@@ -1,6 +1,7 @@
 import { enviarMensagem, enviarMensagemComFontes } from '@/lib/openrouter'
 import { CAMPOS_CONFIG } from '@/lib/queries/config-update'
 import { AcaoAgente, FormularioIA, validarAcao } from '@/lib/queries/agente-ia'
+import { Comando } from './comandos'
 
 /**
  * Time de agentes especializados.
@@ -126,95 +127,6 @@ um arquivo antigo, responda apenas sobre os desta mensagem.`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AGENTE PLANEJADOR — decide quem do time precisa trabalhar
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface Plano {
-  /** Consultar a internet (dados que mudam com o tempo) */
-  pesquisarWeb: boolean
-  /** Termos de busca escolhidos pelo próprio planejador */
-  termosWeb: string
-  /** Página específica para abrir (quando o dono manda um link) */
-  urlParaLer: string
-  /** Consultar os materiais de treinamento (RAG) */
-  consultarConhecimento: boolean
-  /** Pergunta reescrita para a busca vetorial render mais */
-  consultaConhecimento: string
-}
-
-const PLANO_VAZIO: Plano = {
-  pesquisarWeb: false,
-  termosWeb: '',
-  urlParaLer: '',
-  consultarConhecimento: false,
-  consultaConhecimento: '',
-}
-
-/**
- * Roda uma vez por mensagem e diz quais fontes externas valem a pena.
- * Antes isso era feito pelo próprio redator, com marcadores no meio da
- * resposta — custava uma chamada inteira a mais e falhava com frequência.
- */
-export async function planejar(mensagem: string, temArquivos: boolean): Promise<Plano> {
-  if (!mensagem.trim()) return PLANO_VAZIO
-  try {
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: `Você planeja o trabalho de um assistente de restaurante. Não responda ao dono,
-apenas diga que fontes precisam ser consultadas.
-
-Mensagem do dono: "${mensagem}"
-${temArquivos ? 'Ele anexou arquivos nesta mensagem (já serão lidos por outro agente).' : ''}
-
-Responda APENAS com este JSON:
-{ "pesquisarWeb": true|false,
-  "termosWeb": "termos de busca, como você digitaria no Google",
-  "urlParaLer": "endereço completo, se ele mandou um link ou citou um site",
-  "consultarConhecimento": true|false,
-  "consultaConhecimento": "pergunta reescrita para buscar nos materiais" }
-
-pesquisarWeb = true quando a resposta depende de algo que muda com o tempo ou está
-fora do restaurante: leis e normas, preços, fornecedores, concorrentes, tendências,
-notícias, datas, ferramentas, empresas, receitas.
-
-consultarConhecimento = true quando o assunto pode estar em manuais e cartilhas do
-setor: higiene e vigilância sanitária, custos e CMV, cardápio, atendimento, estoque,
-precificação, marketing, obrigações legais, indicadores.
-
-Ambos podem ser true, mas o padrão é FALSE nos dois. Só marque true quando a
-resposta realmente depender daquela fonte.
-
-EXEMPLOS (siga à risca):
-"como estão minhas avaliações?" -> tudo false (é dado do próprio painel)
-"quantas mesas eu tenho?" -> tudo false (está na configuração)
-"crie uma ação de reparar as mesas" -> tudo false (é só executar um pedido)
-"resumo das reclamações" -> tudo false (são os dados dele)
-"posso descongelar carne na pia?" -> consultarConhecimento true (norma sanitária)
-"meu CMV está alto, o que faço?" -> consultarConhecimento true (gestão de custos)
-"quanto está a arroba do boi?" -> pesquisarWeb true (preço muda todo dia)
-"o que tem no site X" -> urlParaLer com o endereço`,
-        },
-        { role: 'user', content: 'Planeje e responda no formato JSON pedido.' },
-      ],
-      { ...JSON_OPTS, max_tokens: 250 },
-    )
-    const d = parse(res)
-    if (!d) return PLANO_VAZIO
-    return {
-      pesquisarWeb: !!d.pesquisarWeb,
-      termosWeb: String(d.termosWeb || '').trim(),
-      urlParaLer: String(d.urlParaLer || '').trim(),
-      consultarConhecimento: !!d.consultarConhecimento,
-      consultaConhecimento: String(d.consultaConhecimento || mensagem).trim(),
-    }
-  } catch {
-    return PLANO_VAZIO
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 3. AGENTE DE PESQUISA — sem memória
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -331,74 +243,6 @@ Se nenhum servir, devolva { "uteis": [] }.`,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. AGENTE ROTEADOR — memória curta
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type Dominio = 'conversa' | 'acao' | 'insight' | 'config' | 'anotacao'
-
-/**
- * Decide de que assunto é o pedido. Barato e curto — evita chamar os
- * escritores à toa e reduz o erro de um prompt único decidindo tudo.
- */
-export async function rotearPedido(
-  mensagem: string,
-  ultimaResposta: string,
-): Promise<{ dominio: Dominio; operacao: 'criar' | 'editar' | 'excluir' | 'nenhuma' }> {
-  const padrao = { dominio: 'conversa' as Dominio, operacao: 'nenhuma' as const }
-  try {
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: `Classifique o que o dono do restaurante quer. Não execute nada, só classifique.
-
-Dono disse: "${mensagem}"
-Assistente respondeu: "${ultimaResposta.slice(0, 400)}"
-
-Responda APENAS com este JSON:
-{ "dominio": "conversa|acao|insight|config|anotacao",
-  "operacao": "criar|editar|excluir|nenhuma" }
-
-- "acao": plano/tarefa operacional do restaurante.
-- "insight": padrão ou observação sobre os feedbacks.
-- "config": dado do perfil (mesas, horário, nome, cozinha, ticket, público...).
-- "anotacao": um fato para lembrar depois.
-- "conversa": pergunta, opinião, análise, bate-papo, OU pedido sobre o próprio
-  sistema/chat/formulário. Use "nenhuma" na operação.
-
-Arquivar, desativar, remover, tirar ou apagar = operação "excluir" (nunca "editar").
-
-EXEMPLOS:
-"crie uma ação de reparar as mesas" -> acao / criar
-"marca a ação X como concluída" -> acao / editar
-"apaga o insight da sobremesa" -> insight / excluir
-"agora são 30 mesas" -> config / editar
-"lembra que o fornecedor entrega às terças" -> anotacao / criar
-"como estão minhas avaliações?" -> conversa / nenhuma
-"resumo das reclamações" -> conversa / nenhuma
-"me mostra um exemplo de formulário" -> conversa / nenhuma
-
-Na dúvida, prefira "conversa" + "nenhuma": é melhor não mexer em nada do que mexer errado.
-Nunca invente uma operação que o dono não pediu.`,
-        },
-        { role: 'user', content: 'Classifique no formato JSON pedido.' },
-      ],
-      { ...JSON_OPTS, max_tokens: 120 },
-    )
-    const d = parse(res)
-    const dominios: Dominio[] = ['conversa', 'acao', 'insight', 'config', 'anotacao']
-    const ops = ['criar', 'editar', 'excluir', 'nenhuma']
-    if (!d || !dominios.includes(d.dominio)) return padrao
-    return {
-      dominio: d.dominio,
-      operacao: ops.includes(d.operacao) ? d.operacao : 'nenhuma',
-    }
-  } catch {
-    return padrao
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 6. AGENTES ESCRITORES — sem memória de conversa
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -504,6 +348,75 @@ export const FORM_CRIAR_INSIGHT: FormularioIA & { acao_pretendida: string } = {
   titulo: 'Vamos criar o insight. Me conta:',
   acao_pretendida: 'criar_insight',
   campos: [{ nome: 'assunto', label: 'Sobre o que é o insight?', tipo: 'texto', obrigatorio: true }],
+}
+
+/**
+ * Agente de UMA tarefa: montar as PERGUNTAS PRECISAS que ainda faltam para
+ * completar o pedido. Diferente dos formulários fixos, ele lê o que o dono já
+ * disse e pergunta só o que falta (se a prioridade já veio, não pergunta de novo).
+ * Se falhar, o coordenador cai no formulário fixo — nunca fica sem formulário.
+ */
+export async function montarPerguntas(
+  dominio: 'acao' | 'insight',
+  pedido: string,
+): Promise<(FormularioIA & { acao_pretendida: string }) | null> {
+  const alvo = dominio === 'acao' ? 'uma AÇÃO operacional' : 'um INSIGHT'
+  const acao_pretendida = dominio === 'acao' ? 'criar_acao' : 'criar_insight'
+  try {
+    const res = await enviarMensagem(
+      [
+        {
+          role: 'system',
+          content: `O dono quer criar ${alvo}, mas o pedido está incompleto. Sua única
+tarefa: montar as PERGUNTAS que ainda faltam para completar — nada além disso.
+
+Pedido dele: "${pedido}"
+
+Regras:
+- Pergunte só o que FALTA. Se algo já foi dito no pedido, NÃO pergunte de novo.
+- No máximo 3 perguntas. Uma pergunta por campo.
+- Se a resposta é de um conjunto fixo, use "tipo":"escolha" com "opcoes". Se é
+  texto livre (descrição, o que fazer), use "tipo":"texto" sem opções.
+- A primeira pergunta deve capturar o ASSUNTO principal ("o que precisa ser feito?"
+  para ação; "sobre o que é?" para insight), a menos que já esteja claro no pedido.
+- Para prioridade, use opcoes: ["Urgente","Importante","Observação"].
+- Perguntas curtas e diretas, em português do Brasil. Não fale do sistema/chat.
+
+Responda APENAS com este JSON:
+{ "titulo": "frase curta de abertura",
+  "campos": [ { "nome": "chave_curta", "label": "a pergunta", "tipo": "texto|escolha",
+                "opcoes": ["A","B"], "obrigatorio": true|false } ] }`,
+        },
+        { role: 'user', content: 'Monte as perguntas no formato JSON pedido.' },
+      ],
+      { ...JSON_OPTS, max_tokens: 500 },
+    )
+    const d = parse(res)
+    if (!d || !Array.isArray(d.campos) || d.campos.length === 0) return null
+    const campos = d.campos
+      .slice(0, 3)
+      .map((c: any, i: number) => {
+        const temOpcoes = Array.isArray(c.opcoes) && c.opcoes.length > 0
+        return {
+          nome: String(c.nome || `campo${i}`).trim() || `campo${i}`,
+          label: String(c.label || '').trim(),
+          tipo: temOpcoes ? ('escolha' as const) : ('texto' as const),
+          opcoes: temOpcoes ? c.opcoes.map(String).slice(0, 6) : undefined,
+          obrigatorio: c.obrigatorio !== false,
+        }
+      })
+      .filter((c: any) => c.label.length > 1)
+    if (!campos.length) return null
+    // Garante que o primeiro campo é sempre obrigatório (o assunto)
+    campos[0].obrigatorio = true
+    return {
+      titulo: String(d.titulo || (dominio === 'acao' ? 'Vamos criar a ação. Me conta:' : 'Vamos criar o insight. Me conta:')),
+      acao_pretendida,
+      campos,
+    }
+  } catch {
+    return null
+  }
 }
 
 /** Monta os campos de um insight novo. */
@@ -687,59 +600,150 @@ export async function montarEdicao(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 7. COORDENADOR — junta o time
+// 7. DESPACHANTE — recebe o comando da IA principal e chama o especialista certo
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface ContextoAgente {
+export interface ContextoComando {
   configAtual: Record<string, unknown>
   acoes: Array<Record<string, any>>
   insights: Array<Record<string, any>>
 }
 
+export interface ResultadoComando {
+  /** Alteração montada pelo especialista, pronta para confirmar ou aplicar. */
+  acao: AcaoAgente | null
+  /** Formulário quando falta informação (ex.: criar sem assunto concreto). */
+  formulario: (FormularioIA & { acao_pretendida?: string }) | null
+}
+
 /**
- * Roteia o pedido para o especialista certo e devolve a alteração pronta.
- * Cada agente vê só a sua fatia — nenhum recebe a conversa inteira.
+ * A IA principal decidiu agir e emitiu um comando; aqui o sistema chama o
+ * especialista daquele tipo, carregado só com o que precisa. Cada caso é UMA
+ * responsabilidade — nenhum especialista decide "o quê", só executa a sua parte.
  */
-export async function decidirAlteracao(
-  mensagem: string,
-  ultimaResposta: string,
-  ctx: ContextoAgente,
-): Promise<{ acao: AcaoAgente | null; formulario: (FormularioIA & { acao_pretendida?: string }) | null }> {
-  const so = (acao: AcaoAgente | null) => ({ acao, formulario: null })
-  const { dominio, operacao } = await rotearPedido(mensagem, ultimaResposta)
-  if (dominio === 'conversa' || operacao === 'nenhuma') {
-    // Mesmo em "conversa", uma afirmação pode mudar o perfil ("agora são 30 mesas")
-    return so(dominio === 'config' ? await montarConfig(mensagem, ctx.configAtual) : null)
-  }
-
-  // Criar: um agente decide se há assunto; se não, mostra o formulário fixo
-  if ((dominio === 'acao' || dominio === 'insight') && operacao === 'criar') {
-    const { temAssunto, assunto } = await extrairAssunto(dominio, mensagem)
-    if (!temAssunto) {
-      return { acao: null, formulario: dominio === 'acao' ? FORM_CRIAR_ACAO : FORM_CRIAR_INSIGHT }
+export async function despacharOperacao(
+  cmd: Comando,
+  ctx: ContextoComando,
+): Promise<ResultadoComando> {
+  const so = (acao: AcaoAgente | null): ResultadoComando => ({ acao, formulario: null })
+  switch (cmd.tipo) {
+    case 'criar_acao': {
+      const { temAssunto, assunto } = await extrairAssunto('acao', cmd.arg)
+      if (!temAssunto) return { acao: null, formulario: (await montarPerguntas('acao', cmd.arg)) ?? FORM_CRIAR_ACAO }
+      const pedido = assunto || cmd.arg
+      // Retry uma vez: o modelo grátis falha de forma transitória. Se ainda assim
+      // não montar, cai no formulário — criar com assunto nunca vira "falhou".
+      const acao = (await montarAcao(pedido)) ?? (await montarAcao(pedido))
+      return acao ? so(acao) : { acao: null, formulario: FORM_CRIAR_ACAO }
     }
-    const pedido = assunto || mensagem
-    return so(dominio === 'acao' ? await montarAcao(pedido) : await montarInsight(pedido))
-  }
-
-  switch (dominio) {
-    case 'acao':
-      return so(await montarEdicao(mensagem, 'acao', operacao === 'excluir' ? 'excluir' : 'editar', ctx.acoes))
-    case 'insight':
-      return so(await montarEdicao(mensagem, 'insight', operacao === 'excluir' ? 'excluir' : 'editar', ctx.insights))
-    case 'config':
-      return so(await montarConfig(mensagem, ctx.configAtual))
-    case 'anotacao':
-      return so(
-        operacao === 'criar'
-          ? {
-              tipo: 'criar_anotacao',
-              dados: { fato: mensagem.slice(0, 300), categoria: 'geral' },
-              descricao: 'Guardar esta informação',
-            }
-          : null,
-      )
+    case 'criar_insight': {
+      const { temAssunto, assunto } = await extrairAssunto('insight', cmd.arg)
+      if (!temAssunto) return { acao: null, formulario: (await montarPerguntas('insight', cmd.arg)) ?? FORM_CRIAR_INSIGHT }
+      const pedido = assunto || cmd.arg
+      const acao = (await montarInsight(pedido)) ?? (await montarInsight(pedido))
+      return acao ? so(acao) : { acao: null, formulario: FORM_CRIAR_INSIGHT }
+    }
+    case 'editar_acao':
+      return so(await montarEdicao(cmd.arg, 'acao', 'editar', ctx.acoes))
+    case 'excluir_acao':
+      return so(await montarEdicao(cmd.arg, 'acao', 'excluir', ctx.acoes))
+    case 'editar_insight':
+      return so(await montarEdicao(cmd.arg, 'insight', 'editar', ctx.insights))
+    case 'excluir_insight':
+      return so(await montarEdicao(cmd.arg, 'insight', 'excluir', ctx.insights))
+    case 'mudar_config':
+      return so(await montarConfig(cmd.arg, ctx.configAtual))
+    case 'anotar':
+      return so({
+        tipo: 'criar_anotacao',
+        dados: { fato: cmd.arg.slice(0, 300), categoria: 'geral' },
+        descricao: 'Guardar esta informação',
+      })
+    case 'formulario': {
+      const tipo = /insight/i.test(cmd.arg) ? 'insight' : 'acao'
+      return {
+        acao: null,
+        formulario: (await montarPerguntas(tipo, cmd.arg)) ?? (tipo === 'acao' ? FORM_CRIAR_ACAO : FORM_CRIAR_INSIGHT),
+      }
+    }
     default:
       return so(null)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. NARRADOR — conta ao dono o que o sistema fez, SEM inventar nada
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Relatório fiel dos campos que o especialista montou — a fonte da narração. */
+export function relatorioDaAcao(acao: AcaoAgente): string {
+  const d = (acao.dados || {}) as Record<string, any>
+  const rotulos: Record<string, string> = {
+    titulo_acao: 'Título', titulo: 'Título', plano_detalhado: 'Plano',
+    descricao: 'Descrição', sugestao: 'Sugestão', prioridade: 'Prioridade',
+    categoria: 'Categoria', status: 'Situação', valor: 'Novo valor', fato: 'Anotação',
+  }
+  const linhas = [acao.descricao]
+  for (const [k, label] of Object.entries(rotulos)) {
+    const v = d[k]
+    if (v != null && String(v).trim()) linhas.push(`${label}: ${v}`)
+  }
+  return linhas.join('\n')
+}
+
+/** Texto determinístico de reserva, caso a narração por IA falhe. */
+function narracaoReserva(descricao: string, situacao: Situacao): string {
+  if (situacao === 'aplicado') return `Pronto! ${descricao}. Se quiser, dá para desfazer.`
+  if (situacao === 'falhou') return 'Não consegui concluir agora. Pode me dar um pouco mais de detalhe?'
+  return `Preparei: ${descricao}. Confira e confirme aqui embaixo.`
+}
+
+export type Situacao = 'preparado' | 'aplicado' | 'falhou'
+
+/**
+ * A IA principal narra o resultado — mas vê SÓ o relatório do sistema, então
+ * não tem de onde inventar. Se o modelo falhar, cai no texto de reserva.
+ */
+export async function narrarOperacao(
+  nome: string,
+  relatorio: string,
+  descricao: string,
+  situacao: Situacao,
+): Promise<string> {
+  const instr =
+    situacao === 'preparado'
+      ? 'Isto está PREPARADO para o dono confirmar (ainda NÃO foi aplicado). Diga o que você preparou e que ele pode conferir e confirmar logo abaixo.'
+      : situacao === 'aplicado'
+        ? 'Isto JÁ foi aplicado no sistema. Avise que está feito e que ele pode desfazer se quiser.'
+        : 'A alteração NÃO pôde ser feita. Explique com gentileza e peça, em uma frase, o que faltou.'
+  try {
+    const res = await enviarMensagem(
+      [
+        {
+          role: 'system',
+          content: `Você é o ${nome}, assistente do painel de um restaurante. O sistema executou
+uma tarefa que o dono pediu e te passou o resultado. Escreva a resposta para o dono em
+1 ou 2 frases curtas, naturais e diretas, em português do Brasil.
+
+RESULTADO DO SISTEMA (é a única verdade — não acrescente nada que não esteja aqui,
+não invente números, nomes, prazos nem detalhes):
+"""
+${relatorio}
+"""
+
+${instr}
+
+Não use listas nem títulos. Não se apresente, não repita seu nome e não chame o leitor
+de "dono". Não devolva o resultado em formato técnico: fale como uma pessoa avisando,
+naturalmente, mencionando só o que está no resultado.`,
+        },
+        { role: 'user', content: 'Escreva a resposta para o dono.' },
+      ],
+      { temperature: 0.3, max_tokens: 200 },
+    )
+    const txt = (typeof res === 'string' ? res : '').trim()
+    return txt || narracaoReserva(descricao, situacao)
+  } catch {
+    return narracaoReserva(descricao, situacao)
   }
 }

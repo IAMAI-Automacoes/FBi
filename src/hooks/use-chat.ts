@@ -1,15 +1,16 @@
 import { useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { enviarMensagem, enviarMensagemComFontes, ChatMessage, FonteWeb } from '@/lib/openrouter'
+import { enviarMensagemComFontes, ChatMessage, FonteWeb } from '@/lib/openrouter'
 import { construirSystemPromptChef } from '@/lib/prompts-sistema'
 import { memorizarDaConversa, FatoMemoria } from '@/lib/queries/memoria-assistente'
 import { buscarConhecimento, extrairTextoDeUrl as lerPagina } from '@/lib/queries/conhecimento'
-import { CAMPOS_CONFIG } from '@/lib/queries/config-update'
-import { AcaoAgente, FormularioIA } from '@/lib/queries/agente-ia'
+import { AcaoAgente, FormularioIA, ACOES_DESTRUTIVAS } from '@/lib/queries/agente-ia'
 import {
-  decidirAlteracao, analisarDocumentos, blocoDeAnalises, AnaliseArquivo,
-  planejar, pesquisarNaWeb, lerPaginaWeb, curarConhecimento,
+  despacharOperacao, narrarOperacao, relatorioDaAcao,
+  analisarDocumentos, blocoDeAnalises, AnaliseArquivo,
+  pesquisarNaWeb, lerPaginaWeb, curarConhecimento,
 } from '@/lib/ia/agentes'
+import { parsearComando, removerComandos, ehComandoMaterial } from '@/lib/ia/comandos'
 
 export interface AtualizacaoConfig {
   campo: string
@@ -39,6 +40,12 @@ export interface MensagemChat {
   registros?: { id: string; descricao: string }[]
   /** Alteração proposta por esta resposta, aguardando o dono confirmar */
   proposta?: AcaoAgente | null
+  /**
+   * Quando a proposta foi aceita, guarda o registro gerado. O botão da proposta
+   * NÃO some: com isto vira o estado "aceita" (verde). Desfazer volta para null
+   * (botão azul de novo), mas o botão permanece sempre no chat.
+   */
+  propostaRegistro?: { id: string; descricao: string } | null
   /** Leitura dos arquivos desta mensagem, feita por um agente sem memória */
   analises?: AnaliseArquivo[]
   /** Mensagem que esta responde — fica visível na bolha, como no WhatsApp */
@@ -101,28 +108,6 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
   )
 
   /**
-   * Time de agentes: um roteador decide o assunto e o especialista daquele
-   * assunto monta a alteração. Substituiu o detector único, que errava por
-   * tentar decidir tudo num prompt só.
-   */
-  const detectarAcaoAgente = async (
-    textoUsuario: string,
-    respostaAssistente: string,
-    ctx: any,
-  ): Promise<{ acao: AcaoAgente | null; formulario: (FormularioIA & { acao_pretendida?: string }) | null }> => {
-    try {
-      const r = await decidirAlteracao(textoUsuario, respostaAssistente, {
-        configAtual: ctx.configAtual || {},
-        acoes: ctx.acoes || [],
-        insights: ctx.insights || [],
-      })
-      return { acao: r.acao, formulario: r.formulario }
-    } catch {
-      return { acao: null, formulario: null }
-    }
-  }
-
-  /**
    * IMPORTANTE: precisa ser estável (useCallback). Sem isso, um efeito que a
    * tenha como dependência dispara a cada render e recarrega o histórico do
    * banco por cima das mensagens locais — apagando a mensagem recém-enviada
@@ -169,7 +154,8 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     opcoes: {
       jaExibida?: boolean
       memoria?: FatoMemoria[]
-      buscaWeb?: boolean
+      /** 'automatico' aplica na hora; 'perguntar' propõe. Muda a narração. */
+      modoAcao?: 'automatico' | 'perguntar'
       respondendoA?: MensagemChat['respondendoA']
     } = {},
   ): Promise<ResultadoEnvio> => {
@@ -185,63 +171,24 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
 
     try {
       const contextoFinal = { ...contextoDadosIniciais, ...contextoDadosAdicionais }
-      let fontesDaPesquisa: FonteWeb[] = []
+      const nomeAssistente = () =>
+        (contextoFinal?.mascote_config?.nome || '').trim() || 'Chef Pepê'
 
-      // ── ORQUESTRAÇÃO ──────────────────────────────────────────────────
-      // O planejador decide quem trabalha; os agentes rodam em paralelo e
-      // entregam material pronto. O redator (a chamada final) só escreve.
+      // ── Pré-passo: ler arquivos anexados (cada um isolado, sem histórico) ──
       const temArquivos = !!contextoFinal.arquivos?.length
-      const plano = texto && !systemMessageOverride
-        ? await planejar(texto, temArquivos)
-        : null
-
-      if (plano?.pesquisarWeb || plano?.urlParaLer) setBuscandoWeb(true)
-
-      const [analises, pesquisa, trechos] = await Promise.all([
-        // Documentos: cada arquivo lido isolado, sem histórico
-        temArquivos ? analisarDocumentos(contextoFinal.arquivos) : Promise.resolve([]),
-        // Pesquisa: página específica tem prioridade sobre busca aberta
-        plano?.urlParaLer
-          ? lerPaginaWeb(plano.urlParaLer, lerPagina)
-          : plano?.pesquisarWeb
-            ? pesquisarNaWeb(plano.termosWeb || texto)
-            : Promise.resolve(null),
-        // Conhecimento: busca vetorial nos materiais de treinamento
-        plano?.consultarConhecimento
-          ? buscarConhecimento(plano.consultaConhecimento || texto, 6)
-          : Promise.resolve([]),
-      ])
-
-      if (analises.length) {
-        const anteriores = analisesRef.current
-        analisesRef.current = [...anteriores, ...analises]
-        contextoFinal.analiseArquivos = blocoDeAnalises(analises, anteriores)
+      if (temArquivos) {
+        const analises = await analisarDocumentos(contextoFinal.arquivos)
+        if (analises.length) {
+          const anteriores = analisesRef.current
+          analisesRef.current = [...anteriores, ...analises]
+          contextoFinal.analiseArquivos = blocoDeAnalises(analises, anteriores)
+        }
       } else if (analisesRef.current.length) {
         contextoFinal.analiseArquivos = blocoDeAnalises([], analisesRef.current)
       }
 
-      setBuscandoWeb(false)
-
-      if (pesquisa) {
-        contextoFinal.pesquisaWeb = pesquisa.resumo
-        fontesDaPesquisa = pesquisa.fontes
-      }
-
-      // Curador filtra o que a busca vetorial trouxe por semelhança
-      if (trechos.length) {
-        contextoFinal.conhecimento = await curarConhecimento(
-          plano?.consultaConhecimento || texto,
-          trechos.map((t) => ({ conteudo: t.conteudo, titulo: t.titulo })),
-        )
-      }
-
-      const sysPrompt =
-        systemMessageOverride ||
-        construirSystemPromptChef(contextoFinal.mascote_config, contextoFinal, {
-          jaBuscou: !!pesquisa,
-        })
-
-      const apiMessages: ChatMessage[] = [
+      // Monta as mensagens da API a partir de um system prompt + o histórico
+      const montarMensagens = (sysPrompt: string): ChatMessage[] => [
         { role: 'system', content: sysPrompt },
         ...currentMessages.map((m): ChatMessage => {
           const imagens = (m.anexos || []).filter((a) => a.tipo === 'imagem' && a.url)
@@ -261,61 +208,138 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
         }),
       ]
 
-      const respostaTexto = (await enviarMensagemComFontes(apiMessages)).texto
-      const fontes = fontesDaPesquisa
-
-      // Mostra a resposta assim que chega e JÁ desliga o "digitando":
-      // o que vem depois (gravar histórico, memória, intenção) é trabalho de
-      // bastidor e não deve deixar o indicador aceso.
-      aplicar((prev) => [...prev, { uid: novoUid(), role: 'assistant', text: respostaTexto, fontes }])
-      setLoading(false) // enviandoRef segue travado até gravar, para nada sobrescrever
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        if (texto || anexos?.length) {
+      // Mostra uma resposta da IA, persiste no banco e grava a memória.
+      const mostrarEPersistir = async (resposta: string, fontes: FonteWeb[] = []) => {
+        aplicar((prev) => [...prev, { uid: novoUid(), role: 'assistant', text: resposta, fontes }])
+        setLoading(false)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          if (texto || anexos?.length) {
+            await supabase.from('mensagens_chat').insert({
+              usuario_id: user.id,
+              sessao_id: sessaoId,
+              mensagem: texto,
+              papel: 'usuario',
+              contexto_pagina: contextoPagina,
+              contexto_dados: {
+                anexos: (anexos || []).map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url ?? null })),
+                respondendoA: opcoes.respondendoA ?? null,
+              },
+            })
+          }
           await supabase.from('mensagens_chat').insert({
             usuario_id: user.id,
             sessao_id: sessaoId,
-            mensagem: texto,
-            papel: 'usuario',
+            mensagem: resposta,
+            papel: 'assistente',
             contexto_pagina: contextoPagina,
-            // guarda só o necessário para reexibir (texto extraído fica de fora)
-            contexto_dados: {
-              anexos: (anexos || []).map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url ?? null })),
-              respondendoA: opcoes.respondendoA ?? null,
-            },
+            contexto_dados: {},
           })
         }
-        await supabase.from('mensagens_chat').insert({
-          usuario_id: user.id,
-          sessao_id: sessaoId,
-          mensagem: respostaTexto,
-          papel: 'assistente',
-          contexto_pagina: contextoPagina,
-          contexto_dados: {},
+        if (texto) {
+          void memorizarDaConversa(
+            contextoFinal.restaurante_id ?? null,
+            texto,
+            resposta,
+            opcoes.memoria ?? contextoFinal.memoria ?? [],
+          )
+        }
+      }
+
+      // ══ FASE 1: a IA principal decide — responde em texto OU emite um comando ══
+      const sysPrompt1 =
+        systemMessageOverride ||
+        construirSystemPromptChef(contextoFinal.mascote_config, contextoFinal, {})
+      // temperatura 0: a decisão de emitir (ou não) um comando precisa ser
+      // determinística — testado 16/16 casos. A prosa da busca vem na fase 2.
+      const resposta1 = (
+        await enviarMensagemComFontes(montarMensagens(sysPrompt1), { temperature: 0 })
+      ).texto
+
+      // Override (ex.: análise inicial do AiChatSheet) não usa comandos
+      const cmd = texto && !systemMessageOverride ? parsearComando(resposta1) : null
+
+      // ── Sem comando: a resposta da fase 1 já é a resposta final ──
+      if (!cmd) {
+        const limpa = removerComandos(resposta1) || 'Desculpe, pode reformular?'
+        await mostrarEPersistir(limpa)
+        return {}
+      }
+
+      // ── Comando de BUSCA: o sistema apura os fatos e a IA escreve com eles ──
+      if (ehComandoMaterial(cmd.tipo)) {
+        let fontes: FonteWeb[] = []
+        if (cmd.tipo === 'pesquisar' || cmd.tipo === 'abrir') setBuscandoWeb(true)
+        try {
+          if (cmd.tipo === 'pesquisar') {
+            const p = await pesquisarNaWeb(cmd.arg || texto)
+            if (p) { contextoFinal.pesquisaWeb = p.resumo; fontes = p.fontes }
+          } else if (cmd.tipo === 'abrir') {
+            const p = await lerPaginaWeb(cmd.arg, lerPagina)
+            if (p) { contextoFinal.pesquisaWeb = p.resumo; fontes = p.fontes }
+          } else {
+            const trechos = await buscarConhecimento(cmd.arg || texto, 6)
+            if (trechos.length) {
+              contextoFinal.conhecimento = await curarConhecimento(
+                cmd.arg || texto,
+                trechos.map((t) => ({ conteudo: t.conteudo, titulo: t.titulo })),
+              )
+            }
+          }
+        } finally {
+          setBuscandoWeb(false)
+        }
+        const web = cmd.tipo === 'pesquisar' || cmd.tipo === 'abrir'
+        const sysPrompt2 = construirSystemPromptChef(contextoFinal.mascote_config, contextoFinal, {
+          jaBuscou: web,
+          semComandos: true,
         })
+        const resposta2 = (await enviarMensagemComFontes(montarMensagens(sysPrompt2))).texto
+        await mostrarEPersistir(removerComandos(resposta2) || resposta2, fontes)
+        return {}
       }
 
-      // Memória de longo prazo — em segundo plano, nunca bloqueia a resposta
-      if (texto) {
-        void memorizarDaConversa(
-          contextoFinal.restaurante_id ?? null,
-          texto,
-          respostaTexto,
-          opcoes.memoria ?? contextoFinal.memoria ?? [],
+      // ── Comando de OPERAÇÃO/FORMULÁRIO: chama o especialista e narra ──
+      const resultado = await despacharOperacao(cmd, {
+        configAtual: contextoFinal.configAtual || {},
+        acoes: contextoFinal.acoes || [],
+        insights: contextoFinal.insights || [],
+      })
+
+      // Falta o assunto (ex.: "crie uma ação" sem dizer do quê) → formulário
+      if (resultado.formulario) {
+        const neutra =
+          resultado.formulario.acao_pretendida === 'criar_insight'
+            ? 'Boa! Vou montar esse insight com você. É só responder aqui embaixo 👇'
+            : 'Boa! Vou criar isso com você. É só responder aqui embaixo 👇'
+        await mostrarEPersistir(neutra)
+        return { formulario: resultado.formulario }
+      }
+
+      // Especialista não conseguiu montar (ex.: item não encontrado)
+      if (!resultado.acao) {
+        const narr = await narrarOperacao(
+          nomeAssistente(),
+          'A alteração pedida não pôde ser identificada com o que existe no sistema.',
+          'a alteração pedida',
+          'falhou',
         )
+        await mostrarEPersistir(narr)
+        return {}
       }
 
-      // Detecção do agente — roda em bastidor, depois da resposta
-      let acao: AcaoAgente | null = null
-      let formulario: (FormularioIA & { acao_pretendida?: string }) | null = null
-      if (texto) {
-        const r = await detectarAcaoAgente(texto, respostaTexto, contextoFinal)
-        acao = r.acao
-        formulario = r.formulario
-      }
-
-      return { acao, formulario }
+      // Ação montada: narra conforme o modo (aplicado x preparado) e devolve
+      const acao = resultado.acao
+      const destrutiva = ACOES_DESTRUTIVAS.includes(acao.tipo)
+      const vaiAplicar = opcoes.modoAcao === 'automatico' && !destrutiva
+      const narr = await narrarOperacao(
+        nomeAssistente(),
+        relatorioDaAcao(acao),
+        acao.descricao,
+        vaiAplicar ? 'aplicado' : 'preparado',
+      )
+      await mostrarEPersistir(narr)
+      return { acao }
     } catch (err: any) {
       const msg = err.message || 'Erro ao comunicar com a IA'
       setError(msg)
@@ -375,24 +399,55 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     [aplicar, sessaoId],
   )
 
-  /** Troca o texto de uma mensagem do usuário na tela e no banco. */
-  const editarMensagem = useCallback(
-    async (uid: string, novoTexto: string) => {
-      let idBanco: string | undefined
+  /**
+   * Editar uma mensagem = REBOBINAR até ela. A IA esquece tudo daquele ponto em
+   * diante: as mensagens seguintes (a memória "pura" da conversa) E as anotações
+   * de longo prazo aprendidas dali para a frente. Deixa a mensagem editada como
+   * a última e devolve true para o chamador reenviar o novo texto à IA.
+   */
+  const rebobinarPara = useCallback(
+    async (uid: string, novoTexto: string, restauranteId: number | null): Promise<boolean> => {
+      const idx = messagesRef.current.findIndex((m) => m.uid === uid)
+      if (idx === -1) return false
+
+      // Tela: mantém até a mensagem editada (com o novo texto) e descarta o resto
       aplicar((prev) =>
-        prev.map((m) => {
-          if (m.uid === uid) {
-            idBanco = m.id
-            return { ...m, text: novoTexto }
-          }
-          return m
-        }),
+        prev.slice(0, idx + 1).map((m, i) => (i === idx ? { ...m, text: novoTexto } : m)),
       )
-      if (idBanco) {
-        await supabase.from('mensagens_chat').update({ mensagem: novoTexto }).eq('id', idBanco)
+
+      // Banco: a ordem da conversa na tela espelha a do banco. Acha a linha da
+      // mensagem editada por posição, apaga dela em diante e usa o created_at
+      // como corte para esquecer as anotações aprendidas a partir daquele ponto.
+      try {
+        const { data: user } = await supabase.auth.getUser()
+        if (user?.user) {
+          const { data: linhas } = await supabase
+            .from('mensagens_chat')
+            .select('id, created_at')
+            .eq('sessao_id', sessaoId)
+            .order('created_at', { ascending: true })
+          const alvo = linhas?.[idx]
+          if (alvo) {
+            const idsApagar = linhas!.slice(idx).map((l) => l.id)
+            if (idsApagar.length) {
+              await supabase.from('mensagens_chat').delete().in('id', idsApagar)
+            }
+            if (restauranteId && alvo.created_at) {
+              await supabase
+                .from('memoria_assistente')
+                .delete()
+                .eq('restaurante_id', restauranteId)
+                .gte('created_at', alvo.created_at)
+            }
+          }
+        }
+      } catch {
+        // Falha de limpeza não pode travar o reenvio — a conversa na tela já foi
+        // rebobinada; o banco reconcilia no próximo carregamento.
       }
+      return true
     },
-    [aplicar],
+    [aplicar, sessaoId],
   )
 
   /** Prende a proposta à última resposta da IA (o botão vive com a mensagem). */
@@ -421,6 +476,24 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     [aplicar],
   )
 
+  /** Marca a proposta como aceita (verde) SEM tirar o botão do chat. */
+  const marcarPropostaAplicada = useCallback(
+    (uid: string, registro: { id: string; descricao: string }) =>
+      aplicar((prev) => prev.map((m) => (m.uid === uid ? { ...m, propostaRegistro: registro } : m))),
+    [aplicar],
+  )
+
+  /** Desfazer: volta a proposta ao estado não-aceita (azul), mantendo o botão. */
+  const desmarcarPropostaPorRegistro = useCallback(
+    (registroId: string) =>
+      aplicar((prev) =>
+        prev.map((m) =>
+          m.propostaRegistro?.id === registroId ? { ...m, propostaRegistro: null } : m,
+        ),
+      ),
+    [aplicar],
+  )
+
   /** Prende a marca de "feito" à última resposta da IA. */
   const anexarRegistro = useCallback(
     (registro: { id: string; descricao: string }) =>
@@ -444,6 +517,32 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     [aplicar],
   )
 
+  /**
+   * Registra uma troca direta (usuário + IA) na tela e no banco, SEM passar pelo
+   * redator. Usado ao responder um formulário: a ação já é montada pelos agentes,
+   * então não faz sentido reprocessar tudo — isso evitava o texto de perguntas
+   * cru virar mensagem e o erro que apagava a mensagem enviada.
+   */
+  const registrarTroca = useCallback(
+    async (textoUsuario: string, textoAssistente: string): Promise<string> => {
+      const assistUid = novoUid()
+      aplicar((prev) => [
+        ...prev,
+        { uid: novoUid(), role: 'user', text: textoUsuario },
+        { uid: assistUid, role: 'assistant', text: textoAssistente },
+      ])
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('mensagens_chat').insert([
+          { usuario_id: user.id, sessao_id: sessaoId, mensagem: textoUsuario, papel: 'usuario', contexto_pagina: contextoPagina, contexto_dados: {} },
+          { usuario_id: user.id, sessao_id: sessaoId, mensagem: textoAssistente, papel: 'assistente', contexto_pagina: contextoPagina, contexto_dados: {} },
+        ])
+      }
+      return assistUid
+    },
+    [aplicar, sessaoId, contextoPagina],
+  )
+
   return {
     messages,
     loading,
@@ -453,11 +552,15 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     adicionarMensagemUsuario,
     removerUltimaMensagem,
     excluirMensagem,
-    editarMensagem,
+    rebobinarPara,
     anexarProposta,
     limparProposta,
+    marcarPropostaAplicada,
+    desmarcarPropostaPorRegistro,
     anexarRegistro,
     removerRegistro,
+    registrarTroca,
+    setLoading,
     carregarHistorico,
     setMessages: (m: MensagemChat[]) => aplicar(() => m),
     setError,

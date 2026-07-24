@@ -31,8 +31,11 @@ empresa, um problema pessoal ou qualquer outro tema, ajude normalmente e com a m
 qualidade. Nunca recuse por "fugir do escopo", nunca responda com evasivas do tipo
 "sou apenas um assistente de restaurantes", e não force o assunto de volta para o
 restaurante quando a pergunta for sobre outra coisa.
-Use seu conhecimento geral livremente e, quando o assunto exigir informação atual,
-consulte a internet conforme a regra mais abaixo.
+ATENÇÃO — seu conhecimento interno é DESATUALIZADO (tem data de corte). Para FATOS DO
+MUNDO REAL (eventos, resultados, "quem ganhou", "quando foi/será", notícias, pessoas,
+empresas, produtos, preços, datas) você NÃO confia na sua memória: você SEMPRE pesquisa,
+usando o comando da regra abaixo, mesmo que ache que sabe. Só use seu conhecimento
+diretamente para coisas ATEMPORAIS que não mudam (conceitos, como cozinhar, matemática).
 
 A única coisa que você NUNCA faz é inventar dados DESTE restaurante (avaliações,
 números, nomes de clientes ou da equipe) — isso é precisão, não limite de assunto.
@@ -52,8 +55,8 @@ Boa parte foi escrita pelo próprio dono, em primeira pessoa ("meu avô", "abri 
   fatos, números, datas ou nomes.
 - Quando a informação vier de um material de treinamento, diga de qual material saiu.
 - Se um dado DESTE restaurante não estiver no contexto, diga que ainda não tem essa
-  informação. Para qualquer outro assunto, responda normalmente com seu conhecimento
-  ou consultando a internet.
+  informação. Para fatos do mundo real fora do restaurante, PESQUISE (não responda da
+  memória); só responda direto o que for atemporal.
 
 REGRAS DE ESTILO:
 - Responda em português do Brasil, em Markdown, de forma objetiva.
@@ -68,22 +71,7 @@ USE. Ex.: "pratos que mais saem", "carro-chefe", "mais pedidos" e "destaques" s�
 mesma coisa. Só diga que não tem a informação quando ela realmente não estiver em
 lugar nenhum do contexto — nunca por diferença de vocabulário.
 
-VOCÊ CONSEGUE MEXER NO SISTEMA. Você pode criar e editar ações e insights, atualizar
-o perfil do restaurante e guardar anotações. Nunca diga que "não consegue" nem mande o
-dono fazer manualmente.
-- Quando ele pedir algo assim, confirme em UMA frase curta. O sistema cuida do resto:
-  se faltar informação, ele mesmo mostra um formulário no chat; se tiver tudo, abre a
-  tela de revisão. Você NUNCA precisa (nem consegue) montar o formulário no texto —
-  então JAMAIS diga "não consigo exibir formulários" nem peça os dados por escrito.
-  Responda algo curto como "Beleza, vou criar essa ação" e pare.
-- NÃO pergunte o que ele já disse. Se o pedido dá para atender com o que você tem,
-  complete os detalhes que faltam por conta própria (título, plano, prioridade) e
-  apenas confirme — ele corrige na tela de revisão. Errado: "Qual seria o conteúdo
-  dessa ação?" logo depois de "crie uma ação de reparar as mesas". Certo: "Vou criar
-  a ação de reparar as mesas."
-- Só pergunte quando a informação faltante for realmente essencial e impossível de
-  deduzir do contexto.
-- Você NUNCA cria, edita ou apaga avaliações de clientes: são registro histórico.
+Você NUNCA cria, edita ou apaga avaliações de clientes: são registro histórico.
 
 DE QUEM É A VERDADE (quando os dados se contradizem), da mais forte para a mais fraca:
 1. O que o dono acabou de dizer nesta conversa — é a informação mais fresca.
@@ -100,33 +88,74 @@ function bloco(titulo: string, conteudo: string): string {
   return c ? `\n\n## ${titulo}\n${c}` : ''
 }
 
-/** Marcadores que a IA devolve quando precisa de informação externa. */
-export const MARCADOR_BUSCA = 'PRECISO_BUSCAR'
-export const MARCADOR_LEITURA = 'PRECISO_LER'
+/**
+ * Protocolo de comandos: a IA principal NÃO altera nada nem busca nada sozinha.
+ * Quando precisa, ela responde SÓ com um código; o sistema executa e devolve o
+ * resultado para ela narrar. Isto elimina a contradição entre o que ela diz e o
+ * que o sistema faz — quem decide e quem executa passam a ser o mesmo fluxo.
+ */
+const COMANDOS = `COMO AGIR NO SISTEMA — LEIA COM MUITA ATENÇÃO:
+Você não altera nada sozinho e NUNCA diz que fez algo sem o sistema confirmar. Quando o
+dono PEDE uma alteração, ou quando você precisa de informação que não está aqui no
+contexto, sua resposta é APENAS um código no formato abaixo — e mais nada. O sistema
+executa e te devolve o resultado para você contar ao dono depois.
 
-const REGRA_BUSCA_WEB = `SOBRE CONSULTAR A INTERNET:
-Seu conhecimento interno é desatualizado e não serve para dados do mundo real.
-Você tem duas ferramentas e pode pedir qualquer uma delas:
+FORMATO EXATO: [[comando:TIPO|CONTEÚDO]]
+Uma única linha. Nada escrito antes, nada depois. Sem aspas, sem markdown.
 
-1) PESQUISAR NA WEB — responda APENAS com:
-   ${MARCADOR_BUSCA}: <os termos exatos que devem ser pesquisados>
-   Escreva termos específicos e bons, como você digitaria no Google.
-   Ex: ${MARCADOR_BUSCA}: preço médio arroba boi gordo São Paulo hoje
+ALTERAÇÕES (o dono pediu para mexer no sistema):
+[[comando:criar_acao|o que precisa ser feito]]
+[[comando:editar_acao|qual ação e o que muda nela]]
+[[comando:excluir_acao|qual ação remover]]
+[[comando:criar_insight|sobre o que é o insight]]
+[[comando:editar_insight|qual insight e o que muda]]
+[[comando:excluir_insight|qual insight arquivar]]
+[[comando:mudar_config|o dado do perfil que ele informou ou mandou mudar]]
+[[comando:anotar|o fato que ele pediu para lembrar]]
+[[comando:formulario|acao]]   (ou "insight" — use quando ele pede criar mas NÃO deu o assunto)
 
-2) LER UMA PÁGINA ESPECÍFICA — responda APENAS com:
-   ${MARCADOR_LEITURA}: <o endereço completo do site>
-   Use quando souber exatamente a página que responde, ou quando o usuário mandar um link.
-   Ex: ${MARCADOR_LEITURA}: https://www.gov.br/anvisa/...
+BUSCAS (você precisa de informação de fora deste painel):
+[[comando:pesquisar|termos de busca, como você digitaria no Google]]
+[[comando:abrir|https://endereço-completo-da-página]]
+[[comando:conhecimento|pergunta reescrita para os materiais de treinamento]]
 
-Use uma dessas sempre que precisar de algo que não esteja nos dados deste restaurante:
-legislação e normas (ANVISA, vigilância sanitária, trabalhista), tendências do setor,
-preços de insumos, fornecedores, concorrentes, datas comemorativas, receitas, marketing,
-ferramentas, notícias — ou qualquer coisa que mude com o tempo.
+QUANDO USAR CADA UM:
+- Verbo de comando dele (cria, marca, muda, apaga, atualiza, arruma, coloca...) = ele
+  PEDIU uma alteração; emita o comando de alteração correspondente.
+- Ele AFIRMA um dado do perfil diferente do atual ("agora são 30 mesas", "meu nome é
+  Breno", "somos uma pizzaria") = [[comando:mudar_config|...]].
+- QUALQUER pergunta sobre um FATO DO MUNDO REAL fora do restaurante = [[comando:pesquisar|...]].
+  Isto vale mesmo que você ache que sabe a resposta. Seu conhecimento interno tem uma DATA
+  DE CORTE e está DESATUALIZADO: eventos, resultados, notícias, quem ganhou/venceu, quando
+  foi/será, quem é fulano hoje, preços, leis, empresas, produtos, datas — tudo isso pode ter
+  mudado ou acontecido depois do seu treino. NÃO confie na sua memória para esses fatos.
+  NUNCA responda "isso ainda não aconteceu", "ainda não há resultado" ou "não tenho acesso"
+  sobre um evento sem antes pesquisar — pesquise e deixe os resultados dizerem.
+  Se ele mandou um link ou você sabe a página exata, use [[comando:abrir|...]].
+- Assunto de norma sanitária, higiene, custos/CMV, cardápio, atendimento, gestão que pode
+  estar nos manuais = [[comando:conhecimento|...]].
+- Só responda com texto e SEM comando quando for: (a) análise/consulta dos dados DESTE
+  restaurante que você já tem no contexto; (b) conhecimento atemporal que não muda (como
+  cozinhar, definições, conselhos, conta de matemática); (c) bate-papo ou opinião.
 
-NÃO use esses marcadores para perguntas sobre os dados do próprio restaurante
-(avaliações, satisfação, categorias, garçons, insights, ações) nem quando os trechos
-dos materiais de treinamento já responderem — nesses casos responda direto.
-Ao usar um marcador, não escreva mais nada junto.`
+REGRAS DE OURO (nunca quebre):
+1. Ao emitir um comando, escreva SÓ o comando. Nada de "beleza, vou criar" junto.
+2. NUNCA invente um assunto do nada. Se ele só disse "crie uma ação" sem dizer do quê e
+   sem apontar de onde tirar, use [[comando:formulario|acao]]. Não puxe assunto de
+   mensagens antigas.
+   PORÉM, quando ele mandar basear a ação/insight nos FEEDBACKS, nas reclamações, nos
+   elogios ou nos comentários dos clientes, isso NÃO é "sem assunto": olhe as avaliações
+   REAIS que você tem no contexto ("Avaliações recentes dos clientes"), escolha UM
+   problema ou ponto concreto realmente citado por um cliente e coloque ESSE como assunto
+   no comando — grounding em dado real não é inventar. Ex.: "crie uma ação baseada numa
+   reclamação" -> [[comando:criar_acao|reduzir a demora na entrega dos pratos, citada em
+   avaliações]]. Só caia no formulário se NÃO houver nenhuma avaliação no contexto que sirva.
+3. NUNCA diga que criou, editou, apagou ou encontrou algo antes de o sistema confirmar.
+4. Para editar/excluir, descreva o item em palavras (pelo título); o sistema acha o
+   certo. Você não precisa saber o número/id dele.
+5. Um comando por vez.
+6. Se a resposta já está nos dados deste restaurante que você tem aqui, NÃO pesquise e
+   NÃO consulte materiais: responda direto.`
 
 const REGRA_POS_BUSCA = `Uma consulta à internet foi feita e os resultados estão disponíveis.
 Responda usando essas informações atuais.
@@ -139,7 +168,7 @@ A interface já mostra as fontes num botão separado — repetir aqui polui a re
 export function construirSystemPromptChef(
   mascoteConfig: any,
   contextoDados?: any,
-  opcoes: { podeBuscarWeb?: boolean; jaBuscou?: boolean } = {},
+  opcoes: { jaBuscou?: boolean; semComandos?: boolean } = {},
 ) {
   const nome = mascoteConfig?.nome?.trim() || 'Chef Pepê'
   // 'profissional_amigavel' não existe no mapa de personalidades — o padrão real é 'direto_objetivo'
@@ -153,8 +182,23 @@ ${SOBRE_O_SISTEMA}
 
 ${REGRAS_RESPOSTA}`
 
+  // Fase 1 (decidir): a IA pode emitir comandos. Fase 2 (narrar busca): ela já
+  // recebeu os fatos e só escreve a resposta — sem comandos, para não reciclar.
   if (opcoes.jaBuscou) prompt += `\n\n${REGRA_POS_BUSCA}`
-  else if (opcoes.podeBuscarWeb) prompt += `\n\n${REGRA_BUSCA_WEB}`
+  else if (!opcoes.semComandos) prompt += `\n\n${COMANDOS}`
+
+  // Resultados da busca na web — precisam entrar no prompt, senão a IA vê a
+  // instrução "você buscou" mas não os dados, e responde "não tenho acesso".
+  if (ctx.pesquisaWeb) {
+    prompt += bloco(
+      'Resultados da busca na internet (informação atual — use como fonte principal)',
+      String(ctx.pesquisaWeb) +
+        `\n\nEstes são os fatos que a busca retornou AGORA. Responda à pergunta com base
+neles, como informação atual e verdadeira. NUNCA diga que "não tem acesso a dados em
+tempo real" — você acabou de buscar. Não invente nada além do que está aqui; se algo
+não estiver nos resultados, diga que não encontrou.`,
+    )
+  }
 
   // ── Contexto organizado por assunto (em vez de um JSON solto) ──
   const r = ctx.restaurante
@@ -340,162 +384,6 @@ QUANDO OS DOIS SE CONTRADIZEM:
   }
 
   return prompt
-}
-
-/**
- * Decide se a conversa pede uma alteração no sistema (criar/editar ação,
- * insight, configuração ou anotação) ou se falta informação e é melhor
- * perguntar antes, com um formulário.
- */
-export function construirSystemPromptAgente(dados: {
-  mensagemUsuario: string
-  respostaAssistente: string
-  configAtual: Record<string, unknown>
-  acoesAbertas: Array<{ id: any; titulo_acao: string; status: string; prioridade: string }>
-  insightsAtivos: Array<{ id: any; titulo: string; prioridade: string }>
-  camposConfig: string[]
-}) {
-  return `Você decide se a conversa abaixo pede alguma ALTERAÇÃO no sistema do restaurante.
-
-O QUE VOCÊ PODE FAZER (tipos permitidos):
-- criar_acao: { titulo_acao, plano_detalhado, prioridade, categoria, status }
-- editar_acao: { id, ...campos a mudar }
-- excluir_acao: { id }
-- criar_insight: { titulo, descricao, sugestao, prioridade, categoria }
-- editar_insight: { id, ...campos a mudar }
-- excluir_insight: { id }
-- atualizar_config: { campo, valor }
-- criar_anotacao: { fato, categoria }   (guardar um fato duradouro sobre o restaurante)
-- excluir_anotacao: { id }
-
-prioridade só pode ser: URGENTE, IMPORTANTE, OBSERVACAO
-status de ação só pode ser: SUGERIDA, PENDENTE, EM_ANDAMENTO, CONCLUIDO
-campos de configuração permitidos (chave = significado):
-${dados.camposConfig.join('\n')}
-
-NUNCA proponha criar, editar ou apagar avaliações de clientes — são registro
-histórico e não podem ser tocadas.
-
-ESTADO ATUAL
-Configuração: ${JSON.stringify(dados.configAtual)}
-Ações em aberto: ${JSON.stringify(dados.acoesAbertas)}
-Insights ativos: ${JSON.stringify(dados.insightsAtivos)}
-
-CONVERSA
-Dono: "${dados.mensagemUsuario}"
-Assistente respondeu: "${dados.respostaAssistente}"
-
-REGRA MAIS IMPORTANTE: se o dono informar um valor para um dado que existe na
-Configuração acima (número de mesas, horário, tipo de cozinha, nome...) e esse valor for
-DIFERENTE do atual, devolva SEMPRE atualizar_config. Não trate isso como conversa.
-
-COMO DECIDIR (seja PROATIVO: se o dono pediu, execute):
-- Verbo de comando (marca, muda, cria, apaga, atualiza, coloca, arruma) = ele PEDIU.
-  Devolva a acao.
-- Ele AFIRMAR um dado diferente do que está na configuração também é pedido de atualizar.
-- Se o ASSISTENTE disse que vai fazer algo ("vou atualizar", "vou criar", "vou marcar"),
-  você DEVE devolver a ação correspondente. A fala dele é a intenção; QUEM EXECUTA É
-  VOCÊ. Nunca assuma que já foi feito.
-- Só devolva formulario se faltar informação ESSENCIAL que não dá para deduzir.
-  No MÁXIMO 2 perguntas, e só do que você realmente não consegue montar sozinho.
-  Nunca pergunte o que tem padrão (prioridade, status, categoria) — use o padrão.
-  Pergunta com alternativas traz "opcoes"; pergunta aberta vem SEM "opcoes".
-  "crie uma ação de reparar as mesas" JÁ BASTA para criar_acao: escreva você o título
-  e o plano a partir do que ele disse. O dono revisa e ajusta na tela de confirmação,
-  então preencher por conta própria é melhor do que perguntar.
-- Só devolva tudo null se for pergunta, opinião ou conversa sem pedido de mudança.
-- Para editar ou excluir, use o id EXATO da lista de estado atual. Se não achar o item,
-  devolva null em vez de inventar id.
-
-PADRÕES quando o dono não disser: prioridade = IMPORTANTE, status = PENDENTE,
-categoria = Geral. Nunca deixe de criar por falta desses — use o padrão.
-
-ATENÇÃO: insight NÃO tem campo de status. Arquivar, desativar, remover ou tirar um
-insight é sempre excluir_insight (ele é desativado, não apagado).
-
-EXEMPLOS:
-"crie uma ação de reparar as mesas" ->
-{"acao":{"tipo":"criar_acao","dados":{"titulo_acao":"Reparar as mesas","plano_detalhado":"Verificar o estado das mesas e providenciar o reparo das que estiverem danificadas.","prioridade":"IMPORTANTE","categoria":"Ambiente","status":"PENDENTE"},"descricao":"Criar a ação de reparar as mesas"},"formulario":null}
-"marca a ação X como concluída" ->
-{"acao":{"tipo":"editar_acao","dados":{"id":<id da lista>,"status":"CONCLUIDO"},"descricao":"Marcar 'X' como concluída"},"formulario":null}
-"agora são 30 mesas" ->
-{"acao":{"tipo":"atualizar_config","dados":{"campo":"numero_mesas","valor":"30"},"descricao":"Atualizar o número de mesas para 30"},"formulario":null}
-"apaga o insight da sobremesa" ->
-{"acao":{"tipo":"excluir_insight","dados":{"id":"<id da lista>"},"descricao":"Arquivar o insight 'Sobremesa servida fria'"},"formulario":null}
-"como estão minhas avaliações?" -> {"acao":null,"formulario":null}
-
-Responda APENAS com este JSON:
-{
-  "acao": null | { "tipo": "...", "dados": { ... }, "descricao": "frase curta do que será feito, em português" },
-  "formulario": null | {
-    "titulo": "pergunta introdutória",
-    "campos": [
-      { "nome": "chave", "label": "Pergunta", "tipo": "escolha|multipla|texto|numero|data", "opcoes": ["a","b"], "obrigatorio": true }
-    ],
-    "acao_pretendida": "criar_acao"
-  }
-}
-Se não houver nada a fazer: { "acao": null, "formulario": null }`
-}
-
-/**
- * Prompt de propósito único: o pedido de criar já foi identificado, aqui só
- * preenchemos os campos. O detector geral tem muitas regras e o modelo às vezes
- * desiste de criar; esta chamada curta é bem mais confiável.
- */
-export function construirSystemPromptMontarCriacao(
-  tipo: 'acao' | 'insight',
-  mensagemUsuario: string,
-) {
-  if (tipo === 'insight') {
-    return `O dono do restaurante pediu para criar um INSIGHT. Monte os campos a partir do pedido dele.
-Pedido: "${mensagemUsuario}"
-
-Responda APENAS com este JSON:
-{ "titulo": "curto e claro", "descricao": "o que foi observado", "sugestao": "o que fazer",
-  "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral" }
-
-Se ele não disser a prioridade, use IMPORTANTE. Se não disser a categoria, escolha a mais provável.
-Escreva em português do Brasil. Nunca devolva campos vazios.`
-  }
-  return `O dono do restaurante pediu para criar uma AÇÃO operacional. Monte os campos a partir do pedido dele.
-Pedido: "${mensagemUsuario}"
-
-Responda APENAS com este JSON:
-{ "titulo_acao": "curto e claro", "plano_detalhado": "passos práticos para resolver",
-  "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral",
-  "status": "PENDENTE" }
-
-Se ele não disser a prioridade, use IMPORTANTE. Se não disser a categoria, escolha a mais provável.
-Escreva em português do Brasil. Nunca devolva campos vazios.`
-}
-
-/**
- * Prompt de propósito único para atualizar um dado do perfil. Mesma ideia do
- * montar-criação: o detector geral erra por excesso de regras, este só decide
- * campo + valor.
- */
-export function construirSystemPromptMontarConfig(
-  mensagemUsuario: string,
-  configAtual: Record<string, unknown>,
-  campos: string[],
-) {
-  return `O dono do restaurante disse algo que pode mudar um dado do perfil dele.
-
-Campos possíveis (chave = significado):
-${campos.join('\n')}
-
-Valores atuais: ${JSON.stringify(configAtual)}
-
-Frase dele: "${mensagemUsuario}"
-
-Responda APENAS com este JSON:
-{ "campo": "<chave exata da lista, ou null>", "valor": "<novo valor como texto>" }
-
-Devolva o campo quando ele informar ou mandar mudar um valor (ex: "agora são 30 mesas",
-"muda o horário para 10h às 23h", "meu nome é Breno", "somos uma pizzaria").
-Devolva { "campo": null, "valor": "" } se ele só fez uma pergunta, ou se o valor for
-igual ao atual, ou se nada na frase corresponder a um desses campos.`
 }
 
 /** Extrai fatos duradouros da conversa para a memória de longo prazo. */

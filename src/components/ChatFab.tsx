@@ -53,6 +53,7 @@ import {
 } from '@/lib/queries/agente-ia'
 import { ConfirmacaoAcao } from '@/components/chat/ConfirmacaoAcao'
 import { FormularioInline } from '@/components/chat/FormularioInline'
+import { montarAcao, montarInsight } from '@/lib/ia/agentes'
 import { VisualizadorAnexo, AnexoVisivel } from '@/components/chat/VisualizadorAnexo'
 import { extrairTextoDePdf } from '@/lib/queries/conhecimento'
 import { buscarMemoria, FatoMemoria } from '@/lib/queries/memoria-assistente'
@@ -191,8 +192,9 @@ export function ChatFab({
   const { toast } = useToast()
   const {
     messages, loading, buscandoWeb, sessaoId, enviar, adicionarMensagemUsuario,
-    removerUltimaMensagem, excluirMensagem, editarMensagem, anexarProposta, limparProposta, anexarRegistro, removerRegistro,
-    carregarHistorico, novaConversa, mudarSessao,
+    removerUltimaMensagem, excluirMensagem, rebobinarPara, anexarProposta,
+    marcarPropostaAplicada, desmarcarPropostaPorRegistro, anexarRegistro, removerRegistro,
+    registrarTroca, setLoading, carregarHistorico, novaConversa, mudarSessao,
   } = useChat('global')
 
   const [message, setMessage] = useState('')
@@ -267,9 +269,26 @@ export function ChatFab({
 
   const salvarEdicao = async () => {
     if (!editandoUid || !textoEdicao.trim()) return
-    await editarMensagem(editandoUid, textoEdicao.trim())
+    const uid = editandoUid
+    const novo = textoEdicao.trim()
     setEditandoUid(null)
     setTextoEdicao('')
+    setHasError(false)
+    setFormularioPendente(null)
+
+    // Rebobina: esquece as mensagens seguintes E as anotações aprendidas dali em
+    // diante. Depois refaz o contexto (memória já sem o que foi esquecido) e
+    // reenvia o novo texto — como se a conversa continuasse a partir da edição.
+    const ok = await rebobinarPara(uid, novo, usuario?.restaurante_id ?? null)
+    if (!ok) return
+
+    const contexto: Record<string, any> = await fetchContexto()
+    const result = await enviar(novo, contexto, undefined, undefined, {
+      jaExibida: true,
+      memoria: memoriaRef.current,
+      modoAcao: modoAcaoRef.current,
+    })
+    await tratarResultado(result, novo)
   }
 
   const aoRolar = (e: React.UIEvent<HTMLDivElement>) => {
@@ -649,8 +668,16 @@ export function ChatFab({
       jaExibida: true,
       memoria: memoriaRef.current,
       respondendoA: citando || undefined,
+      // A narração da IA precisa saber se vai aplicar ou só propor
+      modoAcao: modoAcaoRef.current,
     })
 
+    await tratarResultado(result, msgTexto)
+  }
+
+  /** Trata o retorno do enviar (erro / formulário / ação). Compartilhado entre
+   *  o envio normal e o reenvio pós-edição. */
+  const tratarResultado = async (result: Awaited<ReturnType<typeof enviar>>, msgTexto: string) => {
     if (result?.error) {
       setHasError(true)
       setFailedMessage(msgTexto)
@@ -697,9 +724,14 @@ export function ChatFab({
       const registro = await executarAcao(usuario.restaurante_id, final, modo)
       if (registro) {
         setRegistrosFeitos((p) => [...p, registro])
-        anexarRegistro({ id: registro.id, descricao: registro.descricao })
+        if (uidMensagem) {
+          // Fluxo com proposta: o botão FICA e vira verde (aceita). Nunca some.
+          marcarPropostaAplicada(uidMensagem, { id: registro.id, descricao: registro.descricao })
+        } else {
+          // Modo automático (sem botão de proposta): marca de "feito" avulsa
+          anexarRegistro({ id: registro.id, descricao: registro.descricao })
+        }
       }
-      if (uidMensagem) limparProposta(uidMensagem)
       setPopup(null)
       refetchConfig()
       toast({
@@ -717,9 +749,10 @@ export function ChatFab({
     try {
       await reverterAcao(registro)
       setRegistrosFeitos((p) => p.filter((r) => r.id !== id))
-      removerRegistro(id)
+      removerRegistro(id) // marca avulsa (modo automático)
+      desmarcarPropostaPorRegistro(id) // volta a proposta ao azul, mantendo o botão
       refetchConfig()
-      toast({ title: 'Desfeito', description: 'O estado anterior foi restaurado.' })
+      toast({ title: 'Desfeito', description: 'Voltou ao estado anterior. Você pode aplicar de novo.' })
     } catch (e: any) {
       toast({ title: 'Não consegui desfazer', description: e.message, variant: 'destructive' })
     }
@@ -748,32 +781,63 @@ export function ChatFab({
   }
 
   /** Respostas do formulário voltam como mensagem, para a IA agir com os dados. */
-  const responderFormulario = (respostas: Record<string, string>) => {
+  /**
+   * Responder o formulário NÃO passa pelo redator: os agentes já têm tudo para
+   * montar a ação. Antes, reenviávamos um texto de "pergunta: resposta" pelo chat
+   * — virava mensagem feia, reprocessava tudo e às vezes dava erro e sumia.
+   * Agora monta a ação direto e mostra a proposta, com mensagens limpas.
+   */
+  const responderFormulario = async (respostas: Record<string, string>) => {
     const form = formularioPendente
     setFormularioPendente(null)
     if (!form) return
-    const resumo = form.campos
-      .map((c) => (respostas[c.nome] ? `${c.label} ${respostas[c.nome]}` : ''))
-      .filter(Boolean)
-      .join('. ')
-    if (!resumo) return
-    // Prefixa a intenção para o roteador não classificar as respostas como conversa
-    const prefixo =
-      form.acao_pretendida === 'criar_acao'
-        ? 'Criar a ação: '
-        : form.acao_pretendida === 'criar_insight'
-          ? 'Criar o insight: '
-          : ''
-    handleSend(prefixo + resumo)
+
+    const preenchidos = form.campos.filter((c) => (respostas[c.nome] || '').trim())
+    if (!preenchidos.length) return
+
+    // Mensagem do usuário: curta e legível, só os valores respondidos
+    const textoUsuario = preenchidos.map((c) => respostas[c.nome].trim()).join(' · ')
+    // Pedido para o agente: junta pergunta + resposta para ele extrair os campos
+    const pedido = preenchidos.map((c) => `${c.label}: ${respostas[c.nome].trim()}`).join('. ')
+    const ehInsight = form.acao_pretendida === 'criar_insight'
+
+    setLoading(true)
+    try {
+      const acao = ehInsight ? await montarInsight(pedido) : await montarAcao(pedido)
+      if (!acao) {
+        await registrarTroca(
+          textoUsuario,
+          'Consegui anotar, mas não montei a proposta. Pode me dar um pouco mais de detalhe?',
+        )
+        return
+      }
+      const destrutiva = ACOES_DESTRUTIVAS.includes(acao.tipo)
+      if (modoAcaoRef.current === 'automatico' && !destrutiva) {
+        await registrarTroca(textoUsuario, `Pronto! ${acao.descricao}.`)
+        await aplicarAcao(acao, 'automatico')
+      } else {
+        const uid = await registrarTroca(
+          textoUsuario,
+          ehInsight ? 'Preparei o insight. Confira e confirme:' : 'Preparei a ação. Confira e confirme:',
+        )
+        const puid = anexarProposta(acao)
+        if (puid) setPopup({ acao, uid: puid })
+        else if (uid) setPopup({ acao, uid })
+      }
+    } catch {
+      await registrarTroca(textoUsuario, 'Desculpe, tive um problema ao montar. Pode tentar de novo?')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (ocultar) return null
 
   const messagesToRender =
     messages.length === 0
-      ? [{ uid: 'saudacao', role: 'assistant' as const, content: `Olá! Sou o ${mascoteNome}, seu assistente de inteligência. Como posso ajudar a melhorar seu restaurante hoje?`, anexos: undefined, fontes: undefined, registros: undefined, proposta: undefined, respondendoA: undefined }]
+      ? [{ uid: 'saudacao', role: 'assistant' as const, content: `Olá! Sou o ${mascoteNome}, seu assistente de inteligência. Como posso ajudar a melhorar seu restaurante hoje?`, anexos: undefined, fontes: undefined, registros: undefined, proposta: undefined, propostaRegistro: undefined, respondendoA: undefined }]
       : messages.map((m) => ({ uid: m.uid, role: m.role, content: m.text, anexos: m.anexos, fontes: m.fontes, registros: m.registros, proposta: m.proposta,
-          respondendoA: m.respondendoA }))
+          propostaRegistro: m.propostaRegistro, respondendoA: m.respondendoA }))
 
   return (
     <>
@@ -1149,15 +1213,33 @@ export function ChatFab({
                       )}
                       {msg.role === 'assistant' && msg.proposta && (
                         <div className="flex w-full justify-start pl-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 text-xs h-8 rounded-full border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
-                            onClick={() => setPopup({ acao: msg.proposta!, uid: msg.uid })}
-                          >
-                            <Sparkles className="h-3 w-3" />
-                            {ROTULO_ACAO[msg.proposta.tipo] || 'Revisar alteração'}
-                          </Button>
+                          {msg.propostaRegistro ? (
+                            // Aceita: verde, com Desfazer. O botão NUNCA some.
+                            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 max-w-[85%]">
+                              <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span className="text-[11px] text-emerald-900 flex-1 leading-snug">
+                                {msg.propostaRegistro.descricao}
+                              </span>
+                              <button
+                                onClick={() => desfazer(msg.propostaRegistro!.id)}
+                                className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900 shrink-0"
+                                title="Reverter e voltar ao estado não aplicado"
+                              >
+                                Desfazer
+                              </button>
+                            </div>
+                          ) : (
+                            // Não aceita: azul, clicável para revisar/aplicar
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-xs h-8 rounded-full border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                              onClick={() => setPopup({ acao: msg.proposta!, uid: msg.uid })}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              {ROTULO_ACAO[msg.proposta.tipo] || 'Revisar alteração'}
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
