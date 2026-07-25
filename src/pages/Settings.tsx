@@ -100,9 +100,19 @@ export default function Settings() {
     JSON.stringify({ restaurante, mascote, perfil }) !== JSON.stringify(salvo)
 
   const handleSalvar = async () => {
-    if (!restauranteId) return
+    // Antes isto era um `return` mudo: o botão parecia não fazer nada.
+    if (!restauranteId) {
+      toast({
+        title: 'Não consegui identificar seu restaurante',
+        description: 'Recarregue a página e tente novamente.',
+        variant: 'destructive',
+      })
+      return
+    }
     setSalvando(true)
-    const { error } = await supabase
+    // .select('id'): o Supabase devolve 200 sem erro mesmo quando a RLS bloqueia
+    // e não altera nada. Sem checar as linhas retornadas, mostrávamos "Salvo" falso.
+    const { data, error } = await supabase
       .from('restaurantes')
       .update({
         nome_restaurante: restaurante.nome_restaurante,
@@ -116,10 +126,20 @@ export default function Settings() {
         perfil_restaurante: perfilParaJson(perfil),
       } as any)
       .eq('id', restauranteId)
+      .select('id')
     setSalvando(false)
 
     if (error) {
-      toast({ title: 'Erro', description: 'Não foi possível salvar.', variant: 'destructive' })
+      // Mostra o motivo real em vez de esconder atrás de um texto genérico
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
+      return
+    }
+    if (!data || data.length === 0) {
+      toast({
+        title: 'Não foi salvo',
+        description: 'Sem permissão para editar este restaurante ou a sessão expirou. Recarregue a página e entre de novo.',
+        variant: 'destructive',
+      })
       return
     }
     setSalvo({ restaurante, mascote, perfil })
