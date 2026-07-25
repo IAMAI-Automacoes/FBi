@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 
@@ -23,6 +23,8 @@ interface AuthContextType {
   logout: () => Promise<{ error: any }>
   recuperarSenha: (email: string) => Promise<{ error: any }>
   loading: boolean
+  /** Recarrega os dados do restaurante do banco (sem precisar de F5). */
+  refetchUsuario: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -165,9 +167,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error }
   }
 
+  // Rebusca o restaurante do usuário logado. O `usuario` era carregado só uma
+  // vez (no login) e não atualizava ao navegar — só com F5. Chamado após salvar.
+  const refetchUsuario = useCallback(async () => {
+    const { data: { user: atual } } = await supabase.auth.getUser()
+    if (!atual) return
+    const { data } = await supabase
+      .from('restaurantes')
+      .select('*')
+      .eq('auth_user_id', atual.id)
+      .single()
+    if (data) setUsuario(mapRestauranteToUsuario(data, atual.id))
+  }, [])
+
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, login, cadastro, logout, recuperarSenha, loading }}
+      value={{ user, session, usuario, login, cadastro, logout, recuperarSenha, loading, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

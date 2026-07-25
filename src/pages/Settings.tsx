@@ -10,6 +10,7 @@ import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { WhatsAppTab } from './settings/WhatsAppTab'
 import { useUserProfile } from '@/hooks/use-user-profile'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
+import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ function perfilParaJson(p: PerfilNegocioForm) {
 export default function Settings() {
   const { profile, loading } = useUserProfile()
   const { refetch: refetchConfig } = useRestauranteConfig()
+  const { refetchUsuario } = useAuth()
   const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
@@ -143,7 +145,9 @@ export default function Settings() {
       return
     }
     setSalvo({ restaurante, mascote, perfil })
-    refetchConfig() // atualiza sidebar, banner e o assistente do chat na hora
+    // Atualiza os dois caches do app na hora, sem precisar de F5:
+    refetchConfig()    // sidebar, banner e o assistente do chat (contexto)
+    refetchUsuario()   // dados do restaurante no useAuth (carregados só no login)
     toast({ title: 'Salvo', description: 'Configurações atualizadas.' })
   }
 
