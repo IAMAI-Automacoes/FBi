@@ -15,4 +15,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     persistSession: true,
     autoRefreshToken: true,
   },
+  global: {
+    // O Supabase não envia Cache-Control nas respostas; sem isto o navegador
+    // reusa as respostas GET do cache de memória entre navegações do SPA, e os
+    // dados só atualizavam ao dar F5 (que limpa esse cache). 'no-store' força
+    // toda leitura a vir fresca do banco.
+    fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+  },
 })
