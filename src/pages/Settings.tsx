@@ -9,8 +9,6 @@ import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/Pe
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { WhatsAppTab } from './settings/WhatsAppTab'
 import { useUserProfile } from '@/hooks/use-user-profile'
-import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
-import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -33,8 +31,6 @@ function perfilParaJson(p: PerfilNegocioForm) {
 
 export default function Settings() {
   const { profile, loading } = useUserProfile()
-  const { refetch: refetchConfig } = useRestauranteConfig()
-  const { refetchUsuario } = useAuth()
   const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
@@ -145,10 +141,10 @@ export default function Settings() {
       return
     }
     setSalvo({ restaurante, mascote, perfil })
-    // Atualiza os dois caches do app na hora, sem precisar de F5:
-    refetchConfig()    // sidebar, banner e o assistente do chat (contexto)
-    refetchUsuario()   // dados do restaurante no useAuth (carregados só no login)
-    toast({ title: 'Salvo', description: 'Configurações atualizadas.' })
+    toast({ title: 'Salvo', description: 'Atualizando a página…' })
+    // F5 automático: recarrega para que tudo (formulário, sidebar, chat) reflita
+    // exatamente o que foi salvo, sem depender de nenhum cache do navegador.
+    setTimeout(() => window.location.reload(), 600)
   }
 
   const handleDescartar = () => {
@@ -296,7 +292,7 @@ export default function Settings() {
               <Button variant="ghost" onClick={handleDescartar} disabled={salvando}>
                 Descartar
               </Button>
-              <Button onClick={handleSalvar} disabled={salvando || enviandoArquivo} className="min-w-[160px]">
+              <Button onClick={handleSalvar} disabled={!alterado || salvando || enviandoArquivo} className="min-w-[160px]">
                 {salvando ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
