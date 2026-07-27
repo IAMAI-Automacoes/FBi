@@ -7,13 +7,17 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import {
-  listarDocumentos, indexarDocumento, removerDocumento,
+  listarDocumentos, indexarDocumento, removerDocumento, buscarConteudoDocumento,
   extrairTextoDeUrl, extrairTextoDePdf, DocumentoIA,
 } from '@/lib/queries/conhecimento'
 import {
   BookOpen, FileText, Link2, Type, Trash2, Loader2, Upload, CheckCircle2, AlertCircle,
+  Eye, ExternalLink,
 } from 'lucide-react'
 
 export function ConhecimentoTab({ restauranteId }: { restauranteId: number | null }) {
@@ -27,6 +31,19 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
   const [url, setUrl] = useState('')
   const [tituloTexto, setTituloTexto] = useState('')
   const [texto, setTexto] = useState('')
+  // Visualização de um material dentro do sistema
+  const [vendo, setVendo] = useState<DocumentoIA | null>(null)
+  const [conteudoVisto, setConteudoVisto] = useState<string | null>(null)
+
+  const abrirVisualizacao = async (doc: DocumentoIA) => {
+    setVendo(doc)
+    setConteudoVisto(null)
+    try {
+      setConteudoVisto(await buscarConteudoDocumento(doc.id))
+    } catch {
+      setConteudoVisto('Não foi possível carregar o conteúdo.')
+    }
+  }
 
   const carregar = async () => {
     try {
@@ -225,6 +242,15 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
                       {d.escopo === 'global' && ' · material de referência'}
                     </p>
                   </div>
+                  {d.status === 'indexado' && (
+                    <Button
+                      variant="ghost" size="icon" onClick={() => abrirVisualizacao(d)}
+                      title="Visualizar conteúdo"
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
                   {d.escopo !== 'global' && (
                     <Button
                       variant="ghost" size="icon" onClick={() => excluir(d)}
@@ -239,6 +265,40 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
           )}
         </div>
       </CardContent>
+
+      {/* Visualização do material dentro do sistema */}
+      <Dialog open={!!vendo} onOpenChange={(o) => !o && setVendo(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 pr-6">
+              <span className="truncate">{vendo?.titulo}</span>
+            </DialogTitle>
+          </DialogHeader>
+          {vendo?.origem === 'url' && vendo.url && (
+            <a
+              href={vendo.url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Abrir a página original
+            </a>
+          )}
+          <div className="overflow-y-auto sem-barra rounded-lg border bg-muted/30 p-4 mt-1">
+            {conteudoVisto === null ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+                {conteudoVisto || 'Sem conteúdo.'}
+              </p>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground shrink-0">
+            Este é o texto que a IA lê. Arquivos são guardados como texto extraído — o arquivo
+            original não fica salvo.
+          </p>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

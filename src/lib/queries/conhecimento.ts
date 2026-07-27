@@ -179,6 +179,31 @@ export async function removerDocumento(id: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Reconstrói o texto de um documento a partir dos trechos indexados (o original
+ * não é guardado — só o texto extraído). Remove a sobreposição entre trechos.
+ */
+export async function buscarConteudoDocumento(id: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('documento_trechos')
+    .select('conteudo, posicao')
+    .eq('documento_id', id)
+    .order('posicao', { ascending: true })
+  if (error) throw error
+  const trechos = (data || []) as { conteudo: string; posicao: number }[]
+  if (!trechos.length) return ''
+
+  let texto = trechos[0].conteudo
+  for (let i = 1; i < trechos.length; i++) {
+    const c = trechos[i].conteudo
+    // acha o maior sufixo do acumulado que é prefixo do próximo e junta só o novo
+    let overlap = Math.min(250, texto.length, c.length)
+    while (overlap > 0 && !texto.endsWith(c.slice(0, overlap))) overlap--
+    texto += c.slice(overlap)
+  }
+  return texto
+}
+
 /** Busca semântica: devolve os trechos mais parecidos com a pergunta. */
 export async function buscarConhecimento(
   consulta: string,
