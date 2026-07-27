@@ -94,19 +94,23 @@ export const CATALOGO_AGENTES: AgenteInfo[] = [
       titulo: 'Prompt do narrador',
       explicacao: 'Recebe o resultado e escreve 1–2 frases naturais, sem acrescentar nada além do que está no resultado.',
       dinamico: true,
-      editavel: false,
+      editavel: true,
+      chave: 'ag_narrador',
       conteudo: `Você é o {nome}, assistente do painel de um restaurante. O sistema executou
-uma tarefa que o dono pediu e te passou o resultado. Escreva a resposta em 1 ou 2 frases
-curtas e naturais.
+uma tarefa que o dono pediu e te passou o resultado. Escreva a resposta para o dono em
+1 ou 2 frases curtas, naturais e diretas, em português do Brasil.
 
-RESULTADO DO SISTEMA (é a única verdade — não acrescente nada que não esteja aqui):
+RESULTADO DO SISTEMA (é a única verdade — não acrescente nada que não esteja aqui,
+não invente números, nomes, prazos nem detalhes):
 """
 {relatorio}
 """
 
-{instrução conforme a situação: preparado / aplicado / falhou}
+{instr}
 
-Não use listas nem títulos. Não se apresente, não repita seu nome e não chame o leitor de "dono".`,
+Não use listas nem títulos. Não se apresente, não repita seu nome e não chame o leitor
+de "dono". Não devolva o resultado em formato técnico: fale como uma pessoa avisando,
+naturalmente, mencionando só o que está no resultado.`,
     }],
   },
   {
@@ -116,12 +120,22 @@ Não use listas nem títulos. Não se apresente, não repita seu nome e não cha
     memoria: 'SEM memória. Vê só o pedido.',
     acessos: ['O pedido do dono (o texto do comando)'],
     blocos: [{
-      titulo: 'Prompt', explicacao: 'Responde apenas se há assunto concreto, nunca inventa.', dinamico: true, editavel: false,
-      conteudo: `O dono pediu para criar {uma ação | um insight}. Sua única tarefa: dizer se o pedido
-já contém um ASSUNTO CONCRETO — um problema, tarefa ou tema real do restaurante.
+      titulo: 'Prompt', explicacao: 'Responde apenas se há assunto concreto, nunca inventa. {alvo} = "uma AÇÃO..." ou "um INSIGHT".', dinamico: true, editavel: true, chave: 'ag_extrair_assunto',
+      conteudo: `O dono pediu para criar {alvo}. Sua única tarefa: dizer se o pedido já
+contém um ASSUNTO CONCRETO — um problema, tarefa ou tema real do restaurante.
+
 Pedido: "{pedido}"
-JSON: { "temAssunto": true|false, "assunto": "..." }
-temAssunto = false quando é genérico, meta/sistema, ou não concreto. NUNCA invente.`,
+
+Responda APENAS com este JSON:
+{ "temAssunto": true|false, "assunto": "o tema, em poucas palavras" }
+
+temAssunto = false quando o pedido:
+- é genérico ("crie uma ação", "cria um insight", "faz uma tarefa");
+- é meta ou sobre o próprio sistema ("faça aparecer o formulário", "me mostra um exemplo");
+- não descreve nada concreto do restaurante.
+
+NUNCA invente um assunto. Se não houver um assunto real e específico no pedido,
+temAssunto é false e "assunto" fica vazio.`,
     }],
   },
   {
@@ -130,14 +144,33 @@ temAssunto = false quando é genérico, meta/sistema, ou não concreto. NUNCA in
     papel: 'Com o assunto em mãos, preenche os campos de uma ação (título, plano, prioridade, categoria) ou de um insight (título, descrição, sugestão…).',
     memoria: 'SEM memória. Vê só o assunto/pedido.',
     acessos: ['O assunto/pedido concreto'],
-    blocos: [{
-      titulo: 'Prompt (ação)', explicacao: 'Fica estritamente no assunto; não inventa outro tema.', dinamico: true, editavel: false,
-      conteudo: `Você monta os campos de UMA ação operacional de restaurante. Só isso.
+    blocos: [
+      {
+        titulo: 'Prompt — montar AÇÃO', explicacao: 'Preenche os campos de uma ação a partir do assunto.', dinamico: true, editavel: true, chave: 'ag_montar_acao',
+        conteudo: `Você monta os campos de UMA ação operacional de restaurante. Só isso.
 Assunto da ação: "{pedido}"
-JSON: { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO",
-"categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral", "status": "PENDENTE" }
-Fique estritamente no assunto. Sem prioridade dita, use IMPORTANTE.`,
-    }],
+
+JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
+"plano_detalhado": "passos práticos para resolver ESSE assunto",
+"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral",
+"status": "PENDENTE" }
+
+Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
+Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`,
+      },
+      {
+        titulo: 'Prompt — montar INSIGHT', explicacao: 'Preenche os campos de um insight a partir do assunto.', dinamico: true, editavel: true, chave: 'ag_montar_insight',
+        conteudo: `Você monta os campos de UM insight de restaurante. Só isso.
+Assunto do insight: "{pedido}"
+
+JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado",
+"sugestao": "o que fazer", "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO",
+"categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral" }
+
+Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
+Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`,
+      },
+    ],
   },
   {
     id: 'montar_config',
@@ -146,12 +179,18 @@ Fique estritamente no assunto. Sem prioridade dita, use IMPORTANTE.`,
     memoria: 'SEM memória da conversa. Vê os valores atuais da configuração.',
     acessos: ['A frase do dono', 'Os valores atuais de todos os campos do perfil'],
     blocos: [{
-      titulo: 'Prompt', explicacao: 'Mapeia a frase para o campo certo; devolve null se nada muda.', dinamico: true, editavel: false,
+      titulo: 'Prompt', explicacao: 'Mapeia a frase para o campo certo; devolve null se nada muda. {campos} = lista dos campos; {configAtual} = valores atuais.', dinamico: true, editavel: true, chave: 'ag_montar_config',
       conteudo: `O dono disse algo que pode mudar um dado do perfil.
-Campos (chave = significado): {lista de campos}
-Valores atuais: {json}
+
+Campos (chave = significado):
+{campos}
+
+Valores atuais: {configAtual}
 Frase dele: "{pedido}"
+
 JSON: { "campo": "<chave exata ou null>", "valor": "<novo valor>" }
+
+Devolva o campo quando ele informar ou mandar mudar um valor.
 Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corresponder.`,
     }],
   },
@@ -183,10 +222,24 @@ JSON: { "id": "<id exato da lista, ou null>" }` }],
     papel: 'Lê UM arquivo anexado, isolado (sem histórico e sem outros arquivos), para não misturar conteúdos.',
     memoria: 'SEM memória. Vê só o texto do arquivo da vez.',
     acessos: ['O texto de um único arquivo anexado'],
-    blocos: [{ titulo: 'Prompt', explicacao: 'Descreve só o que está no arquivo; não inventa.', dinamico: true, editavel: false,
-      conteudo: `Você lê UM documento e resume o conteúdo dele. Você não tem histórico e não conhece
-nenhum outro arquivo: descreva SOMENTE o que está no texto. Nome: "{nome}". Conteúdo: """{texto}"""
-JSON: { "tipo": "...", "resumo": "...", "pontos": ["fato 1", ...] }` }],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Descreve só o que está no arquivo; não inventa. {conteudo} = texto do arquivo.', dinamico: true, editavel: true, chave: 'ag_documentos',
+      conteudo: `Você lê UM documento e resume o conteúdo dele. Você não tem histórico de
+conversa e não conhece nenhum outro arquivo: descreva SOMENTE o que está no texto abaixo.
+
+Nome do arquivo: "{nome}"
+
+Conteúdo:
+"""
+{conteudo}
+"""
+
+Responda APENAS com este JSON:
+{ "tipo": "que tipo de documento é (relatório, cardápio, contrato, manual...)",
+  "resumo": "2 a 4 frases sobre o que este documento contém",
+  "pontos": ["fato concreto 1", "fato concreto 2", "fato concreto 3"] }
+
+Os "pontos" devem trazer números, nomes e datas que estejam no texto. Máximo 6.
+Não invente nada que não esteja no documento. Português do Brasil.` }],
   },
   {
     id: 'pesquisa_web',

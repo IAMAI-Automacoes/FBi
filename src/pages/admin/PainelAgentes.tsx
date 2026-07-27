@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { CATALOGO_AGENTES, AgenteInfo, BlocoPrompt } from '@/lib/ia/catalogo-agentes'
-import { promptOverride, salvarPromptEditavel } from '@/lib/ia/prompt-store'
+import { promptOverride, salvarPromptEditavel, placeholdersDe } from '@/lib/ia/prompt-store'
 import {
   ModeloIA, listarModelos, adicionarModelo, ativarModelo, removerModelo,
 } from '@/lib/queries/modelos-ia'
@@ -27,6 +27,19 @@ function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
 
   const salvar = async () => {
     if (!bloco.chave) return
+    // Protege as partes dinâmicas: todo placeholder do texto original precisa
+    // continuar presente, senão o agente perde o dado da conversa e quebra.
+    const obrigatorios = placeholdersDe(bloco.conteudo)
+    const presentes = placeholdersDe(texto)
+    const faltando = obrigatorios.filter((p) => !presentes.includes(p))
+    if (faltando.length) {
+      toast({
+        title: 'Faltam campos obrigatórios',
+        description: `Mantenha no texto: ${faltando.map((p) => `{${p}}`).join(', ')}`,
+        variant: 'destructive',
+      })
+      return
+    }
     setSalvando(true)
     try {
       await salvarPromptEditavel(bloco.chave, texto)

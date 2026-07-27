@@ -22,6 +22,31 @@ export function promptOverride(chave: string): string | null {
   return typeof v === 'string' && v.trim() ? v : null
 }
 
+/**
+ * Monta o prompt de um agente: pega a sobrescrita (se houver) ou o template
+ * padrão, e substitui os placeholders {nome} pelos valores em `vars`. Os
+ * placeholders são a parte dinâmica (dados da conversa) — o admin edita o texto
+ * ao redor, mas não pode remover os placeholders (validado ao salvar).
+ */
+export function montarPrompt(
+  chave: string,
+  padrao: string,
+  vars: Record<string, string>,
+): string {
+  const ov = promptOverride(chave)
+  // Sem sobrescrita: devolve o padrão do código INTOCADO — comportamento idêntico
+  // ao de antes (zero risco). Só a edição do admin ativa a substituição.
+  if (ov == null) return padrao
+  return ov.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m))
+}
+
+/** Placeholders {x} presentes num texto — usado para validar edições. */
+export function placeholdersDe(texto: string): string[] {
+  const achados = new Set<string>()
+  for (const m of texto.matchAll(/\{(\w+)\}/g)) achados.add(m[1])
+  return [...achados]
+}
+
 /** true quando as sobrescritas já foram buscadas do banco ao menos uma vez. */
 export function promptsCarregados(): boolean {
   return carregado

@@ -2,6 +2,7 @@ import { enviarMensagem, enviarMensagemComFontes } from '@/lib/openrouter'
 import { CAMPOS_CONFIG, anexarTextoLivre } from '@/lib/queries/config-update'
 import { AcaoAgente, FormularioIA, validarAcao } from '@/lib/queries/agente-ia'
 import { Comando } from './comandos'
+import { montarPrompt } from './prompt-store'
 
 /**
  * Time de agentes especializados.
@@ -53,7 +54,7 @@ async function analisarUm(nome: string, texto: string): Promise<AnaliseArquivo> 
       [
         {
           role: 'system',
-          content: `Você lê UM documento e resume o conteúdo dele. Você não tem histórico de
+          content: montarPrompt('ag_documentos', `Você lê UM documento e resume o conteúdo dele. Você não tem histórico de
 conversa e não conhece nenhum outro arquivo: descreva SOMENTE o que está no texto abaixo.
 
 Nome do arquivo: "${nome}"
@@ -69,7 +70,7 @@ Responda APENAS com este JSON:
   "pontos": ["fato concreto 1", "fato concreto 2", "fato concreto 3"] }
 
 Os "pontos" devem trazer números, nomes e datas que estejam no texto. Máximo 6.
-Não invente nada que não esteja no documento. Português do Brasil.`,
+Não invente nada que não esteja no documento. Português do Brasil.`, { nome, conteudo: texto.slice(0, 18000) }),
         },
         { role: 'user', content: 'Analise e responda no formato JSON pedido.' },
       ],
@@ -253,7 +254,7 @@ export async function montarAcao(pedido: string): Promise<AcaoAgente | null> {
       [
         {
           role: 'system',
-          content: `Você monta os campos de UMA ação operacional de restaurante. Só isso.
+          content: montarPrompt('ag_montar_acao', `Você monta os campos de UMA ação operacional de restaurante. Só isso.
 Assunto da ação: "${pedido}"
 
 JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
@@ -262,7 +263,7 @@ JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
 "status": "PENDENTE" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
-Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`,
+Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`, { pedido }),
         },
         { role: 'user', content: 'Monte no formato JSON pedido.' },
       ],
@@ -296,7 +297,7 @@ export async function extrairAssunto(
       [
         {
           role: 'system',
-          content: `O dono pediu para criar ${alvo}. Sua única tarefa: dizer se o pedido já
+          content: montarPrompt('ag_extrair_assunto', `O dono pediu para criar ${alvo}. Sua única tarefa: dizer se o pedido já
 contém um ASSUNTO CONCRETO — um problema, tarefa ou tema real do restaurante.
 
 Pedido: "${pedido}"
@@ -310,7 +311,7 @@ temAssunto = false quando o pedido:
 - não descreve nada concreto do restaurante.
 
 NUNCA invente um assunto. Se não houver um assunto real e específico no pedido,
-temAssunto é false e "assunto" fica vazio.`,
+temAssunto é false e "assunto" fica vazio.`, { alvo, pedido }),
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
@@ -426,7 +427,7 @@ export async function montarInsight(pedido: string): Promise<AcaoAgente | null> 
       [
         {
           role: 'system',
-          content: `Você monta os campos de UM insight de restaurante. Só isso.
+          content: montarPrompt('ag_montar_insight', `Você monta os campos de UM insight de restaurante. Só isso.
 Assunto do insight: "${pedido}"
 
 JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado",
@@ -434,7 +435,7 @@ JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado
 "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
-Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`,
+Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`, { pedido }),
         },
         { role: 'user', content: 'Monte no formato JSON pedido.' },
       ],
@@ -463,7 +464,7 @@ export async function montarConfig(
       [
         {
           role: 'system',
-          content: `O dono disse algo que pode mudar um dado do perfil.
+          content: montarPrompt('ag_montar_config', `O dono disse algo que pode mudar um dado do perfil.
 
 Campos (chave = significado):
 ${Object.entries(CAMPOS_CONFIG).map(([k, v]) => `- ${k} = ${v}`).join('\n')}
@@ -474,7 +475,7 @@ Frase dele: "${pedido}"
 JSON: { "campo": "<chave exata ou null>", "valor": "<novo valor>" }
 
 Devolva o campo quando ele informar ou mandar mudar um valor.
-Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corresponder.`,
+Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corresponder.`, { campos: Object.entries(CAMPOS_CONFIG).map(([k, v]) => `- ${k} = ${v}`).join('\n'), configAtual: JSON.stringify(configAtual), pedido }),
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
@@ -728,7 +729,7 @@ export async function narrarOperacao(
       [
         {
           role: 'system',
-          content: `Você é o ${nome}, assistente do painel de um restaurante. O sistema executou
+          content: montarPrompt('ag_narrador', `Você é o ${nome}, assistente do painel de um restaurante. O sistema executou
 uma tarefa que o dono pediu e te passou o resultado. Escreva a resposta para o dono em
 1 ou 2 frases curtas, naturais e diretas, em português do Brasil.
 
@@ -742,7 +743,7 @@ ${instr}
 
 Não use listas nem títulos. Não se apresente, não repita seu nome e não chame o leitor
 de "dono". Não devolva o resultado em formato técnico: fale como uma pessoa avisando,
-naturalmente, mencionando só o que está no resultado.`,
+naturalmente, mencionando só o que está no resultado.`, { nome, relatorio, instr }),
         },
         { role: 'user', content: 'Escreva a resposta para o dono.' },
       ],
