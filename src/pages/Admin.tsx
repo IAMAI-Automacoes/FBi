@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { usePlatformAdmin } from '@/hooks/use-platform-admin'
+import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import {
   buscarTodasSugestoes, responderSugestao, uploadArquivosResposta,
   editarRespostaAdmin, excluirRespostaAdmin, excluirArquivosAdmin,
@@ -994,10 +995,10 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'pagamentos' | 'cupons' | 'afiliados'
+type Tab = 'suporte' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes'
 
 const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados',
+  suporte: 'Suporte', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA',
 }
 
 // Form defaults
@@ -1290,7 +1291,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'pagamentos', 'cupons', 'afiliados'] as Tab[]).map((tab) => (
+          {(['suporte', 'pagamentos', 'cupons', 'afiliados', 'agentes'] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
@@ -1504,6 +1505,9 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        {/* ── AGENTES DE IA ── */}
+        {activeTab === 'agentes' && <PainelAgentes />}
       </div>
 
       {/* ── Dialog: Divisão ── */}

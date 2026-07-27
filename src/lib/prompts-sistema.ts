@@ -1,7 +1,8 @@
 import { getPersonalidadePrompt } from './mascote-config'
+import { promptOverride } from './ia/prompt-store'
 
 /** Descrição do produto — o assistente precisa saber onde ele vive e o que existe no sistema. */
-const SOBRE_O_SISTEMA = `O sistema chama-se "Feedback Inteligente". Ele coleta avaliações dos
+export const SOBRE_O_SISTEMA = `O sistema chama-se "Feedback Inteligente". Ele coleta avaliações dos
 clientes do restaurante por WhatsApp (o cliente escaneia um QR Code, cai numa página e é levado
 para a conversa), analisa cada mensagem com IA e organiza tudo em um painel.
 
@@ -23,7 +24,7 @@ Como ler os números:
 - Comparações com o período anterior só valem quando há base suficiente; com poucas avaliações
   a variação percentual engana.`
 
-const REGRAS_RESPOSTA = `SOBRE O QUE VOCÊ PODE RESPONDER:
+export const REGRAS_RESPOSTA = `SOBRE O QUE VOCÊ PODE RESPONDER:
 Você conversa com o dono do restaurante, um adulto responsável pelo próprio negócio.
 Responda QUALQUER assunto que ele trouxer — não precisa ter relação com restaurantes.
 Se ele perguntar sobre finanças, tecnologia, direito, saúde, notícias, um site, uma
@@ -94,7 +95,7 @@ function bloco(titulo: string, conteudo: string): string {
  * resultado para ela narrar. Isto elimina a contradição entre o que ela diz e o
  * que o sistema faz — quem decide e quem executa passam a ser o mesmo fluxo.
  */
-const COMANDOS = `COMO AGIR NO SISTEMA — LEIA COM MUITA ATENÇÃO:
+export const COMANDOS = `COMO AGIR NO SISTEMA — LEIA COM MUITA ATENÇÃO:
 Você não altera nada sozinho e NUNCA diz que fez algo sem o sistema confirmar. Quando o
 dono PEDE uma alteração, ou quando você precisa de informação que não está aqui no
 contexto, sua resposta é APENAS um código no formato abaixo — e mais nada. O sistema
@@ -163,7 +164,7 @@ REGRAS DE OURO (nunca quebre):
 6. Se a resposta já está nos dados deste restaurante que você tem aqui, NÃO pesquise e
    NÃO consulte materiais: responda direto.`
 
-const REGRA_POS_BUSCA = `Uma consulta à internet foi feita e os resultados estão disponíveis.
+export const REGRA_POS_BUSCA = `Uma consulta à internet foi feita e os resultados estão disponíveis.
 Responda usando essas informações atuais.
 Se os resultados não responderem, diga isso com honestidade em vez de inventar.
 
@@ -181,17 +182,22 @@ export function construirSystemPromptChef(
   const personalidade = getPersonalidadePrompt(mascoteConfig?.personalidade || 'direto_objetivo')
   const ctx = contextoDados || {}
 
+  // Cada bloco pode ser sobrescrito pelo painel de admin (prompt_store); sem
+  // sobrescrita, usa o padrão do código.
+  const sobre = promptOverride('sobre_sistema') ?? SOBRE_O_SISTEMA
+  const regras = promptOverride('regras_resposta') ?? REGRAS_RESPOSTA
+
   let prompt = `Você é o ${nome}, assistente de IA do painel de um restaurante, especialista em gestão e operação.
 Personalidade: ${personalidade}
 
-${SOBRE_O_SISTEMA}
+${sobre}
 
-${REGRAS_RESPOSTA}`
+${regras}`
 
   // Fase 1 (decidir): a IA pode emitir comandos. Fase 2 (narrar busca): ela já
   // recebeu os fatos e só escreve a resposta — sem comandos, para não reciclar.
-  if (opcoes.jaBuscou) prompt += `\n\n${REGRA_POS_BUSCA}`
-  else if (!opcoes.semComandos) prompt += `\n\n${COMANDOS}`
+  if (opcoes.jaBuscou) prompt += `\n\n${promptOverride('regra_pos_busca') ?? REGRA_POS_BUSCA}`
+  else if (!opcoes.semComandos) prompt += `\n\n${promptOverride('comandos') ?? COMANDOS}`
 
   // Resultados da busca na web — precisam entrar no prompt, senão a IA vê a
   // instrução "você buscou" mas não os dados, e responde "não tenho acesso".
