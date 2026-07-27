@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronLeft, Camera, Mail, AtSign, UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
@@ -22,34 +23,39 @@ export default function MyAccount() {
   const [formData, setFormData] = useState({
     nome: '',
     username: '',
+    perfil_notas: '',
   })
   // Baseline do que está salvo, para habilitar "Salvar" só quando houver mudança
-  const [salvo, setSalvo] = useState({ nome: '', username: '' })
+  const [salvo, setSalvo] = useState({ nome: '', username: '', perfil_notas: '' })
 
   useEffect(() => {
     if (!usuario) return
     const nome = usuario.nome || ''
-    setFormData({ nome, username: '' })
-    setSalvo({ nome, username: '' })
+    setFormData({ nome, username: '', perfil_notas: '' })
+    setSalvo({ nome, username: '', perfil_notas: '' })
 
     const fetchProfile = async () => {
       const { data } = await supabase
         .from('restaurantes')
-        .select('avatar_url, username')
+        .select('avatar_url, username, perfil_notas')
         .eq('auth_user_id', usuario.id)
         .single()
 
       if (data) {
         if (data.avatar_url) setAvatarUrl(data.avatar_url)
         const username = (data as any).username || ''
-        setFormData({ nome, username })
-        setSalvo({ nome, username })
+        const perfil_notas = (data as any).perfil_notas || ''
+        setFormData({ nome, username, perfil_notas })
+        setSalvo({ nome, username, perfil_notas })
       }
     }
     fetchProfile()
   }, [usuario])
 
-  const alterado = formData.nome !== salvo.nome || formData.username !== salvo.username
+  const alterado =
+    formData.nome !== salvo.nome ||
+    formData.username !== salvo.username ||
+    formData.perfil_notas !== salvo.perfil_notas
 
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !usuario?.id) return
@@ -128,6 +134,7 @@ export default function MyAccount() {
       .update({
         nome: formData.nome,
         username: finalUsername,
+        perfil_notas: formData.perfil_notas || null,
       } as any)
       .eq('auth_user_id', usuario.id)
 
@@ -140,7 +147,7 @@ export default function MyAccount() {
         variant: 'destructive',
       })
     } else {
-      setSalvo({ nome: formData.nome, username: finalUsername || '' })
+      setSalvo({ nome: formData.nome, username: finalUsername || '', perfil_notas: formData.perfil_notas })
       toast({ title: 'Sucesso', description: 'Atualizando a página…' })
       // F5 automático (igual às Configurações): reflete tudo sem depender de cache
       setTimeout(() => window.location.reload(), 600)
@@ -282,6 +289,24 @@ export default function MyAccount() {
                   />
                   <p className="text-[13px] text-muted-foreground mt-1">
                     O e-mail é utilizado para login e notificações de segurança.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <Label htmlFor="perfil_notas" className="text-sm font-medium flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-gray-400" />
+                    Sobre você
+                  </Label>
+                  <Textarea
+                    id="perfil_notas"
+                    rows={5}
+                    className="resize-none"
+                    value={formData.perfil_notas}
+                    onChange={(e) => setFormData({ ...formData, perfil_notas: e.target.value })}
+                    placeholder="Escreva o que quiser sobre você: sua rotina, o que te motivou a abrir o restaurante, suas preferências… A IA também anota aqui o que você conta sobre você durante as conversas."
+                  />
+                  <p className="text-[13px] text-muted-foreground mt-1">
+                    Campo livre. Ajuda a IA a te conhecer e responder de forma mais pessoal.
                   </p>
                 </div>
               </div>

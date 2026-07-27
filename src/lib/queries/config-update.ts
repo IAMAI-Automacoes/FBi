@@ -80,3 +80,39 @@ export async function atualizarCampoConfig(
 
   throw new Error(`Campo desconhecido: ${campo}`)
 }
+
+/** Colunas de texto livre onde a IA "anota qualquer coisa". */
+export type CampoLivre = 'detalhes' | 'perfil_notas'
+
+/**
+ * Acrescenta uma anotação a um campo livre, sem apagar o que já estava.
+ * Usado quando um fato afirmado não tem um campo estruturado próprio.
+ */
+export async function anexarTextoLivre(
+  restauranteId: number,
+  coluna: CampoLivre,
+  texto: string,
+): Promise<void> {
+  const t = texto.trim()
+  if (!t) return
+  const { data, error } = await supabase
+    .from('restaurantes')
+    .select(coluna)
+    .eq('id', restauranteId)
+    .single()
+  if (error) throw new Error(error.message)
+  const atual = String((data as any)?.[coluna] || '').trim()
+  // Não duplica se o trecho já estiver anotado
+  if (atual.toLowerCase().includes(t.toLowerCase())) return
+  const novo = atual ? `${atual}\n${t}` : t
+
+  const { data: linhas, error: erroGravar } = await (supabase as any)
+    .from('restaurantes')
+    .update({ [coluna]: novo })
+    .eq('id', restauranteId)
+    .select('id')
+  if (erroGravar) throw new Error(erroGravar.message)
+  if (!linhas || linhas.length === 0) {
+    throw new Error('Nada foi anotado — verifique a permissão para editar este restaurante.')
+  }
+}

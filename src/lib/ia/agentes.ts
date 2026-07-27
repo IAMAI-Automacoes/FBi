@@ -1,5 +1,5 @@
 import { enviarMensagem, enviarMensagemComFontes } from '@/lib/openrouter'
-import { CAMPOS_CONFIG } from '@/lib/queries/config-update'
+import { CAMPOS_CONFIG, atualizarCampoConfig, anexarTextoLivre } from '@/lib/queries/config-update'
 import { AcaoAgente, FormularioIA, validarAcao } from '@/lib/queries/agente-ia'
 import { Comando } from './comandos'
 
@@ -745,5 +745,141 @@ naturalmente, mencionando só o que está no resultado.`,
     return txt || narracaoReserva(descricao, situacao)
   } catch {
     return narracaoReserva(descricao, situacao)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. PERSISTÊNCIA DE FATOS — guarda o que o dono afirma, em segundo plano
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SnapshotConfig {
+  /** Valor atual de cada campo estruturado (string vazia = não preenchido). */
+  campos: Record<string, string>
+  /** Texto livre do restaurante (coluna detalhes). */
+  detalhes: string
+  /** Texto livre do perfil pessoal (coluna perfil_notas). */
+  perfilNotas: string
+}
+
+type AcaoPersistencia =
+  | { tipo: 'campo'; campo: string; valor: string }
+  | { tipo: 'livre_restaurante'; valor: string }
+  | { tipo: 'livre_perfil'; valor: string }
+
+/**
+ * Agente de UMA tarefa: dado o que o dono acabou de dizer, achar os FATOS que ele
+ * AFIRMA sobre si ou sobre o restaurante e dizer onde salvar cada um — no campo
+ * estruturado certo (se vazio) ou no texto livre. Conservador de propósito: não
+ * age sobre perguntas, hipóteses, opiniões nem comandos.
+ */
+export async function persistirInformacao(
+  mensagem: string,
+  snap: SnapshotConfig,
+): Promise<AcaoPersistencia[]> {
+  if (!mensagem.trim()) return []
+  const lista = Object.entries(CAMPOS_CONFIG)
+    .filter(([k]) => k !== 'detalhes') // detalhes é texto livre, tratado à parte
+    .map(([k, rotulo]) => `- ${k} (${rotulo}): ${String(snap.campos[k] || '').trim() ? `"${snap.campos[k]}"` : 'VAZIO'}`)
+    .join('\n')
+  try {
+    const res = await enviarMensagem(
+      [
+        {
+          role: 'system',
+          content: `Sua única tarefa: achar FATOS que o dono AFIRMA agora sobre ELE mesmo ou sobre
+o RESTAURANTE e dizer onde salvar cada um. Não responda ao dono, só classifique.
+
+Mensagem do dono: "${mensagem}"
+
+Campos estruturados (valor atual; VAZIO = não preenchido):
+${lista}
+Texto livre do restaurante: ${snap.detalhes.trim() ? 'já tem conteúdo' : 'vazio'}
+Texto livre do perfil (dono): ${snap.perfilNotas.trim() ? 'já tem conteúdo' : 'vazio'}
+
+REGRAS (siga à risca):
+- Só considere fatos AFIRMADOS como verdade agora. IGNORE perguntas, hipóteses
+  ("imagina se..."), desejos, opiniões, ordens/comandos ("muda para...", "cria...")
+  e generalidades que não sejam deste dono/restaurante.
+- Para cada fato:
+  * Se há um campo estruturado para ele e esse campo está VAZIO → use "campo".
+  * Se o campo já tem valor, ou não existe campo para aquilo → use texto livre:
+    "livre_restaurante" (sobre o restaurante) ou "livre_perfil" (sobre o dono como pessoa).
+- NUNCA invente. NÃO repita o que já está salvo. Se não há nada a salvar: {"acoes":[]}.
+
+Responda APENAS com este JSON:
+{ "acoes": [ { "tipo": "campo"|"livre_restaurante"|"livre_perfil", "campo": "<chave exata, só se tipo=campo>", "valor": "<o dado ou a anotação, curto>" } ] }
+
+EXEMPLOS:
+"somos uma churrascaria" (tipo_culinaria VAZIO) -> {"acoes":[{"tipo":"campo","campo":"tipo_culinaria","valor":"Churrascaria"}]}
+"meu avô abriu em 1945 pra alimentar os soldados" (ano_abertura VAZIO) -> {"acoes":[{"tipo":"campo","campo":"ano_abertura","valor":"1945"},{"tipo":"livre_restaurante","valor":"Fundado pelo avô do dono para alimentar os soldados."}]}
+"eu sou formado em administração" -> {"acoes":[{"tipo":"livre_perfil","valor":"O dono é formado em administração."}]}
+"quantas mesas eu tenho?" -> {"acoes":[]}
+"imagina se fôssemos uma pizzaria" -> {"acoes":[]}
+"muda o horário para 10h" -> {"acoes":[]}`,
+        },
+        { role: 'user', content: 'Classifique e responda no formato JSON pedido.' },
+      ],
+      { ...JSON_OPTS, max_tokens: 400 },
+    )
+    const d = parse(res)
+    const acoes: any[] = Array.isArray(d?.acoes) ? d.acoes : []
+    const validas: AcaoPersistencia[] = []
+    for (const a of acoes) {
+      const valor = String(a?.valor || '').trim()
+      if (valor.length < 2) continue
+      if (a?.tipo === 'campo') {
+        const campo = String(a?.campo || '').trim()
+        if (campo && campo !== 'detalhes' && campo in CAMPOS_CONFIG) validas.push({ tipo: 'campo', campo, valor })
+      } else if (a?.tipo === 'livre_restaurante') {
+        validas.push({ tipo: 'livre_restaurante', valor })
+      } else if (a?.tipo === 'livre_perfil') {
+        validas.push({ tipo: 'livre_perfil', valor })
+      }
+    }
+    return validas.slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Roda o agente e aplica as gravações em segundo plano. Nunca lança: falhar aqui
+ * não pode atrapalhar a conversa. Preenche campo estruturado só se estiver VAZIO
+ * (nunca sobrescreve dado existente — correção é feita por comando explícito).
+ */
+export async function persistirEmBackground(
+  restauranteId: number | null,
+  mensagem: string,
+  snap: SnapshotConfig,
+): Promise<void> {
+  if (!restauranteId) return
+  try {
+    const acoes = await persistirInformacao(mensagem, snap)
+    for (const a of acoes) {
+      try {
+        if (a.tipo === 'campo') {
+          const jaTem = String(snap.campos[a.campo] || '').trim()
+          if (jaTem) {
+            // Campo já preenchido: não sobrescreve — vira anotação (com o rótulo do
+            // campo, para ficar legível) no texto livre certo.
+            await anexarTextoLivre(
+              restauranteId,
+              a.campo === 'nome' ? 'perfil_notas' : 'detalhes',
+              `${CAMPOS_CONFIG[a.campo] || a.campo}: ${a.valor}`,
+            )
+          } else {
+            await atualizarCampoConfig(restauranteId, a.campo, a.valor)
+          }
+        } else if (a.tipo === 'livre_restaurante') {
+          await anexarTextoLivre(restauranteId, 'detalhes', a.valor)
+        } else {
+          await anexarTextoLivre(restauranteId, 'perfil_notas', a.valor)
+        }
+      } catch {
+        /* uma gravação falhar não interrompe as outras */
+      }
+    }
+  } catch {
+    /* silencioso: é trabalho de bastidor */
   }
 }

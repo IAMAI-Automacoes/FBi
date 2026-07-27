@@ -862,6 +862,7 @@ export type Database = {
           configuracoes: Json | null
           created_at: string
           detalhes: string | null
+          perfil_notas: string | null
           ia_modo_acao: string
           perfil_restaurante: Json
           é_pagante: boolean | null
@@ -899,6 +900,7 @@ export type Database = {
           configuracoes?: Json | null
           created_at?: string
           detalhes?: string | null
+          perfil_notas?: string | null
           ia_modo_acao?: string
           perfil_restaurante?: Json
           é_pagante?: boolean | null
@@ -936,6 +938,7 @@ export type Database = {
           configuracoes?: Json | null
           created_at?: string
           detalhes?: string | null
+          perfil_notas?: string | null
           ia_modo_acao?: string
           perfil_restaurante?: Json
           é_pagante?: boolean | null

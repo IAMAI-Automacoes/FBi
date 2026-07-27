@@ -122,8 +122,12 @@ BUSCAS (você precisa de informação de fora deste painel):
 QUANDO USAR CADA UM:
 - Verbo de comando dele (cria, marca, muda, apaga, atualiza, arruma, coloca...) = ele
   PEDIU uma alteração; emita o comando de alteração correspondente.
-- Ele AFIRMA um dado do perfil diferente do atual ("agora são 30 mesas", "meu nome é
-  Breno", "somos uma pizzaria") = [[comando:mudar_config|...]].
+- Ele MANDA explicitamente CORRIGIR/MUDAR um dado do perfil ("muda para 30 mesas",
+  "corrige meu nome para Breno", "atualiza o horário") = [[comando:mudar_config|...]].
+- Ele só AFIRMA de passagem uma informação sobre ele ou o restaurante, sem mandar mudar
+  ("somos uma churrascaria", "meu avô abriu em 1945", "atendemos executivos no almoço")
+  = NÃO emita comando. Apenas CONVERSE normalmente, usando essa informação no contexto.
+  O sistema guarda esse fato sozinho, em segundo plano — você não precisa fazer nada.
 - QUALQUER pergunta sobre um FATO DO MUNDO REAL fora do restaurante = [[comando:pesquisar|...]].
   Isto vale mesmo que você ache que sabe a resposta. Seu conhecimento interno tem uma DATA
   DE CORTE e está DESATUALIZADO: eventos, resultados, notícias, quem ganhou/venceu, quando
@@ -237,6 +241,16 @@ não estiver nos resultados, diga que não encontrou.`,
 
   if (ctx.usuario?.nome) {
     prompt += bloco('Com quem você está falando', `${ctx.usuario.nome}, responsável pelo restaurante.`)
+  }
+
+  // Notas pessoais sobre o dono (campo livre do perfil; parte foi anotada pela IA)
+  if (ctx.restaurante?.perfil_notas) {
+    prompt += bloco(
+      'O que você sabe sobre o dono (pessoalmente)',
+      `"""\n${String(ctx.restaurante.perfil_notas)}\n"""\n` +
+        'São informações sobre o dono como pessoa. Use para tratá-lo de forma mais próxima; ' +
+        'nunca repita o texto cru nem fale em primeira pessoa sobre a vida dele.',
+    )
   }
 
   // Mensagem que o dono citou ao responder
