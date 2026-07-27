@@ -9,6 +9,7 @@ import { promptOverride, salvarPromptEditavel } from '@/lib/ia/prompt-store'
 import {
   ModeloIA, listarModelos, adicionarModelo, ativarModelo, removerModelo,
 } from '@/lib/queries/modelos-ia'
+import { PainelMemorias } from '@/pages/admin/PainelMemorias'
 import {
   Bot, ChevronRight, ArrowLeft, Database, Brain, Pencil, Save, RotateCcw, Lock, Loader2,
   Info, Cpu, Plus, Check, Trash2, KeyRound,
@@ -265,7 +266,7 @@ function PainelModelos() {
 }
 
 // ── Painel principal ─────────────────────────────────────────────────────────
-type Vista = { t: 'lista' } | { t: 'agente'; id: string } | { t: 'modelo' }
+type Vista = { t: 'lista' } | { t: 'agente'; id: string } | { t: 'modelo' } | { t: 'memoria' }
 
 export function PainelAgentes() {
   const [vista, setVista] = useState<Vista>({ t: 'lista' })
@@ -278,13 +279,13 @@ export function PainelAgentes() {
       </div>
     )
   }
-  if (vista.t === 'modelo') {
+  if (vista.t === 'modelo' || vista.t === 'memoria') {
     return (
       <div className="flex-1 overflow-y-auto sem-barra p-6">
         <button onClick={() => setVista({ t: 'lista' })} className="max-w-3xl mx-auto mb-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
-        <PainelModelos />
+        {vista.t === 'modelo' ? <PainelModelos /> : <PainelMemorias />}
       </div>
     )
   }
@@ -300,17 +301,30 @@ export function PainelAgentes() {
           </p>
         </div>
 
-        <button
-          onClick={() => setVista({ t: 'modelo' })}
-          className="w-full flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left hover:bg-gray-50/60 transition-colors"
-        >
-          <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><Cpu className="h-4 w-4" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-semibold text-gray-900">Modelo de IA (OpenRouter)</p>
-            <p className="text-[12.5px] text-gray-600 mt-0.5">Cadastrar modelos e chaves, e escolher qual fica ativo.</p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
-        </button>
+        <div className="grid sm:grid-cols-2 gap-2.5">
+          <button
+            onClick={() => setVista({ t: 'modelo' })}
+            className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left hover:bg-gray-50/60 transition-colors"
+          >
+            <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><Cpu className="h-4 w-4" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-gray-900">Modelo de IA</p>
+              <p className="text-[12px] text-gray-600 mt-0.5">Modelos e chaves do OpenRouter.</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+          </button>
+          <button
+            onClick={() => setVista({ t: 'memoria' })}
+            className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left hover:bg-gray-50/60 transition-colors"
+          >
+            <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center shrink-0"><Brain className="h-4 w-4" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-gray-900">Memória da IA</p>
+              <p className="text-[12px] text-gray-600 mt-0.5">Ver e editar o que a IA aprendeu.</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+          </button>
+        </div>
 
         <div className="space-y-2.5">
           {CATALOGO_AGENTES.map((a) => (
