@@ -241,6 +241,28 @@ export function ChatFab({
     if (open && user) carregarHistorico(sessaoId)
   }, [open, user, sessaoId, carregarHistorico])
 
+  // Carrega o modo (Perguntar antes x Fazer sozinha) do banco assim que o
+  // restaurante é conhecido. Sem isto, o botão começava sempre em "Perguntar
+  // antes" (padrão) e só sincronizava no 1º envio — então uma conta em
+  // "automático" no banco editava direto enquanto o botão ainda dizia "perguntar".
+  useEffect(() => {
+    const rid = usuario?.restaurante_id
+    if (!rid) return
+    let vivo = true
+    void (async () => {
+      const { data } = await supabase
+        .from('restaurantes')
+        .select('ia_modo_acao')
+        .eq('id', rid)
+        .single()
+      if (!vivo || !data) return
+      const m = (data as any).ia_modo_acao === 'automatico' ? 'automatico' : 'perguntar'
+      modoAcaoRef.current = m
+      setModoAcao(m)
+    })()
+    return () => { vivo = false }
+  }, [usuario?.restaurante_id])
+
   const irParaOFim = useCallback((suave = true) => {
     scrollRef.current?.scrollIntoView({ behavior: suave ? 'smooth' : 'auto' })
     setLongeDoFim(false)
@@ -765,12 +787,32 @@ export function ChatFab({
   }
 
   const alternarModo = async () => {
-    const novo = modoAcaoRef.current === 'automatico' ? 'perguntar' : 'automatico'
+    const anterior = modoAcaoRef.current
+    const novo = anterior === 'automatico' ? 'perguntar' : 'automatico'
     modoAcaoRef.current = novo
     setModoAcao(novo)
+
     if (usuario?.restaurante_id) {
-      await supabase.from('restaurantes').update({ ia_modo_acao: novo }).eq('id', usuario.restaurante_id)
+      // .select('id'): confirma que gravou. Se a RLS bloquear (0 linhas) ou der
+      // erro, o botão dizia "perguntar" mas o banco seguia "automatico" e a ação
+      // era aplicada direto. Aqui revertemos o botão e avisamos.
+      const { data, error } = await supabase
+        .from('restaurantes')
+        .update({ ia_modo_acao: novo })
+        .eq('id', usuario.restaurante_id)
+        .select('id')
+      if (error || !data || data.length === 0) {
+        modoAcaoRef.current = anterior
+        setModoAcao(anterior)
+        toast({
+          title: 'Não consegui trocar o modo',
+          description: 'Recarregue a página e tente de novo.',
+          variant: 'destructive',
+        })
+        return
+      }
     }
+
     toast({
       title: novo === 'automatico' ? 'A IA vai fazer sozinha' : 'A IA vai perguntar antes',
       description:
