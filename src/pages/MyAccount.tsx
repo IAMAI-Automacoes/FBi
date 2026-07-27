@@ -23,31 +23,33 @@ export default function MyAccount() {
     nome: '',
     username: '',
   })
+  // Baseline do que está salvo, para habilitar "Salvar" só quando houver mudança
+  const [salvo, setSalvo] = useState({ nome: '', username: '' })
 
   useEffect(() => {
-    if (usuario) {
-      setFormData({
-        nome: usuario.nome || '',
-        username: '',
-      })
+    if (!usuario) return
+    const nome = usuario.nome || ''
+    setFormData({ nome, username: '' })
+    setSalvo({ nome, username: '' })
 
-      const fetchProfile = async () => {
-        const { data } = await supabase
-          .from('restaurantes')
-          .select('avatar_url, username')
-          .eq('auth_user_id', usuario.id)
-          .single()
+    const fetchProfile = async () => {
+      const { data } = await supabase
+        .from('restaurantes')
+        .select('avatar_url, username')
+        .eq('auth_user_id', usuario.id)
+        .single()
 
-        if (data) {
-          if (data.avatar_url) setAvatarUrl(data.avatar_url)
-          if ((data as any).username) {
-            setFormData((prev) => ({ ...prev, username: (data as any).username }))
-          }
-        }
+      if (data) {
+        if (data.avatar_url) setAvatarUrl(data.avatar_url)
+        const username = (data as any).username || ''
+        setFormData({ nome, username })
+        setSalvo({ nome, username })
       }
-      fetchProfile()
     }
+    fetchProfile()
   }, [usuario])
+
+  const alterado = formData.nome !== salvo.nome || formData.username !== salvo.username
 
   const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !usuario?.id) return
@@ -78,11 +80,13 @@ export default function MyAccount() {
         description: 'Falha ao salvar a imagem no perfil',
         variant: 'destructive',
       })
+      setUploadingAvatar(false)
     } else {
       setAvatarUrl(publicUrl)
-      toast({ title: 'Sucesso', description: 'Foto de perfil atualizada.' })
+      toast({ title: 'Sucesso', description: 'Foto atualizada. Atualizando…' })
+      // F5 automático: garante que a foto reflita na sidebar/header sem cache
+      setTimeout(() => window.location.reload(), 600)
     }
-    setUploadingAvatar(false)
   }
 
   const handleRemoveAvatar = async () => {
@@ -90,8 +94,8 @@ export default function MyAccount() {
     setUploadingAvatar(true)
     await supabase.from('restaurantes').update({ avatar_url: null }).eq('auth_user_id', usuario.id)
     setAvatarUrl('')
-    setUploadingAvatar(false)
-    toast({ title: 'Removida', description: 'Foto de perfil removida com sucesso.' })
+    toast({ title: 'Removida', description: 'Atualizando…' })
+    setTimeout(() => window.location.reload(), 600)
   }
 
   const handleSave = async () => {
@@ -136,7 +140,10 @@ export default function MyAccount() {
         variant: 'destructive',
       })
     } else {
-      toast({ title: 'Sucesso', description: 'Seu perfil foi atualizado com sucesso.' })
+      setSalvo({ nome: formData.nome, username: finalUsername || '' })
+      toast({ title: 'Sucesso', description: 'Atualizando a página…' })
+      // F5 automático (igual às Configurações): reflete tudo sem depender de cache
+      setTimeout(() => window.location.reload(), 600)
     }
   }
 
@@ -281,7 +288,7 @@ export default function MyAccount() {
             </div>
 
             <div className="bg-gray-50/80 px-6 sm:px-10 py-5 border-t border-gray-100 flex justify-end">
-              <Button onClick={handleSave} disabled={loading} className="min-w-[140px]">
+              <Button onClick={handleSave} disabled={!alterado || loading} className="min-w-[140px]">
                 {loading ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
             </div>
