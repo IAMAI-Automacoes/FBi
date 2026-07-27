@@ -232,6 +232,77 @@ NÃO GUARDE: números que mudam sozinhos, perguntas, saudações, ou o que já e
 Máximo de 3 fatos por conversa.` }],
   },
   {
+    id: 'gerador_insights',
+    nome: 'Gerador de insights (edge function, cron)',
+    papel: 'Roda no servidor de tempos em tempos: agrega os feedbacks do período e gera os insights (padrões, riscos, elogios) com prioridade.',
+    memoria: 'SEM memória de conversa. Vê os feedbacks agregados e a configuração do restaurante.',
+    acessos: ['Feedbacks do período', 'Configuração do restaurante', 'Grava em: insights'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Prioriza risco sanitário/segurança sempre como URGENTE.', dinamico: true, editavel: false,
+      conteudo: `Analise os feedbacks e gere insights. Priorize riscos sanitários ou de segurança sempre
+como URGENTE, independente do volume. Feedbacks: {json} Config: {json}` }],
+  },
+  {
+    id: 'sugeridor_acoes',
+    nome: 'Sugeridor de ações (edge function)',
+    papel: 'A partir dos insights, sugere ações operacionais com plano — nunca a partir de um feedback único.',
+    memoria: 'SEM memória de conversa. Vê os insights ativos e a configuração.',
+    acessos: ['Insights ativos', 'Configuração do restaurante', 'Grava em: acoes_operacionais'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Sempre inclui um plano norteador; nunca age por feedback único.', dinamico: true, editavel: false,
+      conteudo: `Sugira ações operacionais baseadas nestes insights. Nunca sugira ação para feedback único.
+Sempre inclua um plano detalhado norteador. Insights: {json} Config: {json}` }],
+  },
+  {
+    id: 'plano_acao',
+    nome: 'Gerador de plano de ação (edge function)',
+    papel: 'Gera o passo a passo detalhado de UMA ação, quando o dono pede o plano.',
+    memoria: 'SEM memória de conversa. Vê a ação e o contexto do restaurante.',
+    acessos: ['A ação (título/contexto)', 'Configuração do restaurante'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Especialista em gestão e operação de restaurantes.', dinamico: true, editavel: false,
+      conteudo: `Você é um especialista em gestão de restaurantes e operações. Gere um plano de ação
+detalhado e prático para a ação informada, executável por um restaurante. {dados da ação}` }],
+  },
+  {
+    id: 'perguntas_direcionadas',
+    nome: 'Gerador de perguntas direcionadas (edge function)',
+    papel: 'Para uma ação PENDENTE, gera perguntas que ajudam o dono a destravá-la.',
+    memoria: 'SEM memória de conversa. Vê a ação pendente.',
+    acessos: ['A ação pendente e seu contexto'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Gera perguntas objetivas para orientar a execução.', dinamico: true, editavel: false,
+      conteudo: `Gere perguntas direcionadas para ajudar o dono a executar esta ação pendente. {dados}` }],
+  },
+  {
+    id: 'banner',
+    nome: 'Texto do banner (edge function)',
+    papel: 'Cria um texto curto para o banner do painel, com base nos feedbacks das últimas 24h.',
+    memoria: 'SEM memória. Vê os feedbacks recentes.',
+    acessos: ['Feedbacks das últimas 24h', 'Grava em: config do restaurante (texto_banner)'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Texto curto e direto para o banner.', dinamico: true, editavel: false,
+      conteudo: `Gere um texto curto para um banner baseado nestes feedbacks recentes: {json}` }],
+  },
+  {
+    id: 'relatorio_estruturado',
+    nome: 'Análise do relatório (PDF)',
+    papel: 'Escreve a análise do relatório mensal campo a campo (título, resumo, ponto forte/fraco, recomendações), para o PDF encaixar cada parte no lugar certo.',
+    memoria: 'SEM memória. Vê os dados consolidados do período.',
+    acessos: ['Dados do período (volume, satisfação, categorias, trechos de clientes)'],
+    blocos: [{ titulo: 'Prompt', explicacao: 'Consultor escrevendo para o dono; nunca inventa número, sem jargão.', dinamico: true, editavel: false,
+      conteudo: `Você é um consultor de restaurantes escrevendo a análise do relatório mensal para o DONO.
+Responda em JSON: titulo, resumo, ponto_forte, ponto_fraco, leitura_categorias, leitura_clientes,
+recomendacoes[], alerta_amostra. Nunca invente número; proibido jargão (NPS, CSAT, score…);
+satisfação como "X de 100"; recomendações executáveis nesta semana. Dados: {json}` }],
+  },
+  {
+    id: 'resumo_executivo',
+    nome: 'Resumo executivo do relatório',
+    papel: 'Escreve o resumo executivo do relatório em texto corrido para o dono.',
+    memoria: 'SEM memória. Vê os dados do período.',
+    acessos: ['Dados do período'],
+    blocos: [{ titulo: 'Prompt', explicacao: '3 a 5 frases, sem markdown/jargão, com uma recomendação concreta.', dinamico: true, editavel: false,
+      conteudo: `Você escreve o resumo executivo do relatório, lido pelo DONO. Texto corrido, 3 a 5 frases,
+sem markdown/títulos/emojis, sem jargão. Nunca invente número. Termine com UMA recomendação
+concreta. Dados: {json}` }],
+  },
+  {
     id: 'despachante',
     nome: 'Despachante (código, sem IA)',
     papel: 'Não é uma IA: é código que recebe o comando do assistente e chama o especialista certo, carregado só com o que precisa. É o que garante que cada agente veja só a sua fatia.',
