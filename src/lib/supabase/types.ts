@@ -306,6 +306,7 @@ export type Database = {
       documentos_ia: {
         Row: {
           created_at: string
+          arquivo_url: string | null
           descricao: string | null
           erro: string | null
           escopo: string
@@ -319,6 +320,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          arquivo_url?: string | null
           descricao?: string | null
           erro?: string | null
           escopo?: string
@@ -332,6 +334,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          arquivo_url?: string | null
           descricao?: string | null
           erro?: string | null
           escopo?: string

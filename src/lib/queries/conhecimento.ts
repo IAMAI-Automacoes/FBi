@@ -6,11 +6,24 @@ export interface DocumentoIA {
   descricao: string | null
   origem: string
   url: string | null
+  /** Link do arquivo ORIGINAL guardado no Storage (para o dono visualizar). */
+  arquivo_url: string | null
   escopo: string
   status: string
   erro: string | null
   total_trechos: number
   created_at: string
+}
+
+/** Sobe o arquivo original para o Storage e devolve a URL pública (para ver depois). */
+export async function subirArquivoConhecimento(restauranteId: number, file: File): Promise<string> {
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+  const caminho = `${restauranteId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage
+    .from('conhecimento')
+    .upload(caminho, file, { contentType: file.type || undefined, upsert: false })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('conhecimento').getPublicUrl(caminho).data.publicUrl
 }
 
 export interface TrechoRelevante {
@@ -23,7 +36,9 @@ export interface TrechoRelevante {
 
 const TAM_TRECHO = 900 // caracteres por trecho
 const SOBREPOSICAO = 150 // repete um pedaço para não cortar ideia no meio
-const LOTE_EMBED = 32
+// Cada embedding consome CPU no runtime da Edge Function; acima de ~4 por
+// chamada estoura o limite (erro 546) e o material não indexa. Mantém baixo.
+const LOTE_EMBED = 4
 
 /** Quebra o texto em trechos, respeitando fim de frase quando possível. */
 export function dividirEmTrechos(texto: string): string[] {
@@ -113,7 +128,7 @@ export async function listarDocumentos(): Promise<DocumentoIA[]> {
  */
 export async function indexarDocumento(
   restauranteId: number,
-  entrada: { titulo: string; descricao?: string; texto: string; origem?: string; url?: string },
+  entrada: { titulo: string; descricao?: string; texto: string; origem?: string; url?: string; arquivoUrl?: string },
   onProgresso?: (feito: number, total: number) => void,
 ): Promise<DocumentoIA> {
   const trechos = dividirEmTrechos(entrada.texto)
@@ -127,6 +142,7 @@ export async function indexarDocumento(
       descricao: entrada.descricao || null,
       origem: entrada.origem || 'texto',
       url: entrada.url || null,
+      arquivo_url: entrada.arquivoUrl || null,
       escopo: 'restaurante',
       status: 'pendente',
     })

@@ -13,8 +13,9 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import {
   listarDocumentos, indexarDocumento, removerDocumento, buscarConteudoDocumento,
-  extrairTextoDeUrl, extrairTextoDePdf, DocumentoIA,
+  subirArquivoConhecimento, extrairTextoDeUrl, extrairTextoDePdf, DocumentoIA,
 } from '@/lib/queries/conhecimento'
+import { VisualizadorPdf } from '@/components/chat/VisualizadorPdf'
 import {
   BookOpen, FileText, Link2, Type, Trash2, Loader2, Upload, CheckCircle2, AlertCircle,
   Eye, ExternalLink,
@@ -57,7 +58,7 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
   useEffect(() => { carregar() }, [])
 
   const indexar = async (
-    entrada: { titulo: string; texto: string; origem?: string; url?: string },
+    entrada: { titulo: string; texto: string; origem?: string; url?: string; arquivoUrl?: string },
   ) => {
     if (!restauranteId) return
     setProcessando(true)
@@ -91,7 +92,13 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
       if (conteudo.trim().length < 200) {
         throw new Error('O arquivo não tem texto suficiente (PDFs de imagem escaneada não funcionam).')
       }
-      await indexar({ titulo: file.name, texto: conteudo, origem: 'arquivo' })
+      // Guarda o arquivo ORIGINAL no Storage para o dono poder visualizar depois;
+      // se o upload falhar, ainda indexamos o texto (a busca é o essencial).
+      let arquivoUrl: string | undefined
+      try {
+        if (restauranteId) arquivoUrl = await subirArquivoConhecimento(restauranteId, file)
+      } catch { /* segue sem o original */ }
+      await indexar({ titulo: file.name, texto: conteudo, origem: 'arquivo', arquivoUrl })
     } catch (err: any) {
       toast({ title: 'Erro ao ler o arquivo', description: err.message, variant: 'destructive' })
       setProcessando(false)
@@ -274,28 +281,40 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
               <span className="truncate">{vendo?.titulo}</span>
             </DialogTitle>
           </DialogHeader>
-          {vendo?.origem === 'url' && vendo.url && (
+
+          {/* Link para o original: página (url) ou arquivo salvo no Storage */}
+          {(vendo?.url || vendo?.arquivo_url) && (
             <a
-              href={vendo.url} target="_blank" rel="noopener noreferrer"
+              href={vendo.arquivo_url || vendo.url!} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> Abrir a página original
+              <ExternalLink className="h-3.5 w-3.5" />
+              {vendo.origem === 'url' ? 'Abrir a página original' : 'Abrir o arquivo original'}
             </a>
           )}
-          <div className="overflow-y-auto sem-barra rounded-lg border bg-muted/30 p-4 mt-1">
-            {conteudoVisto === null ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-              </div>
+
+          <div className="min-h-0 flex-1 overflow-hidden mt-1">
+            {vendo?.arquivo_url && /\.pdf($|\?)/i.test(vendo.arquivo_url) ? (
+              // PDF original renderizado no próprio sistema
+              <VisualizadorPdf url={vendo.arquivo_url} />
             ) : (
-              <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
-                {conteudoVisto || 'Sem conteúdo.'}
-              </p>
+              <div className="h-full overflow-y-auto sem-barra rounded-lg border bg-muted/30 p-4">
+                {conteudoVisto === null ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+                    {conteudoVisto || 'Sem conteúdo.'}
+                  </p>
+                )}
+              </div>
             )}
           </div>
+
           <p className="text-[11px] text-muted-foreground shrink-0">
-            Este é o texto que a IA lê. Arquivos são guardados como texto extraído — o arquivo
-            original não fica salvo.
+            A busca da IA é feita sobre a versão vetorial (trechos) deste material. O arquivo/página
+            original fica disponível aqui para você conferir.
           </p>
         </DialogContent>
       </Dialog>
