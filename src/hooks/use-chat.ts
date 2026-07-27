@@ -244,16 +244,10 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
             resposta,
             opcoes.memoria ?? contextoFinal.memoria ?? [],
           )
-          // Persiste, em segundo plano, os fatos que o dono afirmou — no campo
-          // certo das configs, ou no texto livre (restaurante/perfil) se não houver.
-          const cfg = (contextoFinal.configAtual || {}) as Record<string, any>
-          void persistirEmBackground(contextoFinal.restaurante_id ?? null, texto, {
-            campos: Object.fromEntries(
-              Object.entries(cfg).map(([k, v]) => [k, v == null ? '' : String(v)]),
-            ),
-            detalhes: String(cfg.detalhes || ''),
-            perfilNotas: String(cfg.perfil_notas || ''),
-          })
+          // Anota, em segundo plano, fatos afirmados que NÃO cabem num campo de
+          // config (histórias, prêmios, detalhes pessoais) — no texto livre.
+          // Campos de config são tratados pelo comando mudar_config.
+          void persistirEmBackground(contextoFinal.restaurante_id ?? null, texto)
         }
       }
 

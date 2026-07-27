@@ -122,12 +122,14 @@ BUSCAS (você precisa de informação de fora deste painel):
 QUANDO USAR CADA UM:
 - Verbo de comando dele (cria, marca, muda, apaga, atualiza, arruma, coloca...) = ele
   PEDIU uma alteração; emita o comando de alteração correspondente.
-- Ele MANDA explicitamente CORRIGIR/MUDAR um dado do perfil ("muda para 30 mesas",
-  "corrige meu nome para Breno", "atualiza o horário") = [[comando:mudar_config|...]].
-- Ele só AFIRMA de passagem uma informação sobre ele ou o restaurante, sem mandar mudar
-  ("somos uma churrascaria", "meu avô abriu em 1945", "atendemos executivos no almoço")
-  = NÃO emita comando. Apenas CONVERSE normalmente, usando essa informação no contexto.
-  O sistema guarda esse fato sozinho, em segundo plano — você não precisa fazer nada.
+- Ele MUDA ou AFIRMA um dado que EXISTE no perfil do restaurante (mesas, horário, tipo de
+  cozinha, nome, localização, ticket, público, pratos, capacidade, equipe, ano...) — seja
+  comando ("muda para 30 mesas", "corrige meu nome para Breno") ou afirmação ("agora são
+  30 mesas", "somos uma churrascaria", "abrimos às 10h") = [[comando:mudar_config|o dado]].
+- Ele afirma um fato que NÃO cabe em nenhum desses campos (uma história, um prêmio, um
+  detalhe pessoal como "meu avô fundou pra alimentar soldados", "sou formado em direito")
+  = NÃO emita comando; apenas CONVERSE usando a informação. O sistema anota esse fato
+  sozinho, em segundo plano — você não precisa fazer nada.
 - QUALQUER pergunta sobre um FATO DO MUNDO REAL fora do restaurante = [[comando:pesquisar|...]].
   Isto vale mesmo que você ache que sabe a resposta. Seu conhecimento interno tem uma DATA
   DE CORTE e está DESATUALIZADO: eventos, resultados, notícias, quem ganhou/venceu, quando
