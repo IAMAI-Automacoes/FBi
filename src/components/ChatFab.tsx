@@ -617,11 +617,10 @@ export function ChatFab({
       ])
 
     memoriaRef.current = memoria
-    if ((configRes.data as any)?.ia_modo_acao) {
-      const m = (configRes.data as any).ia_modo_acao === 'automatico' ? 'automatico' : 'perguntar'
-      modoAcaoRef.current = m
-      setModoAcao(m)
-    }
+    // NÃO sincronizamos o modo aqui: o toggle (alternarModo) e a carga na montagem
+    // são a fonte única. Sobrescrever a cada envio fazia o comportamento divergir
+    // do botão quando a gravação do toggle no banco falhava — a narração vinha de
+    // "perguntar" mesmo com o botão em "Fazer sozinha".
 
     const cfg = configRes.data as any
     const perfil = (cfg?.perfil_restaurante as any) || {}
@@ -714,14 +713,15 @@ export function ChatFab({
     if (result?.formulario) {
       setFormularioPendente(result.formulario)
     } else if (result?.acao) {
-      // Excluir nunca roda sozinho, nem no modo automático
+      // Em qualquer modo a proposta fica PRESA à resposta — o botão nunca some.
+      // Excluir nunca roda sozinho, nem no modo automático.
       const destrutiva = ACOES_DESTRUTIVAS.includes(result.acao.tipo)
+      const uid = anexarProposta(result.acao)
       if (modoAcaoRef.current === 'automatico' && !destrutiva) {
-        await aplicarAcao(result.acao, 'automatico')
+        // Aplica na hora e marca o MESMO botão como feito (verde, com desfazer).
+        await aplicarAcao(result.acao, 'automatico', undefined, uid || undefined)
       } else {
-        // A proposta fica presa à resposta: o botão não some ao continuar a
-        // conversa, e dá para reabrir mesmo depois de rolar para cima.
-        const uid = anexarProposta(result.acao)
+        // Perguntar antes: abre o popup para editar/confirmar; o botão azul fica.
         if (uid) setPopup({ acao: result.acao, uid })
       }
     }
@@ -859,15 +859,15 @@ export function ChatFab({
       const destrutiva = ACOES_DESTRUTIVAS.includes(acao.tipo)
       if (modoAcaoRef.current === 'automatico' && !destrutiva) {
         await registrarTroca(textoUsuario, `Pronto! ${acao.descricao}.`)
-        await aplicarAcao(acao, 'automatico')
+        const puid = anexarProposta(acao) // botão fica preso e vira verde ao aplicar
+        await aplicarAcao(acao, 'automatico', undefined, puid || undefined)
       } else {
-        const uid = await registrarTroca(
+        await registrarTroca(
           textoUsuario,
           ehInsight ? 'Preparei o insight. Confira e confirme:' : 'Preparei a ação. Confira e confirme:',
         )
         const puid = anexarProposta(acao)
         if (puid) setPopup({ acao, uid: puid })
-        else if (uid) setPopup({ acao, uid })
       }
     } catch {
       await registrarTroca(textoUsuario, 'Desculpe, tive um problema ao montar. Pode tentar de novo?')

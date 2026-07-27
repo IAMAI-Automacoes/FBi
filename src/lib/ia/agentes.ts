@@ -481,11 +481,18 @@ Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corre
       { ...JSON_OPTS, max_tokens: 200 },
     )
     const d = parse(res)
-    if (!d?.campo || !String(d.valor ?? '').trim()) return null
+    // O "|" é o separador de comando: se vazar para o valor ("raverzão|raver"),
+    // fica um valor sujo. Pega o último segmento limpo — normalmente o pretendido.
+    const valor = String(d?.valor ?? '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .pop() || ''
+    if (!d?.campo || !valor) return null
     const a: AcaoAgente = {
       tipo: 'atualizar_config',
-      dados: { campo: d.campo, valor: String(d.valor).trim() },
-      descricao: `Atualizar ${CAMPOS_CONFIG[d.campo] || d.campo} para "${String(d.valor).trim()}"`,
+      dados: { campo: d.campo, valor },
+      descricao: `Atualizar ${CAMPOS_CONFIG[d.campo] || d.campo} para "${valor}"`,
     }
     return validarAcao(a) ? null : a
   } catch {
