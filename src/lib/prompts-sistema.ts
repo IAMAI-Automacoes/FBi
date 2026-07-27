@@ -1,5 +1,9 @@
 import { getPersonalidadePrompt } from './mascote-config'
-import { promptOverride } from './ia/prompt-store'
+import { promptOverride, dadoAtivo } from './ia/prompt-store'
+
+/** Interruptores de dados do assistente (admin liga/desliga cada bloco). */
+const DADOS = 'assistente_dados'
+const on = (item: string) => dadoAtivo(DADOS, item)
 
 /** Descrição do produto — o assistente precisa saber onde ele vive e o que existe no sistema. */
 export const SOBRE_O_SISTEMA = `O sistema chama-se "Feedback Inteligente". Ele coleta avaliações dos
@@ -213,7 +217,7 @@ não estiver nos resultados, diga que não encontrou.`,
   }
 
   // ── Contexto organizado por assunto (em vez de um JSON solto) ──
-  const r = ctx.restaurante
+  const r = on('perfil') ? ctx.restaurante : null
   if (r) {
     const p = r.perfil || {}
     const servicos = Array.isArray(p.servicos) && p.servicos.length ? p.servicos.join(', ') : ''
@@ -252,7 +256,7 @@ não estiver nos resultados, diga que não encontrou.`,
   }
 
   // Notas pessoais sobre o dono (campo livre do perfil; parte foi anotada pela IA)
-  if (ctx.restaurante?.perfil_notas) {
+  if (on('perfil_notas') && ctx.restaurante?.perfil_notas) {
     prompt += bloco(
       'O que você sabe sobre o dono (pessoalmente)',
       `"""\n${String(ctx.restaurante.perfil_notas)}\n"""\n` +
@@ -285,7 +289,7 @@ não estiver nos resultados, diga que não encontrou.`,
   }
 
   // Trechos recuperados dos documentos de treinamento (busca vetorial)
-  if (ctx.conhecimento?.length) {
+  if (on('conhecimento') && ctx.conhecimento?.length) {
     prompt += bloco(
       'Trechos dos materiais de treinamento (use como fonte principal)',
       ctx.conhecimento
@@ -302,7 +306,7 @@ Não altere fatos, números nem instruções técnicas. Se não responderem, ign
     )
   }
 
-  if (ctx.memoria?.length) {
+  if (on('memoria') && ctx.memoria?.length) {
     prompt += bloco(
       'O que você anotou em conversas anteriores',
       ctx.memoria.map((m: any) => `- ${m.fato}`).join('\n') +
@@ -322,7 +326,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
     )
   }
 
-  const k = ctx.kpis
+  const k = on('kpis') ? ctx.kpis : null
   if (k) {
     prompt += bloco(
       'Números do período recente',
@@ -340,7 +344,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
     )
   }
 
-  if (ctx.categorias?.length) {
+  if (on('categorias') && ctx.categorias?.length) {
     prompt += bloco(
       'Satisfação por categoria',
       ctx.categorias
@@ -349,11 +353,11 @@ QUANDO OS DOIS SE CONTRADIZEM:
     )
   }
 
-  if (ctx.garcons?.length) {
+  if (on('garcons') && ctx.garcons?.length) {
     prompt += bloco('Equipe cadastrada', ctx.garcons.map((g: any) => `- ${g.nome_garcon}`).join('\n'))
   }
 
-  if (ctx.insights?.length) {
+  if (on('insights') && ctx.insights?.length) {
     prompt += bloco(
       'Insights ativos',
       ctx.insights
@@ -362,7 +366,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
     )
   }
 
-  if (ctx.acoes?.length) {
+  if (on('acoes') && ctx.acoes?.length) {
     prompt += bloco(
       'Ações em aberto',
       ctx.acoes.map((a: any) => `- [${a.status}] ${a.titulo_acao}`).join('\n'),
@@ -393,7 +397,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
     )
   }
 
-  if (ctx.feedbacks?.length) {
+  if (on('feedbacks') && ctx.feedbacks?.length) {
     prompt += bloco(
       'Avaliações recentes dos clientes',
       ctx.feedbacks

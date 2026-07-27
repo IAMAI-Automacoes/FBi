@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { CATALOGO_AGENTES, AgenteInfo, BlocoPrompt } from '@/lib/ia/catalogo-agentes'
-import { promptOverride, salvarPromptEditavel, placeholdersDe } from '@/lib/ia/prompt-store'
+import { promptOverride, salvarPromptEditavel, placeholdersDe, dadoAtivo, salvarConfigObj } from '@/lib/ia/prompt-store'
+import { Switch } from '@/components/ui/switch'
 import {
   ModeloIA, listarModelos, adicionarModelo, ativarModelo, removerModelo,
 } from '@/lib/queries/modelos-ia'
@@ -113,6 +114,54 @@ function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
   )
 }
 
+// ── Interruptores de dados do assistente principal ──────────────────────────
+const DADOS_ASSISTENTE: { id: string; label: string }[] = [
+  { id: 'perfil', label: 'Perfil do restaurante' },
+  { id: 'perfil_notas', label: 'Notas pessoais do dono' },
+  { id: 'kpis', label: 'Números do período (satisfação, volume)' },
+  { id: 'categorias', label: 'Satisfação por categoria' },
+  { id: 'garcons', label: 'Garçons cadastrados' },
+  { id: 'insights', label: 'Insights ativos' },
+  { id: 'acoes', label: 'Ações em aberto' },
+  { id: 'feedbacks', label: 'Avaliações recentes dos clientes' },
+  { id: 'memoria', label: 'Memória de longo prazo (anotações)' },
+  { id: 'conhecimento', label: 'Materiais de treinamento (busca)' },
+]
+
+function ToggleDadosAssistente() {
+  const { toast } = useToast()
+  const [estado, setEstado] = useState<Record<string, boolean>>(() => {
+    const o: Record<string, boolean> = {}
+    for (const d of DADOS_ASSISTENTE) o[d.id] = dadoAtivo('assistente_dados', d.id)
+    return o
+  })
+  const [ocupado, setOcupado] = useState<string | null>(null)
+
+  const alternar = async (id: string) => {
+    const anterior = estado
+    const novo = { ...estado, [id]: !estado[id] }
+    setEstado(novo); setOcupado(id)
+    try { await salvarConfigObj('assistente_dados', novo) }
+    catch (e: any) { setEstado(anterior); toast({ title: 'Não consegui salvar', description: e.message, variant: 'destructive' }) }
+    finally { setOcupado(null) }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[13px] font-semibold text-gray-700 flex items-center gap-1.5"><Database className="h-3.5 w-3.5" /> Dados que este agente recebe</p>
+      <div className="rounded-lg border border-gray-200 divide-y">
+        {DADOS_ASSISTENTE.map((d) => (
+          <div key={d.id} className="flex items-center justify-between px-3.5 py-2.5">
+            <span className="text-sm text-gray-800">{d.label}</span>
+            <Switch checked={estado[d.id] ?? true} disabled={ocupado === d.id} onCheckedChange={() => alternar(d.id)} />
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-gray-400">Desligar um dado o tira do contexto que a IA recebe — vale para todos os restaurantes.</p>
+    </div>
+  )
+}
+
 // ── Detalhe de um agente (tela dedicada) ─────────────────────────────────────
 function AgenteDetalhe({ agente, onVoltar }: { agente: AgenteInfo; onVoltar: () => void }) {
   return (
@@ -150,6 +199,8 @@ function AgenteDetalhe({ agente, onVoltar }: { agente: AgenteInfo; onVoltar: () 
           </ul>
         </div>
       </div>
+
+      {agente.id === 'assistente' && <ToggleDadosAssistente />}
 
       {agente.blocos.length > 0 ? (
         <div className="space-y-3">

@@ -47,6 +47,30 @@ export function placeholdersDe(texto: string): string[] {
   return [...achados]
 }
 
+/**
+ * Configurações liga/desliga (dados e funções por agente), guardadas como JSON
+ * no mesmo mecanismo de sobrescrita. `dadoAtivo` é TRUE por padrão — só fica
+ * desligado se o admin marcar explicitamente false.
+ */
+export function configObj(chave: string): Record<string, boolean> {
+  const raw = cache[chave]
+  if (!raw) return {}
+  try {
+    const o = JSON.parse(raw)
+    return o && typeof o === 'object' ? o : {}
+  } catch {
+    return {}
+  }
+}
+
+export function dadoAtivo(chave: string, item: string): boolean {
+  return configObj(chave)[item] !== false
+}
+
+export async function salvarConfigObj(chave: string, obj: Record<string, boolean>): Promise<void> {
+  await salvarPromptEditavel(chave, JSON.stringify(obj))
+}
+
 /** true quando as sobrescritas já foram buscadas do banco ao menos uma vez. */
 export function promptsCarregados(): boolean {
   return carregado
