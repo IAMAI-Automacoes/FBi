@@ -9,6 +9,8 @@ import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/Pe
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { WhatsAppTab } from './settings/WhatsAppTab'
 import { useUserProfile } from '@/hooks/use-user-profile'
+import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
+import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -31,6 +33,8 @@ function perfilParaJson(p: PerfilNegocioForm) {
 
 export default function Settings() {
   const { profile, loading } = useUserProfile()
+  const { refetch: refetchConfig } = useRestauranteConfig()
+  const { refetchUsuario } = useAuth()
   const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
@@ -141,10 +145,12 @@ export default function Settings() {
       return
     }
     setSalvo({ restaurante, mascote, perfil })
-    toast({ title: 'Salvo', description: 'Atualizando a página…' })
-    // F5 automático: recarrega para que tudo (formulário, sidebar, chat) reflita
-    // exatamente o que foi salvo, sem depender de nenhum cache do navegador.
-    setTimeout(() => window.location.reload(), 600)
+    // Atualiza os caches persistentes (sem F5): o contexto (sidebar/banner/chat) e
+    // os dados do restaurante no useAuth. As telas que buscam do banco já vêm
+    // frescas ao navegar por causa do cache: 'no-store'.
+    refetchConfig()
+    refetchUsuario()
+    toast({ title: 'Salvo', description: 'Configurações atualizadas.' })
   }
 
   const handleDescartar = () => {

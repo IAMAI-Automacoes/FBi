@@ -183,7 +183,7 @@ export function ChatFab({
   onOpenChange: (v: boolean) => void
 }) {
   const { pathname } = useLocation()
-  const { user, usuario } = useAuth()
+  const { user, usuario, refetchUsuario } = useAuth()
   const { mascote, refetch: refetchConfig } = useRestauranteConfig()
   const mascoteNome = mascote.nome
   // O return condicional fica no fim do componente: sair antes dos hooks
@@ -757,7 +757,8 @@ export function ChatFab({
         }
       }
       setPopup(null)
-      refetchConfig()
+      refetchConfig()   // sidebar/banner/chat
+      refetchUsuario()  // dados do restaurante no useAuth — reflete sem F5
       toast({
         title: modo === 'automatico' ? 'Feito pela IA' : 'Alteração aplicada',
         description: final.descricao,

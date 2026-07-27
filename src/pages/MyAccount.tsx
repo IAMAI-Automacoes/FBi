@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
 
 export default function MyAccount() {
-  const { usuario } = useAuth()
+  const { usuario, refetchUsuario } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
@@ -30,19 +30,23 @@ export default function MyAccount() {
 
   useEffect(() => {
     if (!usuario) return
-    const nome = usuario.nome || ''
-    setFormData({ nome, username: '', perfil_notas: '' })
-    setSalvo({ nome, username: '', perfil_notas: '' })
+    // Começa com o nome do cache (login) só para não piscar vazio…
+    const nomeCache = usuario.nome || ''
+    setFormData({ nome: nomeCache, username: '', perfil_notas: '' })
+    setSalvo({ nome: nomeCache, username: '', perfil_notas: '' })
 
     const fetchProfile = async () => {
+      // …mas o valor de verdade vem do banco (fresco, sem cache), inclusive o
+      // nome — assim, ao voltar para esta tela, o nome salvo aparece sem F5.
       const { data } = await supabase
         .from('restaurantes')
-        .select('avatar_url, username, perfil_notas')
+        .select('nome, avatar_url, username, perfil_notas')
         .eq('auth_user_id', usuario.id)
         .single()
 
       if (data) {
         if (data.avatar_url) setAvatarUrl(data.avatar_url)
+        const nome = (data as any).nome ?? nomeCache
         const username = (data as any).username || ''
         const perfil_notas = (data as any).perfil_notas || ''
         setFormData({ nome, username, perfil_notas })
@@ -86,13 +90,12 @@ export default function MyAccount() {
         description: 'Falha ao salvar a imagem no perfil',
         variant: 'destructive',
       })
-      setUploadingAvatar(false)
     } else {
       setAvatarUrl(publicUrl)
-      toast({ title: 'Sucesso', description: 'Foto atualizada. Atualizando…' })
-      // F5 automático: garante que a foto reflita na sidebar/header sem cache
-      setTimeout(() => window.location.reload(), 600)
+      refetchUsuario() // atualiza a foto no cabeçalho/sidebar sem F5
+      toast({ title: 'Sucesso', description: 'Foto de perfil atualizada.' })
     }
+    setUploadingAvatar(false)
   }
 
   const handleRemoveAvatar = async () => {
@@ -100,8 +103,9 @@ export default function MyAccount() {
     setUploadingAvatar(true)
     await supabase.from('restaurantes').update({ avatar_url: null }).eq('auth_user_id', usuario.id)
     setAvatarUrl('')
-    toast({ title: 'Removida', description: 'Atualizando…' })
-    setTimeout(() => window.location.reload(), 600)
+    refetchUsuario()
+    setUploadingAvatar(false)
+    toast({ title: 'Removida', description: 'Foto de perfil removida.' })
   }
 
   const handleSave = async () => {
@@ -129,7 +133,9 @@ export default function MyAccount() {
       }
     }
 
-    const { error } = await supabase
+    // .select('id'): detecta bloqueio de RLS (0 linhas), que vinha como 200 sem
+    // erro — antes mostrava "salvo" falso e o perfil não mudava de verdade.
+    const { data, error } = await supabase
       .from('restaurantes')
       .update({
         nome: formData.nome,
@@ -137,21 +143,26 @@ export default function MyAccount() {
         perfil_notas: formData.perfil_notas || null,
       } as any)
       .eq('auth_user_id', usuario.id)
+      .select('id')
 
     setLoading(false)
 
     if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
+      return
+    }
+    if (!data || data.length === 0) {
       toast({
-        title: 'Erro',
-        description: 'Não foi possível salvar as alterações.',
+        title: 'Não foi salvo',
+        description: 'Sem permissão ou sessão expirada. Recarregue a página e entre de novo.',
         variant: 'destructive',
       })
-    } else {
-      setSalvo({ nome: formData.nome, username: finalUsername || '', perfil_notas: formData.perfil_notas })
-      toast({ title: 'Sucesso', description: 'Atualizando a página…' })
-      // F5 automático (igual às Configurações): reflete tudo sem depender de cache
-      setTimeout(() => window.location.reload(), 600)
+      return
     }
+    setSalvo({ nome: formData.nome, username: finalUsername || '', perfil_notas: formData.perfil_notas })
+    // Atualiza o useAuth (nome/dados usados no cabeçalho e em outras telas), sem F5
+    refetchUsuario()
+    toast({ title: 'Salvo', description: 'Perfil atualizado.' })
   }
 
   if (!usuario) {

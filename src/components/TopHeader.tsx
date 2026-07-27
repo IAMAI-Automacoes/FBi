@@ -108,8 +108,8 @@ export function TopHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="h-9 w-9 border border-border cursor-pointer hover:opacity-80 transition-opacity ring-offset-2 hover:ring-2 ring-primary/20">
-                {profile?.avatar_url && (
-                  <AvatarImage src={profile.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                {(usuario?.avatar_url || profile?.avatar_url) && (
+                  <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
                 )}
                 <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
                   {getIniciais(usuario?.nome, 2)}
@@ -124,8 +124,8 @@ export function TopHeader() {
               <div className="p-3 bg-secondary/20">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10 border border-border/50 shadow-sm">
-                    {profile?.avatar_url && (
-                      <AvatarImage src={profile.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                    {(usuario?.avatar_url || profile?.avatar_url) && (
+                      <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
                     )}
                     <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
                       {getIniciais(usuario?.nome, 2)}
