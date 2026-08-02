@@ -1,13 +1,52 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+/* Quem vê esta página é o CLIENTE do restaurante, com o celular na mão, depois
+   de escanear um adesivo na mesa. Não sabe o que é slug nem QR desativado —
+   então a mensagem fala do que ele pode fazer a respeito. */
+const PAGINA_NAO_ENCONTRADO = `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR code não encontrado</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       padding:24px;font-family:Inter,system-ui,-apple-system,sans-serif;
+       background:linear-gradient(165deg,#F5F9FF 0%,#EEF6FF 50%,#F0FBFF 100%);color:#0F172A}
+  .cartao{background:#fff;border-radius:20px;padding:36px 28px;max-width:400px;width:100%;
+          text-align:center;box-shadow:0 20px 50px rgba(37,99,235,.12),0 4px 12px rgba(15,23,42,.06)}
+  .icone{width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.14);
+         display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px}
+  h1{font-size:19px;font-weight:700;letter-spacing:-.02em;margin:0 0 10px}
+  p{font-size:14.5px;line-height:1.6;color:#64748B;margin:0}
+</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="icone">🔍</div>
+    <h1>QR code não encontrado</h1>
+    <p>Este código pode ter sido desativado ou substituído. Fale com o restaurante para deixar sua avaliação.</p>
+  </div>
+</body>
+</html>`
+
 serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
     const slug = url.searchParams.get('slug')
 
+    // Antes isto redirecionava para um /404 no domínio do goskip, onde o app
+    // era hospedado. Aquele host morreu, então quem escaneava um QR inválido
+    // caía num endereço inexistente. Servir a própria página de erro dispensa
+    // saber o domínio do app — funciona em localhost e em produção, sem precisar
+    // atualizar nada quando o site for publicado.
     const redirectNotFound = () => {
-      return Response.redirect('https://visao-geral-dashboard-ece46.goskip.app/404', 302)
+      return new Response(PAGINA_NAO_ENCONTRADO, {
+        status: 404,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
     }
 
     if (!slug) {
@@ -100,6 +139,9 @@ serve(async (req: Request) => {
     return Response.redirect(`https://wa.me/${finalNumber}`, 302)
   } catch (err) {
     console.error('Erro no handler qr-redirect:', err)
-    return Response.redirect('https://visao-geral-dashboard-ece46.goskip.app/404', 302)
+    return new Response(PAGINA_NAO_ENCONTRADO, {
+      status: 500,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
   }
 })

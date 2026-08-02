@@ -55,7 +55,11 @@ serve(async (req: Request) => {
 
     const restauranteId = restaurante.id
 
-    const qrRedirectBaseUrl = 'https://lixrcruilisncfhfhndo.supabase.co/functions/v1/qr-redirect'
+    // Derivado do ambiente em vez de fixo: a URL do projeto estava escrita à
+    // mão aqui, o que quebraria em qualquer outro projeto Supabase (staging,
+    // um fork, uma migração de conta). `SUPABASE_URL` já é lido por todas as
+    // outras edge functions.
+    const qrRedirectBaseUrl = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/qr-redirect`
 
     if (req.method === 'GET') {
       const { data: qrCode, error: qrErr } = await supabaseAdmin
