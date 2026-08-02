@@ -27,6 +27,10 @@ interface AuthContextType {
   cadastro: (nome: string, email: string, password: string) => Promise<{ error: any }>
   logout: () => Promise<{ error: any }>
   recuperarSenha: (email: string) => Promise<{ error: any }>
+  /** Admin da plataforma (tabela `platform_admins`, casada por email).
+      Diferente de `usuario.cargo === 'admin'`, que é papel DENTRO de um
+      restaurante. Quem administra a plataforma não precisa de assinatura. */
+  ehAdminPlataforma: boolean
   loading: boolean
   /** True enquanto o cadastro do restaurante está sendo buscado.
       Distingue "ainda carregando" de "carregou e não achou" — sem isso a tela
@@ -58,11 +62,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [usuario, setUsuario] = useState<UsuarioDados | null>(null)
   const [loading, setLoading] = useState(true)
   const [buscandoUsuario, setBuscandoUsuario] = useState(false)
+  const [ehAdminPlataforma, setEhAdminPlataforma] = useState(false)
 
   useEffect(() => {
+    // Resolvido junto do usuário, e não num hook separado por componente.
+    // Antes cada consumidor de `usePlatformAdmin` disparava a própria consulta,
+    // e o gate de rota precisaria esperar um `loading` que corria por fora do
+    // fluxo de auth — o que fazia o primeiro render decidir com `isAdmin=false`.
+    const buscarAdminPlataforma = async (email: string | undefined) => {
+      if (!email) {
+        setEhAdminPlataforma(false)
+        return
+      }
+      const { data, error } = await supabase
+        .from('platform_admins')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (error) {
+        // Falha de consulta significa "não é admin", nunca acesso liberado.
+        console.error('Erro ao verificar admin da plataforma:', error)
+        setEhAdminPlataforma(false)
+        return
+      }
+      setEhAdminPlataforma(!!data)
+    }
+
     const fetchUsuario = async (userAuth: User) => {
       setBuscandoUsuario(true)
       try {
+        await buscarAdminPlataforma(userAuth.email)
         const { data, error } = await supabase
           .from('restaurantes')
           .select('*')
@@ -108,6 +138,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         fetchUsuario(session.user)
       } else {
         setUsuario(null)
+        setEhAdminPlataforma(false)
         setLoading(false)
       }
     })
@@ -203,7 +234,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

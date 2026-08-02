@@ -1,24 +1,18 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 
+/* Admin da plataforma (tabela `platform_admins`).
+
+   Antes este hook fazia a própria consulta ao banco, e cada componente que o
+   usava disparava mais uma — Admin, TopHeader, e agora o gate de rota e as
+   permissões seriam quatro requisições idênticas por sessão. Pior: o `loading`
+   dele corria por fora do fluxo de autenticação, então o gate de rota decidia
+   no primeiro render com `isAdmin=false` e expulsava o admin antes da resposta
+   chegar.
+
+   Agora o estado vive no AuthProvider e resolve junto com o usuário. A
+   assinatura `{ isAdmin, loading }` foi mantida para não mexer em quem já
+   consome o hook. */
 export function usePlatformAdmin() {
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user?.email) { setLoading(false); return }
-      supabase
-        .from('platform_admins')
-        .select('email')
-        .eq('email', user.email)
-        .maybeSingle()
-        .then(({ data }) => {
-          setIsAdmin(!!data)
-          setLoading(false)
-        })
-    })
-  }, [])
-
-  return { isAdmin, loading }
+  const { ehAdminPlataforma, loading, buscandoUsuario } = useAuth()
+  return { isAdmin: ehAdminPlataforma, loading: loading || buscandoUsuario }
 }

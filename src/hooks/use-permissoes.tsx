@@ -21,7 +21,7 @@ interface UsePermissoesReturn {
 }
 
 export function usePermissoes(): UsePermissoesReturn {
-  const { usuario } = useAuth()
+  const { usuario, ehAdminPlataforma } = useAuth()
   const [funcao, setFuncao] = useState<Funcao | null>(null)
   const [carregando, setCarregando] = useState(true)
 
@@ -55,13 +55,19 @@ export function usePermissoes(): UsePermissoesReturn {
   // cargo admin ou sem funcao_id = acesso total
   const isAdmin = !usuario?.configuracoes || !(usuario.configuracoes as any).funcao_id
 
+  // Admin da plataforma passa por cima das funções do restaurante — precisa
+  // navegar por qualquer tela para dar suporte e reproduzir problema de cliente.
+  // O bypass mora aqui, e não em `RotaPermitida`, para que todo consumidor de
+  // `podeVer`/`podeEditar` herde a exceção em vez de cada um reimplementá-la.
+  const acessoTotal = isAdmin || ehAdminPlataforma
+
   const podeVer = (modulo: string): boolean => {
-    if (isAdmin) return true
+    if (acessoTotal) return true
     return funcao?.permissoes?.[modulo]?.ver ?? false
   }
 
   const podeEditar = (modulo: string): boolean => {
-    if (isAdmin) return true
+    if (acessoTotal) return true
     return funcao?.permissoes?.[modulo]?.editar ?? false
   }
 

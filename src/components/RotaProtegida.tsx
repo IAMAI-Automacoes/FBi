@@ -16,7 +16,7 @@ const ROTAS_DE_PAGAMENTO = ['/assinatura', '/checkout', '/checkout/sucesso']
 const ROTAS_DE_COMPRA = ['/checkout', '/checkout/sucesso']
 
 export function RotaProtegida() {
-  const { session, usuario, loading, buscandoUsuario, logout } = useAuth()
+  const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, logout } = useAuth()
   const location = useLocation()
 
   // `buscandoUsuario && !usuario` cobre a janela do login: ali `loading` já é
@@ -112,16 +112,27 @@ export function RotaProtegida() {
   const naRotaDePagamento = ROTAS_DE_PAGAMENTO.includes(location.pathname)
   const semPlanoAtivo = usuario.assinatura_status !== 'ativa'
 
+  // Admin da plataforma não é cliente: não assina e não configura restaurante.
+  // Sem esta exceção ele seria mandado para /assinatura antes de `Admin.tsx`
+  // montar — trancado para fora do painel que administra.
+  //
+  // O valor vem do AuthProvider e resolve junto com o usuário, então aqui já é
+  // confiável. Se viesse de um hook com loading próprio, o primeiro render
+  // decidiria com `false` e o expulsaria de forma intermitente.
+  //
+  // Só as checagens de COBRANÇA são puladas. Sessão ausente, cadastro que não
+  // carregou e conta encerrada continuam valendo — são integridade, não cobrança.
+
   // ── Pagamento antes do onboarding ──
   // Esta ordem é o centro da correção. Antes existia só a checagem de
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
   // que o dinheiro entrou.
-  if (!ehMembro && semPlanoAtivo && !naRotaDePagamento) {
+  if (!ehAdminPlataforma && !ehMembro && semPlanoAtivo && !naRotaDePagamento) {
     return <Navigate to="/assinatura" replace />
   }
 
-  if (usuario.onboarding_completo === false && !naRotaDePagamento) {
+  if (!ehAdminPlataforma && usuario.onboarding_completo === false && !naRotaDePagamento) {
     if (ehMembro && location.pathname !== '/onboarding-membro') {
       return <Navigate to="/onboarding-membro" replace />
     }
