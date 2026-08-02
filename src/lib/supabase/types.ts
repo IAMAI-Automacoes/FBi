@@ -858,6 +858,11 @@ export type Database = {
       restaurantes: {
         Row: {
           ativo: boolean | null
+          assinatura_status: string
+          assinatura_expira_em: string | null
+          plano_ciclo: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           auth_user_id: string | null
           avatar_url: string | null
           cargo: string
@@ -896,6 +901,11 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          assinatura_status?: string
+          assinatura_expira_em?: string | null
+          plano_ciclo?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           auth_user_id?: string | null
           avatar_url?: string | null
           cargo?: string
@@ -934,6 +944,11 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          assinatura_status?: string
+          assinatura_expira_em?: string | null
+          plano_ciclo?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           auth_user_id?: string | null
           avatar_url?: string | null
           cargo?: string

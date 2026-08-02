@@ -9,6 +9,11 @@ export interface UsuarioDados {
   nome: string | null
   cargo: string | null
   onboarding_completo: boolean | null
+  /** 'sem_assinatura' | 'ativa' | 'inadimplente' | 'cancelada'.
+      Só o servidor e admins da plataforma escrevem (trigger no banco). */
+  assinatura_status: string | null
+  /** Nulo = conta ativa. Preenchido = excluída (reversível pelo admin). */
+  excluida_em: string | null
   configuracoes?: any
   avatar_url?: string | null
   username?: string | null
@@ -23,6 +28,10 @@ interface AuthContextType {
   logout: () => Promise<{ error: any }>
   recuperarSenha: (email: string) => Promise<{ error: any }>
   loading: boolean
+  /** True enquanto o cadastro do restaurante está sendo buscado.
+      Distingue "ainda carregando" de "carregou e não achou" — sem isso a tela
+      de erro pisca no login, quando a sessão já existe mas o fetch não voltou. */
+  buscandoUsuario: boolean
   /** Recarrega os dados do restaurante do banco (sem precisar de F5). */
   refetchUsuario: () => Promise<void>
 }
@@ -48,42 +57,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [usuario, setUsuario] = useState<UsuarioDados | null>(null)
   const [loading, setLoading] = useState(true)
+  const [buscandoUsuario, setBuscandoUsuario] = useState(false)
 
   useEffect(() => {
     const fetchUsuario = async (userAuth: User) => {
-      const { data, error } = await supabase
-        .from('restaurantes')
-        .select('*')
-        .eq('auth_user_id', userAuth.id)
-        .single()
-
-      if (data) {
-        setUsuario(mapRestauranteToUsuario(data, userAuth.id))
-        setLoading(false)
-        return
-      }
-
-      // Sem restaurante — cria placeholder (novo cadastro sem trigger)
-      if (error?.code === 'PGRST116') {
-        const { data: novo } = await supabase
+      setBuscandoUsuario(true)
+      try {
+        const { data, error } = await supabase
           .from('restaurantes')
-          .insert({
-            auth_user_id: userAuth.id,
-            email: userAuth.email || '',
-            nome: null,
-            nome_restaurante: 'Meu Restaurante',
-            onboarding_completo: false,
-          })
           .select('*')
+          .eq('auth_user_id', userAuth.id)
           .single()
 
-        setUsuario(novo ? mapRestauranteToUsuario(novo, userAuth.id) : null)
-        setLoading(false)
-        return
-      }
+        if (data) {
+          setUsuario(mapRestauranteToUsuario(data, userAuth.id))
+          return
+        }
 
-      console.error('Erro ao buscar restaurante:', error)
-      setLoading(false)
+        // Sem restaurante — cria placeholder (novo cadastro sem trigger)
+        if (error?.code === 'PGRST116') {
+          const { data: novo } = await supabase
+            .from('restaurantes')
+            .insert({
+              auth_user_id: userAuth.id,
+              email: userAuth.email || '',
+              nome: null,
+              nome_restaurante: 'Meu Restaurante',
+              onboarding_completo: false,
+            })
+            .select('*')
+            .single()
+
+          setUsuario(novo ? mapRestauranteToUsuario(novo, userAuth.id) : null)
+          return
+        }
+
+        console.error('Erro ao buscar restaurante:', error)
+      } finally {
+        setBuscandoUsuario(false)
+        setLoading(false)
+      }
     }
 
     const {
@@ -125,6 +138,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     })
 
     if (error) return { error }
+
+    // Email já cadastrado nem sempre volta como erro: para não virar um oráculo
+    // de enumeração, o Supabase pode responder "sucesso" com um usuário de
+    // fachada e `identities` vazio. Sem tratar isso, o cadastro parecia dar
+    // certo e a pessoa achava que tinha criado uma segunda conta.
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      return { error: { code: 'email_ja_cadastrado', message: 'Email já cadastrado' } }
+    }
 
     if (data.user) {
       const { data: novo, error: insertError } = await supabase
@@ -182,7 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, login, cadastro, logout, recuperarSenha, loading, refetchUsuario }}
+      value={{ user, session, usuario, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

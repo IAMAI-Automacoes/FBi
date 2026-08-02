@@ -399,3 +399,53 @@ export async function excluirDivisao(id: string): Promise<void> {
   const { error } = await supabase.from('divisao_receita').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── Contas (assinatura) ───────────────────────────────────────────────────────
+// Enquanto o pagamento automático não existe, é por aqui que uma conta é
+// liberada. Depois o webhook do Stripe passa a escrever na mesma coluna.
+//
+// Leitura de todas as contas: policy `admins_read_restaurantes`.
+// Escrita: policy `admins_update_restaurantes` + exceção no trigger
+// `proteger_colunas_assinatura`. Usuário comum não consegue mexer nisso.
+
+export type AssinaturaStatus = 'sem_assinatura' | 'ativa' | 'inadimplente' | 'cancelada'
+
+export interface ContaAdmin {
+  id: number
+  nome: string | null
+  email: string | null
+  nome_restaurante: string | null
+  assinatura_status: AssinaturaStatus
+  plano_ciclo: string | null
+  onboarding_completo: boolean
+  /** Nulo = conta ativa. Preenchido = excluída (reversível). */
+  excluida_em: string | null
+  created_at: string
+}
+
+export async function buscarContas(): Promise<ContaAdmin[]> {
+  const { data, error } = await supabase
+    .from('restaurantes')
+    .select('id, nome, email, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as ContaAdmin[]
+}
+
+export async function definirAssinatura(id: number, status: AssinaturaStatus): Promise<void> {
+  const { error } = await supabase
+    .from('restaurantes')
+    .update({ assinatura_status: status } as never)
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Exclusão reversível. Não apaga nada: só marca a data.
+    Conta excluída não entra no software, mas os dados continuam no banco. */
+export async function definirExclusaoConta(id: number, excluir: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('restaurantes')
+    .update({ excluida_em: excluir ? new Date().toISOString() : null } as never)
+    .eq('id', id)
+  if (error) throw error
+}
