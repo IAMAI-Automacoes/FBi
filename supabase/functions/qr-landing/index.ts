@@ -39,10 +39,15 @@ serve(async (req: Request) => {
 
     const { data: rest } = await admin
       .from('restaurantes')
-      .select('nome_restaurante, numero_whatsapp, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro')
+      .select('nome_restaurante, numero_whatsapp, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
       .eq('id', qr.restaurante_id)
       .maybeSingle()
     if (!rest) return json({ error: 'Restaurante não encontrado' }, 404)
+
+    // Conta encerrada (soft delete): os QRs impressos continuam nas mesas, então
+    // o corte precisa acontecer aqui. Sem isto o cliente escaneia e ainda envia
+    // feedback para quem não é mais cliente da plataforma.
+    if (rest.excluida_em) return json({ error: 'QR não encontrado' }, 404)
 
     let garcomNome: string | null = null
     if (qr.garcom_id) {

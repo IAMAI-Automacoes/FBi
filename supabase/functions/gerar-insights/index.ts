@@ -63,6 +63,11 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     return { insights_gerados: 0, feedbacks_analisados: 0, status: 'sem_config' }
   }
 
+  // Conta encerrada (soft delete): nao processa nem quando chamada direto.
+  if (config.excluida_em) {
+    return { insights_gerados: 0, feedbacks_analisados: 0, status: 'conta_encerrada' }
+  }
+
   const config_insights = (config.config_insights as any) || {}
   const feedbacks_por_analise = config_insights.feedbacks_por_analise || 10
   const horas_entre_analises = config_insights.horas_entre_analises || 24
@@ -256,7 +261,12 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const { data: restaurantes, error: restErr } = await db.from('restaurantes').select('id')
+      // Conta encerrada (soft delete) fica de fora: processar custaria chamada
+      // de IA por restaurante que nao e mais cliente.
+      const { data: restaurantes, error: restErr } = await db
+        .from('restaurantes')
+        .select('id')
+        .is('excluida_em', null)
       if (restErr) throw restErr
       let insightsTotal = 0
       let processados = 0

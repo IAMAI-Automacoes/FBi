@@ -16,8 +16,7 @@ import Reports from './pages/Reports'
 import QRCodes from './pages/QRCodes'
 import Garcons from './pages/Garcons'
 import Settings from './pages/Settings'
-import Login from './pages/auth/Login'
-import Cadastro from './pages/auth/Cadastro'
+import Autenticacao from './pages/auth/Autenticacao'
 import RecuperarSenha from './pages/auth/RecuperarSenha'
 import Onboarding from './pages/auth/Onboarding'
 import OnboardingMembro from './pages/auth/OnboardingMembro'
@@ -25,6 +24,10 @@ import MyAccount from './pages/MyAccount'
 import Sugestoes from './pages/Sugestoes'
 import Admin from './pages/Admin'
 import FeedbackLanding from './pages/FeedbackLanding'
+import Vendas from './pages/Vendas'
+import Checkout from './pages/Checkout'
+import Assinatura from './pages/Assinatura'
+import CheckoutSucesso from './pages/CheckoutSucesso'
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 
@@ -36,13 +39,25 @@ const App = () => (
         <Toaster />
         <Sonner />
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/cadastro" element={<Cadastro />} />
+          {/* Mesma tela; a rota só decide o modo inicial.
+              As `key` distintas são obrigatórias: sem elas o React reconcilia as
+              duas rotas como o MESMO componente (mesmo tipo, mesma posição) e
+              não remonta. Como `modo`, `email` e `aviso` são inicializados via
+              useState, eles congelariam nos valores antigos — navegar de
+              /cadastro para /login trocaria a URL sem mudar nada na tela. */}
+          <Route path="/login" element={<Autenticacao key="entrar" modoInicial="entrar" />} />
+          <Route path="/cadastro" element={<Autenticacao key="criar" modoInicial="criar" />} />
           <Route path="/recuperar-senha" element={<RecuperarSenha />} />
           {/* Página pública que o cliente abre ao escanear o QR */}
           <Route path="/f/:slug" element={<FeedbackLanding />} />
+          {/* Landing de vendas — pública. `/` segue sendo o dashboard. */}
+          <Route path="/vendas" element={<Vendas />} />
 
           <Route element={<RotaProtegida />}>
+            {/* Assinatura: exige conta, mas roda antes do onboarding */}
+            <Route path="/assinatura" element={<Assinatura />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout/sucesso" element={<CheckoutSucesso />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/onboarding-membro" element={<OnboardingMembro />} />
             <Route path="/minha-conta" element={<MyAccount />} />

@@ -147,7 +147,15 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-xl mb-8 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-[#1D4ED8]">Feedback Inteligente</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-[#1D4ED8]">Feedback Inteligente</h1>
+          {/* Fecha o ciclo Conta → Pagamento → Acesso sem trazer a trilha para
+              cá: esta tela já tem a própria barra de 4 passos, e dois medidores
+              empilhados obrigariam a ler "passo 2 de 4 dentro da etapa 3 de 3". */}
+          <p className="text-sm text-gray-500 mt-1">
+            Pagamento confirmado · configurando seu acesso
+          </p>
+        </div>
         <Button variant="ghost" size="sm" onClick={() => logout()} className="text-gray-500">
           <LogOut className="h-4 w-4 mr-2" />
           Sair

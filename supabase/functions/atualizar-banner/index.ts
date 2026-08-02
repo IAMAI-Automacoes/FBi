@@ -29,6 +29,7 @@ serve(async (req: Request) => {
         .from('restaurantes')
         .select('id')
         .eq('ativo', true)
+        .is('excluida_em', null)
       restaurantes = data || []
     } else if (restaurante_id) {
       restaurantes = [{ id: restaurante_id }]
@@ -37,6 +38,7 @@ serve(async (req: Request) => {
         .from('restaurantes')
         .select('id')
         .eq('ativo', true)
+        .is('excluida_em', null)
         .limit(1)
       restaurantes = data || []
     }
@@ -55,11 +57,18 @@ serve(async (req: Request) => {
       try {
         const { data: config, error: configErr } = await supabaseAdmin
           .from('restaurantes')
-          .select('ultima_atualizacao_banner, mascote_config')
+          .select('ultima_atualizacao_banner, mascote_config, excluida_em')
           .eq('id', rest.id)
           .single()
 
         if (configErr || !config) continue
+
+        // Conta encerrada (soft delete): nao gasta chamada de IA. Cobre tambem
+        // o caminho em que a funcao e chamada direto com um restaurante_id.
+        if (config.excluida_em) {
+          resultados.push({ id: rest.id, status: 'conta_encerrada' })
+          continue
+        }
 
         const ultimaAtualizacao = config.ultima_atualizacao_banner
           ? new Date(config.ultima_atualizacao_banner)

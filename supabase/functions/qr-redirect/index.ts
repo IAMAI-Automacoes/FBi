@@ -42,12 +42,20 @@ serve(async (req: Request) => {
     // Busca o número do WhatsApp do restaurante
     const { data: config, error: configErr } = await supabaseAdmin
       .from('restaurantes')
-      .select('numero_whatsapp')
+      .select('numero_whatsapp, excluida_em')
       .eq('id', qrCode.restaurante_id)
       .single()
 
     if (configErr || !config || !config.numero_whatsapp) {
       console.error('Número de WhatsApp não encontrado para o restaurante:', qrCode.restaurante_id)
+      return redirectNotFound()
+    }
+
+    // Conta encerrada (soft delete): o QR impresso continua existindo nas mesas,
+    // então o corte tem que ser aqui. Sem isto, cliente escaneia e ainda manda
+    // feedback para um restaurante que não é mais cliente.
+    if (config.excluida_em) {
+      console.error('Restaurante com conta encerrada:', qrCode.restaurante_id)
       return redirectNotFound()
     }
 
