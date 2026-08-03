@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
@@ -34,7 +34,11 @@ import {
   Bot,
   Check,
   LogOut,
+  Upload,
+  X,
+  ImagePlus,
 } from 'lucide-react'
+import { getIniciais } from '@/lib/iniciais'
 
 interface OnboardingData {
   restaurante_nome: string
@@ -54,6 +58,13 @@ export default function Onboarding() {
 
   const [step, setStep] = useState(1)
   const [loadingSubmit, setLoadingSubmit] = useState(false)
+  // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
+  // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
+  // aparece na hora enquanto a imagem definitiva ainda carrega do Storage.
+  const [logoUrl, setLogoUrl] = useState('')
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [enviandoLogo, setEnviandoLogo] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [data, setData] = useState<OnboardingData>({
     restaurante_nome: '',
     restaurante_culinaria: '',
@@ -71,20 +82,65 @@ export default function Onboarding() {
     }
   }, [usuario, navigate])
 
-  // Pré-carregar nome do restaurante se já existir
+  // Pré-carregar nome e logo do restaurante se já existirem
   useEffect(() => {
     if (!usuario?.restaurante_id) return
     supabase
       .from('restaurantes')
-      .select('nome_restaurante')
+      .select('nome_restaurante, logo_url')
       .eq('id', usuario.restaurante_id)
       .single()
       .then(({ data: rest }) => {
         if (rest?.nome_restaurante && rest.nome_restaurante !== 'Meu Restaurante') {
           setData((prev) => ({ ...prev, restaurante_nome: rest.nome_restaurante }))
         }
+        if (rest?.logo_url) setLogoUrl(rest.logo_url)
       })
   }, [usuario?.restaurante_id])
+
+  const logoMostrada = logoPreview || logoUrl
+
+  const handleUploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !usuario?.restaurante_id) return
+
+    const objetoUrl = URL.createObjectURL(file)
+    setLogoPreview(objetoUrl) // aparece na hora
+    setEnviandoLogo(true)
+
+    try {
+      const ext = file.name.split('.').pop()
+      const caminho = `logo-${usuario.restaurante_id}-${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('logos').upload(caminho, file, { upsert: true })
+      if (error) throw error
+
+      const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(caminho)
+      setLogoUrl(publicUrl)
+
+      // Só troca o preview local pela URL pública depois que ela carrega,
+      // pra imagem não "piscar" some/aparece.
+      const img = new Image()
+      img.onload = () => {
+        setLogoPreview(null)
+        URL.revokeObjectURL(objetoUrl)
+      }
+      img.onerror = () => setLogoPreview(null)
+      img.src = publicUrl
+    } catch (err: any) {
+      setLogoPreview(null)
+      URL.revokeObjectURL(objetoUrl)
+      toast({ title: 'Erro no upload', description: err.message, variant: 'destructive' })
+    } finally {
+      setEnviandoLogo(false)
+    }
+  }
+
+  const handleRemoveLogo = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setLogoPreview(null)
+    setLogoUrl('')
+  }
 
   const handleNext = () => {
     if (step === 1 && !data.restaurante_nome.trim()) {
@@ -121,6 +177,7 @@ export default function Onboarding() {
           numero_mesas: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null,
           metodo_coleta_feedback: data.como_coleta_feedbacks || null,
           frequencia_relatorios: data.frequencia_relatorios || null,
+          logo_url: logoUrl || null,
           mascote_config: mascoteConfig,
           onboarding_completo: true,
         } as any)
@@ -257,11 +314,69 @@ export default function Onboarding() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="logo" className="text-gray-700">
-                  Foto/Logo do restaurante
-                </Label>
-                <Input id="logo" type="file" accept="image/*" className="bg-white cursor-pointer" />
-                <p className="text-xs text-gray-500">Upload opcional (você pode alterar depois)</p>
+                <Label className="text-gray-700">Foto/Logo do restaurante</Label>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="group relative flex items-center justify-center w-20 h-20 border border-gray-200 rounded-xl bg-gray-50 overflow-hidden cursor-pointer hover:border-[#1D4ED8]/50 transition-all shrink-0"
+                    onClick={() => !enviandoLogo && fileInputRef.current?.click()}
+                  >
+                    {logoMostrada ? (
+                      <img
+                        src={logoMostrada}
+                        alt="Logo do restaurante"
+                        className="w-full h-full object-contain p-1.5 bg-white"
+                      />
+                    ) : data.restaurante_nome.trim() ? (
+                      <span className="text-2xl font-bold text-[#1D4ED8]">
+                        {getIniciais(data.restaurante_nome, 2)}
+                      </span>
+                    ) : (
+                      <ImagePlus className="h-6 w-6 text-gray-400" />
+                    )}
+
+                    {!enviandoLogo && logoMostrada && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        title="Remover imagem"
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/95 text-red-600 flex items-center justify-center shadow-sm hover:bg-white"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+
+                    {enviandoLogo && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={enviandoLogo}
+                      onClick={() => !enviandoLogo && fileInputRef.current?.click()}
+                      className="bg-white"
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {logoMostrada ? 'Trocar imagem' : 'Enviar imagem'}
+                    </Button>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Opcional · PNG, JPG ou WEBP
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/png, image/jpeg, image/gif, image/webp"
+                  onChange={handleUploadLogo}
+                  disabled={enviandoLogo}
+                />
               </div>
             </div>
           )}
