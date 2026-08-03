@@ -1,24 +1,48 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Check, Loader2, LogOut, ShieldCheck } from 'lucide-react'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Check, Loader2, LogOut, ShieldCheck, Ticket } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark } from '@/components/auth/AuthLayout'
 import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
 import { RECURSOS_INCLUSOS, buscarCiclo, ehCiclo } from '@/components/vendas/ciclos-plano'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
+import { resgatarCupom } from '@/lib/queries/cupom'
 
 /* Confirmação do plano antes de mandar para o Stripe.
    Rota protegida: quem chega aqui já está autenticado — o portão de login é o
    próprio `RotaProtegida`, então este é o primeiro passo depois da conta criada. */
 export default function Checkout() {
   const [params] = useSearchParams()
-  const { usuario, logout } = useAuth()
+  const navigate = useNavigate()
+  const { usuario, logout, refetchUsuario } = useAuth()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+
+  // Cupom de acesso — libera sem depender do Stripe (o resgate é no servidor)
+  const [cupom, setCupom] = useState('')
+  const [aplicandoCupom, setAplicandoCupom] = useState(false)
+  const [erroCupom, setErroCupom] = useState<string | null>(null)
 
   const cicloParam = params.get('ciclo')
   const ciclo = ehCiclo(cicloParam) ? cicloParam : 'mensal'
   const plano = buscarCiclo(ciclo)
+
+  const aplicarCupom = async () => {
+    const codigo = cupom.trim()
+    if (!codigo || aplicandoCupom) return
+    setAplicandoCupom(true)
+    setErroCupom(null)
+    try {
+      await resgatarCupom(codigo)
+      // Atualiza o usuário (assinatura_status vira "ativa") e entra no app.
+      // O RotaProtegida encaminha para o onboarding ou para o painel.
+      await refetchUsuario()
+      navigate('/', { replace: true })
+    } catch (e) {
+      setErroCupom(e instanceof Error ? e.message : 'Não foi possível aplicar o cupom.')
+      setAplicandoCupom(false)
+    }
+  }
 
   const irParaPagamento = async () => {
     setEnviando(true)
@@ -236,10 +260,81 @@ export default function Checkout() {
 
           <p
             className="text-center"
-            style={{ fontSize: '12.5px', color: cores.corpoSuave, margin: '10px 0 24px' }}
+            style={{ fontSize: '12.5px', color: cores.corpoSuave, margin: '10px 0 22px' }}
           >
             Pagamento processado pelo Stripe · cancele quando quiser
           </p>
+
+          {/* Cupom de acesso — funciona mesmo sem o Stripe configurado */}
+          <div
+            style={{
+              background: cores.superficie,
+              border: `1px solid ${cores.borda}`,
+              borderRadius: '14px',
+              padding: '16px',
+              marginBottom: '22px',
+            }}
+          >
+            <div className="flex items-center" style={{ gap: '7px', marginBottom: '10px' }}>
+              <Ticket className="h-4 w-4" style={{ color: cores.azul }} />
+              <span style={{ fontSize: '13.5px', fontWeight: 600, color: cores.corpoForte }}>
+                Tem um cupom de acesso?
+              </span>
+            </div>
+            <div className="flex" style={{ gap: '8px' }}>
+              <input
+                value={cupom}
+                onChange={(e) => { setCupom(e.target.value); setErroCupom(null) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') aplicarCupom() }}
+                placeholder="Digite o código"
+                disabled={aplicandoCupom}
+                style={{
+                  flex: 1,
+                  height: '44px',
+                  padding: '0 14px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                  textTransform: 'uppercase',
+                  color: cores.tinta,
+                  background: '#FFFFFF',
+                  border: `1px solid ${cores.borda}`,
+                  borderRadius: '11px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={aplicarCupom}
+                disabled={aplicandoCupom || !cupom.trim()}
+                className="flex items-center justify-center"
+                style={{
+                  height: '44px',
+                  padding: '0 18px',
+                  gap: '7px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  background: cores.azul,
+                  border: 'none',
+                  borderRadius: '11px',
+                  cursor: aplicandoCupom || !cupom.trim() ? 'not-allowed' : 'pointer',
+                  opacity: aplicandoCupom || !cupom.trim() ? 0.6 : 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {aplicandoCupom ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Aplicar'}
+              </button>
+            </div>
+            {erroCupom && (
+              <p role="alert" style={{ fontSize: '12.5px', color: '#B91C1C', marginTop: '9px' }}>
+                {erroCupom}
+              </p>
+            )}
+            <p style={{ fontSize: '11.5px', color: cores.corpoSuave, marginTop: '9px', lineHeight: 1.5 }}>
+              Um cupom válido libera seu acesso na hora, sem passar pelo pagamento.
+            </p>
+          </div>
 
           <div style={{ height: '1px', background: cores.borda, marginBottom: '20px' }} />
 
