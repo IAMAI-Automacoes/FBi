@@ -7,7 +7,6 @@ export interface ModeloIA {
   id: string
   nome: string
   modelo: string
-  api_key: string
   ativo: boolean
   created_at: string
 }
@@ -21,11 +20,10 @@ export async function listarModelos(): Promise<ModeloIA[]> {
   return (data || []) as ModeloIA[]
 }
 
-export async function adicionarModelo(entrada: { nome: string; modelo: string; api_key: string }): Promise<void> {
+export async function adicionarModelo(entrada: { nome: string; modelo: string }): Promise<void> {
   const { error } = await db.from('modelos_ia').insert({
     nome: entrada.nome.trim(),
     modelo: entrada.modelo.trim(),
-    api_key: entrada.api_key.trim(),
     ativo: false,
   })
   if (error) throw new Error(error.message)

@@ -13,7 +13,7 @@ import {
 import { PainelMemorias } from '@/pages/admin/PainelMemorias'
 import {
   Bot, ChevronRight, ArrowLeft, Database, Brain, Pencil, Save, RotateCcw, Lock, Loader2,
-  Info, Cpu, Plus, Check, Trash2, KeyRound,
+  Info, Cpu, Plus, Check, Trash2,
 } from 'lucide-react'
 
 // ── Editor de um bloco de prompt ─────────────────────────────────────────────
@@ -215,16 +215,11 @@ function AgenteDetalhe({ agente, onVoltar }: { agente: AgenteInfo; onVoltar: () 
 }
 
 // ── Gestão de modelos do OpenRouter ──────────────────────────────────────────
-function mascararChave(k: string) {
-  if (k.length <= 8) return '••••'
-  return `${k.slice(0, 5)}…${k.slice(-4)}`
-}
-
 function PainelModelos() {
   const { toast } = useToast()
   const [modelos, setModelos] = useState<ModeloIA[]>([])
   const [carregando, setCarregando] = useState(true)
-  const [form, setForm] = useState({ nome: '', modelo: '', api_key: '' })
+  const [form, setForm] = useState({ nome: '', modelo: '' })
   const [salvando, setSalvando] = useState(false)
   const [ocupadoId, setOcupadoId] = useState<string | null>(null)
 
@@ -236,11 +231,11 @@ function PainelModelos() {
   useEffect(() => { carregar() }, [])
 
   const adicionar = async () => {
-    if (!form.nome.trim() || !form.modelo.trim() || !form.api_key.trim()) return
+    if (!form.nome.trim() || !form.modelo.trim()) return
     setSalvando(true)
     try {
       await adicionarModelo(form)
-      setForm({ nome: '', modelo: '', api_key: '' })
+      setForm({ nome: '', modelo: '' })
       toast({ title: 'Modelo adicionado' })
       await carregar()
     } catch (e: any) {
@@ -287,7 +282,6 @@ function PainelModelos() {
                 {m.ativo && <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5">ativo</span>}
               </p>
               <p className="text-[12px] text-gray-500 font-mono truncate">{m.modelo}</p>
-              <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><KeyRound className="h-3 w-3" /> {mascararChave(m.api_key)}</p>
             </div>
             {!m.ativo && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5 shrink-0" onClick={() => ativar(m.id)} disabled={ocupadoId === m.id}>
@@ -314,15 +308,12 @@ function PainelModelos() {
             <Input value={form.modelo} onChange={(e) => setForm((f) => ({ ...f, modelo: e.target.value }))} placeholder="google/gemini-2.0-flash-exp:free" className="font-mono text-[13px]" />
           </div>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-gray-600">Chave da API (OpenRouter)</label>
-          <Input type="password" value={form.api_key} onChange={(e) => setForm((f) => ({ ...f, api_key: e.target.value }))} placeholder="sk-or-v1-..." className="font-mono text-[13px]" />
-        </div>
-        <Button className="gap-1.5" onClick={adicionar} disabled={salvando || !form.nome.trim() || !form.modelo.trim() || !form.api_key.trim()}>
+        <Button className="gap-1.5" onClick={adicionar} disabled={salvando || !form.nome.trim() || !form.modelo.trim()}>
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
         </Button>
         <p className="text-[11px] text-gray-400">
-          Pegue o ID e a chave em openrouter.ai. A chave fica visível só para administradores.
+          Pegue o ID do modelo em openrouter.ai. A chave da API fica num segredo do servidor
+          (variável <code>OPENROUTER_API_KEY</code>), não no banco.
         </p>
       </div>
     </div>
@@ -373,7 +364,7 @@ export function PainelAgentes() {
             <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><Cpu className="h-4 w-4" /></div>
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-semibold text-gray-900">Modelo de IA</p>
-              <p className="text-[12px] text-gray-600 mt-0.5">Modelos e chaves do OpenRouter.</p>
+              <p className="text-[12px] text-gray-600 mt-0.5">Modelos do OpenRouter.</p>
             </div>
             <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
           </button>
