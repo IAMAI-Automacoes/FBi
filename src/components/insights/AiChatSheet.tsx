@@ -17,6 +17,7 @@ import { FormattedMessage, parseInline, LINK_ESCURO } from '@/lib/chat-utils'
 import { useChat } from '@/hooks/use-chat'
 import { supabase } from '@/lib/supabase/client'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
+import { useAuth } from '@/hooks/use-auth'
 import { getIniciais } from '@/lib/iniciais'
 import { useToast } from '@/hooks/use-toast'
 
@@ -37,6 +38,7 @@ export function AiChatSheet({ open, onOpenChange, insight }: AiChatSheetProps) {
   const [contextoDados, setContextoDados] = useState<any>({ insight })
   const { toast } = useToast()
   const { mascote } = useRestauranteConfig()
+  const { usuario } = useAuth()
   const mascoteNome = mascote.nome
 
   const { messages, loading, error, enviar, setMessages, setError } = useChat(
@@ -156,8 +158,13 @@ export function AiChatSheet({ open, onOpenChange, insight }: AiChatSheetProps) {
   }
 
   const handleCriarAcao = async (dados: any) => {
+    if (!usuario?.restaurante_id) {
+      toast({ title: 'Erro ao criar ação', description: 'Restaurante não identificado.', variant: 'destructive' })
+      return
+    }
     try {
       const { error: err } = await supabase.from('acoes_operacionais').insert({
+        restaurante_id: usuario.restaurante_id,
         titulo_acao: dados?.titulo || insight?.title || 'Nova Ação',
         prioridade: dados?.prioridade || insight?.priority || 'IMPORTANTE',
         status: 'PENDENTE',
@@ -172,8 +179,13 @@ export function AiChatSheet({ open, onOpenChange, insight }: AiChatSheetProps) {
   }
 
   const handleCriarInsight = async (dados: any) => {
+    if (!usuario?.restaurante_id) {
+      toast({ title: 'Erro ao criar insight', description: 'Restaurante não identificado.', variant: 'destructive' })
+      return
+    }
     try {
       const { error: err } = await supabase.from('insights').insert({
+        restaurante_id: usuario.restaurante_id,
         titulo: dados?.titulo || 'Novo Insight',
         prioridade: dados?.prioridade || 'OBSERVACAO',
         categoria: insight?.category,
