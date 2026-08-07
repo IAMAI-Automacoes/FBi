@@ -173,11 +173,16 @@ serve(async (req: Request) => {
       return json({ hasInstance: true, connected, qrcode: connected ? null : extractQr(data), numero: connected ? numero : null })
     }
 
-    // ── desconectar: encerra a sessão (mantém a instância/token) ─────────────────
+    // ── desconectar: encerra a sessão, apaga a instância na uazapi (libera o
+    //    slot) e limpa as credenciais guardadas (token + número). ──────────────
     if (action === 'desconectar') {
-      if (token) await callInstance('disconnect', 'POST')
+      if (token) {
+        try { await callInstance('disconnect', 'POST') } catch { /* best-effort */ }
+        try { await callInstance('delete', 'DELETE') } catch { /* best-effort */ }
+      }
+      await setToken(null)
       await setNumero(null)
-      return json({ hasInstance: !!token, connected: false, qrcode: null, numero: null })
+      return json({ hasInstance: false, connected: false, qrcode: null, numero: null })
     }
 
     // ── reset: reinicia o runtime (para sessões travadas) ───────────────────────
