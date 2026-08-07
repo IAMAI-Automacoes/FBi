@@ -9,7 +9,6 @@ import {
   despacharOperacao, narrarOperacao, relatorioDaAcao,
   analisarDocumentos, blocoDeAnalises, AnaliseArquivo,
   pesquisarNaWeb, lerPaginaWeb, curarConhecimento,
-  persistirEmBackground,
 } from '@/lib/ia/agentes'
 import { parsearComando, removerComandos, ehComandoMaterial } from '@/lib/ia/comandos'
 
@@ -238,16 +237,15 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
           })
         }
         if (texto) {
+          // A IA aprende em segundo plano na SUA memória própria
+          // (`memoria_assistente`). Os campos de texto livre do usuário
+          // (`perfil_notas`, `detalhes`) são só dele — a IA não escreve neles.
           void memorizarDaConversa(
             contextoFinal.restaurante_id ?? null,
             texto,
             resposta,
             opcoes.memoria ?? contextoFinal.memoria ?? [],
           )
-          // Anota, em segundo plano, fatos afirmados que NÃO cabem num campo de
-          // config (histórias, prêmios, detalhes pessoais) — no texto livre.
-          // Campos de config são tratados pelo comando mudar_config.
-          void persistirEmBackground(contextoFinal.restaurante_id ?? null, texto)
         }
       }
 
