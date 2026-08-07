@@ -19,7 +19,6 @@ import Settings from './pages/Settings'
 import Autenticacao from './pages/auth/Autenticacao'
 import RecuperarSenha from './pages/auth/RecuperarSenha'
 import Onboarding from './pages/auth/Onboarding'
-import OnboardingMembro from './pages/auth/OnboardingMembro'
 import MyAccount from './pages/MyAccount'
 import Sugestoes from './pages/Sugestoes'
 import Admin from './pages/Admin'
@@ -59,7 +58,6 @@ const App = () => (
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/checkout/sucesso" element={<CheckoutSucesso />} />
             <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/onboarding-membro" element={<OnboardingMembro />} />
             <Route path="/minha-conta" element={<MyAccount />} />
             <Route
               path="/configuracoes"

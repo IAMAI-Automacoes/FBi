@@ -76,7 +76,7 @@ export function RotaProtegida() {
   if (usuario.excluida_em) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-6 text-center">
-        <p className="text-base font-semibold text-gray-900">Esta conta foi encerrada</p>
+        <p className="text-base font-semibold text-gray-900">Esta conta foi excluída</p>
         <p className="mt-2 max-w-sm text-sm text-gray-500">
           O acesso foi removido. Se você acha que isso é um engano, fale com o suporte — seus
           dados continuam guardados.
@@ -101,14 +101,7 @@ export function RotaProtegida() {
     )
   }
 
-  // Membro convidado usa a assinatura do dono — nunca é barrado por não ter
-  // plano próprio. (`restaurante_id` hoje é sempre o id da própria linha, então
-  // o que distingue de fato é o cargo.)
-  const ehMembro =
-    usuario.restaurante_id !== null &&
-    usuario.restaurante_id !== undefined &&
-    usuario.cargo === 'visualizador'
-
+  // Login por restaurante é único (não existe mais "membro convidado").
   const naRotaDePagamento = ROTAS_DE_PAGAMENTO.includes(location.pathname)
   const semPlanoAtivo = usuario.assinatura_status !== 'ativa'
 
@@ -128,23 +121,21 @@ export function RotaProtegida() {
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
   // que o dinheiro entrou.
-  if (!ehAdminPlataforma && !ehMembro && semPlanoAtivo && !naRotaDePagamento) {
+  if (!ehAdminPlataforma && semPlanoAtivo && !naRotaDePagamento) {
     return <Navigate to="/assinatura" replace />
   }
 
-  if (!ehAdminPlataforma && usuario.onboarding_completo === false && !naRotaDePagamento) {
-    if (ehMembro && location.pathname !== '/onboarding-membro') {
-      return <Navigate to="/onboarding-membro" replace />
-    }
-    if (!ehMembro && location.pathname !== '/onboarding') {
-      return <Navigate to="/onboarding" replace />
-    }
+  if (
+    !ehAdminPlataforma &&
+    usuario.onboarding_completo === false &&
+    !naRotaDePagamento &&
+    location.pathname !== '/onboarding'
+  ) {
+    return <Navigate to="/onboarding" replace />
   }
 
-  if (usuario.onboarding_completo === true) {
-    if (location.pathname === '/onboarding' || location.pathname === '/onboarding-membro') {
-      return <Navigate to="/" replace />
-    }
+  if (usuario.onboarding_completo === true && location.pathname === '/onboarding') {
+    return <Navigate to="/" replace />
   }
 
   return <Outlet />
