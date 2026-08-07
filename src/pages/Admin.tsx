@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
   X, Video, FileText, FileSpreadsheet, Check, Play, MessageSquare, Tag, Users,
+  RotateCcw, Search,
 } from 'lucide-react'
 import { format, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -27,10 +28,8 @@ import {
   buscarCupons, criarCupon, atualizarCupon, excluirCupon,
   type SugestaoAdmin, type DivisaoReceita, type Afiliado, type Cupon, type ReacaoAdmin,
   buscarContas,
-  definirAssinatura,
   definirExclusaoConta,
   type ContaAdmin,
-  type AssinaturaStatus,
 } from '@/lib/queries/admin'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
@@ -1006,6 +1005,16 @@ const TAB_LABELS: Record<Tab, string> = {
   suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA',
 }
 
+// Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
+// admin achar rápido cada situação.
+type FiltroConta = 'todas' | 'pagantes' | 'nao_pagantes' | 'excluidas'
+const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'pagantes', label: 'Pagantes' },
+  { key: 'nao_pagantes', label: 'Não pagantes' },
+  { key: 'excluidas', label: 'Excluídas' },
+]
+
 // Form defaults
 const EMPTY_DIVISAO = { nome: '', chave_pix: '', tipo: 'porcentagem' as 'porcentagem' | 'valor_fixo', valor: '', ativo: true }
 const EMPTY_AFILIADO = {
@@ -1057,6 +1066,7 @@ export default function Admin() {
   const [loadingContas, setLoadingContas] = useState(false)
   const [salvandoContaId, setSalvandoContaId] = useState<number | null>(null)
   const [buscaConta, setBuscaConta] = useState('')
+  const [filtroConta, setFiltroConta] = useState<FiltroConta>('todas')
 
   // ── Cupons ──
   const [cupons, setCupons] = useState<Cupon[]>([])
@@ -1116,25 +1126,13 @@ export default function Admin() {
   }, [])
   useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
 
-  const alternarAssinatura = useCallback(async (conta: ContaAdmin) => {
-    const novo: AssinaturaStatus = conta.assinatura_status === 'ativa' ? 'sem_assinatura' : 'ativa'
-    setSalvandoContaId(conta.id)
-    try {
-      await definirAssinatura(conta.id, novo)
-      setContas((prev) => prev.map((c) => (c.id === conta.id ? { ...c, assinatura_status: novo } : c)))
-    } catch (e) {
-      console.error('Erro ao alterar assinatura:', e)
-      alert('Não foi possível alterar a assinatura desta conta.')
-    } finally {
-      setSalvandoContaId(null)
-    }
-  }, [])
 
   const alternarExclusao = useCallback(async (conta: ContaAdmin) => {
     const excluindo = !conta.excluida_em
     if (excluindo && !confirm(
-      `Encerrar a conta "${conta.nome_restaurante || conta.email}"?\n\n` +
-      'Ela perde o acesso imediatamente. Nenhum dado é apagado e você pode restaurar depois.',
+      `Excluir a conta "${conta.nome_restaurante || conta.email}"?\n\n` +
+      'A pessoa perde o acesso na hora e não recupera sozinha — nem criando conta de novo ' +
+      'com o mesmo email. Os dados continuam no banco e só você pode restaurar, quando quiser.',
     )) return
 
     setSalvandoContaId(conta.id)
@@ -1406,117 +1404,160 @@ export default function Admin() {
         )}
 
         {/* ── CONTAS ── */}
-        {activeTab === 'contas' && (
+        {activeTab === 'contas' && (() => {
+          const busca = buscaConta.trim().toLowerCase()
+          const contasBusca = contas.filter((c) =>
+            !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
+          )
+          const casaFiltro = (c: ContaAdmin, f: FiltroConta) => {
+            const excluida = !!c.excluida_em
+            const pagante = c.assinatura_status === 'ativa'
+            if (f === 'excluidas') return excluida
+            if (f === 'pagantes') return !excluida && pagante
+            if (f === 'nao_pagantes') return !excluida && !pagante
+            return true
+          }
+          const contasFiltradas = contasBusca.filter((c) => casaFiltro(c, filtroConta))
+
+          return (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
-              <div className="mb-5">
+              <div className="mb-4">
                 <h2 className="text-base font-semibold text-gray-800">Contas</h2>
-                <p className="text-[12px] text-gray-500 mt-0.5">
-                  Conta sem assinatura ativa não acessa o software — cai na tela de planos.
-                  Enquanto o pagamento automático não existe, a liberação é feita aqui.
+                <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
+                  São duas coisas diferentes. <b className="text-gray-700">Pagamento</b>: parar de
+                  pagar tira o acesso ao software (a conta cai na tela de planos), mas guarda tudo — a
+                  pessoa pode voltar a pagar quando quiser. <b className="text-gray-700">Excluir</b>:
+                  remove o acesso de vez — a pessoa não recupera sozinha, nem criando conta com o mesmo
+                  email. Os dados ficam no banco e só você restaura.
                 </p>
               </div>
 
-              <input
-                value={buscaConta}
-                onChange={(e) => setBuscaConta(e.target.value)}
-                placeholder="Buscar por nome, restaurante ou email…"
-                className="w-full h-9 px-3 mb-4 text-[13px] bg-white border border-gray-200 rounded-lg outline-none focus:border-[#1D4ED8]"
-              />
+              {/* Busca */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  value={buscaConta}
+                  onChange={(e) => setBuscaConta(e.target.value)}
+                  placeholder="Buscar por nome, restaurante ou email…"
+                  className="w-full h-9 pl-9 pr-3 text-[13px] bg-white border border-gray-200 rounded-lg outline-none focus:border-[#1D4ED8]"
+                />
+              </div>
+
+              {/* Filtros por situação, com contagem */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {FILTROS_CONTA.map((f) => {
+                  const n = contasBusca.filter((c) => casaFiltro(c, f.key)).length
+                  const on = filtroConta === f.key
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setFiltroConta(f.key)}
+                      className={cn(
+                        'px-3 py-1 rounded-full text-[12px] font-medium border transition-colors',
+                        on
+                          ? 'bg-[#1D4ED8] text-white border-[#1D4ED8]'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300',
+                      )}
+                    >
+                      {f.label}
+                      <span className={cn('ml-1.5', on ? 'text-blue-200' : 'text-gray-400')}>{n}</span>
+                    </button>
+                  )
+                })}
+              </div>
 
               {loadingContas ? (
-                <p className="text-center py-8 text-sm text-gray-400">Carregando…</p>
+                <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
+              ) : contasFiltradas.length === 0 ? (
+                <p className="text-center py-10 text-sm text-gray-400">
+                  {contas.length === 0 ? 'Nenhuma conta ainda.' : 'Nenhuma conta neste filtro.'}
+                </p>
               ) : (
                 <CrudTable>
                   <thead>
                     <tr>
                       <Th>Conta</Th>
-                      <Th>Email</Th>
-                      <Th>Assinatura</Th>
-                      <Th>Onboarding</Th>
-                      <Th>Ação</Th>
+                      <Th>Pagamento</Th>
+                      <Th>Ações</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contas
-                      .filter((c) => {
-                        const q = buscaConta.trim().toLowerCase()
-                        if (!q) return true
-                        return [c.nome, c.nome_restaurante, c.email]
-                          .some((v) => (v ?? '').toLowerCase().includes(q))
-                      })
-                      .map((c) => {
-                        const ativa = c.assinatura_status === 'ativa'
-                        const excluida = !!c.excluida_em
-                        return (
-                          <tr
-                            key={c.id}
-                            className={cn('border-t border-gray-100', excluida && 'opacity-55')}
-                          >
-                            <Td>
-                              <span className="font-medium text-gray-800">
+                    {contasFiltradas.map((c) => {
+                      const pagante = c.assinatura_status === 'ativa'
+                      const excluida = !!c.excluida_em
+                      const salvando = salvandoContaId === c.id
+                      return (
+                        <tr key={c.id} className={cn('border-t border-gray-100', excluida && 'bg-red-50/40')}>
+                          {/* Conta */}
+                          <Td>
+                            <div className="flex flex-col">
+                              <span className={cn('font-medium', excluida ? 'text-gray-500' : 'text-gray-800')}>
                                 {c.nome_restaurante || 'Sem nome'}
+                                {c.nome && <span className="text-gray-400 font-normal"> · {c.nome}</span>}
+                                {excluida && (
+                                  <span className="ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold tracking-wide align-middle">
+                                    EXCLUÍDA
+                                  </span>
+                                )}
                               </span>
-                              {c.nome && <span className="text-gray-400"> · {c.nome}</span>}
-                              {excluida && (
-                                <span className="ml-2 px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[11px] font-semibold">
-                                  encerrada
-                                </span>
-                              )}
-                            </Td>
-                            <Td className="text-gray-500">{c.email || '—'}</Td>
-                            <Td>
-                              <span className={cn(
-                                'px-2 py-0.5 rounded-full text-[11px] font-semibold',
-                                ativa ? 'bg-emerald-50 text-emerald-700'
-                                  : c.assinatura_status === 'inadimplente' ? 'bg-amber-50 text-amber-700'
-                                  : c.assinatura_status === 'cancelada' ? 'bg-red-50 text-red-700'
-                                  : 'bg-gray-100 text-gray-600',
-                              )}>
-                                {c.assinatura_status.replace('_', ' ')}
-                              </span>
-                              {c.plano_ciclo && (
-                                <span className="text-[11px] text-gray-400"> · {c.plano_ciclo}</span>
-                              )}
-                            </Td>
-                            <Td><BadgeBool v={c.onboarding_completo} /></Td>
-                            <Td>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => alternarAssinatura(c)}
-                                  disabled={salvandoContaId === c.id || excluida}
-                                  className={cn(
-                                    'px-3 py-1 rounded-md text-[12px] font-medium transition-colors disabled:opacity-40',
-                                    ativa
-                                      ? 'border border-gray-300 text-gray-700 hover:bg-gray-100'
-                                      : 'bg-[#1D4ED8] text-white hover:bg-blue-800',
-                                  )}
-                                >
-                                  {salvandoContaId === c.id ? '…' : ativa ? 'Desativar' : 'Ativar'}
-                                </button>
-                                <button
-                                  onClick={() => alternarExclusao(c)}
-                                  disabled={salvandoContaId === c.id}
-                                  className={cn(
-                                    'px-3 py-1 rounded-md text-[12px] font-medium transition-colors disabled:opacity-40',
-                                    excluida
-                                      ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                                      : 'border border-red-200 text-red-600 hover:bg-red-50',
-                                  )}
-                                >
-                                  {excluida ? 'Restaurar' : 'Encerrar'}
-                                </button>
-                              </div>
-                            </Td>
-                          </tr>
-                        )
-                      })}
+                              <span className="text-[12px] text-gray-400">{c.email || '—'}</span>
+                            </div>
+                          </Td>
+
+                          {/* Pagamento */}
+                          <Td>
+                            <span className={cn(
+                              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
+                              pagante ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
+                            )}>
+                              <span className={cn('h-1.5 w-1.5 rounded-full', pagante ? 'bg-emerald-500' : 'bg-gray-400')} />
+                              {pagante ? 'Pagante' : 'Não pagante'}
+                            </span>
+                            {(c.assinatura_status === 'inadimplente' || c.assinatura_status === 'cancelada') && (
+                              <span className="ml-1.5 text-[10px] text-gray-400">{c.assinatura_status}</span>
+                            )}
+                            {pagante && c.plano_ciclo && (
+                              <span className="ml-1.5 text-[10px] text-gray-400">{c.plano_ciclo}</span>
+                            )}
+                          </Td>
+
+                          {/* Ação: só exclusão reversível. O acesso pago é
+                              controlado por pagamento real ou cupom — não há
+                              como "tornar pagante" pelo painel. */}
+                          <Td>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => alternarExclusao(c)}
+                                disabled={salvando}
+                                title={excluida
+                                  ? 'Restaurar: devolve o acesso e os dados'
+                                  : 'Excluir: remove o acesso de vez, mas guarda os dados no banco'}
+                                className={cn(
+                                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium transition-colors disabled:opacity-40',
+                                  excluida
+                                    ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                                    : 'border border-red-200 text-red-600 hover:bg-red-50',
+                                )}
+                              >
+                                {excluida ? (
+                                  <><RotateCcw className="h-3.5 w-3.5" /> Restaurar</>
+                                ) : (
+                                  <><Trash2 className="h-3.5 w-3.5" /> Excluir</>
+                                )}
+                              </button>
+                            </div>
+                          </Td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </CrudTable>
               )}
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ── PAGAMENTOS ── */}
         {activeTab === 'pagamentos' && (

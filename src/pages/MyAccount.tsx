@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, Camera, Mail, AtSign, UserIcon } from 'lucide-react'
+import { ChevronLeft, Camera, Mail, AtSign, UserIcon, Trash2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,11 +11,13 @@ import { useToast } from '@/hooks/use-toast'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
+import { excluirMinhaConta } from '@/lib/queries/conta'
 
 export default function MyAccount() {
-  const { usuario, refetchUsuario } = useAuth()
+  const { usuario, refetchUsuario, logout } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -39,9 +41,9 @@ export default function MyAccount() {
       // …mas o valor de verdade vem do banco (fresco, sem cache), inclusive o
       // nome — assim, ao voltar para esta tela, o nome salvo aparece sem F5.
       const { data } = await supabase
-        .from('restaurantes')
+        .from('usuarios')
         .select('nome, avatar_url, username, perfil_notas')
-        .eq('auth_user_id', usuario.id)
+        .eq('id', usuario.id)
         .single()
 
       if (data) {
@@ -80,9 +82,9 @@ export default function MyAccount() {
     } = supabase.storage.from('avatars').getPublicUrl(filePath)
 
     const { error: updateError } = await supabase
-      .from('restaurantes')
+      .from('usuarios')
       .update({ avatar_url: publicUrl })
-      .eq('auth_user_id', usuario.id)
+      .eq('id', usuario.id)
 
     if (updateError) {
       toast({
@@ -101,7 +103,7 @@ export default function MyAccount() {
   const handleRemoveAvatar = async () => {
     if (!usuario?.id) return
     setUploadingAvatar(true)
-    await supabase.from('restaurantes').update({ avatar_url: null }).eq('auth_user_id', usuario.id)
+    await supabase.from('usuarios').update({ avatar_url: null }).eq('id', usuario.id)
     setAvatarUrl('')
     refetchUsuario()
     setUploadingAvatar(false)
@@ -116,10 +118,10 @@ export default function MyAccount() {
 
     if (finalUsername) {
       const { data: existingUser } = await supabase
-        .from('restaurantes')
+        .from('usuarios')
         .select('id')
         .eq('username', finalUsername)
-        .neq('auth_user_id', usuario.id)
+        .neq('id', usuario.id)
         .maybeSingle()
 
       if (existingUser) {
@@ -136,13 +138,13 @@ export default function MyAccount() {
     // .select('id'): detecta bloqueio de RLS (0 linhas), que vinha como 200 sem
     // erro — antes mostrava "salvo" falso e o perfil não mudava de verdade.
     const { data, error } = await supabase
-      .from('restaurantes')
+      .from('usuarios')
       .update({
         nome: formData.nome,
         username: finalUsername,
         perfil_notas: formData.perfil_notas || null,
       } as any)
-      .eq('auth_user_id', usuario.id)
+      .eq('id', usuario.id)
       .select('id')
 
     setLoading(false)
@@ -163,6 +165,23 @@ export default function MyAccount() {
     // Atualiza o useAuth (nome/dados usados no cabeçalho e em outras telas), sem F5
     refetchUsuario()
     toast({ title: 'Salvo', description: 'Perfil atualizado.' })
+  }
+
+  const handleExcluirConta = async () => {
+    if (!confirm(
+      'Tem certeza que quer EXCLUIR sua conta?\n\n' +
+      'Você perde o acesso na hora e não recupera sozinho, nem criando conta de novo com o ' +
+      'mesmo email. Fale com o suporte se precisar restaurar depois.',
+    )) return
+    setExcluindo(true)
+    try {
+      await excluirMinhaConta()
+      await logout()
+      window.location.href = '/login'
+    } catch (e: any) {
+      toast({ title: 'Não foi possível excluir', description: e.message, variant: 'destructive' })
+      setExcluindo(false)
+    }
   }
 
   if (!usuario) {
@@ -326,6 +345,29 @@ export default function MyAccount() {
             <div className="bg-gray-50/80 px-6 sm:px-10 py-5 border-t border-gray-100 flex justify-end">
               <Button onClick={handleSave} disabled={!alterado || loading} className="min-w-[140px]">
                 {loading ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Zona de perigo — excluir a própria conta (reversível só pelo suporte) */}
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/40 p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-800">Excluir minha conta</h3>
+                <p className="text-[13px] text-red-700/80 mt-1">
+                  Você perde o acesso na hora e não recupera sozinho, nem criando conta de novo com o
+                  mesmo email. Os dados ficam guardados e só o suporte restaura, se você pedir.
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={handleExcluirConta}
+                disabled={excluindo}
+                className="shrink-0 gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                {excluindo ? 'Excluindo...' : 'Excluir conta'}
               </Button>
             </div>
           </div>
