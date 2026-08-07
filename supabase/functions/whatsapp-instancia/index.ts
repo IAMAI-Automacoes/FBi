@@ -173,12 +173,18 @@ serve(async (req: Request) => {
       return json({ hasInstance: true, connected, qrcode: connected ? null : extractQr(data), numero: connected ? numero : null })
     }
 
-    // ── desconectar: encerra a sessão, apaga a instância na uazapi (libera o
-    //    slot) e limpa as credenciais guardadas (token + número). ──────────────
+    // ── desconectar: apaga a instância na uazapi (libera o slot) e limpa as
+    //    credenciais guardadas (token + número). ────────────────────────────────
     if (action === 'desconectar') {
       if (token) {
-        try { await callInstance('disconnect', 'POST') } catch { /* best-effort */ }
-        try { await callInstance('delete', 'DELETE') } catch { /* best-effort */ }
+        // DELETE /instance (na raiz) encerra a sessão E remove a instância do
+        // banco da uazapi — é o endpoint correto para liberar o slot.
+        try {
+          await fetch(`${BASE}/instance`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', token },
+          })
+        } catch { /* best-effort: as credenciais são limpas de qualquer forma */ }
       }
       await setToken(null)
       await setNumero(null)
