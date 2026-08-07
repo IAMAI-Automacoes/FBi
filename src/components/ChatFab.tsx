@@ -608,7 +608,7 @@ export function ChatFab({
         rId ? supabase.from('garcons').select('nome_garcon').eq('restaurante_id', rId).eq('ativo', true) : vazio,
         rId
           ? supabase.from('restaurantes')
-              .select('nome, nome_restaurante, detalhes, perfil_notas, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao')
+              .select('nome_restaurante, detalhes, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao')
               .eq('id', rId).single()
           : Promise.resolve({ data: null as any }),
         buscarKpis(rId, '30d').catch(() => null),
@@ -623,6 +623,12 @@ export function ChatFab({
     // "perguntar" mesmo com o botão em "Fazer sozinha".
 
     const cfg = configRes.data as any
+    // Campos de PESSOA (nome/perfil_notas) vêm do usuário logado (tabela `usuarios`),
+    // não mais de `restaurantes`. Sobrepõe no cfg pra manter o resto do código igual.
+    if (cfg) {
+      cfg.nome = usuario?.nome ?? null
+      cfg.perfil_notas = usuario?.perfil_notas ?? null
+    }
     const perfil = (cfg?.perfil_restaurante as any) || {}
 
     return {

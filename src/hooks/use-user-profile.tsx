@@ -27,11 +27,12 @@ export function useUserProfile() {
         return
       }
 
+      // Dados da pessoa (e o restaurante_id) vêm de `usuarios`.
       const { data } = await supabase
-        .from('restaurantes')
-        .select('*')
-        .eq('auth_user_id', user.id)
-        .single()
+        .from('usuarios')
+        .select('restaurante_id, nome, email, cargo, avatar_url')
+        .eq('id', user.id)
+        .maybeSingle()
 
       if (mounted) {
         setProfile(
@@ -40,7 +41,7 @@ export function useUserProfile() {
                 id: user.id,
                 email: data.email,
                 nome: data.nome,
-                restaurante_id: data.id,
+                restaurante_id: data.restaurante_id,
                 cargo: data.cargo,
                 avatar_url: data.avatar_url,
               }

@@ -13,7 +13,7 @@ import { CAMPOS_CONFIG, campoValido, atualizarCampoConfig } from '@/lib/queries/
  * Motor de ações do assistente.
  *
  * Tudo que a IA cria ou altera passa por aqui, e TUDO fica registrado em
- * `acoes_ia` com o valor anterior — é isso que permite desfazer.
+ * `ia_log_alteracoes` com o valor anterior — é isso que permite desfazer.
  *
  * Regra de segurança: feedbacks de clientes são registro histórico e NUNCA
  * podem ser criados, editados ou apagados pela IA. Se pudessem, todos os
@@ -88,7 +88,7 @@ async function registrar(
   depois: any,
 ): Promise<RegistroAcao | null> {
   const { data } = await supabase
-    .from('acoes_ia')
+    .from('ia_log_alteracoes')
     .insert({
       restaurante_id: restauranteId,
       tipo: acao.tipo,
@@ -236,11 +236,16 @@ export async function executarAcao(
       const campo = String(d.campo)
       const { data: r } = await supabase
         .from('restaurantes')
-        .select('nome, nome_restaurante, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante')
+        .select('nome_restaurante, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante')
         .eq('id', restauranteId)
         .single()
       const perfil = ((r as any)?.perfil_restaurante as any) || {}
-      const valorAnterior = (r as any)?.[campo] ?? perfil[campo] ?? ''
+      let valorAnterior = (r as any)?.[campo] ?? perfil[campo] ?? ''
+      // `nome` é de pessoa (tabela `usuarios`) — pega o valor anterior de lá
+      if (campo === 'nome') {
+        const { data: p } = await supabase.from('usuarios').select('nome').eq('restaurante_id', restauranteId).maybeSingle()
+        valorAnterior = (p as any)?.nome ?? ''
+      }
 
       await atualizarCampoConfig(restauranteId, campo, String(d.valor))
       return registrar(
@@ -300,14 +305,14 @@ export async function reverterAcao(registro: RegistroAcao): Promise<void> {
   }
 
   await supabase
-    .from('acoes_ia')
+    .from('ia_log_alteracoes')
     .update({ revertido: true, revertido_em: new Date().toISOString() })
     .eq('id', registro.id)
 }
 
 export async function listarHistoricoIA(restauranteId: number, limite = 50): Promise<RegistroAcao[]> {
   const { data } = await supabase
-    .from('acoes_ia')
+    .from('ia_log_alteracoes')
     .select('*')
     .eq('restaurante_id', restauranteId)
     .order('created_at', { ascending: false })

@@ -71,18 +71,29 @@ export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
 
   const usuarioIds = [...new Set((sugestoes as any[]).map((s) => s.usuario_id).filter(Boolean))]
 
+  // Dados do restaurante vêm de `restaurantes`; os da pessoa (nome/email/avatar)
+  // de `usuarios`. Une-se pelo id do auth (usuario_id da sugestão).
   const { data: restaurantes } = await supabase
     .from('restaurantes')
-    .select('auth_user_id, nome, email, avatar_url, nome_restaurante, logo_url, numero_whatsapp, tipo_culinaria, numero_mesas, detalhes')
+    .select('auth_user_id, nome_restaurante, logo_url, numero_whatsapp, tipo_culinaria, numero_mesas, detalhes')
     .in('auth_user_id', usuarioIds)
+
+  const { data: pessoas } = await supabase
+    .from('usuarios')
+    .select('id, nome, email, avatar_url')
+    .in('id', usuarioIds)
+
+  const pessoaMap: Record<string, any> = {}
+  for (const p of pessoas ?? []) pessoaMap[p.id] = p
 
   const userMap: Record<string, PerfilRestaurante> = {}
   for (const r of restaurantes ?? []) {
     if (r.auth_user_id) {
+      const p = pessoaMap[r.auth_user_id] || {}
       userMap[r.auth_user_id] = {
-        nome: r.nome ?? null,
-        email: r.email ?? null,
-        avatar_url: r.avatar_url ?? null,
+        nome: p.nome ?? null,
+        email: p.email ?? null,
+        avatar_url: p.avatar_url ?? null,
         nome_restaurante: r.nome_restaurante ?? null,
         logo_url: r.logo_url ?? null,
         numero_whatsapp: r.numero_whatsapp ?? null,
@@ -426,10 +437,28 @@ export interface ContaAdmin {
 export async function buscarContas(): Promise<ContaAdmin[]> {
   const { data, error } = await supabase
     .from('restaurantes')
-    .select('id, nome, email, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at')
+    .select('id, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data ?? []) as unknown as ContaAdmin[]
+
+  // nome/email da pessoa vêm de `usuarios` (unido por restaurante_id)
+  const { data: pessoas } = await supabase.from('usuarios').select('restaurante_id, nome, email')
+  const pessoaPorRest: Record<number, { nome: string | null; email: string | null }> = {}
+  for (const p of (pessoas ?? []) as any[]) {
+    pessoaPorRest[p.restaurante_id] = { nome: p.nome ?? null, email: p.email ?? null }
+  }
+
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    nome: pessoaPorRest[r.id]?.nome ?? null,
+    email: pessoaPorRest[r.id]?.email ?? null,
+    nome_restaurante: r.nome_restaurante ?? null,
+    assinatura_status: r.assinatura_status,
+    plano_ciclo: r.plano_ciclo ?? null,
+    onboarding_completo: r.onboarding_completo,
+    excluida_em: r.excluida_em ?? null,
+    created_at: r.created_at,
+  })) as ContaAdmin[]
 }
 
 export async function definirAssinatura(id: number, status: AssinaturaStatus): Promise<void> {

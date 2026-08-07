@@ -15,6 +15,106 @@ export type Database = {
   }
   public: {
     Tables: {
+      usuarios: {
+        Row: {
+          avatar_url: string | null
+          cargo: string
+          configuracoes: Json | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string | null
+          perfil_notas: string | null
+          restaurante_id: number
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          cargo?: string
+          configuracoes?: Json | null
+          created_at?: string
+          email?: string | null
+          id: string
+          nome?: string | null
+          perfil_notas?: string | null
+          restaurante_id: number
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          cargo?: string
+          configuracoes?: Json | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          perfil_notas?: string | null
+          restaurante_id?: number
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuarios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ia_log_alteracoes: {
+        Row: {
+          alvo_id: string | null
+          alvo_tabela: string | null
+          antes: Json | null
+          created_at: string
+          depois: Json | null
+          descricao: string
+          id: string
+          modo: string
+          restaurante_id: number
+          revertido: boolean
+          revertido_em: string | null
+          tipo: string
+        }
+        Insert: {
+          alvo_id?: string | null
+          alvo_tabela?: string | null
+          antes?: Json | null
+          created_at?: string
+          depois?: Json | null
+          descricao: string
+          id?: string
+          modo?: string
+          restaurante_id: number
+          revertido?: boolean
+          revertido_em?: string | null
+          tipo: string
+        }
+        Update: {
+          alvo_id?: string | null
+          alvo_tabela?: string | null
+          antes?: Json | null
+          created_at?: string
+          depois?: Json | null
+          descricao?: string
+          id?: string
+          modo?: string
+          restaurante_id?: number
+          revertido?: boolean
+          revertido_em?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acoes_ia_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       afiliados: {
         Row: {
           agencia: string | null

@@ -17,18 +17,22 @@ export const CAMPOS_CONFIG: Record<string, string> = {
   diferenciais: 'diferenciais',
   desafios: 'desafios',
   ano_abertura: 'ano de abertura',
-  detalhes: 'descrição do restaurante',
 }
+// `detalhes` (descrição do restaurante) e `perfil_notas` (notas da pessoa) são
+// campos de texto livre do USUÁRIO — a IA não escreve neles. Ela aprende na
+// própria memória (`memoria_assistente`).
 
-// Onde cada campo mora no banco
-const COLUNAS_TEXTO = new Set(['nome', 'nome_restaurante', 'tipo_culinaria', 'detalhes'])
+// Onde cada campo mora no banco.
+// `nome` é de PESSOA (mora em `usuarios`); os demais texto são do restaurante.
+const COLUNAS_PESSOA = new Set(['nome'])
+const COLUNAS_TEXTO = new Set(['nome_restaurante', 'tipo_culinaria'])
 const CAMPOS_JSON = new Set([
   'localizacao', 'estilo', 'capacidade_lugares', 'num_funcionarios', 'faixa_preco',
   'horario_funcionamento', 'publico_alvo', 'pratos_destaque', 'diferenciais', 'desafios', 'ano_abertura',
 ])
 
 export function campoValido(campo: string): boolean {
-  return campo === 'numero_mesas' || COLUNAS_TEXTO.has(campo) || CAMPOS_JSON.has(campo)
+  return campo === 'numero_mesas' || COLUNAS_PESSOA.has(campo) || COLUNAS_TEXTO.has(campo) || CAMPOS_JSON.has(campo)
 }
 
 /**
@@ -55,6 +59,25 @@ export async function atualizarCampoConfig(
     if (!data || data.length === 0) {
       throw new Error('Nada foi alterado — verifique se você tem permissão para editar este restaurante.')
     }
+  }
+
+  // Campos de pessoa (ex.: nome) moram em `usuarios`; a RLS restringe à própria linha.
+  const gravarPessoa = async (campos: Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('usuarios')
+      .update(campos)
+      .eq('restaurante_id', restauranteId)
+      .select('id')
+    if (error) throw new Error(error.message)
+    if (!data || data.length === 0) {
+      throw new Error('Nada foi alterado — verifique se você tem permissão para editar este perfil.')
+    }
+  }
+
+  if (COLUNAS_PESSOA.has(campo)) {
+    await gravarPessoa({ [campo]: v || null })
+    return
   }
 
   if (campo === 'numero_mesas') {
@@ -95,11 +118,17 @@ export async function anexarTextoLivre(
 ): Promise<void> {
   const t = texto.trim()
   if (!t) return
-  const { data, error } = await supabase
-    .from('restaurantes')
+  // `perfil_notas` é de pessoa (tabela `usuarios`, filtrada por restaurante_id +
+  // RLS na própria linha); `detalhes` é do restaurante.
+  const ehPessoa = coluna === 'perfil_notas'
+  const tabela = ehPessoa ? 'usuarios' : 'restaurantes'
+  const chave = ehPessoa ? 'restaurante_id' : 'id'
+
+  const { data, error } = await (supabase as any)
+    .from(tabela)
     .select(coluna)
-    .eq('id', restauranteId)
-    .single()
+    .eq(chave, restauranteId)
+    .maybeSingle()
   if (error) throw new Error(error.message)
   const atual = String((data as any)?.[coluna] || '').trim()
   // Não duplica se o trecho já estiver anotado
@@ -107,12 +136,12 @@ export async function anexarTextoLivre(
   const novo = atual ? `${atual}\n${t}` : t
 
   const { data: linhas, error: erroGravar } = await (supabase as any)
-    .from('restaurantes')
+    .from(tabela)
     .update({ [coluna]: novo })
-    .eq('id', restauranteId)
+    .eq(chave, restauranteId)
     .select('id')
   if (erroGravar) throw new Error(erroGravar.message)
   if (!linhas || linhas.length === 0) {
-    throw new Error('Nada foi anotado — verifique a permissão para editar este restaurante.')
+    throw new Error('Nada foi anotado — verifique a permissão para editar este perfil.')
   }
 }

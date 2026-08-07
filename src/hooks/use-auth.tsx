@@ -17,6 +17,7 @@ export interface UsuarioDados {
   configuracoes?: any
   avatar_url?: string | null
   username?: string | null
+  perfil_notas?: string | null
 }
 
 interface AuthContextType {
@@ -48,12 +49,26 @@ export const useAuth = () => {
   return context
 }
 
-function mapRestauranteToUsuario(row: any, authId: string): UsuarioDados {
+// Os dados de PESSOA (nome, email, avatar, username, cargo, notas, configuracoes)
+// agora moram na tabela `usuarios`, separada de `restaurantes`. Durante a
+// transição as duas ficam sincronizadas por trigger, então mesclar
+// `restaurantes` (dados do restaurante) com `usuarios` (dados da pessoa) é
+// sempre consistente. `mesclarUsuario` prioriza os campos vindos de `usuarios`.
+const CAMPOS_PESSOA = 'nome, email, avatar_url, username, cargo, perfil_notas, configuracoes'
+
+function mesclarUsuario(rest: any, pessoa: any, authUser: User): UsuarioDados {
   return {
-    ...row,
-    id: authId,           // auth UUID — mantido para operações de auth
-    restaurante_id: row.id, // bigint — usado em queries de dados
+    ...rest,
+    ...(pessoa || {}),          // campos de pessoa sobrescrevem, vindos de `usuarios`
+    id: authUser.id,            // auth UUID — operações de auth
+    restaurante_id: rest.id,    // bigint — queries de dados
+    email: pessoa?.email ?? rest?.email ?? authUser.email ?? null,
   }
+}
+
+async function buscarPessoa(authId: string) {
+  const { data } = await supabase.from('usuarios').select(CAMPOS_PESSOA).eq('id', authId).maybeSingle()
+  return data
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -100,25 +115,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .single()
 
         if (data) {
-          setUsuario(mapRestauranteToUsuario(data, userAuth.id))
+          const pessoa = await buscarPessoa(userAuth.id)
+          setUsuario(mesclarUsuario(data, pessoa, userAuth))
           return
         }
 
-        // Sem restaurante — cria placeholder (novo cadastro sem trigger)
+        // Sem restaurante — cria placeholder. Os campos de pessoa NÃO vão para
+        // `restaurantes`; o trigger cria a linha em `usuarios`, e aqui só
+        // garantimos o email da conta nela.
         if (error?.code === 'PGRST116') {
           const { data: novo } = await supabase
             .from('restaurantes')
             .insert({
               auth_user_id: userAuth.id,
-              email: userAuth.email || '',
-              nome: null,
               nome_restaurante: 'Meu Restaurante',
               onboarding_completo: false,
             })
             .select('*')
             .single()
 
-          setUsuario(novo ? mapRestauranteToUsuario(novo, userAuth.id) : null)
+          if (novo) {
+            await supabase.from('usuarios').update({ email: userAuth.email || null }).eq('id', userAuth.id)
+            const pessoa = await buscarPessoa(userAuth.id)
+            setUsuario(mesclarUsuario(novo, pessoa, userAuth))
+          } else {
+            setUsuario(null)
+          }
           return
         }
 
@@ -183,8 +205,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('restaurantes')
         .insert({
           auth_user_id: data.user.id,
-          email,
-          nome,
           nome_restaurante: 'Meu Restaurante',
           onboarding_completo: false,
         })
@@ -196,7 +216,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: insertError }
       }
 
-      if (novo) setUsuario(mapRestauranteToUsuario(novo, data.user.id))
+      if (novo) {
+        // A pessoa (nome/email) mora em `usuarios`. O trigger já criou a linha
+        // ao inserir o restaurante; aqui preenchemos nome e email.
+        await supabase.from('usuarios').update({ nome, email }).eq('id', data.user.id)
+        const pessoa = await buscarPessoa(data.user.id)
+        setUsuario(mesclarUsuario(novo, pessoa, data.user))
+      }
     }
 
     return { error: null }
@@ -229,7 +255,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .select('*')
       .eq('auth_user_id', atual.id)
       .single()
-    if (data) setUsuario(mapRestauranteToUsuario(data, atual.id))
+    if (data) {
+      const pessoa = await buscarPessoa(atual.id)
+      setUsuario(mesclarUsuario(data, pessoa, atual))
+    }
   }, [])
 
   return (
