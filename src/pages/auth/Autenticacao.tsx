@@ -83,6 +83,21 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
     setAviso(null)
   }
 
+  // "Criar conta" no /login não alterna mais o formulário na mesma tela: leva
+  // para a criação de conta DENTRO do fluxo de compra (Conta → Pagamento →
+  // Acesso). Assim quem se cadastra por aqui passa pelo pagamento e só então
+  // pelo onboarding — nunca entra no software sem assinar. Preserva um destino
+  // de compra que já estivesse em andamento e o email já digitado.
+  const irCriarConta = () => {
+    const fromExistente = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+    navigate('/cadastro', {
+      state: {
+        from: fromExistente ?? { pathname: '/assinatura' },
+        emailPreenchido: email || undefined,
+      },
+    })
+  }
+
   const aoEnviar = async (e: React.FormEvent) => {
     e.preventDefault()
     setAviso(null)
@@ -343,17 +358,34 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
             Precisa de ajuda?
           </a>
 
-          {/* Alternador de modo — mesma tela, sem navegação e sem perder o que
-              já foi digitado nem o plano em compra. */}
+          {/* No /cadastro, "Entrar" alterna o modo na mesma tela (sem perder o
+              que já foi digitado nem o plano em compra). No /login, "Criar conta"
+              leva para o fluxo de compra completo — por isso navega, em vez de
+              só trocar o modo. */}
           <div style={{ fontSize: '13px', color: '#64748B', textAlign: 'center', marginTop: '4px' }}>
-            {criando ? 'Já tem uma conta? ' : 'Ainda não tem conta? '}
-            <button
-              type="button"
-              onClick={() => trocarModo(criando ? 'entrar' : 'criar')}
-              style={{ fontWeight: 600, color: '#2563EB', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '13px' }}
-            >
-              {criando ? 'Entrar' : 'Criar conta'}
-            </button>
+            {criando ? (
+              <>
+                Já tem uma conta?{' '}
+                <button
+                  type="button"
+                  onClick={() => trocarModo('entrar')}
+                  style={{ fontWeight: 600, color: '#2563EB', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '13px' }}
+                >
+                  Entrar
+                </button>
+              </>
+            ) : (
+              <>
+                Ainda não tem conta?{' '}
+                <button
+                  type="button"
+                  onClick={irCriarConta}
+                  style={{ fontWeight: 600, color: '#2563EB', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '13px' }}
+                >
+                  Criar conta e assinar
+                </button>
+              </>
+            )}
           </div>
         </div>
       </form>
