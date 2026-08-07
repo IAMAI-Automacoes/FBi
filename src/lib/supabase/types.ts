@@ -334,51 +334,6 @@ export type Database = {
         }
         Relationships: []
       }
-      acoes_ia: {
-        Row: {
-          alvo_id: string | null
-          alvo_tabela: string | null
-          antes: Json | null
-          created_at: string
-          depois: Json | null
-          descricao: string
-          id: string
-          modo: string
-          restaurante_id: number
-          revertido: boolean
-          revertido_em: string | null
-          tipo: string
-        }
-        Insert: {
-          alvo_id?: string | null
-          alvo_tabela?: string | null
-          antes?: Json | null
-          created_at?: string
-          depois?: Json | null
-          descricao: string
-          id?: string
-          modo?: string
-          restaurante_id: number
-          revertido?: boolean
-          revertido_em?: string | null
-          tipo: string
-        }
-        Update: {
-          alvo_id?: string | null
-          alvo_tabela?: string | null
-          antes?: Json | null
-          created_at?: string
-          depois?: Json | null
-          descricao?: string
-          id?: string
-          modo?: string
-          restaurante_id?: number
-          revertido?: boolean
-          revertido_em?: string | null
-          tipo?: string
-        }
-        Relationships: []
-      }
       memoria_assistente: {
         Row: {
           categoria: string
@@ -957,31 +912,23 @@ export type Database = {
       }
       restaurantes: {
         Row: {
-          ativo: boolean | null
           assinatura_status: string
           assinatura_expira_em: string | null
           plano_ciclo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           auth_user_id: string | null
-          avatar_url: string | null
-          cargo: string
           config_insights: Json | null
-          configuracoes: Json | null
           created_at: string
           detalhes: string | null
-          perfil_notas: string | null
           ia_modo_acao: string
           perfil_restaurante: Json
-          é_pagante: boolean | null
-          email: string | null
           frequencia_relatorios: string | null
           funcoes_config: Json | null
           id: number
           logo_url: string | null
           mascote_config: Json | null
           metodo_coleta_feedback: string | null
-          nome: string | null
           nome_restaurante: string | null
           qr_bg_imagem: string | null
           qr_bg_modo: string | null
@@ -995,36 +942,26 @@ export type Database = {
           tipo_culinaria: string | null
           ultima_analise_insights: string | null
           ultima_atualizacao_banner: string | null
-          url_api: string | null
-          username: string | null
           whatsapp_token: string | null
         }
         Insert: {
-          ativo?: boolean | null
           assinatura_status?: string
           assinatura_expira_em?: string | null
           plano_ciclo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           auth_user_id?: string | null
-          avatar_url?: string | null
-          cargo?: string
           config_insights?: Json | null
-          configuracoes?: Json | null
           created_at?: string
           detalhes?: string | null
-          perfil_notas?: string | null
           ia_modo_acao?: string
           perfil_restaurante?: Json
-          é_pagante?: boolean | null
-          email?: string | null
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           id?: number
           logo_url?: string | null
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
-          nome?: string | null
           nome_restaurante?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
@@ -1038,36 +975,26 @@ export type Database = {
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null
           ultima_atualizacao_banner?: string | null
-          url_api?: string | null
-          username?: string | null
           whatsapp_token?: string | null
         }
         Update: {
-          ativo?: boolean | null
           assinatura_status?: string
           assinatura_expira_em?: string | null
           plano_ciclo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           auth_user_id?: string | null
-          avatar_url?: string | null
-          cargo?: string
           config_insights?: Json | null
-          configuracoes?: Json | null
           created_at?: string
           detalhes?: string | null
-          perfil_notas?: string | null
           ia_modo_acao?: string
           perfil_restaurante?: Json
-          é_pagante?: boolean | null
-          email?: string | null
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           id?: number
           logo_url?: string | null
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
-          nome?: string | null
           nome_restaurante?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
@@ -1081,8 +1008,6 @@ export type Database = {
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null
           ultima_atualizacao_banner?: string | null
-          url_api?: string | null
-          username?: string | null
           whatsapp_token?: string | null
         }
         Relationships: []
