@@ -60,7 +60,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 - **`n8n_chat_histories`** — NÃO tocar (gerenciado pelo n8n)
 - **`mensagens_chat`** — NÃO tocar (chat interno, escopo separado)
 - **`OPENROUTER_API_KEY` e `SUPABASE_SERVICE_ROLE_KEY`** — nunca no client bundle
-- **`config_restaurantes.id`** é **bigint** (não uuid) — todas FKs de restaurante usam bigint
+- **`restaurantes.id`** é **bigint** (não uuid) — todas FKs de restaurante usam bigint
 - **Supabase client:** importar de `@/lib/supabase/client`
 
 ---
@@ -119,7 +119,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `sugerir-acoes` | Sugere ações a partir de insights (trigger automático) |
 | `gerar-plano-acao` | Gera plano detalhado para uma ação |
 | `gerar-perguntas-direcionadas` | Gera perguntas direcionadas para ação PENDENTE |
-| `atualizar-banner` | Atualiza `config_restaurantes.texto_banner` via IA |
+| `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
 

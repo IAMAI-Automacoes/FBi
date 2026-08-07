@@ -118,7 +118,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `sugerir-acoes` | Sugere ações a partir de insights (trigger automático) |
 | `gerar-plano-acao` | Gera plano detalhado para uma ação |
 | `gerar-perguntas-direcionadas` | Gera perguntas direcionadas para ação PENDENTE |
-| `atualizar-banner` | Atualiza `config_restaurantes.texto_banner` via IA |
+| `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
 
@@ -137,11 +137,15 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 
 ## Auth Flow
 
-1. Cadastro → cria `auth.users` + insere em `usuarios` (sem `restaurante_id`)
-2. Login → `RotaProtegida` verifica `session`
-3. Se `onboarding_completo = false` → redireciona `/onboarding`
-4. Onboarding → cria `config_restaurantes` + vincula `usuarios.restaurante_id`
+1. Cadastro → cria `auth.users` + insere uma linha em `restaurantes` (com `auth_user_id`)
+2. Login → `RotaProtegida` verifica `session`, assinatura e `excluida_em`
+3. Sem plano ativo → `/assinatura`; se `onboarding_completo = false` → `/onboarding`
+4. Onboarding → preenche os dados do restaurante e marca `onboarding_completo = true`
 5. RLS usa `get_user_restaurante_id()` (função SQL) para isolar dados por restaurante
+
+> **NOTA:** não existem mais as tabelas `usuarios` nem `config_restaurantes` — os
+> dados de pessoa e as configurações foram fundidos na própria `restaurantes`
+> (a linha é achada por `auth_user_id`).
 
 ---
 
@@ -149,7 +153,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 
 Todas as tabelas principais usam `get_user_restaurante_id()`:
 ```sql
--- Função
-SELECT restaurante_id FROM public.usuarios WHERE id = auth.uid() LIMIT 1;
+-- Função (SECURITY DEFINER)
+SELECT id FROM public.restaurantes WHERE auth_user_id = auth.uid() LIMIT 1;
 ```
 Garante que gestor A nunca vê dados do restaurante B.
