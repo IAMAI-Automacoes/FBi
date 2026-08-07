@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   Select,
@@ -11,10 +11,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Calendar, Search, Folder, X } from 'lucide-react'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CalendarDays, Search, Folder, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
+import { rotuloSentimento } from '@/lib/sentimento'
 import { useAuth } from '@/hooks/use-auth'
 
 
@@ -81,6 +84,9 @@ export default function Feedbacks() {
   }
 
   const dataToDisplay = feedbacks
+  const datas = filtros.datas ?? []
+  const setDatas = (novas: Date[] | undefined) =>
+    setFiltros((prev) => ({ ...prev, datas: novas && novas.length > 0 ? novas : undefined }))
 
   return (
     <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">
@@ -88,13 +94,17 @@ export default function Feedbacks() {
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <Select
             value={filtros.periodo}
+            disabled={datas.length > 0}
             onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, periodo: val }))}
           >
-            <SelectTrigger className="w-[160px] h-10 bg-white shadow-sm border-gray-200">
-              <div className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Período" />
-              </div>
+            <SelectTrigger
+              className={cn(
+                'w-[150px] h-10 bg-white shadow-sm border-gray-200',
+                datas.length > 0 && 'opacity-50',
+              )}
+              title={datas.length > 0 ? 'Limpe as datas para usar o período' : undefined}
+            >
+              <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="7d">Últimos 7 dias</SelectItem>
@@ -104,18 +114,84 @@ export default function Feedbacks() {
             </SelectContent>
           </Select>
 
+          {/* Calendário: escolhe um ou mais dias específicos. Quando há dias
+              marcados, eles têm precedência sobre o período acima. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  'h-10 bg-white shadow-sm border-gray-200 font-normal justify-start',
+                  datas.length === 0 && 'text-muted-foreground',
+                )}
+              >
+                <CalendarDays className="mr-2 h-4 w-4" />
+                {datas.length === 0
+                  ? 'Escolher datas'
+                  : datas.length === 1
+                    ? format(datas[0], "d 'de' MMM", { locale: ptBR })
+                    : `${datas.length} dias selecionados`}
+                {datas.length > 0 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Limpar datas"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDatas(undefined)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setDatas(undefined)
+                      }
+                    }}
+                    className="ml-2 -mr-1 rounded-sm p-0.5 hover:bg-gray-100 text-gray-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="multiple"
+                selected={datas}
+                onSelect={setDatas}
+                locale={ptBR}
+                disabled={{ after: new Date() }}
+              />
+              {datas.length > 0 && (
+                <div className="flex items-center justify-between border-t p-2">
+                  <span className="text-xs text-muted-foreground pl-1">
+                    {datas.length} {datas.length === 1 ? 'dia' : 'dias'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setDatas(undefined)}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
           <Select
             value={filtros.sentimento}
             onValueChange={(val) => setFiltros((prev) => ({ ...prev, sentimento: val }))}
           >
-            <SelectTrigger className="w-[170px] h-10 bg-white shadow-sm border-gray-200">
+            <SelectTrigger className="w-[190px] h-10 bg-white shadow-sm border-gray-200">
               <SelectValue placeholder="Todos Sentimentos" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos Sentimentos</SelectItem>
               <SelectItem value="positivo">Positivo</SelectItem>
               <SelectItem value="negativo">Negativo</SelectItem>
-              <SelectItem value="neutro">Neutro</SelectItem>
+              <SelectItem value="neutro">Positivo / Negativo</SelectItem>
             </SelectContent>
           </Select>
 
@@ -222,11 +298,11 @@ export default function Feedbacks() {
                   />
                   <span
                     className={cn(
-                      'text-[10px] font-bold tracking-wider',
+                      'text-[10px] font-bold tracking-wide text-center leading-tight',
                       isPos ? 'text-success' : isNeg ? 'text-destructive' : 'text-warning',
                     )}
                   >
-                    {fb.sentimento?.toUpperCase() || 'NEUTRO'}
+                    {rotuloSentimento(fb.sentimento).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">

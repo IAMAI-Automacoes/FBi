@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
-import { subDays, startOfDay } from 'date-fns'
+import { subDays, startOfDay, addDays } from 'date-fns'
 
 export interface FiltrosFeedback {
   periodo: '7d' | '30d' | '90d' | 'all'
@@ -7,19 +7,33 @@ export interface FiltrosFeedback {
   categorias: string[]
   busca: string
   ordenacao: 'recent' | 'oldest'
+  /** Dias específicos escolhidos no calendário. Quando preenchido, tem
+      precedência sobre `periodo`: mostra só os feedbacks desses dias. */
+  datas?: Date[]
 }
 
 export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, offset: number) {
   let query = supabase.from('feedbacks_restaurante').select('*', { count: 'exact' })
 
-  if (filtros.periodo !== 'all') {
+  if (filtros.datas && filtros.datas.length > 0) {
+    // OR de intervalos [início do dia, início do dia seguinte) — cada dia
+    // escolhido vira uma janela; dias não contíguos são unidos com `or`.
+    const janelas = filtros.datas.map((d) => {
+      const ini = startOfDay(d)
+      const fim = addDays(ini, 1)
+      return `and(created_at.gte.${ini.toISOString()},created_at.lt.${fim.toISOString()})`
+    })
+    query = query.or(janelas.join(','))
+  } else if (filtros.periodo !== 'all') {
     const days = filtros.periodo === '7d' ? 7 : filtros.periodo === '30d' ? 30 : 90
     const startDate = startOfDay(subDays(new Date(), days)).toISOString()
     query = query.gte('created_at', startDate)
   }
 
   if (filtros.sentimento && filtros.sentimento !== 'all') {
-    query = query.eq('sentimento', filtros.sentimento.toUpperCase())
+    // `ilike` sem curinga = igualdade sem diferenciar maiúsc./minúsc.; o banco
+    // guarda o sentimento em minúsculo ('neutro'), então `eq` MAIÚSCULO não batia.
+    query = query.ilike('sentimento', filtros.sentimento)
   }
 
   if (filtros.categorias.length > 0) {

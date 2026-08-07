@@ -173,7 +173,7 @@ export async function gerarPdfRelatorio(
     const neg = kpis.negativos || 0
     const segs = [
       { n: pos, c: VERDE, r: 'Positivas' },
-      { n: neu, c: CINZA_NEUTRO, r: 'Neutras' },
+      { n: neu, c: CINZA_NEUTRO, r: 'Positivo / Negativo' },
       { n: neg, c: VERMELHO, r: 'Negativas' },
     ]
     let x = M

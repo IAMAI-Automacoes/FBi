@@ -9,7 +9,9 @@ export function KpiCards({ data }: { data: DashboardData['kpis'] }) {
       </div>
       <div className="w-px h-10 bg-border" />
       <div>
-        <p className="text-sm text-muted-foreground">Sentimento Geral</p>
+        <p className="text-sm text-muted-foreground">
+          Sentimento Geral <span className="text-muted-foreground/70">— quanto mais alto melhor</span>
+        </p>
         <p className="text-4xl font-bold text-foreground mt-1">{data.sentiment}%</p>
       </div>
     </div>

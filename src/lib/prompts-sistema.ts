@@ -333,7 +333,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
       [
         `Avaliações: ${k.totalFeedbacks}`,
         `Índice de satisfação: ${k.sentiment} de 100`,
-        `Positivas: ${k.positivos} (${k.positivePercent}%) | Neutras: ${k.neutros} | Negativas: ${k.negativos} (${k.negativePercent}%)`,
+        `Positivas: ${k.positivos} (${k.positivePercent}%) | Positivo/Negativo: ${k.neutros} | Negativas: ${k.negativos} (${k.negativePercent}%)`,
         k.criticalTheme && k.criticalTheme !== 'Nenhum'
           ? `Tema com mais reclamações: ${k.criticalTheme} (${k.criticalPercent}% negativas)`
           : '',

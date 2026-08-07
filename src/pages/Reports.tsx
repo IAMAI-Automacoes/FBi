@@ -151,7 +151,7 @@ export default function Reports() {
         ['Total de avaliações', String(kpis.totalFeedbacks), kpis.hasPrevData ? kpis.totalTrend : '—'],
         ['Índice de satisfação (0-100)', String(kpis.sentiment), kpis.hasPrevData ? kpis.sentimentTrend : '—'],
         ['Avaliações positivas', `${kpis.positivos} (${kpis.positivePercent}%)`, ''],
-        ['Avaliações neutras', String(kpis.neutros), ''],
+        ['Avaliações Positivo / Negativo', String(kpis.neutros), ''],
         ['Avaliações negativas', `${kpis.negativos} (${kpis.negativePercent}%)`, ''],
         ['Tema que mais preocupa', temaCritico, ''],
         ['Clientes únicos', String(stats.clientesUnicos), ''],
@@ -419,7 +419,7 @@ export default function Reports() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-                  Neutras: <b className="text-foreground">{kpis.neutros}</b>
+                  Positivo / Negativo: <b className="text-foreground">{kpis.neutros}</b>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
