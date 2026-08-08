@@ -1,6 +1,6 @@
 {
-  "name": "skip-react-template",
-  "description": "A frontend React Vite TypeScript Shadcn UI template for Skip projects",
+  "name": "easy-feed",
+  "description": "Easy Feed — SaaS de feedback para restaurantes: coleta avaliacoes pelo WhatsApp, analisa com IA e entrega insights no painel.",
   "private": true,
   "version": "0.0.197",
   "type": "module",

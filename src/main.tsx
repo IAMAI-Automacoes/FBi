@@ -10,10 +10,9 @@ import './main.css'
 declare const __BUILD_TIME__: string | undefined
 const geradoEm = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : null
 console.info(
-  `%c Feedback Inteligente %c ${geradoEm ? `build de ${new Date(geradoEm).toLocaleString('pt-BR')}` : 'desenvolvimento'} `,
+  `%c Easy Feed %c ${geradoEm ? `build de ${new Date(geradoEm).toLocaleString('pt-BR')}` : 'desenvolvimento'} `,
   'background:#1D4ED8;color:#fff;border-radius:3px 0 0 3px;padding:2px 4px',
   'background:#e2e8f0;color:#0f172a;border-radius:0 3px 3px 0;padding:2px 4px',
 )
 
-// @skip-protected: Do not remove. Required for React rendering.
 createRoot(document.getElementById('root')!).render(<App />)
