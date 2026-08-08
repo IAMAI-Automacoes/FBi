@@ -39,11 +39,8 @@ export default function Assinatura() {
 
       <div className="relative mx-auto" style={{ maxWidth: '880px', padding: 'clamp(32px, 6vw, 64px) 24px', zIndex: 10 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 'clamp(32px, 5vw, 48px)' }}>
-          <div className="flex items-center" style={{ gap: '10px' }}>
+          <div className="flex items-center">
             <BrandMark size={30} />
-            <span style={{ fontSize: '15px', fontWeight: 600, color: cores.tinta }}>
-              Feedback Inteligente
-            </span>
           </div>
           <button
             onClick={() => logout()}

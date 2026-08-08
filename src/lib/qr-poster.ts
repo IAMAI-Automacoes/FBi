@@ -1,4 +1,4 @@
-import { iamaiLogo } from '@/assets/brand'
+import { easyFeedIcon } from '@/assets/brand'
 import { getTema, getFiltro } from '@/lib/qr-temas'
 
 export const POSTER_W = 720
@@ -167,7 +167,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   )
   ctx.drawImage(qr, qx, qy, qs, qs)
 
-  // Logo da IAMAI no centro do QR (fallback: texto "IAMAI")
+  // Ícone do Easy Feed no centro do QR (fallback: texto "Easy Feed")
   const cx = W / 2
   const cy = card.y + card.h / 2
   const r = 56
@@ -178,15 +178,15 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.lineWidth = 4
   ctx.strokeStyle = t.posterAccent
   ctx.stroke()
-  const logo = await carregarImg(iamaiLogo)
+  const logo = await carregarImg(easyFeedIcon)
   if (logo && logo.width > 1) {
     const lw = r * 1.5
     const lh = (logo.height / logo.width) * lw
     ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh)
   } else {
     ctx.fillStyle = t.posterAccent
-    ctx.font = 'bold 22px sans-serif'
-    ctx.fillText('IAMAI', cx, cy + 8)
+    ctx.font = 'bold 18px sans-serif'
+    ctx.fillText('Easy Feed', cx, cy + 7)
   }
 
   // Instrução abaixo do cartão
@@ -199,6 +199,6 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // Rodapé: crédito do produto
   ctx.globalAlpha = 0.75
   ctx.font = '18px sans-serif'
-  ctx.fillText('Feedback Inteligente · por IAMAI', W / 2, H - 34)
+  ctx.fillText('Easy Feed', W / 2, H - 34)
   ctx.globalAlpha = 1
 }
