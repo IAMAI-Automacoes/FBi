@@ -50,6 +50,18 @@ function extractToken(d: any): string | null {
   return typeof raw === 'string' && raw ? raw : null
 }
 
+// Nome da instância na uazapi = nome do restaurante (é o que aparece no painel
+// da uazapi). Sanitiza espaços e tamanho; cai num rótulo estável e único quando
+// o nome ainda é o placeholder do cadastro ou está vazio, pra não criar uma
+// instância genérica "Meu Restaurante". A identidade real da instância é o token
+// (whatsapp_token) e o adminField01 (id) — o name é só um rótulo, então nomes
+// repetidos entre restaurantes não quebram o roteamento.
+function nomeInstancia(nome: string | null | undefined, id: number): string {
+  const limpo = (nome ?? '').replace(/\s+/g, ' ').trim()
+  if (!limpo || limpo.toLowerCase() === 'meu restaurante') return `Restaurante ${id}`
+  return limpo.slice(0, 60)
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -107,7 +119,11 @@ serve(async (req: Request) => {
       const resp = await fetch(`${BASE}/instance/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', admintoken: ADMIN_TOKEN },
-        body: JSON.stringify({ name: `fib_${rest.id}`, adminField01: String(rest.id), adminField02: rest.nome_restaurante ?? '' }),
+        body: JSON.stringify({
+          name: nomeInstancia(rest.nome_restaurante, rest.id),
+          adminField01: String(rest.id), // roteamento no n8n — NÃO remover
+          adminField02: rest.nome_restaurante ?? '',
+        }),
       })
       if (resp.status === 429) return 'limite'
       const data = await resp.json().catch(() => ({}))
