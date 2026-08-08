@@ -31,6 +31,7 @@ import {
   CheckCircle,
   Store,
   MessageSquare,
+  MessageCircle,
   Bot,
   Check,
   LogOut,
@@ -39,6 +40,7 @@ import {
   ImagePlus,
 } from 'lucide-react'
 import { getIniciais } from '@/lib/iniciais'
+import { WhatsAppTab } from '@/pages/settings/WhatsAppTab'
 
 interface OnboardingData {
   restaurante_nome: string
@@ -199,7 +201,7 @@ export default function Onboarding() {
     }
   }
 
-  const progress = (step / 4) * 100
+  const progress = (step / 5) * 100
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -221,7 +223,7 @@ export default function Onboarding() {
       <Card className="w-full max-w-xl shadow-lg border-0 ring-1 ring-gray-200">
         <CardHeader>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-gray-500">Passo {step} de 4</span>
+            <span className="text-sm font-medium text-gray-500">Passo {step} de 5</span>
             <span className="text-sm font-medium text-[#1D4ED8]">{Math.round(progress)}%</span>
           </div>
           <Progress value={progress} className="h-2 mb-6" />
@@ -244,6 +246,11 @@ export default function Onboarding() {
             )}
             {step === 4 && (
               <>
+                <MessageCircle className="h-6 w-6 text-[#1D4ED8]" /> Conectar WhatsApp
+              </>
+            )}
+            {step === 5 && (
+              <>
                 <CheckCircle className="h-6 w-6 text-[#1D4ED8]" /> Confirmação
               </>
             )}
@@ -252,7 +259,8 @@ export default function Onboarding() {
             {step === 1 && 'Conte-nos um pouco sobre o seu estabelecimento.'}
             {step === 2 && 'Como você costuma ouvir seus clientes hoje?'}
             {step === 3 && 'Vamos dar uma personalidade ao seu assistente.'}
-            {step === 4 && 'Revise as informações antes de começarmos.'}
+            {step === 4 && 'Conecte o WhatsApp que vai receber e responder os feedbacks dos clientes.'}
+            {step === 5 && 'Revise as informações antes de começarmos.'}
           </CardDescription>
         </CardHeader>
 
@@ -482,6 +490,15 @@ export default function Onboarding() {
           )}
 
           {step === 4 && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <WhatsAppTab restauranteId={usuario?.restaurante_id ?? null} embedded />
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                Opcional agora — você também pode conectar depois em Configurações › WhatsApp.
+              </p>
+            </div>
+          )}
+
+          {step === 5 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 space-y-5">
                 <div className="flex gap-3">
@@ -542,7 +559,7 @@ export default function Onboarding() {
             <div />
           )}
 
-          {step < 4 ? (
+          {step < 5 ? (
             <Button onClick={handleNext} className="bg-[#1D4ED8] hover:bg-blue-700 text-white">
               Próximo
               <ArrowRight className="ml-2 h-4 w-4" />
