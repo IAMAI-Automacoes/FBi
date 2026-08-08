@@ -114,11 +114,8 @@ export function RodapeVendas() {
         className="mx-auto flex flex-col sm:flex-row items-center justify-between"
         style={{ maxWidth: '1180px', padding: '30px 24px', gap: '16px' }}
       >
-        <div className="flex items-center" style={{ gap: '10px' }}>
+        <div className="flex items-center">
           <BrandMark size={26} />
-          <span style={{ fontSize: '14px', fontWeight: 600, color: cores.tinta }}>
-            Feedback Inteligente
-          </span>
         </div>
 
         <div

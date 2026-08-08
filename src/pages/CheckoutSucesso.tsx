@@ -36,11 +36,8 @@ export default function CheckoutSucesso() {
         className="relative mx-auto flex items-center justify-between"
         style={{ maxWidth: '760px', padding: '22px 24px', zIndex: 10 }}
       >
-        <div className="flex items-center" style={{ gap: '10px' }}>
+        <div className="flex items-center">
           <BrandMark size={30} />
-          <span style={{ fontSize: '15px', fontWeight: 600, color: cores.tinta }}>
-            Feedback Inteligente
-          </span>
         </div>
 
         <button

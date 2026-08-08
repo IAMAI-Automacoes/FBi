@@ -76,11 +76,8 @@ export default function Checkout() {
         className="relative mx-auto flex items-center justify-between"
         style={{ maxWidth: '760px', padding: '22px 24px', zIndex: 10 }}
       >
-        <Link to="/assinatura" className="flex items-center" style={{ gap: '10px', textDecoration: 'none' }}>
+        <Link to="/assinatura" className="flex items-center" style={{ textDecoration: 'none' }}>
           <BrandMark size={30} />
-          <span style={{ fontSize: '15px', fontWeight: 600, color: cores.tinta }}>
-            Feedback Inteligente
-          </span>
         </Link>
 
         <button

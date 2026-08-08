@@ -353,7 +353,7 @@ export async function gerarPdfRelatorio(
     )
     doc.text(`Página ${i} de ${paginas}`, LARGURA / 2, ALTURA - 9.5, { align: 'center' })
     doc.text(
-      analise.porIa ? 'Análise gerada por IA · Feedback Inteligente' : 'Feedback Inteligente',
+      analise.porIa ? 'Análise gerada por IA · Easy Feed' : 'Easy Feed',
       LARGURA - M,
       ALTURA - 9.5,
       { align: 'right' },

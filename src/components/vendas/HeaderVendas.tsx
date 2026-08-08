@@ -39,18 +39,8 @@ export function HeaderVendas() {
         className="mx-auto flex items-center justify-between"
         style={{ maxWidth: '1180px', padding: '14px 24px' }}
       >
-        <a href="#topo" className="flex items-center gap-2.5" style={{ textDecoration: 'none' }}>
+        <a href="#topo" className="flex items-center" style={{ textDecoration: 'none' }}>
           <BrandMark size={32} />
-          <span
-            style={{
-              color: cores.tinta,
-              fontWeight: 600,
-              fontSize: '15px',
-              letterSpacing: '-0.01em',
-            }}
-          >
-            Feedback Inteligente
-          </span>
         </a>
 
         <nav className="hidden md:flex items-center" style={{ gap: '28px' }}>

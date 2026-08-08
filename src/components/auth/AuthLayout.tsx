@@ -1,22 +1,13 @@
 import { ReactNode } from 'react'
 import { TrendingUp, Star, Brain, ArrowUpRight } from 'lucide-react'
+import { easyFeedLogo } from '@/assets/brand'
 
-/* ───────────── Marca ───────────── */
+/* ───────────── Marca ─────────────
+   Logo completa do Easy Feed (ícone + nome). `size` é a ALTURA; a largura
+   acompanha. Como a logo já traz o nome, quem a usa não repete o texto ao lado. */
 export function BrandMark({ size = 36 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="40" rx="12" fill="#2563EB" />
-      <path
-        d="M10 28 L17 19 L23 22.5 L30 12"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeOpacity="0.45"
-      />
-      <circle cx="30" cy="12" r="3.5" fill="white" />
-      <circle cx="17" cy="19" r="2.5" fill="white" fillOpacity="0.6" />
-    </svg>
+    <img src={easyFeedLogo} alt="Easy Feed" style={{ height: size, width: 'auto', display: 'block' }} />
   )
 }
 
@@ -87,11 +78,8 @@ function ShowcasePanel() {
       <div style={{ position: 'relative', zIndex: 10, height: '100vh', display: 'flex', flexDirection: 'column', padding: '48px 52px' }}>
 
         {/* Marca topo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <BrandMark size={34} />
-          <span style={{ color: '#0F172A', fontWeight: 600, fontSize: '15px', letterSpacing: '-0.01em' }}>
-            Feedback Inteligente
-          </span>
         </div>
 
         {/* Headline */}

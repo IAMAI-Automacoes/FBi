@@ -1,6 +1,6 @@
 import { getTema, getFiltro } from '@/lib/qr-temas'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
-import { iamaiLogo } from '@/assets/brand'
+import { easyFeedLogo } from '@/assets/brand'
 
 export interface LandingViewProps {
   restauranteNome: string
@@ -37,11 +37,10 @@ export function LandingView({
   const waLink = whatsapp ? `https://wa.me/${whatsapp}` : null
 
   const Marca = (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="bg-white rounded-md px-2.5 py-1 shadow-sm">
-        <img src={iamaiLogo} alt="IAMAI" className="h-4 w-auto object-contain" />
+    <div className="flex flex-col items-center">
+      <div className="bg-white rounded-md px-3 py-1.5 shadow-sm">
+        <img src={easyFeedLogo} alt="Easy Feed" className="h-5 w-auto object-contain" />
       </div>
-      <span className="text-[10px] font-medium opacity-70">Feedback Inteligente</span>
     </div>
   )
 
