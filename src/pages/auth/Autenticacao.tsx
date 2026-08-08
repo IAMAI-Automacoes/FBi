@@ -186,7 +186,7 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
       </Link>
 
       <div style={{ marginBottom: '24px' }}>
-        <BrandMark size={36} />
+        <BrandMark size={48} />
       </div>
 
       <div style={{ marginBottom: '14px' }}>

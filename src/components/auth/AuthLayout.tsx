@@ -79,7 +79,7 @@ function ShowcasePanel() {
 
         {/* Marca topo */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <BrandMark size={34} />
+          <BrandMark size={48} />
         </div>
 
         {/* Headline */}

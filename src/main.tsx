@@ -15,5 +15,4 @@ console.info(
   'background:#e2e8f0;color:#0f172a;border-radius:0 3px 3px 0;padding:2px 4px',
 )
 
-// @skip-protected: Do not remove. Required for React rendering.
 createRoot(document.getElementById('root')!).render(<App />)

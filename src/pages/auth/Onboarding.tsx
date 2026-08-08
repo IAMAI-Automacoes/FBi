@@ -206,7 +206,7 @@ export default function Onboarding() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-xl mb-8 flex justify-between items-center">
         <div>
-          <BrandMark size={30} />
+          <BrandMark size={48} />
           {/* Fecha o ciclo Conta → Pagamento → Acesso sem trazer a trilha para
               cá: esta tela já tem a própria barra de 4 passos, e dois medidores
               empilhados obrigariam a ler "passo 2 de 4 dentro da etapa 3 de 3". */}

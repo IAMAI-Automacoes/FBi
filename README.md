@@ -1,6 +1,6 @@
-# Projeto Criado com o Skip
+# Easy Feed
 
-Este projeto foi criado de ponta a ponta com o [Skip](https://goskip.dev).
+SaaS de feedback para restaurantes: coleta avaliações pelo WhatsApp, analisa com IA e entrega insights e ações no dashboard.
 
 ## 🚀 Stack Tecnológica
 

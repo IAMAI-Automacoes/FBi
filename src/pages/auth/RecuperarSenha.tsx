@@ -134,7 +134,7 @@ export default function RecuperarSenha() {
     <AuthLayout>
       {/* Marca — só ícone */}
       <div style={{ marginBottom: '24px' }}>
-        <BrandMark size={36} />
+        <BrandMark size={48} />
       </div>
 
       {/* ─── MODO REDEFINIR SENHA ─── */}
