@@ -18,6 +18,10 @@ export interface UsuarioDados {
   avatar_url?: string | null
   username?: string | null
   perfil_notas?: string | null
+  /** Colunas de `restaurantes` (vêm do select('*')). numero_whatsapp preenchido
+      = WhatsApp conectado; whatsapp_token = instância criada na uazapi. */
+  numero_whatsapp?: string | null
+  whatsapp_token?: string | null
 }
 
 interface AuthContextType {

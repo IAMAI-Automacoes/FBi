@@ -65,6 +65,8 @@ export default function Index() {
   // isPeriodEmpty: tem dados históricos mas zero no período atual → mostrar dashboard com aviso
   const isNeverUsed = !isLoading && data?.kpis.totalFeedbacks === 0 && !data?.kpis.hasPrevData
   const isPeriodEmpty = !isLoading && data?.kpis.totalFeedbacks === 0 && data?.kpis.hasPrevData
+  // numero_whatsapp preenchido = WhatsApp conectado (o edge function limpa no disconnect).
+  const whatsappConectado = !!usuario?.numero_whatsapp
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
@@ -87,20 +89,16 @@ export default function Index() {
             Você ainda não recebeu nenhum feedback
           </h2>
           <p className="text-gray-500 max-w-md mb-8">
-            Configure o WhatsApp nas configurações do restaurante e compartilhe o QR Code com seus
-            clientes para começar a coletar feedbacks.
+            {whatsappConectado
+              ? 'Seu WhatsApp está conectado. Compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'
+              : 'Configure o WhatsApp nas configurações do restaurante e compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'}
           </p>
-          <div className="flex gap-3">
-            <Button asChild className="bg-[#1D4ED8] hover:bg-blue-700">
-              <Link to="/configuracoes">
-                <Settings className="mr-2 h-4 w-4" />
-                Ir para Configurações
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/qrcode">Ver QR Code</Link>
-            </Button>
-          </div>
+          <Button asChild className="bg-[#1D4ED8] hover:bg-blue-700">
+            <Link to="/configuracoes">
+              <Settings className="mr-2 h-4 w-4" />
+              Ir para Configurações
+            </Link>
+          </Button>
         </div>
       ) : data ? (
         <>

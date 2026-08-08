@@ -76,9 +76,6 @@ export function AppSidebar() {
             <span className="text-sm font-semibold text-foreground leading-tight">
               {nomeRestaurante}
             </span>
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              Feedback Intelligence
-            </span>
           </div>
         </div>
       </SidebarHeader>

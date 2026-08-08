@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/hooks/use-auth'
 import { useUserProfile } from '@/hooks/use-user-profile'
 import { getIniciais } from '@/lib/iniciais'
+import { easyFeedLogoInterna } from '@/assets/brand'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,11 +85,21 @@ export function TopHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-white px-4 shadow-sm sm:px-6">
+      <header className="sticky top-0 z-30 relative flex h-16 w-full items-center justify-between border-b border-border bg-white px-4 shadow-sm sm:px-6">
         <div className="flex items-center gap-4">
           <SidebarTrigger className="-ml-2 md:hidden" />
           <h1 className="text-xl font-semibold text-foreground">{title}</h1>
         </div>
+
+        {/* Logo centralizada na barra — entre o nome da página e os ícones à direita.
+            Escondida no mobile pra não colidir com o título e os ícones. */}
+        <Link
+          to="/"
+          aria-label="Easy Feed"
+          className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block"
+        >
+          <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-7 w-auto" />
+        </Link>
 
         <div className="flex items-center gap-4">
           {isAdmin && (

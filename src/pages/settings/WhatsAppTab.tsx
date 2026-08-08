@@ -23,10 +23,13 @@ function qrSrc(qr: string): string {
 export function WhatsAppTab({
   restauranteId,
   embedded = false,
+  onConnectedChange,
 }: {
   restauranteId: number | null
   /** No onboarding renderiza só o conteúdo, sem o Card externo (a etapa já tem cabeçalho). */
   embedded?: boolean
+  /** Avisa o pai (ex.: onboarding) quando o estado de conexão muda. */
+  onConnectedChange?: (connected: boolean) => void
 }) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -65,6 +68,11 @@ export function WhatsAppTab({
       .finally(() => { if (ativo) setLoading(false) })
     return () => { ativo = false; pararPolling() }
   }, [chamar, pararPolling])
+
+  // Reporta o estado de conexão pro pai (o onboarding usa pra liberar o "Próximo").
+  useEffect(() => {
+    onConnectedChange?.(estado?.connected === true)
+  }, [estado?.connected, onConnectedChange])
 
   const iniciarConexao = async () => {
     setConectando(true)

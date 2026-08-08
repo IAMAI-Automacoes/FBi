@@ -59,6 +59,7 @@ export default function Onboarding() {
   const navigate = useNavigate()
 
   const [step, setStep] = useState(1)
+  const [whatsappConectado, setWhatsappConectado] = useState(false)
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
   // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
@@ -144,13 +145,30 @@ export default function Onboarding() {
     setLogoUrl('')
   }
 
+  // Cada passo exige seus campos preenchidos; o passo 4 exige o WhatsApp conectado.
+  const validarStep = (s: number): string | null => {
+    if (s === 1) {
+      if (!data.restaurante_nome.trim()) return 'Informe o nome do restaurante.'
+      if (!data.restaurante_culinaria) return 'Selecione o tipo de culinária.'
+      if (!data.restaurante_mesas.trim()) return 'Informe o número de mesas.'
+    }
+    if (s === 2) {
+      if (!data.como_coleta_feedbacks.trim()) return 'Conte como você coleta feedbacks hoje.'
+      if (!data.frequencia_relatorios) return 'Selecione a frequência de relatórios.'
+    }
+    if (s === 3) {
+      if (!data.ia_nome.trim()) return 'Dê um nome ao assistente de IA.'
+      if (!data.ia_tom) return 'Selecione o tom de comunicação.'
+      if (data.ia_focos.length === 0) return 'Selecione ao menos uma área de foco.'
+    }
+    if (s === 4 && !whatsappConectado) return 'Conecte o WhatsApp para continuar.'
+    return null
+  }
+
   const handleNext = () => {
-    if (step === 1 && !data.restaurante_nome.trim()) {
-      toast({
-        title: 'Atenção',
-        description: 'O nome do restaurante é obrigatório para continuarmos.',
-        variant: 'destructive',
-      })
+    const erro = validarStep(step)
+    if (erro) {
+      toast({ title: 'Faltou preencher', description: erro, variant: 'destructive' })
       return
     }
     setStep((s) => s + 1)
@@ -162,6 +180,15 @@ export default function Onboarding() {
 
   const handleComplete = async () => {
     if (!usuario?.restaurante_id) return
+    // Garante que nenhum passo ficou incompleto (inclui WhatsApp conectado).
+    for (const s of [1, 2, 3, 4]) {
+      const erro = validarStep(s)
+      if (erro) {
+        toast({ title: 'Faltou preencher', description: erro, variant: 'destructive' })
+        setStep(s)
+        return
+      }
+    }
     setLoadingSubmit(true)
 
     try {
@@ -491,9 +518,13 @@ export default function Onboarding() {
 
           {step === 4 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <WhatsAppTab restauranteId={usuario?.restaurante_id ?? null} embedded />
+              <WhatsAppTab
+                restauranteId={usuario?.restaurante_id ?? null}
+                embedded
+                onConnectedChange={setWhatsappConectado}
+              />
               <p className="text-xs text-gray-500 mt-4 text-center">
-                Opcional agora — você também pode conectar depois em Configurações › WhatsApp.
+                Conecte o WhatsApp para concluir o onboarding — é por ele que os feedbacks chegam.
               </p>
             </div>
           )}
