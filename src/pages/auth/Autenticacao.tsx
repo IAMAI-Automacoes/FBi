@@ -186,7 +186,7 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
 
       <div style={{ marginBottom: '14px' }}>
         <h1 style={{ fontSize: '23px', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: '6px' }}>
-          {criando ? 'Crie sua conta' : 'Bem-vindo de volta'}
+          {criando ? 'Crie sua conta' : 'Bem-vindo'}
         </h1>
         <p style={{ fontSize: '14px', color: '#64748B' }}>
           {criando
