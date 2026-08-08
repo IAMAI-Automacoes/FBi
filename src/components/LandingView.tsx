@@ -39,7 +39,7 @@ export function LandingView({
   const Marca = (
     <div className="flex flex-col items-center">
       <div className="bg-white rounded-md px-3 py-1.5 shadow-sm">
-        <img src={easyFeedLogo} alt="Easy Feed" className="h-5 w-auto object-contain" />
+        <img src={easyFeedLogo} alt="Easy Feed" className="h-10 w-auto object-contain" />
       </div>
     </div>
   )

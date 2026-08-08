@@ -180,7 +180,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.stroke()
   const logo = await carregarImg(easyFeedIcon)
   if (logo && logo.width > 1) {
-    const lw = r * 1.5
+    const lw = r * 3
     const lh = (logo.height / logo.width) * lw
     ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh)
   } else {

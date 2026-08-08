@@ -5,7 +5,7 @@ import { easyFeedLogo } from '@/assets/brand'
 /* ───────────── Marca ─────────────
    Logo completa do Easy Feed (ícone + nome). `size` é a ALTURA; a largura
    acompanha. Como a logo já traz o nome, quem a usa não repete o texto ao lado. */
-export function BrandMark({ size = 36 }: { size?: number }) {
+export function BrandMark({ size = 72 }: { size?: number }) {
   return (
     <img src={easyFeedLogo} alt="Easy Feed" style={{ height: size, width: 'auto', display: 'block' }} />
   )
@@ -79,7 +79,7 @@ function ShowcasePanel() {
 
         {/* Marca topo */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <BrandMark size={34} />
+          <BrandMark size={68} />
         </div>
 
         {/* Headline */}

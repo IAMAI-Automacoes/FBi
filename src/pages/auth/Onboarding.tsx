@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
-import { BrandMark } from '@/components/auth/AuthLayout'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -206,11 +205,10 @@ export default function Onboarding() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-xl mb-8 flex justify-between items-center">
         <div>
-          <BrandMark size={30} />
           {/* Fecha o ciclo Conta → Pagamento → Acesso sem trazer a trilha para
               cá: esta tela já tem a própria barra de 4 passos, e dois medidores
               empilhados obrigariam a ler "passo 2 de 4 dentro da etapa 3 de 3". */}
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500">
             Pagamento confirmado · configurando seu acesso
           </p>
         </div>

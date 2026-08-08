@@ -11,7 +11,6 @@ import { ehRotaDeCompra } from '@/components/compra/etapas'
 import { ArrowLeft, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react'
 import {
   AuthLayout,
-  BrandMark,
   WhatsAppIcon,
   authInputStyle,
   authInputFocus,
@@ -184,10 +183,6 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
         <ArrowLeft className="h-3.5 w-3.5" />
         Voltar para o site
       </Link>
-
-      <div style={{ marginBottom: '24px' }}>
-        <BrandMark size={36} />
-      </div>
 
       <div style={{ marginBottom: '14px' }}>
         <h1 style={{ fontSize: '23px', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: '6px' }}>

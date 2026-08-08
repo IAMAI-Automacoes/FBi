@@ -37,7 +37,7 @@ export default function CheckoutSucesso() {
         style={{ maxWidth: '760px', padding: '22px 24px', zIndex: 10 }}
       >
         <div className="flex items-center">
-          <BrandMark size={30} />
+          <BrandMark size={60} />
         </div>
 
         <button

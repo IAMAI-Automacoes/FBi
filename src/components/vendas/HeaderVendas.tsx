@@ -40,7 +40,7 @@ export function HeaderVendas() {
         style={{ maxWidth: '1180px', padding: '14px 24px' }}
       >
         <a href="#topo" className="flex items-center" style={{ textDecoration: 'none' }}>
-          <BrandMark size={32} />
+          <BrandMark size={64} />
         </a>
 
         <nav className="hidden md:flex items-center" style={{ gap: '28px' }}>

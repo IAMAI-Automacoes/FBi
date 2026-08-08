@@ -115,7 +115,7 @@ export function RodapeVendas() {
         style={{ maxWidth: '1180px', padding: '30px 24px', gap: '16px' }}
       >
         <div className="flex items-center">
-          <BrandMark size={26} />
+          <BrandMark size={52} />
         </div>
 
         <div

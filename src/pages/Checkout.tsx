@@ -77,7 +77,7 @@ export default function Checkout() {
         style={{ maxWidth: '760px', padding: '22px 24px', zIndex: 10 }}
       >
         <Link to="/assinatura" className="flex items-center" style={{ textDecoration: 'none' }}>
-          <BrandMark size={30} />
+          <BrandMark size={60} />
         </Link>
 
         <button

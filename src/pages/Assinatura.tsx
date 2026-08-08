@@ -40,7 +40,7 @@ export default function Assinatura() {
       <div className="relative mx-auto" style={{ maxWidth: '880px', padding: 'clamp(32px, 6vw, 64px) 24px', zIndex: 10 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 'clamp(32px, 5vw, 48px)' }}>
           <div className="flex items-center">
-            <BrandMark size={30} />
+            <BrandMark size={60} />
           </div>
           <button
             onClick={() => logout()}
