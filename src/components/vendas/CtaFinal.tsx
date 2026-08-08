@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { BrandMark } from '@/components/auth/AuthLayout'
+import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
 import { cores, orbe, textoGradiente, TRANSICAO } from './tokens'
 
 export function CtaFinal() {
@@ -134,6 +134,18 @@ export function RodapeVendas() {
           <Link to="/login" style={{ color: 'inherit', textDecoration: 'none' }}>
             Entrar
           </Link>
+          <a
+            href="https://wa.me/5511952138636"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center"
+            style={{ gap: '6px', color: '#25D366', fontWeight: 600, textDecoration: 'none', transition: 'opacity 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            <WhatsAppIcon size={15} />
+            Fale com a gente
+          </a>
         </div>
 
         <span style={{ fontSize: '13px', color: cores.corpoSuave }}>© {ano} IAMAI</span>
