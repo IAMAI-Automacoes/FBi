@@ -98,7 +98,8 @@ export function TopHeader() {
           aria-label="Easy Feed"
           className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block"
         >
-          <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-7 w-auto" />
+          {/* Quase a altura do header (64px), deixando só uma bordinha em cima/embaixo. */}
+          <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-[52px] w-auto" />
         </Link>
 
         <div className="flex items-center gap-4">
