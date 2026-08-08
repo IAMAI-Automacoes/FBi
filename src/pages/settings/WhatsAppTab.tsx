@@ -20,7 +20,14 @@ function qrSrc(qr: string): string {
   return `data:image/png;base64,${qr}`
 }
 
-export function WhatsAppTab({ restauranteId }: { restauranteId: number | null }) {
+export function WhatsAppTab({
+  restauranteId,
+  embedded = false,
+}: {
+  restauranteId: number | null
+  /** No onboarding renderiza só o conteúdo, sem o Card externo (a etapa já tem cabeçalho). */
+  embedded?: boolean
+}) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [estado, setEstado] = useState<EstadoWhats | null>(null)
@@ -136,19 +143,8 @@ export function WhatsAppTab({ restauranteId }: { restauranteId: number | null })
 
   if (!restauranteId) return null
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-emerald-600" />
-          <CardTitle>WhatsApp</CardTitle>
-        </div>
-        <CardDescription>
-          Conecte o número de WhatsApp que recebe e responde os feedbacks dos clientes.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
+  const conteudo = (
+    loading ? (
           <Skeleton className="h-40 w-full rounded-lg" />
         ) : estado?.connected ? (
           <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
@@ -211,8 +207,24 @@ export function WhatsAppTab({ restauranteId }: { restauranteId: number | null })
               <MessageCircle className="h-4 w-4 mr-1.5" /> Conectar WhatsApp
             </Button>
           </div>
-        )}
-      </CardContent>
+        )
+  )
+
+  // No onboarding: só o conteúdo, sem o Card (a etapa já traz título/descrição).
+  if (embedded) return conteudo
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-emerald-600" />
+          <CardTitle>WhatsApp</CardTitle>
+        </div>
+        <CardDescription>
+          Conecte o número de WhatsApp que recebe e responde os feedbacks dos clientes.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>{conteudo}</CardContent>
     </Card>
   )
 }
