@@ -6,7 +6,7 @@ const DADOS = 'assistente_dados'
 const on = (item: string) => dadoAtivo(DADOS, item)
 
 /** Descrição do produto — o assistente precisa saber onde ele vive e o que existe no sistema. */
-export const SOBRE_O_SISTEMA = `O sistema chama-se "Feedback Inteligente". Ele coleta avaliações dos
+export const SOBRE_O_SISTEMA = `O sistema chama-se "Easy Feed". Ele coleta avaliações dos
 clientes do restaurante por WhatsApp (o cliente escaneia um QR Code, cai numa página e é levado
 para a conversa), analisa cada mensagem com IA e organiza tudo em um painel.
 
