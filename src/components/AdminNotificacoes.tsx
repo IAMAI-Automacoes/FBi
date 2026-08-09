@@ -1,46 +1,76 @@
-import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 
+// Chave pública VAPID (é pública por design — pode ficar no bundle). A privada
+// vive só no servidor (integracao_config), usada pela edge function enviar-push.
+const VAPID_PUBLIC_KEY =
+  'BLfkBUJBdJzyAs5A-8Q-daniHRzoie_v2PkwZPHhMIG4X9Ix8thCjJEX9Zwiw4CmsLpnHHgpfPVA3sdBXQWI_o4'
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  const arr = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
+  return arr
+}
+
 /**
- * Notificação do navegador (Web Notifications API) para o admin da plataforma
- * quando chega mensagem nova de cliente no suporte:
- *   - INSERT em `sugestoes_plataforma`  → nova dúvida/sugestão
- *   - INSERT em `respostas_sugestoes` com autor='usuario' → resposta do cliente
- *
- * A notificação sai no estilo do WhatsApp: foto do restaurante (logo) como
- * ícone, nome do cliente como título e a mensagem no corpo — uma notificação
- * por cliente (tag), então mensagens do mesmo cliente se atualizam em vez de
- * empilhar.
- *
- * Fica montado no App inteiro (dentro do AuthProvider + Router), então funciona
- * em qualquer rota e mesmo com a aba em segundo plano — que é quando a
- * notificação do sistema é útil. Aba visível não notifica (o badge do topo
- * já sinaliza), pra não alertar duas vezes.
+ * Inscreve o admin da plataforma no Web Push, pra receber notificação de
+ * mensagem de cliente MESMO com o app fechado. Quem mostra a notificação é o
+ * service worker (sw.js), a partir do push enviado pela edge function
+ * `enviar-push` (disparada por gatilho no banco). Este componente só:
+ *   1. pede permissão (no primeiro gesto — exigência do navegador);
+ *   2. cria/recupera a inscrição de push e a salva em `push_subscriptions`.
  */
 export function AdminNotificacoes() {
-  const { ehAdminPlataforma } = useAuth()
-  const navigate = useNavigate()
-  // navigate troca de identidade a cada render; guardamos numa ref pra usar no
-  // onclick da notificação sem precisar recriar a subscription do realtime.
-  const navRef = useRef(navigate)
-  navRef.current = navigate
+  const { ehAdminPlataforma, user } = useAuth()
 
   useEffect(() => {
-    if (!ehAdminPlataforma) return
-    if (typeof Notification === 'undefined') return // navegador sem suporte
+    if (!ehAdminPlataforma || !user) return
+    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return
 
-    // Pedir permissão precisa partir de um gesto do usuário (exigência de
-    // Chrome/Firefox/Safari). Pedimos na primeira interação; o listener some
-    // assim que dispara.
+    let cancelado = false
+
+    const inscrever = async () => {
+      if (Notification.permission !== 'granted') return
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub =
+          (await reg.pushManager.getSubscription()) ??
+          (await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          }))
+        if (cancelado) return
+
+        const json = sub.toJSON()
+        const endpoint = json.endpoint
+        const p256dh = json.keys?.p256dh
+        const auth = json.keys?.auth
+        if (!endpoint || !p256dh || !auth) return
+
+        await supabase.from('push_subscriptions').upsert(
+          { auth_user_id: user.id, endpoint, p256dh, auth, user_agent: navigator.userAgent },
+          { onConflict: 'endpoint' },
+        )
+      } catch (err) {
+        console.warn('Falha ao inscrever no push:', err)
+      }
+    }
+
     let removerGesto: (() => void) | null = null
-    if (Notification.permission === 'default') {
-      const pedir = () => {
+    if (Notification.permission === 'granted') {
+      inscrever()
+    } else if (Notification.permission === 'default') {
+      // Chrome/Firefox/Safari exigem que o pedido de permissão venha de um gesto.
+      const pedir = async () => {
         try {
-          Notification.requestPermission()
+          const p = await Notification.requestPermission()
+          if (p === 'granted') inscrever()
         } catch {
-          /* Safari antigo usa callback; ignoramos o erro */
+          /* Safari antigo usa callback; ignoramos */
         }
         removerGesto?.()
       }
@@ -52,103 +82,11 @@ export function AdminNotificacoes() {
       }
     }
 
-    // Só notifica com permissão concedida E aba em segundo plano. Serve de
-    // porteiro antes de qualquer consulta, pra não buscar dados à toa.
-    const podeNotificar = () => Notification.permission === 'granted' && document.hidden
-
-    const resumo = (texto: string | null | undefined, fallback: string) => {
-      const t = (texto ?? '').trim()
-      if (!t) return fallback
-      return t.length > 140 ? `${t.slice(0, 137)}…` : t
-    }
-
-    // Nome (do restaurante) + foto (logo) do cliente, a partir do id do auth.
-    // Mesma junção que o painel admin faz. O admin da plataforma enxerga essas
-    // linhas por RLS.
-    const dadosCliente = async (usuarioId: string | null | undefined) => {
-      const padrao = { nome: 'Cliente', foto: '/favicon.png' }
-      if (!usuarioId) return padrao
-      const { data: rest } = await supabase
-        .from('restaurantes')
-        .select('nome_restaurante, logo_url')
-        .eq('auth_user_id', usuarioId)
-        .maybeSingle()
-      let nome = rest?.nome_restaurante ?? null
-      if (!nome) {
-        const { data: pessoa } = await supabase
-          .from('usuarios')
-          .select('nome')
-          .eq('id', usuarioId)
-          .maybeSingle()
-        nome = pessoa?.nome ?? null
-      }
-      return { nome: nome || 'Cliente', foto: rest?.logo_url || '/favicon.png' }
-    }
-
-    const mostrar = (titulo: string, corpo: string, foto: string, tag: string) => {
-      try {
-        const n = new Notification(titulo, {
-          body: corpo,
-          icon: foto, // foto do restaurante (logo) — como o avatar do WhatsApp
-          tag, // uma notificação por cliente; nova mensagem atualiza a mesma
-          renotify: true, // re-alerta mesmo reaproveitando a tag
-        } as NotificationOptions)
-        n.onclick = () => {
-          window.focus()
-          navRef.current('/admin')
-          n.close()
-        }
-      } catch {
-        /* alguns navegadores exigem Service Worker p/ Notification; ignoramos */
-      }
-    }
-
-    const canal = supabase
-      .channel('admin-notificacoes-navegador')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'sugestoes_plataforma' },
-        async (payload) => {
-          if (!podeNotificar()) return
-          const nova = payload.new as { texto?: string; titulo?: string; usuario_id?: string }
-          const { nome, foto } = await dadosCliente(nova.usuario_id)
-          mostrar(
-            nome,
-            resumo(nova.titulo || nova.texto, 'Enviou uma nova dúvida.'),
-            foto,
-            `easyfeed-cliente-${nova.usuario_id ?? 'x'}`,
-          )
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'respostas_sugestoes' },
-        async (payload) => {
-          if (!podeNotificar()) return
-          const nova = payload.new as { texto?: string; autor?: string; sugestao_id?: string }
-          if (nova.autor !== 'usuario') return // só mensagens do cliente, não do admin
-          // Descobre de qual cliente é a resposta (via a sugestão dona da mensagem).
-          const { data: sug } = await supabase
-            .from('sugestoes_plataforma')
-            .select('usuario_id')
-            .eq('id', nova.sugestao_id ?? '')
-            .maybeSingle()
-          const { nome, foto } = await dadosCliente(sug?.usuario_id)
-          mostrar(
-            nome,
-            resumo(nova.texto, 'Enviou uma nova mensagem.'),
-            foto,
-            `easyfeed-cliente-${sug?.usuario_id ?? 'x'}`,
-          )
-        },
-      )
-      .subscribe()
-
     return () => {
+      cancelado = true
       removerGesto?.()
-      supabase.removeChannel(canal)
     }
-  }, [ehAdminPlataforma])
+  }, [ehAdminPlataforma, user])
 
   return null
 }

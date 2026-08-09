@@ -37,7 +37,16 @@ self.addEventListener('push', (event) => {
     data: { url: dados.url || '/admin' },
   }
 
-  event.waitUntil(self.registration.showNotification(titulo, opcoes))
+  event.waitUntil(
+    (async () => {
+      // Se o app já está aberto e visível na frente, não enche com notificação
+      // do sistema (o badge do topo cobre) — igual ao WhatsApp Web.
+      const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const appNaFrente = janelas.some((j) => j.visibilityState === 'visible')
+      if (appNaFrente) return
+      await self.registration.showNotification(titulo, opcoes)
+    })(),
+  )
 })
 
 // Clique na notificação: foca uma aba do app já aberta (e navega) ou abre uma nova.
