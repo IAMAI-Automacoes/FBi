@@ -261,7 +261,7 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
     ) : null
 
   return (
-    <div className="w-80 shrink-0 h-full flex flex-col border-l border-gray-200 bg-white animate-in slide-in-from-right duration-200">
+    <div className="w-full md:w-80 shrink-0 h-full flex flex-col border-l border-gray-200 bg-white animate-in slide-in-from-right duration-200">
       <div className="shrink-0 flex items-center gap-2 px-4 h-16 border-b border-gray-100">
         <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
           <X className="h-4 w-4" />
@@ -626,13 +626,15 @@ function AdminBubble({ msg, signedUrls, reacoes, quote, onReact, onReply, onEdit
 // ── ConversaView ──────────────────────────────────────────────────────────────
 function ConversaView({
   s, signedUrls, replyText, replyFiles, sending,
-  onReplyTextChange, onReplyFilesChange, onRemoveFile, onSend, onRefresh, onRead, onReact,
+  onReplyTextChange, onReplyFilesChange, onRemoveFile, onSend, onRefresh, onRead, onReact, onVoltar,
 }: {
   s: SugestaoAdmin; signedUrls: Record<string, string>
   replyText: string; replyFiles: File[]; sending: boolean
   onReplyTextChange: (v: string) => void; onReplyFilesChange: (f: File[]) => void
   onRemoveFile: (i: number) => void; onSend: (respondeA: string | null) => void; onRefresh: () => void; onRead: () => void
   onReact: (mensagemId: string, emoji: string) => void
+  /** Volta pra lista (só no mobile, onde o chat é single-pane). */
+  onVoltar?: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -814,25 +816,36 @@ function ConversaView({
   return (
     <div className="flex h-full">
       <div className="flex flex-col h-full flex-1 min-w-0">
-      <button
-        type="button"
-        onClick={() => setShowPerfil((v) => !v)}
-        className="shrink-0 w-full text-left px-4 py-3 flex items-center gap-3 hover:brightness-95 transition-all"
-        style={{ background: WA_TEAL }}
-        title="Ver perfil"
-      >
-        {logo ? (
-          <img src={logo} alt={name} className="h-9 w-9 rounded-full object-cover shrink-0 bg-white/20" />
-        ) : (
-          <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0', avatarColor(name))}>
-            {initials(s.perfil?.nome_restaurante ?? s.usuario_nome, s.usuario_email)}
-          </div>
+      <div className="shrink-0 flex items-stretch" style={{ background: WA_TEAL }}>
+        {onVoltar && (
+          <button
+            type="button"
+            onClick={onVoltar}
+            className="md:hidden flex items-center pl-3 pr-1 text-white/90 hover:text-white"
+            aria-label="Voltar para a lista"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
         )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white leading-tight truncate">{name}</p>
-          {s.usuario_email && <p className="text-[12px] text-white/70 truncate">{s.usuario_email}</p>}
-        </div>
-      </button>
+        <button
+          type="button"
+          onClick={() => setShowPerfil((v) => !v)}
+          className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3 hover:brightness-95 transition-all"
+          title="Ver perfil"
+        >
+          {logo ? (
+            <img src={logo} alt={name} className="h-9 w-9 rounded-full object-cover shrink-0 bg-white/20" />
+          ) : (
+            <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0', avatarColor(name))}>
+              {initials(s.perfil?.nome_restaurante ?? s.usuario_nome, s.usuario_email)}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white leading-tight truncate">{name}</p>
+            {s.usuario_email && <p className="text-[12px] text-white/70 truncate">{s.usuario_email}</p>}
+          </div>
+        </button>
+      </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5" style={{ background: WA_BG }}>
         {thread.map((msg, i) => (
@@ -1358,7 +1371,13 @@ export default function Admin() {
         {/* ── SUPORTE ── */}
         {activeTab === 'suporte' && (
           <>
-            <div className="w-72 shrink-0 border-r border-gray-200 flex flex-col overflow-hidden">
+            <div
+              className={cn(
+                'shrink-0 border-r border-gray-200 flex-col overflow-hidden md:w-72 md:flex',
+                // No mobile é single-pane: lista some quando há conversa aberta.
+                selectedId ? 'hidden md:flex' : 'flex w-full',
+              )}
+            >
               <div className="px-4 py-3" style={{ background: WA_TEAL }}>
                 <p className="text-[15px] font-semibold text-white">Suporte</p>
               </div>
@@ -1374,10 +1393,17 @@ export default function Admin() {
                 </div>
               )}
             </div>
-            <div className="flex-1 overflow-hidden">
+            <div
+              className={cn(
+                'flex-1 overflow-hidden',
+                // No mobile: só aparece com conversa aberta; no desktop sempre.
+                selectedId ? '' : 'hidden md:block',
+              )}
+            >
               {selectedConv ? (
                 <ConversaView
                   key={selectedId}
+                  onVoltar={() => setSelectedId(null)}
                   s={selectedConv} signedUrls={signedUrls}
                   replyText={replyTexts[selectedId!] ?? ''} replyFiles={replyFilesMap[selectedId!] ?? []}
                   sending={sendingId === selectedId}
