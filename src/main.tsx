@@ -16,3 +16,13 @@ console.info(
 )
 
 createRoot(document.getElementById('root')!).render(<App />)
+
+// Registra o service worker do PWA (instalável + Web Push). Depois do load pra
+// não competir com o primeiro render.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch((err) => console.warn('Falha ao registrar o service worker:', err))
+  })
+}
