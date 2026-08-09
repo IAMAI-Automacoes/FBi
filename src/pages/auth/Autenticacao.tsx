@@ -41,7 +41,9 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
   const [senha, setSenha] = useState('')
   const [confirmarSenha, setConfirmarSenha] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
-  const [lembrarMe, setLembrarMe] = useState(false)
+  // Marcado por padrão: persistir o login é o comportamento desejado (logar o
+  // mínimo possível). Quem estiver em PC compartilhado desmarca.
+  const [lembrarMe, setLembrarMe] = useState(true)
   const [carregando, setCarregando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(estado?.avisoAuth ?? null)
 

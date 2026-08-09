@@ -1,18 +1,24 @@
-// Storage adaptável para a sessão do Supabase, controlado pelo "Lembrar-me".
+// Storage adaptável para a sessão do Supabase.
 //
-// - "Lembrar-me" MARCADO  → sessão em localStorage (persiste após fechar o navegador)
-// - "Lembrar-me" DESMARCADO → sessão em sessionStorage (some ao fechar o navegador)
+// O PADRÃO é PERSISTIR (localStorage) — o objetivo é logar o mínimo de vezes
+// possível. A sessão só vira temporária (sessionStorage, some ao fechar o
+// navegador) quando a pessoa DESMARCA "Lembrar-me" — útil em computador
+// compartilhado. Junto do autoRefreshToken do Supabase, isso mantém o login
+// vivo por muito tempo sem pedir senha de novo.
 //
 // A flag fica em localStorage e é definida no login (setRememberMe) ANTES de o
 // Supabase persistir a sessão, garantindo que ela vá para o storage correto.
 
 const REMEMBER_KEY = 'fib.remember-me'
+const OPT_OUT = 'off'
 
 export function setRememberMe(remember: boolean) {
   if (remember) {
-    localStorage.setItem(REMEMBER_KEY, 'true')
-  } else {
+    // Volta ao padrão (persistir): remove qualquer opt-out.
     localStorage.removeItem(REMEMBER_KEY)
+  } else {
+    // Opt-out explícito → sessão só nesta aba/sessão do navegador.
+    localStorage.setItem(REMEMBER_KEY, OPT_OUT)
   }
 }
 
@@ -33,7 +39,10 @@ function ehAppInstalado(): boolean {
 }
 
 function shouldPersist(): boolean {
-  return ehAppInstalado() || localStorage.getItem(REMEMBER_KEY) === 'true'
+  // Persiste sempre no app instalado; no navegador, persiste por padrão e só
+  // NÃO persiste se a pessoa optou por sair (desmarcou "Lembrar-me").
+  if (ehAppInstalado()) return true
+  return localStorage.getItem(REMEMBER_KEY) !== OPT_OUT
 }
 
 // Adapter compatível com a interface de storage do supabase-js.
