@@ -979,8 +979,9 @@ function ConversaView({
 // ── CRUD Table genérica ───────────────────────────────────────────────────────
 function CrudTable({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <table className="w-full text-sm">{children}</table>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+      {/* min-w: no celular a tabela rola dentro do card em vez de espremer/cortar. */}
+      <table className="w-full text-sm min-w-[560px]">{children}</table>
     </div>
   )
 }
