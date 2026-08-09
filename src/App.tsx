@@ -29,6 +29,7 @@ import Assinatura from './pages/Assinatura'
 import CheckoutSucesso from './pages/CheckoutSucesso'
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
+import { AdminNotificacoes } from './components/AdminNotificacoes'
 
 const App = () => (
   <AuthProvider>
@@ -37,6 +38,8 @@ const App = () => (
         <TooltipProvider>
         <Toaster />
         <Sonner />
+        {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
+        <AdminNotificacoes />
         <Routes>
           {/* Mesma tela; a rota só decide o modo inicial.
               As `key` distintas são obrigatórias: sem elas o React reconcilia as
