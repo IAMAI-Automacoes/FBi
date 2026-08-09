@@ -30,6 +30,7 @@ import CheckoutSucesso from './pages/CheckoutSucesso'
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
+import { ManifestPorRota } from './components/ManifestPorRota'
 
 const App = () => (
   <AuthProvider>
@@ -40,6 +41,8 @@ const App = () => (
         <Sonner />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
+        {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}
+        <ManifestPorRota />
         <Routes>
           {/* Mesma tela; a rota só decide o modo inicial.
               As `key` distintas são obrigatórias: sem elas o React reconcilia as

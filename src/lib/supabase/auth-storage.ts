@@ -16,8 +16,24 @@ export function setRememberMe(remember: boolean) {
   }
 }
 
+// App instalado na tela inicial (PWA em modo standalone). Aí o usuário espera
+// continuar logado ao reabrir o ícone, como num app nativo (WhatsApp) — então
+// forçamos a sessão pro localStorage independente do "Lembrar-me". No navegador
+// comum, o "Lembrar-me" continua mandando.
+function ehAppInstalado(): boolean {
+  try {
+    return (
+      window.matchMedia?.('(display-mode: standalone)').matches === true ||
+      // iOS Safari expõe isso em vez do display-mode
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    )
+  } catch {
+    return false
+  }
+}
+
 function shouldPersist(): boolean {
-  return localStorage.getItem(REMEMBER_KEY) === 'true'
+  return ehAppInstalado() || localStorage.getItem(REMEMBER_KEY) === 'true'
 }
 
 // Adapter compatível com a interface de storage do supabase-js.
