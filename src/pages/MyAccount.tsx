@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, Camera, Mail, AtSign, UserIcon, Trash2, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, Camera, Mail, AtSign, UserIcon, Trash2, AlertTriangle, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,6 +18,7 @@ export default function MyAccount() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -184,6 +185,48 @@ export default function MyAccount() {
     }
   }
 
+  const handleCancelarAssinatura = async () => {
+    if (
+      !confirm(
+        'Cancelar sua assinatura?\n\n' +
+          'Você mantém o acesso até a data que já pagou (se houver) e, depois disso, o painel é ' +
+          'bloqueado. Seus dados continuam guardados — é só reativar quando quiser.',
+      )
+    )
+      return
+    setCancelando(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('cancelar-assinatura', { body: {} })
+      if (error) {
+        let msg = error.message
+        try {
+          const corpo = await (error as any).context?.json?.()
+          if (corpo?.error) msg = corpo.error
+        } catch {
+          /* usa a mensagem padrão */
+        }
+        throw new Error(msg)
+      }
+      if ((data as any)?.error) throw new Error((data as any).error)
+
+      const modo = (data as any)?.modo
+      const ate = (data as any)?.acesso_ate
+      toast({
+        title: 'Assinatura cancelada',
+        description:
+          modo === 'agendado' && ate
+            ? `Você mantém o acesso até ${new Date(ate).toLocaleDateString('pt-BR')}.`
+            : 'Seu acesso foi encerrado. Seus dados continuam guardados.',
+      })
+      await refetchUsuario()
+      if (modo === 'encerrada') window.location.href = '/assinatura'
+    } catch (e: any) {
+      toast({ title: 'Não foi possível cancelar', description: e.message, variant: 'destructive' })
+    } finally {
+      setCancelando(false)
+    }
+  }
+
   if (!usuario) {
     return (
       <div className="min-h-screen bg-gray-50/50 p-8">
@@ -346,6 +389,64 @@ export default function MyAccount() {
               <Button onClick={handleSave} disabled={!alterado || loading} className="min-w-[140px]">
                 {loading ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
+            </div>
+          </div>
+
+          {/* Assinatura */}
+          <div className="rounded-2xl border border-gray-200/75 bg-white p-5 sm:p-6 shadow-subtle">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <CreditCard className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-gray-900">Assinatura</h3>
+                <p className="text-[13px] text-gray-600 mt-1">
+                  {usuario.assinatura_cancelada_em && usuario.assinatura_status === 'ativa' ? (
+                    <>
+                      Cancelada — seu acesso continua até{' '}
+                      <span className="font-medium text-gray-800">
+                        {usuario.assinatura_expira_em
+                          ? new Date(usuario.assinatura_expira_em).toLocaleDateString('pt-BR')
+                          : 'o fim do período'}
+                      </span>
+                      . Depois o painel é bloqueado; seus dados ficam guardados.
+                    </>
+                  ) : usuario.assinatura_status === 'ativa' ? (
+                    <>
+                      Ativa
+                      {usuario.assinatura_expira_em
+                        ? ` · válida até ${new Date(usuario.assinatura_expira_em).toLocaleDateString('pt-BR')}`
+                        : ' · sem data de expiração'}
+                      .
+                    </>
+                  ) : usuario.assinatura_status === 'cancelada' ? (
+                    <>Cancelada. Reative quando quiser para voltar a usar o painel.</>
+                  ) : usuario.assinatura_status === 'inadimplente' ? (
+                    <>Pagamento pendente.</>
+                  ) : (
+                    <>Sem assinatura ativa.</>
+                  )}
+                </p>
+                {usuario.assinatura_status !== 'ativa' &&
+                  usuario.assinatura_status !== 'inadimplente' && (
+                    <Link
+                      to="/assinatura"
+                      className="text-[13px] font-medium text-[#1D4ED8] hover:underline mt-1 inline-block"
+                    >
+                      Ver planos
+                    </Link>
+                  )}
+              </div>
+              {(usuario.assinatura_status === 'ativa' ||
+                usuario.assinatura_status === 'inadimplente') &&
+                !usuario.assinatura_cancelada_em && (
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelarAssinatura}
+                    disabled={cancelando}
+                    className="shrink-0 text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    {cancelando ? 'Cancelando…' : 'Cancelar assinatura'}
+                  </Button>
+                )}
             </div>
           </div>
 

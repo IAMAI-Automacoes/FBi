@@ -22,6 +22,10 @@ export interface UsuarioDados {
       = WhatsApp conectado; whatsapp_token = instância criada na uazapi. */
   numero_whatsapp?: string | null
   whatsapp_token?: string | null
+  /** Assinatura: data até quando o acesso é válido (null = sem expiração) e
+      quando o usuário pediu o cancelamento (null = não pediu). */
+  assinatura_expira_em?: string | null
+  assinatura_cancelada_em?: string | null
 }
 
 interface AuthContextType {
