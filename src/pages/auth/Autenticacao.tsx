@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast'
 // Alias explícito: o nome cru colidia com o setter do useState e a chamada
 // silenciosamente virava um no-op — o "Lembrar-me" nunca era gravado.
 import { setRememberMe as gravarLembrarMe } from '@/lib/supabase/auth-storage'
+import { supabase } from '@/lib/supabase/client'
 import { destinoPosAuth } from '@/lib/auth-destino'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { ehRotaDeCompra } from '@/components/compra/etapas'
@@ -150,10 +151,35 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
         codigo === 'user_already_exists' ||
         /already registered|already exists|user_already/i.test(mensagem))
     ) {
+      // Login transparente: se a senha digitada for a da conta, entra direto e
+      // continua de onde parou — o RotaProtegida leva ao onboarding se faltar
+      // concluir, ou ao painel se já estiver completo. Sem redigitar nada.
+      setCarregando(true)
+      const { error: erroLogin } = await login(email, senha)
+      setCarregando(false)
+
+      if (!erroLogin) {
+        // Atualiza o nome (pessoa) com o que foi digitado agora — best-effort.
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user && nome.trim()) {
+            await supabase.from('usuarios').update({ nome: nome.trim() }).eq('id', user.id)
+          }
+        } catch {
+          /* o nome é opcional aqui; ignora falha */
+        }
+        toast({
+          title: 'Você já tinha uma conta',
+          description: 'Entramos direto para continuar de onde você parou.',
+        })
+        navigate(destino, { replace: true })
+        return
+      }
+
+      // Senha não confere → manda pro login com o email já preenchido.
       navigate('/login', {
         replace: true,
         state: {
-          // Repassa o destino da compra, para o login continuar de onde parou.
           from: (location.state as { from?: unknown } | null)?.from,
           avisoAuth: 'Você já tem uma conta com esse email. Digite sua senha para continuar.',
           emailPreenchido: email,

@@ -61,6 +61,8 @@ export default function Onboarding() {
   const [step, setStep] = useState(1)
   const [whatsappConectado, setWhatsappConectado] = useState(false)
   const [loadingSubmit, setLoadingSubmit] = useState(false)
+  // Passo 5 conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
+  const [autoProgresso, setAutoProgresso] = useState(0)
   // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
   // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
   // aparece na hora enquanto a imagem definitiva ainda carrega do Storage.
@@ -227,6 +229,35 @@ export default function Onboarding() {
       setLoadingSubmit(false)
     }
   }
+
+  // Auto-finalizar no passo 5: o botão vai "preenchendo" e conclui sozinho se a
+  // pessoa não clicar nem voltar — evita conta parada no onboarding. Voltar
+  // (sair do passo 5) cancela e rearma; se a conclusão falhar, não fica em loop.
+  const handleCompleteRef = useRef(handleComplete)
+  handleCompleteRef.current = handleComplete
+  const jaAutoFinalizou = useRef(false)
+  const AUTO_FINALIZAR_MS = 6000
+
+  useEffect(() => {
+    if (step !== 5 || loadingSubmit || jaAutoFinalizou.current) {
+      if (step !== 5) {
+        setAutoProgresso(0)
+        jaAutoFinalizou.current = false
+      }
+      return
+    }
+    const inicio = Date.now()
+    const iv = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - inicio) / AUTO_FINALIZAR_MS) * 100)
+      setAutoProgresso(pct)
+      if (pct >= 100) {
+        clearInterval(iv)
+        jaAutoFinalizou.current = true
+        handleCompleteRef.current()
+      }
+    }, 50)
+    return () => clearInterval(iv)
+  }, [step, loadingSubmit])
 
   const progress = (step / 5) * 100
 
@@ -580,6 +611,14 @@ export default function Onboarding() {
           )}
         </CardContent>
 
+        {step === 5 && !loadingSubmit && (
+          <p className="px-6 text-center text-xs text-gray-500">
+            Concluindo sozinho em instantes — clique em{' '}
+            <span className="font-semibold">Começar a usar</span> para finalizar agora, ou em{' '}
+            <span className="font-semibold">Anterior</span> para ajustar.
+          </p>
+        )}
+
         <CardFooter className="flex justify-between border-t border-gray-100 bg-gray-50/50 py-4 px-6 rounded-b-xl">
           {step > 1 ? (
             <Button variant="outline" onClick={handlePrev} className="bg-white">
@@ -597,21 +636,34 @@ export default function Onboarding() {
             </Button>
           ) : (
             <Button
-              onClick={handleComplete}
+              onClick={() => {
+                jaAutoFinalizou.current = true
+                handleComplete()
+              }}
               disabled={loadingSubmit}
-              className="bg-[#1D4ED8] hover:bg-blue-700 text-white"
+              className="relative overflow-hidden bg-[#1D4ED8] hover:bg-blue-700 text-white"
             >
-              {loadingSubmit ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Começar a usar
-                </>
+              {/* Preenchimento do auto-finalizar (fica atrás do texto). */}
+              {!loadingSubmit && (
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 bg-white/25"
+                  style={{ width: `${autoProgresso}%` }}
+                />
               )}
+              <span className="relative z-10 inline-flex items-center">
+                {loadingSubmit ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Começar a usar
+                  </>
+                )}
+              </span>
             </Button>
           )}
         </CardFooter>
