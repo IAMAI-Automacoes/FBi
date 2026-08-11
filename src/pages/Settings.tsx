@@ -8,7 +8,6 @@ import { MascotTab, MascoteForm } from './settings/MascotTab'
 import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/PerfilNegocioTab'
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { WhatsAppTab } from './settings/WhatsAppTab'
-import { useUserProfile } from '@/hooks/use-user-profile'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -32,9 +31,11 @@ function perfilParaJson(p: PerfilNegocioForm) {
 }
 
 export default function Settings() {
-  const { profile, loading } = useUserProfile()
   const { refetch: refetchConfig } = useRestauranteConfig()
-  const { refetchUsuario } = useAuth()
+  // restaurante_id vem do useAuth (baseado em `restaurantes`), não da `usuarios`
+  // — assim o Settings nunca fica em branco por causa de uma linha de pessoa
+  // ausente/bloqueada por RLS.
+  const { usuario, refetchUsuario, loading } = useAuth()
   const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
@@ -50,7 +51,7 @@ export default function Settings() {
   const [salvando, setSalvando] = useState(false)
   const [enviandoArquivo, setEnviandoArquivo] = useState(false)
 
-  const restauranteId = profile?.restaurante_id ?? null
+  const restauranteId = usuario?.restaurante_id ?? null
 
   // Carrega tudo de uma vez — as abas viraram formulários controlados
   useEffect(() => {
@@ -208,8 +209,6 @@ export default function Settings() {
       </div>
     )
   }
-
-  if (!profile) return null
 
   const navItems = [
     { id: 'restaurante', label: 'Restaurante' },

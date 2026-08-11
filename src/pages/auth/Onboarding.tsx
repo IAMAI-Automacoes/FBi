@@ -47,7 +47,6 @@ interface OnboardingData {
   restaurante_culinaria: string
   restaurante_mesas: string
   como_coleta_feedbacks: string
-  frequencia_relatorios: string
   ia_nome: string
   ia_tom: string
   ia_focos: string[]
@@ -77,7 +76,6 @@ export default function Onboarding() {
     restaurante_culinaria: '',
     restaurante_mesas: '',
     como_coleta_feedbacks: '',
-    frequencia_relatorios: '',
     ia_nome: 'Chef Pepê',
     ia_tom: '',
     ia_focos: [],
@@ -156,10 +154,6 @@ export default function Onboarding() {
       if (!data.restaurante_culinaria) return 'Selecione o tipo de culinária.'
       if (!data.restaurante_mesas.trim()) return 'Informe o número de mesas.'
     }
-    if (s === 2) {
-      if (!data.como_coleta_feedbacks.trim()) return 'Conte como você coleta feedbacks hoje.'
-      if (!data.frequencia_relatorios) return 'Selecione a frequência de relatórios.'
-    }
     if (s === 3) {
       if (!data.ia_nome.trim()) return 'Dê um nome ao assistente de IA.'
       if (!data.ia_tom) return 'Selecione o tom de comunicação.'
@@ -169,11 +163,20 @@ export default function Onboarding() {
     return null
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const erro = validarStep(step)
     if (erro) {
       toast({ title: 'Faltou preencher', description: erro, variant: 'destructive' })
       return
+    }
+    // Ao sair do passo 1, grava o nome do restaurante já no banco: a instância do
+    // WhatsApp (criada ao conectar, no passo 4) usa esse nome. Sem isso, ela
+    // pegaria o "Meu Restaurante" padrão, já que o resto só salva no Finalizar.
+    if (step === 1 && usuario?.restaurante_id && data.restaurante_nome.trim()) {
+      await supabase
+        .from('restaurantes')
+        .update({ nome_restaurante: data.restaurante_nome.trim() })
+        .eq('id', usuario.restaurante_id)
     }
     setStep((s) => s + 1)
   }
@@ -209,7 +212,6 @@ export default function Onboarding() {
           tipo_culinaria: data.restaurante_culinaria || null,
           numero_mesas: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null,
           metodo_coleta_feedback: data.como_coleta_feedbacks || null,
-          frequencia_relatorios: data.frequencia_relatorios || null,
           logo_url: logoUrl || null,
           mascote_config: mascoteConfig,
           onboarding_completo: true,
@@ -496,24 +498,6 @@ export default function Onboarding() {
                 />
                 <p className="text-xs text-gray-500">Opcional</p>
               </div>
-              <div className="space-y-2 pt-2">
-                <Label htmlFor="frequencia" className="text-base text-gray-800 font-medium">
-                  Frequência desejada de relatórios
-                </Label>
-                <Select
-                  value={data.frequencia_relatorios}
-                  onValueChange={(v) => setData({ ...data, frequencia_relatorios: v })}
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecione a frequência..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Diário">Diário</SelectItem>
-                    <SelectItem value="Semanal">Semanal</SelectItem>
-                    <SelectItem value="Mensal">Mensal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           )}
 
@@ -618,10 +602,6 @@ export default function Onboarding() {
                     <p className="text-gray-600 text-sm mt-1">
                       <span className="font-medium">Método atual:</span>{' '}
                       {data.como_coleta_feedbacks || 'Não informado'}
-                    </p>
-                    <p className="text-gray-600 text-sm">
-                      <span className="font-medium">Relatórios:</span>{' '}
-                      {data.frequencia_relatorios || 'Não informado'}
                     </p>
                   </div>
                 </div>

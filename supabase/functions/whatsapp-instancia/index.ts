@@ -120,8 +120,9 @@ serve(async (req: Request) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', admintoken: ADMIN_TOKEN },
         body: JSON.stringify({
-          name: nomeInstancia(rest.nome_restaurante, rest.id),
-          adminField01: String(rest.id), // roteamento no n8n — NÃO remover
+          name: nomeInstancia(rest.nome_restaurante, rest.id), // nome = nome do restaurante
+          systemName: 'iamai-ia',
+          adminField01: String(rest.id), // id do restaurante → roteamento no n8n (NÃO remover)
           adminField02: rest.nome_restaurante ?? '',
         }),
       })

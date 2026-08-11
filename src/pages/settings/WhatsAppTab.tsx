@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { MessageCircle, CheckCircle2, RefreshCw, Loader2, Smartphone } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -152,9 +151,7 @@ export function WhatsAppTab({
   if (!restauranteId) return null
 
   const conteudo = (
-    loading ? (
-          <Skeleton className="h-40 w-full rounded-lg" />
-        ) : estado?.connected ? (
+    estado?.connected ? (
           <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -214,6 +211,9 @@ export function WhatsAppTab({
             <Button onClick={iniciarConexao} className="bg-emerald-600 hover:bg-emerald-700">
               <MessageCircle className="h-4 w-4 mr-1.5" /> Conectar WhatsApp
             </Button>
+            {loading && (
+              <span className="text-xs text-muted-foreground">Verificando conexão…</span>
+            )}
           </div>
         )
   )
