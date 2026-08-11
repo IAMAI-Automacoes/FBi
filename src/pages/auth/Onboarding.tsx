@@ -54,7 +54,7 @@ interface OnboardingData {
 }
 
 export default function Onboarding() {
-  const { usuario, logout } = useAuth()
+  const { usuario, logout, ehAdminPlataforma } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
 
@@ -63,6 +63,8 @@ export default function Onboarding() {
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   // Passo 5 conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
   const [autoProgresso, setAutoProgresso] = useState(0)
+  // Admin pode pular o onboarding (não é cliente). Se não pular, preenche igual.
+  const [pulando, setPulando] = useState(false)
   // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
   // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
   // aparece na hora enquanto a imagem definitiva ainda carrega do Storage.
@@ -230,6 +232,24 @@ export default function Onboarding() {
     }
   }
 
+  // Admin pula a configuração: marca o onboarding como concluído (sem preencher
+  // dados) e vai pro painel. onboarding_completo não é campo protegido, então o
+  // próprio usuário grava.
+  const handlePular = async () => {
+    if (!usuario?.restaurante_id) return
+    setPulando(true)
+    const { error } = await supabase
+      .from('restaurantes')
+      .update({ onboarding_completo: true })
+      .eq('id', usuario.restaurante_id)
+    if (error) {
+      toast({ title: 'Erro ao pular', description: error.message, variant: 'destructive' })
+      setPulando(false)
+      return
+    }
+    window.location.href = '/'
+  }
+
   // Auto-finalizar no passo 5: o botão vai "preenchendo" e conclui sozinho se a
   // pessoa não clicar nem voltar — evita conta parada no onboarding. Voltar
   // (sair do passo 5) cancela e rearma; se a conclusão falhar, não fica em loop.
@@ -269,13 +289,28 @@ export default function Onboarding() {
               cá: esta tela já tem a própria barra de 4 passos, e dois medidores
               empilhados obrigariam a ler "passo 2 de 4 dentro da etapa 3 de 3". */}
           <p className="text-sm text-gray-500">
-            Pagamento confirmado · configurando seu acesso
+            {ehAdminPlataforma
+              ? 'Admin · a configuração é opcional pra você'
+              : 'Pagamento confirmado · configurando seu acesso'}
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => logout()} className="text-gray-500">
-          <LogOut className="h-4 w-4 mr-2" />
-          Sair
-        </Button>
+        <div className="flex items-center gap-1">
+          {ehAdminPlataforma && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handlePular}
+              disabled={pulando}
+              className="text-[#1D4ED8]"
+            >
+              {pulando ? 'Pulando…' : 'Pular configuração'}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => logout()} className="text-gray-500">
+            <LogOut className="h-4 w-4 mr-2" />
+            Sair
+          </Button>
+        </div>
       </div>
 
       <Card className="w-full max-w-xl shadow-lg border-0 ring-1 ring-gray-200">

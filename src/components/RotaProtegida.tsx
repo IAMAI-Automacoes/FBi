@@ -125,8 +125,11 @@ export function RotaProtegida() {
     return <Navigate to="/assinatura" replace />
   }
 
+  // Onboarding vale para todos — inclusive admin. A diferença é que o admin,
+  // dentro da tela de onboarding, tem um botão "Pular configuração" (não é
+  // obrigado). Se ele não pular, preenche como qualquer pessoa. Só a COBRANÇA
+  // é pulada para admin (acima).
   if (
-    !ehAdminPlataforma &&
     usuario.onboarding_completo === false &&
     !naRotaDePagamento &&
     location.pathname !== '/onboarding'
