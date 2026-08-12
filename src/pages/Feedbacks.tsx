@@ -17,8 +17,10 @@ import { CalendarDays, Search, Folder, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
-import { rotuloSentimento } from '@/lib/sentimento'
+import { rotuloSentimento, coresSentimento } from '@/lib/sentimento'
+import { PontoSentimento } from '@/components/PontoSentimento'
 import { useAuth } from '@/hooks/use-auth'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 
 
 export default function Feedbacks() {
@@ -73,6 +75,13 @@ export default function Feedbacks() {
     const timeoutId = setTimeout(() => carregarFeedbacks(false), 300)
     return () => clearTimeout(timeoutId)
   }, [filtros, carregarFeedbacks])
+
+  // Tempo real: novo feedback recarrega a lista sozinho.
+  useRealtimeReload(
+    ['feedbacks_originais', 'feedbacks_restaurante'],
+    usuario?.restaurante_id ?? null,
+    () => carregarFeedbacks(false),
+  )
 
   const toggleCategoria = (cat: string) => {
     setFiltros((prev) => ({
@@ -191,7 +200,8 @@ export default function Feedbacks() {
               <SelectItem value="all">Todos Sentimentos</SelectItem>
               <SelectItem value="positivo">Positivo</SelectItem>
               <SelectItem value="negativo">Negativo</SelectItem>
-              <SelectItem value="neutro">Positivo / Negativo</SelectItem>
+              <SelectItem value="positivo e negativo">Positivo e negativo</SelectItem>
+              <SelectItem value="neutro">Neutro</SelectItem>
             </SelectContent>
           </Select>
 
@@ -282,24 +292,18 @@ export default function Feedbacks() {
           </div>
         ) : (
           dataToDisplay.map((fb) => {
-            const isPos = fb.sentimento?.toUpperCase() === 'POSITIVO'
-            const isNeg = fb.sentimento?.toUpperCase() === 'NEGATIVO'
+            const cor = coresSentimento(fb.sentimento)
             return (
               <div
                 key={fb.id}
                 className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle flex flex-col sm:flex-row gap-4 sm:gap-6 hover:shadow-elevation transition-all duration-200"
               >
-                <div className="w-full sm:w-[90px] flex sm:flex-col items-center justify-start sm:justify-start pt-1 gap-2 shrink-0 border-b sm:border-b-0 pb-3 sm:pb-0 border-gray-100">
-                  <div
-                    className={cn(
-                      'w-2.5 h-2.5 rounded-full',
-                      isPos ? 'bg-success' : isNeg ? 'bg-destructive' : 'bg-warning',
-                    )}
-                  />
+                <div className="w-full sm:w-[100px] flex sm:flex-col items-center justify-start sm:justify-start pt-1 gap-2 shrink-0 border-b sm:border-b-0 pb-3 sm:pb-0 border-gray-100">
+                  <PontoSentimento sentimento={fb.sentimento} className="w-2.5 h-2.5" />
                   <span
                     className={cn(
                       'text-[10px] font-bold tracking-wide text-center leading-tight',
-                      isPos ? 'text-success' : isNeg ? 'text-destructive' : 'text-warning',
+                      cor.texto,
                     )}
                   >
                     {rotuloSentimento(fb.sentimento).toUpperCase()}

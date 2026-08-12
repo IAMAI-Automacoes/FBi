@@ -15,7 +15,8 @@ export interface FeedbackItem {
   id: string
   text: string
   categories: string[]
-  sentiment: 'positive' | 'neutral' | 'negative'
+  /** Sentimento cru da MENSAGEM ORIGINAL: positivo|negativo|positivo e negativo|neutro. */
+  sentiment: string
   timeAgo: string
 }
 
@@ -365,20 +366,11 @@ export const buscarUltimosFeedbacks = async (
     else if (calendarDays === 1) timeAgo = 'Ontem'
     else timeAgo = `há ${calendarDays} dias`
 
-    let sentiment: 'positive' | 'neutral' | 'negative' = 'neutral'
-    if (f.sentimento?.toLowerCase() === 'positivo' || f.sentimento?.toLowerCase() === 'positive')
-      sentiment = 'positive'
-    else if (
-      f.sentimento?.toLowerCase() === 'negativo' ||
-      f.sentimento?.toLowerCase() === 'negative'
-    )
-      sentiment = 'negative'
-
     return {
       id: String(f.id),
       text: f.texto_original || '',
       categories: (f.categorias ?? []) as string[],
-      sentiment,
+      sentiment: (f.sentimento || 'neutro') as string,
       timeAgo,
     }
   })

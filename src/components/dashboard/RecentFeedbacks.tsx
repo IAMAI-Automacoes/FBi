@@ -4,24 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { DashboardData } from '@/lib/queries/visao-geral'
 import { cn } from '@/lib/utils'
-
-const sentimentConfig = {
-  positive: {
-    label: 'Positivo',
-    dot: 'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  },
-  neutral: {
-    label: 'Positivo / Negativo',
-    dot: 'bg-amber-400',
-    badge: 'bg-amber-50 text-amber-700 border border-amber-200',
-  },
-  negative: {
-    label: 'Negativo',
-    dot: 'bg-rose-500',
-    badge: 'bg-rose-50 text-rose-700 border border-rose-200',
-  },
-}
+import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
+import { PontoSentimento } from '@/components/PontoSentimento'
 
 export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recentFeedbacks'] }) {
   return (
@@ -44,7 +28,7 @@ export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recen
         ) : (
           <div className="flex flex-col divide-y divide-border/50">
             {feedbacks.map((item) => {
-              const config = sentimentConfig[item.sentiment]
+              const cor = coresSentimento(item.sentiment)
               return (
                 <div
                   key={item.id}
@@ -53,12 +37,12 @@ export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recen
                   <div className="pt-0.5 shrink-0">
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
-                        config.badge,
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap border',
+                        cor.badge,
                       )}
                     >
-                      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', config.dot)} />
-                      {config.label}
+                      <PontoSentimento sentimento={item.sentiment} className="h-1.5 w-1.5" />
+                      {rotuloSentimento(item.sentiment)}
                     </span>
                   </div>
                   <div className="flex-1 flex flex-col gap-2 min-w-0">

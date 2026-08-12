@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { PeriodInfo, DashboardData } from '@/lib/queries/visao-geral'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { KpiCards } from '@/components/dashboard/KpiCards'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { RecentFeedbacks } from '@/components/dashboard/RecentFeedbacks'
@@ -26,41 +27,39 @@ export default function Index() {
   // Skeleton só aparece no carregamento inicial — troca de período atualiza silenciosamente
   const hasLoadedOnce = useRef(false)
 
-  useEffect(() => {
-    let mounted = true
-
-    const loadData = async () => {
-      if (!hasLoadedOnce.current) setIsLoading(true)
-      try {
-        const restauranteId = usuario?.restaurante_id ?? null
-
-        const [kpis, chartData, categories, recentFeedbacks] = await Promise.all([
-          buscarKpis(restauranteId, period),
-          buscarTendencia(restauranteId, period),
-          buscarCategorias(restauranteId, period),
-          buscarUltimosFeedbacks(restauranteId, 5),
-        ])
-
-        if (!mounted) return
-        setData({ kpis, chartData, categories, recentFeedbacks })
-        hasLoadedOnce.current = true
-      } catch (error) {
-        console.error('Erro ao carregar visão geral:', error)
-        if (mounted) {
-          toast({
-            title: 'Erro ao carregar dados',
-            description: 'Não foi possível carregar os dados do dashboard.',
-            variant: 'destructive',
-          })
-        }
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
+  const carregar = useCallback(async () => {
+    if (!hasLoadedOnce.current) setIsLoading(true)
+    try {
+      const restauranteId = usuario?.restaurante_id ?? null
+      const [kpis, chartData, categories, recentFeedbacks] = await Promise.all([
+        buscarKpis(restauranteId, period),
+        buscarTendencia(restauranteId, period),
+        buscarCategorias(restauranteId, period),
+        buscarUltimosFeedbacks(restauranteId, 5),
+      ])
+      setData({ kpis, chartData, categories, recentFeedbacks })
+      hasLoadedOnce.current = true
+    } catch (error) {
+      console.error('Erro ao carregar visão geral:', error)
+      toast({
+        title: 'Erro ao carregar dados',
+        description: 'Não foi possível carregar os dados do dashboard.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
     }
+  }, [period, usuario, toast])
 
-    loadData()
-    return () => { mounted = false }
-  }, [period, toast, usuario])
+  useEffect(() => { carregar() }, [carregar])
+
+  // Tempo real: novos feedbacks (originais e separados) recarregam KPIs, gráficos
+  // e a lista sozinhos, sem F5.
+  useRealtimeReload(
+    ['feedbacks_restaurante', 'feedbacks_originais'],
+    usuario?.restaurante_id ?? null,
+    carregar,
+  )
 
   // isNeverUsed: sem dados em nenhum período → tela de boas-vindas
   // isPeriodEmpty: tem dados históricos mas zero no período atual → mostrar dashboard com aviso

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
   FileText, Download, FileDown, Users, Smile, ThumbsUp, Sparkles,
   AlertTriangle, Loader2, PartyPopper, UserCheck, Repeat, CalendarDays, Clock,
@@ -95,31 +96,35 @@ export default function Reports() {
 
   const restauranteId = profile?.restaurante_id ?? null
 
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setAnalise(null) // a leitura da IA é por período
+    try {
+      const [k, e, t] = await Promise.all([
+        buscarKpis(restauranteId, period),
+        buscarEstatisticasRelatorio(restauranteId, period),
+        buscarTendencia(restauranteId, period),
+      ])
+      setKpis(k); setStats(e); setTendencia(t)
+      if (restauranteId) {
+        const { data: r } = await supabase
+          .from('restaurantes').select('nome_restaurante').eq('id', restauranteId).single()
+        if (r?.nome_restaurante) setNomeRestaurante(r.nome_restaurante)
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Não foi possível carregar os dados do relatório.')
+    }
+    setLoading(false)
+  }, [restauranteId, period])
+
   useEffect(() => {
     if (profileLoading) return
-    const carregar = async () => {
-      setLoading(true)
-      setAnalise(null) // a leitura da IA é por período
-      try {
-        const [k, e, t] = await Promise.all([
-          buscarKpis(restauranteId, period),
-          buscarEstatisticasRelatorio(restauranteId, period),
-          buscarTendencia(restauranteId, period),
-        ])
-        setKpis(k); setStats(e); setTendencia(t)
-        if (restauranteId) {
-          const { data: r } = await supabase
-            .from('restaurantes').select('nome_restaurante').eq('id', restauranteId).single()
-          if (r?.nome_restaurante) setNomeRestaurante(r.nome_restaurante)
-        }
-      } catch (err) {
-        console.error(err)
-        toast.error('Não foi possível carregar os dados do relatório.')
-      }
-      setLoading(false)
-    }
     carregar()
-  }, [profileLoading, restauranteId, period])
+  }, [profileLoading, carregar])
+
+  // Tempo real: novos feedbacks separados recarregam KPIs e gráficos sozinhos.
+  useRealtimeReload(['feedbacks_restaurante'], restauranteId, carregar)
 
   const semDados = !!kpis && kpis.totalFeedbacks === 0
 
@@ -420,7 +425,7 @@ export default function Reports() {
               <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-muted">
                 {[
                   { n: kpis.positivos, cor: 'bg-emerald-500' },
-                  { n: kpis.neutros, cor: 'bg-slate-300' },
+                  { n: kpis.neutros, cor: 'bg-amber-400' },
                   { n: kpis.negativos, cor: 'bg-rose-500' },
                 ].map((s, i) =>
                   s.n > 0 ? (
@@ -434,8 +439,8 @@ export default function Reports() {
                   Positivas: <b className="text-foreground">{kpis.positivos}</b> ({kpis.positivePercent}%)
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-                  Positivo / Negativo: <b className="text-foreground">{kpis.neutros}</b>
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  Neutras: <b className="text-foreground">{kpis.neutros}</b>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />

@@ -21,11 +21,12 @@ const PERIODOS = [
   { dias: 0, label: 'Todo o período' },
 ]
 
-// Indicador de sentimento discreto (um pontinho), pra não poluir.
-const dotCor: Record<string, string> = {
-  elogio: 'bg-emerald-500',
-  reclamacao: 'bg-rose-500',
-  neutro: 'bg-amber-400',
+// Sem bolinha (poluía): o próprio NÚMERO é colorido pelo sentimento.
+// elogio=verde, reclamação=vermelho, neutro=amarelo.
+const numCor: Record<string, string> = {
+  elogio: 'text-emerald-600',
+  reclamacao: 'text-rose-600',
+  neutro: 'text-amber-600',
 }
 
 /**
@@ -107,15 +108,15 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
         ) : (
           <ul className="divide-y divide-border/50">
             {temas.map((t) => (
-              <li key={t.id} className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-muted/30 transition-colors">
-                <span
-                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCor[t.tipo] ?? dotCor.neutro)}
-                  title={t.tipo === 'elogio' ? 'Positivo' : t.tipo === 'reclamacao' ? 'Negativo' : 'Neutro'}
-                />
-                <span className="text-base font-bold tabular-nums text-foreground shrink-0">
+              <li
+                key={t.id}
+                className="flex items-baseline gap-4 px-5 py-3 hover:bg-muted/30 transition-colors"
+                title={t.tipo === 'elogio' ? 'Positivo' : t.tipo === 'reclamacao' ? 'Negativo' : 'Neutro'}
+              >
+                <span className="text-[15px] text-foreground/90 truncate min-w-0">{t.rotulo}</span>
+                <span className={cn('text-lg font-bold tabular-nums shrink-0', numCor[t.tipo] ?? numCor.neutro)}>
                   {t.quantidade}
                 </span>
-                <span className="text-[15px] text-foreground/90 truncate min-w-0">{t.rotulo}</span>
               </li>
             ))}
           </ul>
