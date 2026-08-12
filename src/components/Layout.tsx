@@ -5,6 +5,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { AppSidebar } from './AppSidebar'
 import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
+import { AvisoAssinatura } from './AvisoAssinatura'
 
 /** Largura do painel do chat — o conteúdo recua exatamente isso (só no desktop). */
 const LARGURA_CHAT = 380
@@ -25,6 +26,7 @@ export default function Layout() {
           style={{ marginRight: chatAberto && !isMobile ? LARGURA_CHAT : 0 }}
         >
           <TopHeader />
+          <AvisoAssinatura />
           <div className="flex-1 min-h-0 overflow-auto sem-barra p-4 sm:p-6 lg:p-8 animate-fade-in">
             <Outlet />
           </div>

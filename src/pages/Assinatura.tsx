@@ -33,7 +33,7 @@ export default function Assinatura() {
         ? {
             titulo: 'Sua assinatura foi encerrada',
             texto:
-              'Você pode reativar quando quiser. Todos os feedbacks, insights e configurações do seu restaurante continuam salvos.',
+              'Você pode reativar quando quiser — seus feedbacks, insights e configurações continuam salvos. Ao reativar, é só reconectar o WhatsApp em instantes para voltar a receber feedbacks.',
           }
         : {
             titulo: 'Escolha um plano para começar',
