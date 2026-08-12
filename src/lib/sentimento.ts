@@ -8,7 +8,8 @@ import type { CSSProperties } from 'react'
  * PEDAÇOS SEPARADOS (feedbacks_restaurante.sentimento): só 'positivo' |
  * 'negativo' | 'neutro' (se tem os dois, o n8n divide em dois pedaços).
  *
- * Cores: positivo=verde, negativo=vermelho, neutro=AMARELO, misto=verde+vermelho.
+ * Cores: positivo=verde, negativo=vermelho, neutro=CINZA, misto (positivo e
+ * negativo)=AMARELO.
  */
 export type TipoSentimento = 'positivo' | 'negativo' | 'misto' | 'neutro'
 
@@ -34,17 +35,14 @@ export function rotuloSentimento(valor?: string | null): string {
   }
 }
 
-/** Split verde|vermelho para o "misto" (as duas cores juntas). */
-const SPLIT_MISTO: CSSProperties = { background: 'linear-gradient(90deg,#10b981 50%,#f43f5e 50%)' }
-
 export const CORES_SENTIMENTO: Record<
   TipoSentimento,
   { badge: string; texto: string; dot: string; dotStyle?: CSSProperties }
 > = {
   positivo: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', texto: 'text-emerald-600', dot: 'bg-emerald-500' },
   negativo: { badge: 'bg-rose-50 text-rose-700 border-rose-200', texto: 'text-rose-600', dot: 'bg-rose-500' },
-  neutro:   { badge: 'bg-amber-50 text-amber-700 border-amber-200', texto: 'text-amber-600', dot: 'bg-amber-400' },
-  misto:    { badge: 'bg-slate-50 text-slate-700 border-slate-200', texto: 'text-slate-700', dot: '', dotStyle: SPLIT_MISTO },
+  neutro:   { badge: 'bg-slate-50 text-slate-600 border-slate-200', texto: 'text-slate-500', dot: 'bg-slate-400' },
+  misto:    { badge: 'bg-amber-50 text-amber-700 border-amber-200', texto: 'text-amber-600', dot: 'bg-amber-400' },
 }
 
 export function coresSentimento(valor?: string | null) {

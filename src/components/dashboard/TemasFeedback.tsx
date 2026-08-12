@@ -26,7 +26,7 @@ const PERIODOS = [
 const numCor: Record<string, string> = {
   elogio: 'text-emerald-600',
   reclamacao: 'text-rose-600',
-  neutro: 'text-amber-600',
+  neutro: 'text-slate-500',
 }
 
 /**

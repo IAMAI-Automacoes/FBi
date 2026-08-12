@@ -425,7 +425,7 @@ export default function Reports() {
               <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-muted">
                 {[
                   { n: kpis.positivos, cor: 'bg-emerald-500' },
-                  { n: kpis.neutros, cor: 'bg-amber-400' },
+                  { n: kpis.neutros, cor: 'bg-slate-400' },
                   { n: kpis.negativos, cor: 'bg-rose-500' },
                 ].map((s, i) =>
                   s.n > 0 ? (
@@ -439,7 +439,7 @@ export default function Reports() {
                   Positivas: <b className="text-foreground">{kpis.positivos}</b> ({kpis.positivePercent}%)
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
                   Neutras: <b className="text-foreground">{kpis.neutros}</b>
                 </span>
                 <span className="flex items-center gap-1.5">

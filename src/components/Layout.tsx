@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -7,23 +7,38 @@ import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
 import { AvisoAssinatura } from './AvisoAssinatura'
 
-/** Largura do painel do chat — o conteúdo recua exatamente isso (só no desktop). */
-const LARGURA_CHAT = 380
+// Limites da largura do chat de IA (desktop). O conteúdo recua exatamente isso.
+const MIN_CHAT = 320
+const MAX_CHAT = 620
+const PADRAO_CHAT = 380
 
 export default function Layout() {
-  // O chat não cobre a página: ela encolhe para o lado enquanto ele está aberto
   const [chatAberto, setChatAberto] = useState(false)
-  // No celular o chat é overlay em tela cheia — o conteúdo NÃO recua (senão a
-  // página some atrás dos 380px numa tela de ~375px).
+  const [larguraChat, setLarguraChat] = useState(() => {
+    const salvo = Number(localStorage.getItem('largura_chat_ia'))
+    return salvo >= MIN_CHAT && salvo <= MAX_CHAT ? salvo : PADRAO_CHAT
+  })
+  // No celular o chat é overlay em tela cheia — o conteúdo NÃO recua.
   const isMobile = useIsMobile()
+  const chatDesktop = chatAberto && !isMobile
+
+  const mudarLargura = (v: number) => {
+    const clamp = Math.min(MAX_CHAT, Math.max(MIN_CHAT, Math.round(v)))
+    setLarguraChat(clamp)
+    localStorage.setItem('largura_chat_ia', String(clamp))
+  }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider
+      // Com o chat aberto, o menu encolhe pra sobrar só um pouco à direita das
+      // palavras — dá mais espaço pro conteúdo + chat.
+      style={chatDesktop ? ({ '--sidebar-width': '12.5rem' } as CSSProperties) : undefined}
+    >
       <div className="flex h-screen w-full bg-background overflow-hidden">
         <AppSidebar />
         <main
           className="flex flex-1 flex-col w-full min-w-0 min-h-0 transition-[margin] duration-300 ease-in-out"
-          style={{ marginRight: chatAberto && !isMobile ? LARGURA_CHAT : 0 }}
+          style={{ marginRight: chatDesktop ? larguraChat : 0 }}
         >
           <TopHeader />
           <AvisoAssinatura />
@@ -31,7 +46,12 @@ export default function Layout() {
             <Outlet />
           </div>
         </main>
-        <ChatFab open={chatAberto} onOpenChange={setChatAberto} />
+        <ChatFab
+          open={chatAberto}
+          onOpenChange={setChatAberto}
+          largura={larguraChat}
+          onLarguraChange={mudarLargura}
+        />
       </div>
     </SidebarProvider>
   )

@@ -14,6 +14,7 @@ import {
   X,
   Globe,
   ChevronDown,
+  ChevronRight,
   Check,
   FileText,
   Zap,
@@ -61,6 +62,7 @@ import { buscarKpis } from '@/lib/queries/visao-geral'
 import { buscarEstatisticasRelatorio } from '@/lib/queries/relatorios'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { getIniciais } from '@/lib/iniciais'
 import { useToast } from '@/hooks/use-toast'
@@ -178,11 +180,33 @@ function Fontes({ fontes }: { fontes: { url: string; titulo: string }[] }) {
 export function ChatFab({
   open,
   onOpenChange,
+  largura,
+  onLarguraChange,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
+  largura: number
+  onLarguraChange: (v: number) => void
 }) {
   const { pathname } = useLocation()
+  const isMobile = useIsMobile()
+
+  // Arrasta a borda esquerda pra aumentar/diminuir o chat (os limites moram no Layout).
+  const iniciarResize = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = largura
+    const onMove = (ev: PointerEvent) => onLarguraChange(startW - (ev.clientX - startX))
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   const { user, usuario, refetchUsuario } = useAuth()
   const { mascote, refetch: refetchConfig } = useRestauranteConfig()
   const mascoteNome = mascote.nome
@@ -906,7 +930,9 @@ export function ChatFab({
 
         <SheetContent
           semOverlay
-          className="w-full sm:max-w-[380px] p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.25)]"
+          className="w-full p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.25)]"
+          // No desktop a largura é controlada (redimensionável); no celular é tela cheia.
+          style={isMobile ? undefined : { width: largura, maxWidth: '100vw' }}
           // Sem isto, fechar o popup (Esc ou clique fora) fecha o chat junto:
           // o evento do dialog aninhado borbulha para o Sheet.
           onEscapeKeyDown={(e) => { if (temPopupAberto) e.preventDefault() }}
@@ -914,6 +940,23 @@ export function ChatFab({
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
+          {/* Borda esquerda: arrastar redimensiona; a setinha no meio recolhe. Só desktop. */}
+          {!isMobile && (
+            <>
+              <div
+                onPointerDown={iniciarResize}
+                title="Arraste para redimensionar"
+                className="absolute left-0 top-0 z-20 h-full w-2 cursor-ew-resize transition-colors hover:bg-primary/20"
+              />
+              <button
+                onClick={() => onOpenChange(false)}
+                title="Recolher o chat"
+                className="absolute left-0 top-1/2 z-30 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-gray-300 bg-white text-gray-500 shadow hover:bg-gray-50 hover:text-gray-800"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
 
           {/* ── Header ── */}
           <SheetHeader className="p-4 border-b bg-white shrink-0">
@@ -936,12 +979,7 @@ export function ChatFab({
                       {getIniciais(mascoteNome, 1)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col items-start flex-1 min-w-0">
-                    <span className="font-bold text-gray-900">{mascoteNome}</span>
-                    <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Online
-                    </span>
-                  </div>
+                  <span className="font-bold text-gray-900 truncate min-w-0">{mascoteNome}</span>
                   <div className="flex items-center gap-1">
                     <button onClick={handleOpenHistory} title="Histórico" className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
                       <History className="h-4 w-4" />
@@ -950,6 +988,7 @@ export function ChatFab({
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
+                  <div className="flex-1" />
                 </>
               )}
             </SheetTitle>
