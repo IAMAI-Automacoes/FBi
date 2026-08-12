@@ -1,150 +1,140 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { json, preflight } from '../_shared/cors.ts'
+import { clienteAdmin } from '../_shared/auth.ts'
+import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { paramsDoAgente } from '../_shared/params.ts'
+import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
+import { blocoPerfil, buscarConhecimento, tomDoAssistente } from '../_shared/perfil.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const AGENTE = 'plano_acao'
 
-serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+/**
+ * Prompt padrão. O admin pode sobrescrevê-lo pelo painel (chave ef_plano_acao);
+ * os placeholders são preenchidos aqui e não podem ser removidos na edição.
+ */
+const PROMPT_PADRAO = `Você é um especialista em gestão de restaurantes e operações.
+Baseado na ação descrita abaixo, gere um plano detalhado de ação PARA ESTE restaurante.
 
-  try {
-    const body = await req.json().catch(() => ({}))
-    const acao_id = body.acao_id
-
-    if (!acao_id) {
-      throw new Error('acao_id é obrigatório')
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    })
-
-    // Buscar dados da ação
-    const { data: acao, error: acaoErr } = await supabaseAdmin
-      .from('acoes_operacionais')
-      .select('*')
-      .eq('id', acao_id)
-      .single()
-
-    if (acaoErr) throw acaoErr
-    if (!acao) {
-      throw new Error('Ação não encontrada')
-    }
-
-    // Buscar insights relacionados para contexto
-    const { data: insights, error: insightsErr } = await supabaseAdmin
-      .from('insights')
-      .select('*')
-      .eq('restaurante_id', acao.restaurante_id)
-      .eq('ativo', true)
-      .limit(5)
-
-    if (insightsErr) throw insightsErr
-
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.5-flash-lite'
-
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY não configurada')
-    }
-
-    const contextoPrincipal = `
-Ação: ${acao.titulo_acao}
-Categoria: ${acao.categoria}
-Prioridade: ${acao.prioridade}
-Status: ${acao.status}
-`
-
-    const contextoInsights =
-      insights && insights.length > 0
-        ? `Insights relacionados:\n${insights.map((i) => `- ${i.titulo}: ${i.descricao}`).join('\n')}`
-        : ''
-
-    const prompt = `Você é um especialista em gestão de restaurantes e operações.
-Baseado na ação descrita abaixo, gere um plano detalhado de ação.
+{tom}
 
 O plano deve:
 1. Explicar COMO resolver o problema
 2. Ser orientador e prático, sem ser rígido demais
 3. Fornecer direcionamentos claros para a equipe
-4. Ser realista e aplicável no contexto de um restaurante
+4. Levar em conta o porte, o público e a realidade deste restaurante — nada de
+   conselho genérico que serviria para qualquer lugar
 
-Contexto:
-${contextoPrincipal}
+## Sobre este restaurante
+{perfil}
 
-${contextoInsights}
+## Ação
+{acao}
+
+{insights}
+
+{conhecimento}
 
 Retorne SOMENTE um JSON neste formato, sem markdown:
 {
   "plano_detalhado": "Seu plano aqui com múltiplas linhas se necessário"
 }`
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://feedbackinteligente.app',
-      },
-      body: JSON.stringify({
-        model: modelo,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-      }),
+serve(async (req: Request) => {
+  const pre = preflight(req)
+  if (pre) return pre
+
+  try {
+    const body = await req.json().catch(() => ({}))
+    const acaoId = body.acao_id
+    if (!acaoId) return json({ error: 'acao_id é obrigatório' }, 400)
+
+    const db = clienteAdmin()
+
+    const { data: acao, error: acaoErr } = await db
+      .from('acoes_operacionais')
+      .select('*')
+      .eq('id', acaoId)
+      .single()
+    if (acaoErr) throw acaoErr
+    if (!acao) return json({ error: 'Ação não encontrada' }, 404)
+
+    // Antes esta função rodava sem nenhum dado do restaurante e sobrescrevia
+    // com um plano genérico o plano contextualizado que sugerir-acoes havia
+    // gerado. Agora ela recebe o mesmo contexto.
+    const { data: restaurante } = await db
+      .from('restaurantes')
+      .select('nome_restaurante, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante, mascote_config')
+      .eq('id', acao.restaurante_id)
+      .maybeSingle()
+
+    const { data: insights } = await db
+      .from('insights')
+      .select('titulo, descricao')
+      .eq('restaurante_id', acao.restaurante_id)
+      .eq('ativo', true)
+      .limit(5)
+
+    const contextoAcao = [
+      `Título: ${acao.titulo_acao}`,
+      acao.categoria ? `Categoria: ${acao.categoria}` : '',
+      acao.prioridade ? `Prioridade: ${acao.prioridade}` : '',
+      acao.status ? `Status: ${acao.status}` : '',
+    ].filter(Boolean).join('\n')
+
+    const blocoInsights = insights?.length
+      ? `## Insights relacionados\n${insights.map((i: { titulo: string; descricao: string }) => `- ${i.titulo}: ${i.descricao}`).join('\n')}`
+      : ''
+
+    const conhecimento = await buscarConhecimento(
+      db,
+      acao.restaurante_id,
+      `${acao.titulo_acao} ${acao.categoria ?? ''}`,
+      4,
+    )
+    const blocoConhecimento = conhecimento
+      ? `## Boas práticas de referência (use para embasar o plano)\n${conhecimento}`
+      : ''
+
+    const prompts = await carregarPrompts(db)
+    const prompt = montarPrompt(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
+      tom: tomDoAssistente(restaurante?.mascote_config),
+      perfil: blocoPerfil(restaurante),
+      acao: contextoAcao,
+      insights: blocoInsights,
+      conhecimento: blocoConhecimento,
     })
 
-    if (!response.ok) {
-      throw new Error(`OpenRouter API Error: ${await response.text()}`)
-    }
+    const params = await paramsDoAgente(db, AGENTE, {
+      response_format: { type: 'json_object' },
+      max_tokens: 1200,
+    })
+    if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
 
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content ?? '{}'
+    const { result } = await chamarIA(db, {
+      messages: [{ role: 'user', content: prompt }],
+      params,
+      origem: 'gerar-plano-acao',
+      restauranteId: acao.restaurante_id,
+      agenteId: AGENTE,
+    })
 
-    let planoGerado = ''
-    try {
-      const parsed = JSON.parse(content)
-      planoGerado = parsed.plano_detalhado || ''
-    } catch (e) {
-      planoGerado = content
-    }
+    const planoGerado =
+      typeof result === 'string' ? result : (result?.plano_detalhado ?? '')
+    if (!planoGerado) return json({ error: 'Não foi possível gerar o plano' }, 502)
 
-    if (!planoGerado) {
-      throw new Error('Não foi possível gerar o plano')
-    }
-
-    // Atualizar a ação com o novo plano
-    const { data: acaoAtualizada, error: updateErr } = await supabaseAdmin
+    const { error: updateErr } = await db
       .from('acoes_operacionais')
       .update({ plano_detalhado: planoGerado })
-      .eq('id', acao_id)
-      .select()
-      .single()
-
+      .eq('id', acaoId)
     if (updateErr) throw updateErr
 
-    return new Response(
-      JSON.stringify({
-        status: 'sucesso',
-        plano_detalhado: planoGerado,
-        acao_id: acao_id,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
-    )
-  } catch (err: any) {
-    const errMsg =
-      err?.message || err?.details || err?.hint || JSON.stringify(err) || 'unknown error'
-    return new Response(JSON.stringify({ error: errMsg, code: err?.code, raw: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return json({ status: 'sucesso', plano_detalhado: planoGerado, acao_id: acaoId })
+  } catch (err) {
+    if (err instanceof ErroCota) {
+      return json({ error: 'Crédito de IA esgotado neste ciclo', codigo: 'sem_credito' }, 402)
+    }
+    // deno-lint-ignore no-explicit-any
+    const e = err as any
+    return json({ error: e?.message || String(err), code: e?.code }, 500)
   }
 })

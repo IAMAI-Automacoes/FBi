@@ -3,6 +3,7 @@ import { CAMPOS_CONFIG, anexarTextoLivre } from '@/lib/queries/config-update'
 import { AcaoAgente, FormularioIA, validarAcao } from '@/lib/queries/agente-ia'
 import { Comando } from './comandos'
 import { montarPrompt } from './prompt-store'
+import { paramsDoAgente } from './params'
 
 /**
  * Time de agentes especializados.
@@ -74,7 +75,8 @@ Não invente nada que não esteja no documento. Português do Brasil.`, { nome, 
         },
         { role: 'user', content: 'Analise e responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 800 },
+      paramsDoAgente('documentos', { ...JSON_OPTS, max_tokens: 800 }),
+      'documentos',
     )
     const d = parse(res)
     if (!d) return { ...base, erro: 'não consegui interpretar o conteúdo' }
@@ -154,7 +156,8 @@ Se não encontrar nada confiável, diga isso em uma linha.`,
         },
         { role: 'user', content: termos },
       ],
-      { web: true, max_tokens: 700, temperature: 0 },
+      { ...paramsDoAgente('pesquisa_web', { max_tokens: 700, temperature: 0 }), web: true },
+      'pesquisa_web',
     )
     return { resumo: texto, fontes }
   } catch {
@@ -222,7 +225,8 @@ Se nenhum servir, devolva { "uteis": [] }.`,
         },
         { role: 'user', content: 'Selecione e responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 150 },
+      paramsDoAgente('curador', { ...JSON_OPTS, max_tokens: 150 }),
+      'curador',
     )
     const d = parse(res)
     const indices: number[] = Array.isArray(d?.uteis) ? d.uteis : []
@@ -267,7 +271,8 @@ Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vaz
         },
         { role: 'user', content: 'Monte no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 500 },
+      paramsDoAgente('montar_acao_insight', { ...JSON_OPTS, max_tokens: 500 }),
+      'montar_acao_insight',
     )
     const d = parse(res)
     if (!d?.titulo_acao) return null
@@ -315,7 +320,8 @@ temAssunto é false e "assunto" fica vazio.`, { alvo, pedido }),
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 120 },
+      paramsDoAgente('extrair_assunto', { ...JSON_OPTS, max_tokens: 120 }),
+      'extrair_assunto',
     )
     const d = parse(res)
     const assunto = String(d?.assunto || '').trim()
@@ -390,7 +396,8 @@ Responda APENAS com este JSON:
         },
         { role: 'user', content: 'Monte as perguntas no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 500 },
+      paramsDoAgente('montar_perguntas', { ...JSON_OPTS, max_tokens: 500 }),
+      'montar_perguntas',
     )
     const d = parse(res)
     if (!d || !Array.isArray(d.campos) || d.campos.length === 0) return null
@@ -439,7 +446,8 @@ Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vaz
         },
         { role: 'user', content: 'Monte no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 500 },
+      paramsDoAgente('montar_acao_insight', { ...JSON_OPTS, max_tokens: 500 }),
+      'montar_acao_insight',
     )
     const d = parse(res)
     if (!d?.titulo) return null
@@ -479,7 +487,8 @@ Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corre
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 200 },
+      paramsDoAgente('montar_config', { ...JSON_OPTS, max_tokens: 200 }),
+      'montar_config',
     )
     const d = parse(res)
     // O "|" é o separador de comando: se vazar para o valor ("raverzão|raver"),
@@ -516,18 +525,19 @@ export async function identificarItem(
       [
         {
           role: 'system',
-          content: `Qual item da lista o dono está mencionando? Só isso.
+          content: montarPrompt('ag_identificar_item', `Qual item da lista o dono está mencionando? Só isso.
 
 Lista: ${JSON.stringify(lista)}
 Pedido dele: "${pedido}"
 
 Responda APENAS com este JSON: { "id": "<id exato da lista, ou null>" }
 Use o id EXATO de um item. Se nenhum corresponder claramente ao pedido, devolva null.
-Não invente id.`,
+Não invente id.`, { lista: JSON.stringify(lista), pedido }),
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 60 },
+      paramsDoAgente('identificar_item', { ...JSON_OPTS, max_tokens: 60 }),
+      'identificar_item',
     )
     const d = parse(res)
     const id = d?.id ? String(d.id) : null
@@ -555,7 +565,7 @@ async function montarMudanca(
       [
         {
           role: 'system',
-          content: `O dono quer alterar ESTE ${alvo === 'acao' ? 'ação' : 'insight'}:
+          content: montarPrompt('ag_montar_mudanca', `O dono quer alterar ESTE ${alvo === 'acao' ? 'ação' : 'insight'}:
 ${JSON.stringify(item)}
 
 Pedido dele: "${pedido}"
@@ -563,11 +573,17 @@ Pedido dele: "${pedido}"
 Responda APENAS com este JSON: { "campos": { ...só os campos que mudam } }
 Campos possíveis: ${campos}
 Inclua SOMENTE o que o dono pediu para mudar, com o valor novo. Não repita o que já está
-igual. Se não der para entender o que muda, devolva { "campos": {} }.`,
+igual. Se não der para entender o que muda, devolva { "campos": {} }.`, {
+            alvo: alvo === 'acao' ? 'ação' : 'insight',
+            item: JSON.stringify(item),
+            pedido,
+            campos,
+          }),
         },
         { role: 'user', content: 'Responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 300 },
+      paramsDoAgente('montar_mudanca', { ...JSON_OPTS, max_tokens: 300 }),
+      'montar_mudanca',
     )
     const d = parse(res)
     return d?.campos && typeof d.campos === 'object' && Object.keys(d.campos).length ? d.campos : null
@@ -747,7 +763,8 @@ naturalmente, mencionando só o que está no resultado.`, { nome, relatorio, ins
         },
         { role: 'user', content: 'Escreva a resposta para o dono.' },
       ],
-      { temperature: 0.3, max_tokens: 200 },
+      paramsDoAgente('narrador', { temperature: 0.3, max_tokens: 200 }),
+      'narrador',
     )
     const txt = (typeof res === 'string' ? res : '').trim()
     return txt || narracaoReserva(descricao, situacao)
@@ -814,7 +831,8 @@ EXEMPLOS:
         },
         { role: 'user', content: 'Classifique e responda no formato JSON pedido.' },
       ],
-      { ...JSON_OPTS, max_tokens: 400 },
+      paramsDoAgente('persistir', { ...JSON_OPTS, max_tokens: 400 }),
+      'persistir',
     )
     const d = parse(res)
     const acoes: any[] = Array.isArray(d?.acoes) ? d.acoes : []

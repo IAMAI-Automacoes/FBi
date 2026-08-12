@@ -20,6 +20,7 @@ import {
 import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
+import { PainelUsoIA } from '@/pages/admin/PainelUsoIA'
 import {
   buscarTodasSugestoes, responderSugestao, uploadArquivosResposta,
   editarRespostaAdmin, excluirRespostaAdmin, excluirArquivosAdmin,
@@ -1014,10 +1015,10 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento'
+type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia'
 
 const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento',
+  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA',
 }
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
@@ -1357,7 +1358,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento'] as Tab[]).map((tab) => (
+          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia'] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
@@ -1746,6 +1747,13 @@ export default function Admin() {
 
         {/* ── CONHECIMENTO GLOBAL ── */}
         {activeTab === 'conhecimento' && <ConhecimentoGlobal />}
+
+        {/* ── USO E CUSTO DE IA ── */}
+        {activeTab === 'uso_ia' && (
+          <div className="flex-1 overflow-y-auto sem-barra p-6">
+            <PainelUsoIA />
+          </div>
+        )}
       </div>
 
       {/* ── Dialog: Divisão ── */}

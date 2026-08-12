@@ -195,6 +195,7 @@ export function ChatFab({
     removerUltimaMensagem, excluirMensagem, rebobinarPara, anexarProposta,
     marcarPropostaAplicada, desmarcarPropostaPorRegistro, anexarRegistro, removerRegistro,
     registrarTroca, setLoading, carregarHistorico, novaConversa, mudarSessao,
+    uso, creditoEsgotado,
   } = useChat('global')
 
   const [message, setMessage] = useState('')
@@ -1421,11 +1422,36 @@ export function ChatFab({
                   />
                 ) : (
                 <>
+                {/* Crédito do ciclo: só aparece quando já passou da metade, para
+                    não poluir a conversa de quem mal usou. */}
+                {uso && uso.limite > 0 && uso.gasto / uso.limite >= 0.5 && (
+                  <div className="mb-2 px-0.5">
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className={creditoEsgotado ? 'text-red-600 font-medium' : 'text-gray-500'}>
+                        {creditoEsgotado
+                          ? 'Crédito de IA esgotado neste ciclo'
+                          : 'Crédito de IA do ciclo'}
+                      </span>
+                      <span className="text-gray-400 font-mono">
+                        US$ {uso.gasto.toFixed(2)} / {uso.limite.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full transition-all', creditoEsgotado ? 'bg-red-500' : 'bg-amber-400')}
+                        style={{ width: `${Math.min((uso.gasto / uso.limite) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Compositor: texto ocupa a largura toda, botões na barra de baixo */}
                 <div
                   className={cn(
                     'rounded-xl border bg-white transition-colors',
-                    loading ? 'border-gray-200' : 'border-gray-200 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100',
+                    loading || creditoEsgotado
+                      ? 'border-gray-200'
+                      : 'border-gray-200 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100',
                   )}
                 >
                   <input
@@ -1437,7 +1463,11 @@ export function ChatFab({
                     onChange={handleImageSelect}
                   />
                   <Textarea
-                    placeholder={`Pergunte ao ${mascoteNome}...`}
+                    placeholder={
+                      creditoEsgotado
+                        ? 'Crédito de IA esgotado — renova junto com a assinatura'
+                        : `Pergunte ao ${mascoteNome}...`
+                    }
                     className="min-h-[52px] max-h-[120px] resize-none border-0 bg-transparent px-3 pt-2.5 pb-0 text-sm shadow-none focus-visible:ring-0"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -1447,7 +1477,7 @@ export function ChatFab({
                         handleSend(message)
                       }
                     }}
-                    disabled={loading}
+                    disabled={loading || creditoEsgotado}
                   />
                   <div className="flex items-center gap-1 px-2 pb-2 pt-1">
                     <button
@@ -1481,7 +1511,7 @@ export function ChatFab({
                       size="icon"
                       className="h-7 w-7 bg-[#1D4ED8] hover:bg-blue-800 text-white rounded-md disabled:opacity-40"
                       onClick={() => handleSend(message)}
-                      disabled={(!message.trim() && !anexos.length) || loading || enviandoImagem}
+                      disabled={(!message.trim() && !anexos.length) || loading || enviandoImagem || creditoEsgotado}
                     >
                       <Send className="h-3.5 w-3.5" />
                     </Button>

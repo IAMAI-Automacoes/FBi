@@ -7,6 +7,7 @@ import {
   PeriodInfo,
 } from '@/lib/queries/visao-geral'
 import { enviarMensagem } from '@/lib/openrouter'
+import { paramsDoAgente } from '@/lib/ia/params'
 import {
   construirSystemPromptResumoExecutivo,
   construirSystemPromptRelatorioEstruturado,
@@ -276,7 +277,8 @@ export async function gerarAnaliseRelatorio(dados: any): Promise<AnaliseRelatori
         { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Gere a análise do relatório no formato JSON pedido.' },
       ],
-      { response_format: { type: 'json_object' } },
+      paramsDoAgente('relatorio_estruturado', { response_format: { type: 'json_object' } }),
+      'relatorio_estruturado',
     )
 
     const bruto =
@@ -307,13 +309,27 @@ export async function gerarAnaliseRelatorio(dados: any): Promise<AnaliseRelatori
   }
 }
 
-export async function gerarResumoExecutivo(dadosRelatorio: any) {
-  const systemPrompt = construirSystemPromptResumoExecutivo(dadosRelatorio)
-  const resposta = await enviarMensagem([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: 'Gere o resumo executivo do relatório.' },
-  ])
-  return String(resposta)
+/**
+ * Resumo executivo em texto corrido, para o dono ler antes de abrir o PDF.
+ * Falhar aqui não pode impedir a geração do relatório, então devolve string
+ * vazia e a tela simplesmente não mostra a seção.
+ */
+export async function gerarResumoExecutivo(dadosRelatorio: any): Promise<string> {
+  try {
+    const systemPrompt = construirSystemPromptResumoExecutivo(dadosRelatorio)
+    const resposta = await enviarMensagem(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Gere o resumo executivo do relatório.' },
+      ],
+      paramsDoAgente('resumo_executivo', { max_tokens: 400 }),
+      'resumo_executivo',
+    )
+    return String(resposta ?? '')
+  } catch (err) {
+    console.warn('Resumo executivo indisponível:', err)
+    return ''
+  }
 }
 
 export async function salvarRelatorio(

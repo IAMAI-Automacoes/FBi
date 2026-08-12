@@ -1,99 +1,106 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { json, preflight } from '../_shared/cors.ts'
+import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
+import { paramsDoAgente, type ParamsAgente } from '../_shared/params.ts'
+import { chamarIA, ErroCota, ErroIA } from '../_shared/openrouter.ts'
+import { avaliarEscopo, ultimaMensagemDoUsuario } from '../_shared/escopo.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+/**
+ * Proxy de IA do chat.
+ *
+ * Antes esta função aceitava qualquer requisição sem autenticação e repassava
+ * ao OpenRouter o modelo e os limites que o cliente pedisse — ou seja, qualquer
+ * pessoa com a URL podia gastar a chave da plataforma. Agora ela exige sessão,
+ * resolve o restaurante, aplica a cota mensal e decide os parâmetros no
+ * servidor a partir de `agentes_ia`.
+ */
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+/** Teto de segurança: nem o admin consegue configurar um agente acima disto. */
+const MAX_TOKENS_TETO = 4000
+
+serve(async (req: Request) => {
+  const pre = preflight(req)
+  if (pre) return pre
 
   try {
-    const { messages, options = {} } = await req.json()
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.0-flash-exp:free'
+    const { messages, options = {}, agente_id: agenteId = 'assistente' } = await req.json()
 
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'OPENROUTER_API_KEY not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!Array.isArray(messages) || !messages.length) {
+      return json({ error: 'Nenhuma mensagem enviada' }, 400)
     }
 
-    // Busca na web (plugin do OpenRouter). Só é ligada quando o cliente pede,
-    // porque cada busca tem custo por requisição.
-    const web = options.web === true
-    const maxResultados = Math.min(Math.max(Number(options.web_max_results) || 4, 1), 8)
+    const admin = clienteAdmin()
 
-    const body = {
-      model: options.model || modelo,
+    // ── Quem está pedindo ──
+    const auth = await autenticarRestaurante(
+      req,
+      admin,
+      'id, auth_user_id, assinatura_status, excluida_em',
+    )
+    if (!auth.ok) return json({ error: auth.erro }, auth.status)
+    const { restaurante } = auth
+
+    if (restaurante.linha.excluida_em) {
+      return json({ error: 'Conta encerrada' }, 403)
+    }
+
+    // O paywall existia apenas como redirect no React, o que não impedia
+    // chamadas diretas à função.
+    if (restaurante.assinatura_status !== 'ativa') {
+      return json({ error: 'Assinatura inativa', codigo: 'sem_assinatura' }, 403)
+    }
+
+    // ── Escopo: barra o off-topic antes de gastar token ──
+    const veredicto = avaliarEscopo(ultimaMensagemDoUsuario(messages))
+    if (!veredicto.permitido) {
+      return json({ result: veredicto.motivo, fontes: [], fora_de_escopo: true }, 200)
+    }
+
+    // ── Parâmetros: decididos aqui, não pelo cliente ──
+    const padrao: ParamsAgente = {}
+    if (options.response_format?.type === 'json_object') {
+      padrao.response_format = { type: 'json_object' }
+    }
+    if (typeof options.temperature === 'number') padrao.temperature = options.temperature
+    if (typeof options.max_tokens === 'number') padrao.max_tokens = options.max_tokens
+    if (options.web === true) {
+      padrao.web = true
+      padrao.web_max_results = Number(options.web_max_results) || 4
+    }
+
+    const params = await paramsDoAgente(admin, String(agenteId), padrao)
+    if (!params) {
+      return json({ error: 'Este agente está desativado pelo administrador' }, 503)
+    }
+
+    // `options.model` do cliente é ignorado de propósito: era o caminho para
+    // escolher um modelo caro por fora do painel.
+    params.max_tokens = Math.min(params.max_tokens ?? 1000, MAX_TOKENS_TETO)
+
+    const { result, fontes } = await chamarIA(admin, {
       messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 1000,
-      ...(options.response_format ? { response_format: options.response_format } : {}),
-      ...(web
-        ? {
-            plugins: [
-              {
-                id: 'web',
-                max_results: maxResultados,
-                // Sem pedir citação: as fontes vão para um botão separado na interface
-                search_prompt:
-                  'Uma busca na web foi feita hoje. Use os resultados abaixo para responder com informacao atual. Escreva apenas a resposta, sem citar links, sem nomear os sites e sem lista de fontes no final.',
-              },
-            ],
-          }
-        : {}),
-    }
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://feedbackinteligente.app',
-      },
-      body: JSON.stringify(body),
+      params,
+      origem: 'chat',
+      restauranteId: restaurante.id,
+      agenteId: String(agenteId),
     })
 
-    if (!response.ok) {
-      const err = await response.text()
-      return new Response(
-        JSON.stringify({ error: `OpenRouter error: ${response.status}`, detail: err }),
+    return json({ result, fontes })
+  } catch (err) {
+    if (err instanceof ErroCota) {
+      return json(
         {
-          status: response.status,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          error: 'Crédito de IA esgotado neste ciclo',
+          codigo: 'sem_credito',
+          gasto: err.gasto,
+          limite: err.limite,
         },
+        402,
       )
     }
-
-    const data = await response.json()
-    const message = data.choices?.[0]?.message ?? {}
-    const content = message.content ?? ''
-
-    // Fontes usadas pela busca (annotations do padrão OpenRouter)
-    const fontes = Array.isArray(message.annotations)
-      ? message.annotations
-          .filter((a: any) => a?.type === 'url_citation' && a?.url_citation?.url)
-          .map((a: any) => ({ url: a.url_citation.url, titulo: a.url_citation.title ?? '' }))
-      : []
-
-    let result = content
-    if (options.response_format?.type === 'json_object') {
-      try {
-        result = JSON.parse(content)
-      } catch {
-        result = content
-      }
+    if (err instanceof ErroIA) {
+      return json({ error: err.message, detail: err.detalhe }, err.status)
     }
-
-    return new Response(JSON.stringify({ result, fontes }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return json({ error: String(err) }, 500)
   }
 })

@@ -15,7 +15,7 @@ import {
   buscarKpis, buscarTendencia, getPeriodDates, PeriodInfo,
 } from '@/lib/queries/visao-geral'
 import {
-  buscarEstatisticasRelatorio, gerarAnaliseRelatorio,
+  buscarEstatisticasRelatorio, gerarAnaliseRelatorio, gerarResumoExecutivo, salvarRelatorio,
   EstatisticasRelatorio, AnaliseRelatorio,
 } from '@/lib/queries/relatorios'
 import { gerarPdfRelatorio } from '@/lib/pdf/gerar-pdf-relatorio'
@@ -90,6 +90,7 @@ export default function Reports() {
   const [gerandoPdf, setGerandoPdf] = useState(false)
   const [gerandoCsv, setGerandoCsv] = useState(false)
   const [analise, setAnalise] = useState<AnaliseRelatorio | null>(null)
+  const [resumoExecutivo, setResumoExecutivo] = useState<string>('')
   const [analisando, setAnalisando] = useState(false)
 
   const restauranteId = profile?.restaurante_id ?? null
@@ -241,9 +242,24 @@ export default function Reports() {
     if (!kpis || !stats) return
     setAnalisando(true)
     try {
-      const a = await gerarAnaliseRelatorio(await montarDados())
+      const dados = await montarDados()
+      // O resumo executivo sai junto: é a leitura em texto corrido que o dono
+      // lê na tela, sem precisar abrir o PDF.
+      const [a, resumo] = await Promise.all([
+        gerarAnaliseRelatorio(dados),
+        gerarResumoExecutivo(dados),
+      ])
       setAnalise(a)
+      setResumoExecutivo(resumo)
       if (!a.porIa) toast.warning('A IA não respondeu — mostrando a leitura calculada.')
+
+      if (restauranteId) {
+        // Guarda o histórico do período; falhar aqui não pode esconder a
+        // análise que já está na tela.
+        salvarRelatorio(restauranteId, PERIOD_LABEL[period], dados, resumo, '').catch((err) =>
+          console.warn('Não foi possível salvar o relatório:', err),
+        )
+      }
     } catch (e: any) {
       toast.error('Erro ao gerar a análise', { description: e.message })
     } finally {
@@ -446,6 +462,14 @@ export default function Reports() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{analise.resumo}</p>
+                  {resumoExecutivo && (
+                    <div className="rounded-lg bg-white border border-primary/15 p-3.5">
+                      <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-1.5">
+                        Resumo executivo
+                      </p>
+                      <p className="text-sm text-foreground leading-relaxed">{resumoExecutivo}</p>
+                    </div>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-lg border-l-2 border-emerald-500 bg-white p-3">
                       <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">Ponto forte</p>

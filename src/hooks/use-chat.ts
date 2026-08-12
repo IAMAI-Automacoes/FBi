@@ -1,6 +1,8 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { enviarMensagemComFontes, ChatMessage, FonteWeb } from '@/lib/openrouter'
+import { enviarMensagemComFontes, ChatMessage, FonteWeb, ErroIA } from '@/lib/openrouter'
+import { paramsDoAgente } from '@/lib/ia/params'
+import { buscarUsoCiclo, UsoCiclo } from '@/lib/queries/uso-ia'
 import { construirSystemPromptChef } from '@/lib/prompts-sistema'
 import { memorizarDaConversa, FatoMemoria } from '@/lib/queries/memoria-assistente'
 import { buscarConhecimento, extrairTextoDeUrl as lerPagina } from '@/lib/queries/conhecimento'
@@ -65,6 +67,9 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
   const [loading, setLoading] = useState(false)
   const [buscandoWeb, setBuscandoWeb] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Crédito do ciclo: alimenta a barra e trava o envio quando acaba
+  const [uso, setUso] = useState<UsoCiclo | null>(null)
+  const [creditoEsgotado, setCreditoEsgotado] = useState(false)
   // Espelha o state para o envio não depender de um render acontecer antes
   const messagesRef = useRef<MensagemChat[]>([])
   // Trava recargas de histórico enquanto há um envio em andamento
@@ -256,7 +261,11 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
       // temperatura 0: a decisão de emitir (ou não) um comando precisa ser
       // determinística — testado 16/16 casos. A prosa da busca vem na fase 2.
       const resposta1 = (
-        await enviarMensagemComFontes(montarMensagens(sysPrompt1), { temperature: 0 })
+        await enviarMensagemComFontes(
+          montarMensagens(sysPrompt1),
+          paramsDoAgente('assistente', { temperature: 0 }),
+          'assistente',
+        )
       ).texto
 
       // Override (ex.: análise inicial do AiChatSheet) não usa comandos
@@ -297,7 +306,13 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
           jaBuscou: web,
           semComandos: true,
         })
-        const resposta2 = (await enviarMensagemComFontes(montarMensagens(sysPrompt2))).texto
+        const resposta2 = (
+          await enviarMensagemComFontes(
+            montarMensagens(sysPrompt2),
+            paramsDoAgente('assistente'),
+            'assistente',
+          )
+        ).texto
         await mostrarEPersistir(removerComandos(resposta2) || resposta2, fontes)
         return {}
       }
@@ -344,12 +359,32 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
       await mostrarEPersistir(narr)
       return { acao }
     } catch (err: any) {
+      // Crédito esgotado e assinatura inativa não são falha técnica: viram
+      // resposta na conversa, com o motivo, em vez de um erro vermelho.
+      if (err instanceof ErroIA && (err.codigo === 'sem_credito' || err.codigo === 'sem_assinatura')) {
+        const texto =
+          err.codigo === 'sem_credito'
+            ? `Você usou todo o crédito de IA deste ciclo${
+                err.detalhes?.limite ? ` (US$ ${err.detalhes.limite.toFixed(2)})` : ''
+              }. Ele é renovado junto com a assinatura.`
+            : 'Sua assinatura não está ativa, então o assistente está indisponível.'
+        await mostrarEPersistir(texto)
+        setCreditoEsgotado(err.codigo === 'sem_credito')
+        return {}
+      }
       const msg = err.message || 'Erro ao comunicar com a IA'
       setError(msg)
       return { error: msg }
     } finally {
       enviandoRef.current = false
       setLoading(false)
+      // O custo real só é conhecido depois da resposta, então a barra é
+      // atualizada aqui — inclusive quando a chamada falhou no meio.
+      void buscarUsoCiclo().then((u) => {
+        if (!u) return
+        setUso(u)
+        setCreditoEsgotado(u.restante <= 0)
+      })
     }
   }
 
@@ -546,11 +581,22 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     [aplicar, sessaoId, contextoPagina],
   )
 
+  // Estado inicial do crédito, para a barra já aparecer certa ao abrir o chat.
+  useEffect(() => {
+    void buscarUsoCiclo().then((u) => {
+      if (!u) return
+      setUso(u)
+      setCreditoEsgotado(u.restante <= 0)
+    })
+  }, [])
+
   return {
     messages,
     loading,
     buscandoWeb,
     error,
+    uso,
+    creditoEsgotado,
     enviar,
     adicionarMensagemUsuario,
     removerUltimaMensagem,

@@ -1,5 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
+import { paramsDoAgente } from '../_shared/params.ts'
+import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
+import { blocoPerfil, buscarConhecimento, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,49 +13,48 @@ const corsHeaders = {
 }
 
 const MIN_FEEDBACKS_MANUAL = 3
+const AGENTE = 'gerador_insights'
 
-// @ts-ignore - Supabase.ai existe no runtime das edge functions
-const aiSession = new Supabase.ai.Session('gte-small')
+/** Padrão do código; o admin sobrescreve pela chave ef_gerar_insights no painel. */
+const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. Analise os feedbacks reais dos clientes e gere insights operacionais em JSON.
 
-function blocoPerfil(r: any): string {
-  const p = (r?.perfil_restaurante as any) || {}
-  const linhas = [
-    r?.nome_restaurante ? `Nome: ${r.nome_restaurante}` : '',
-    r?.tipo_culinaria ? `Tipo de cozinha: ${r.tipo_culinaria}` : '',
-    p.estilo ? `Estilo: ${p.estilo}` : '',
-    p.localizacao ? `Localizacao: ${p.localizacao}` : '',
-    r?.numero_mesas ? `Mesas: ${r.numero_mesas}` : '',
-    p.capacidade_lugares ? `Capacidade: ${p.capacidade_lugares} lugares` : '',
-    p.num_funcionarios ? `Equipe: ${p.num_funcionarios} funcionarios` : '',
-    p.faixa_preco ? `Ticket medio: ${p.faixa_preco}` : '',
-    p.publico_alvo ? `Publico: ${p.publico_alvo}` : '',
-    p.pratos_destaque ? `Pratos que mais saem: ${p.pratos_destaque}` : '',
-    p.diferenciais ? `Diferenciais: ${p.diferenciais}` : '',
-    p.desafios ? `Desafios relatados pelo dono: ${p.desafios}` : '',
-    r?.detalhes ? `Descricao do dono: ${r.detalhes}` : '',
-  ].filter(Boolean)
-  return linhas.length ? linhas.join('\n') : 'Perfil ainda nao preenchido.'
+{tom}
+
+## Sobre este restaurante
+{perfil}
+{memoria}
+{conhecimento}
+
+## Como classificar
+1. "URGENTE": qualquer risco sanitario (cabelo, inseto, alimento estragado, intoxicacao), risco a seguranca do cliente ou violacao grave. Classifique assim INDEPENDENTE do volume, mesmo com 1 relato.
+2. "IMPORTANTE": padroes relevantes, reclamacoes recorrentes e consistentes, pontos de melhoria fortes.
+3. "OBSERVACAO": assuntos notaveis, tendencias menores e elogios sem acao imediata.
+
+## Regras de qualidade
+- Baseie-se APENAS nos feedbacks abaixo. Nao invente reclamacao que nao existe.
+- A sugestao deve ser CONCRETA e executavel neste restaurante, considerando o perfil dele (tamanho, tipo de cozinha, publico). Nada de conselho generico.
+- Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
+- Agrupe feedbacks do mesmo tema num unico insight, nao repita.
+- Escreva em portugues do Brasil, direto, sem jargao.
+
+## Formato OBRIGATORIO (retorne SOMENTE este JSON)
+{
+  "insights": [
+    {
+      "prioridade": "URGENTE" | "IMPORTANTE" | "OBSERVACAO",
+      "categoria": "Servico" | "Comida" | "Ambiente" | "Preco" | "Agilidade" | "Geral",
+      "titulo": "Titulo curto e claro",
+      "descricao": "O que os feedbacks mostram, com o padrao observado",
+      "sugestao": "Acao pratica e especifica para a equipe resolver",
+      "feedbacks_relacionados": 2
+    }
+  ]
 }
 
-async function buscarConhecimento(db: any, restauranteId: number, consulta: string): Promise<string> {
-  try {
-    if (!consulta.trim()) return ''
-    const emb = await aiSession.run(consulta.slice(0, 4000), { mean_pool: true, normalize: true })
-    const { data } = await db.rpc('buscar_conhecimento_para', {
-      consulta_embedding: emb,
-      p_restaurante_id: restauranteId,
-      consulta_texto: consulta.slice(0, 500),
-      limite: 6,
-    })
-    if (!data || !data.length) return ''
-    return data.map((t: any, i: number) => `[${i + 1}] (${t.titulo})\n${t.conteudo}`).join('\n\n')
-  } catch (e) {
-    console.error('Falha na busca de conhecimento:', e)
-    return ''
-  }
-}
+## Feedbacks a analisar
+{feedbacks}`
 
-async function processarRestaurante(db: any, restauranteId: number, force: boolean, apiKey: string, modelo: string) {
+async function processarRestaurante(db: any, restauranteId: number, force: boolean, prompts: Prompts) {
   // A configuracao mora na tabela restaurantes (config_restaurantes nao existe)
   const { data: config, error: configErr } = await db
     .from('restaurantes')
@@ -73,7 +76,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
   const horas_entre_analises = config_insights.horas_entre_analises || 24
   const max_importantes = config_insights.max_importantes || 5
   const max_observacoes = config_insights.max_observacoes || 3
-  const mascoteNome = (config.mascote_config as any)?.nome || 'Chef Pepe'
+  const mascoteNome = nomeDoAssistente(config.mascote_config)
 
   const ultimaAnalise = config.ultima_analise_insights ? new Date(config.ultima_analise_insights) : null
 
@@ -125,70 +128,57 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
 
   const conhecimento = await buscarConhecimento(db, restauranteId, consultaConhecimento)
 
-  const prompt = `Voce e o "${mascoteNome}", consultor de gestao de restaurantes. Analise os feedbacks reais dos clientes e gere insights operacionais em JSON.
-
-## Sobre este restaurante
-${blocoPerfil(config)}
-${memoria?.length ? `\n## O que voce ja aprendeu sobre este restaurante (anotacoes)\n${memoria.map((m: any) => `- ${m.fato}`).join('\n')}` : ''}
-${conhecimento ? `\n## Boas praticas de referencia (use para embasar as sugestoes)\n${conhecimento}` : ''}
-
-## Como classificar
-1. "URGENTE": qualquer risco sanitario (cabelo, inseto, alimento estragado, intoxicacao), risco a seguranca do cliente ou violacao grave. Classifique assim INDEPENDENTE do volume, mesmo com 1 relato.
-2. "IMPORTANTE": padroes relevantes, reclamacoes recorrentes e consistentes, pontos de melhoria fortes.
-3. "OBSERVACAO": assuntos notaveis, tendencias menores e elogios sem acao imediata.
-
-## Regras de qualidade
-- Baseie-se APENAS nos feedbacks abaixo. Nao invente reclamacao que nao existe.
-- A sugestao deve ser CONCRETA e executavel neste restaurante, considerando o perfil dele (tamanho, tipo de cozinha, publico). Nada de conselho generico.
-- Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
-- Agrupe feedbacks do mesmo tema num unico insight, nao repita.
-- Escreva em portugues do Brasil, direto, sem jargao.
-
-## Formato OBRIGATORIO (retorne SOMENTE este JSON)
-{
-  "insights": [
-    {
-      "prioridade": "URGENTE" | "IMPORTANTE" | "OBSERVACAO",
-      "categoria": "Servico" | "Comida" | "Ambiente" | "Preco" | "Agilidade" | "Geral",
-      "titulo": "Titulo curto e claro",
-      "descricao": "O que os feedbacks mostram, com o padrao observado",
-      "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedbacks_relacionados": 2
-    }
-  ]
-}
-
-## Feedbacks a analisar
-${JSON.stringify((feedbacks || []).map((f: any) => ({ texto: f.texto_original, sentimento: f.sentimento, categoria: f.categoria })))}`
-
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://feedbackinteligente.app',
-    },
-    body: JSON.stringify({
-      model: modelo,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
-    }),
+  const prompt = montarPrompt(prompts, 'ef_gerar_insights', PROMPT_PADRAO, {
+    nome: mascoteNome,
+    tom: tomDoAssistente(config.mascote_config),
+    perfil: blocoPerfil(config),
+    memoria: memoria?.length
+      ? `\n## O que voce ja aprendeu sobre este restaurante (anotacoes)\n${memoria.map((m: any) => `- ${m.fato}`).join('\n')}`
+      : '',
+    conhecimento: conhecimento
+      ? `\n## Boas praticas de referencia (use para embasar as sugestoes)\n${conhecimento}`
+      : '',
+    feedbacks: JSON.stringify(
+      (feedbacks || []).map((f: any) => ({
+        texto: f.texto_original,
+        sentimento: f.sentimento,
+        categoria: f.categoria,
+      })),
+    ),
   })
 
-  if (!response.ok) {
-    console.error(`OpenRouter API Error (restaurante ${restauranteId}): ${await response.text()}`)
-    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'erro_ia' }
+  // A cota é por restaurante: um sem crédito não pode interromper o lote.
+  try {
+    await checarCota(db, restauranteId)
+  } catch (e) {
+    if (e instanceof ErroCota) {
+      return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'sem_credito' }
+    }
+    throw e
   }
 
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content ?? '[]'
+  const params = await paramsDoAgente(db, AGENTE, {
+    response_format: { type: 'json_object' },
+    max_tokens: 3000,
+  })
+  if (!params) {
+    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'agente_desativado' }
+  }
 
   let insightsGerados: any[] = []
   try {
-    const parsed = JSON.parse(content)
-    insightsGerados = Array.isArray(parsed) ? parsed : parsed.insights || []
-  } catch (parseErr) {
-    console.error('Falha ao parsear resposta da IA:', content, parseErr)
+    const { result } = await chamarIA(db, {
+      messages: [{ role: 'user', content: prompt }],
+      params,
+      origem: 'gerar-insights',
+      restauranteId,
+      agenteId: AGENTE,
+      checarCotaAntes: false,
+    })
+    insightsGerados = Array.isArray(result) ? result : (result?.insights || [])
+  } catch (err) {
+    console.error(`Falha ao gerar insights (restaurante ${restauranteId}):`, err)
+    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'erro_ia' }
   }
 
   if (insightsGerados.length > 0) {
@@ -247,9 +237,11 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const db = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
 
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.5-flash-lite'
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY nao configurada.')
+    if (!Deno.env.get('OPENROUTER_API_KEY')) throw new Error('OPENROUTER_API_KEY nao configurada.')
+
+    // Carregado uma vez por invocação: o lote inteiro usa a mesma versão dos
+    // prompts, e a próxima execução já pega a edição feita no painel.
+    const prompts = await carregarPrompts(db)
 
     const cronSecret = Deno.env.get('CRON_SECRET')
     const providedSecret = req.headers.get('x-cron-secret')
@@ -271,7 +263,7 @@ serve(async (req: Request) => {
       let insightsTotal = 0
       let processados = 0
       for (const r of restaurantes ?? []) {
-        const res = await processarRestaurante(db, r.id, false, apiKey, modelo)
+        const res = await processarRestaurante(db, r.id, false, prompts)
         insightsTotal += res.insights_gerados
         processados += 1
       }
@@ -304,7 +296,7 @@ serve(async (req: Request) => {
       })
     }
 
-    const result = await processarRestaurante(db, targetRestauranteId, force, apiKey, modelo)
+    const result = await processarRestaurante(db, targetRestauranteId, force, prompts)
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

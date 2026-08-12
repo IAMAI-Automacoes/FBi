@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import { enviarMensagem } from '@/lib/openrouter'
 import { construirSystemPromptMemoria } from '@/lib/prompts-sistema'
+import { paramsDoAgente } from '@/lib/ia/params'
 
 export interface FatoMemoria {
   id: string
@@ -42,7 +43,8 @@ export async function memorizarDaConversa(
         { role: 'system', content: construirSystemPromptMemoria(conversa, memoriaAtual.map((m) => m.fato)) },
         { role: 'user', content: 'Extraia os fatos no formato JSON pedido.' },
       ],
-      { response_format: { type: 'json_object' } },
+      paramsDoAgente('memoria_longo_prazo', { response_format: { type: 'json_object' } }),
+      'memoria_longo_prazo',
     )
 
     const parsed =

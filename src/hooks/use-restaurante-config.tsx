@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { carregarPromptsEditaveis } from '@/lib/ia/prompt-store'
+import { carregarParamsAgentes } from '@/lib/ia/params'
 
 export interface MascoteConfig {
   nome: string
@@ -84,8 +85,10 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
   useEffect(() => {
     if (usuario === undefined) return // auth ainda carregando
     fetchConfig()
-    // Carrega as sobrescritas de prompt (painel de admin) para a IA usar
+    // Carrega as sobrescritas do painel de admin (texto dos prompts e
+    // parâmetros de inferência) para os agentes usarem em runtime.
     void carregarPromptsEditaveis()
+    void carregarParamsAgentes()
   }, [usuario, fetchConfig])
 
   return (

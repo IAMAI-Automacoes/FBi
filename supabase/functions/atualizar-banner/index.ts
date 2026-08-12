@@ -1,61 +1,63 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { json, preflight } from '../_shared/cors.ts'
+import { clienteAdmin } from '../_shared/auth.ts'
+import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { paramsDoAgente } from '../_shared/params.ts'
+import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
+import { nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const AGENTE = 'banner'
+
+/** Padrão do código; o admin sobrescreve pela chave ef_banner no painel. */
+const PROMPT_PADRAO = `Você é o "{nome}", um assistente analisando feedbacks de clientes de um restaurante.
+Sua missão é gerar UMA frase curta (máximo 2 linhas, tom profissional e amigável) resumindo o
+destaque dos feedbacks das últimas horas.
+
+{tom}
+
+Exemplos: "Ontem recebemos 12 feedbacks, 83% positivos. Destaque: 4 elogios à nova sobremesa."
+ou "Nas últimas 24h, surgiram 3 menções negativas sobre tempo de espera. Vale investigar."
+NÃO use formatação JSON nem markdown (asteriscos). Retorne apenas o texto puro da frase.
+
+Feedbacks a analisar:
+{feedbacks}`
+
+const TEXTO_PADRAO = 'Continue coletando feedbacks para receber insights do Chef Pepê.'
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const pre = preflight(req)
+  if (pre) return pre
 
   try {
     const body = await req.json().catch(() => ({}))
-    const { restaurante_id, force = false, process_all = false } = body
+    const { restaurante_id: restauranteId, force = false, process_all: processAll = false } = body
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    })
+    const db = clienteAdmin()
 
     let restaurantes: { id: number }[] = []
-
-    if (process_all) {
-      const { data } = await supabaseAdmin
-        .from('restaurantes')
-        .select('id')
-        .eq('ativo', true)
-        .is('excluida_em', null)
+    if (processAll) {
+      const { data } = await db
+        .from('restaurantes').select('id').eq('ativo', true).is('excluida_em', null)
       restaurantes = data || []
-    } else if (restaurante_id) {
-      restaurantes = [{ id: restaurante_id }]
+    } else if (restauranteId) {
+      restaurantes = [{ id: restauranteId }]
     } else {
-      const { data } = await supabaseAdmin
-        .from('restaurantes')
-        .select('id')
-        .eq('ativo', true)
-        .is('excluida_em', null)
-        .limit(1)
+      const { data } = await db
+        .from('restaurantes').select('id').eq('ativo', true).is('excluida_em', null).limit(1)
       restaurantes = data || []
     }
 
-    if (restaurantes.length === 0) {
-      return new Response(JSON.stringify({ message: 'Nenhum restaurante encontrado.' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    if (!restaurantes.length) return json({ message: 'Nenhum restaurante encontrado.' })
+
+    const prompts = await carregarPrompts(db)
+    const params = await paramsDoAgente(db, AGENTE, { max_tokens: 200 })
+    if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
 
     const resultados = []
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.5-flash-lite'
 
     for (const rest of restaurantes) {
       try {
-        const { data: config, error: configErr } = await supabaseAdmin
+        const { data: config, error: configErr } = await db
           .from('restaurantes')
           .select('ultima_atualizacao_banner, mascote_config, excluida_em')
           .eq('id', rest.id)
@@ -82,76 +84,73 @@ serve(async (req: Request) => {
           continue
         }
 
-        const data24hAtras = new Date()
-        data24hAtras.setHours(data24hAtras.getHours() - 24)
+        const desde = (horas: number) => {
+          const d = new Date()
+          d.setHours(d.getHours() - horas)
+          return d.toISOString()
+        }
 
-        let { data: feedbacks } = await supabaseAdmin
+        // O filtro por restaurante_id faltava aqui: dentro do laço por
+        // restaurante, cada banner era gerado com os feedbacks de TODOS os
+        // restaurantes da plataforma.
+        let { data: feedbacks } = await db
           .from('feedbacks_restaurante')
           .select('texto_original, sentimento, categoria')
-          .gte('created_at', data24hAtras.toISOString())
+          .eq('restaurante_id', rest.id)
+          .gte('created_at', desde(24))
 
-        if (!feedbacks || feedbacks.length === 0) {
-          const data48hAtras = new Date()
-          data48hAtras.setHours(data48hAtras.getHours() - 48)
-          const { data: feedbacks48h } = await supabaseAdmin
+        if (!feedbacks?.length) {
+          const { data: feedbacks48h } = await db
             .from('feedbacks_restaurante')
             .select('texto_original, sentimento, categoria')
-            .gte('created_at', data48hAtras.toISOString())
+            .eq('restaurante_id', rest.id)
+            .gte('created_at', desde(48))
           feedbacks = feedbacks48h || []
         }
 
-        const textoPadrao = 'Continue coletando feedbacks para receber insights do Chef Pepê.'
-
         if (feedbacks.length < 3) {
-          await supabaseAdmin
+          await db
             .from('restaurantes')
             .update({
-              texto_banner: textoPadrao,
+              texto_banner: TEXTO_PADRAO,
               ultima_atualizacao_banner: new Date().toISOString(),
             })
             .eq('id', rest.id)
 
-          resultados.push({ id: rest.id, status: 'padrao_poucos_feedbacks', texto: textoPadrao })
+          resultados.push({ id: rest.id, status: 'padrao_poucos_feedbacks', texto: TEXTO_PADRAO })
           continue
         }
 
-        if (!apiKey) {
-          throw new Error('OPENROUTER_API_KEY ausente')
+        // A cota é por restaurante, então precisa ser checada dentro do laço:
+        // um restaurante sem crédito não pode interromper os demais.
+        try {
+          await checarCota(db, rest.id)
+        } catch (e) {
+          if (e instanceof ErroCota) {
+            resultados.push({ id: rest.id, status: 'sem_credito' })
+            continue
+          }
+          throw e
         }
 
-        const mascoteConfig = (config.mascote_config as any) || {}
-        const nomeMascote = mascoteConfig.nome || 'Chef Pepê'
-
-        const prompt = `Você é o "${nomeMascote}", um assistente analisando feedbacks de clientes de um restaurante.
-Sua missão é gerar UMA frase curta (máximo 2 linhas, tom profissional e amigável) resumindo o destaque dos feedbacks das últimas horas.
-Exemplos: "Ontem recebemos 12 feedbacks, 83% positivos. Destaque: 4 elogios à nova sobremesa." ou "Nas últimas 24h, surgiram 3 menções negativas sobre tempo de espera. Vale investigar."
-NÃO use formatação JSON nem markdown (asteriscos). Retorne apenas o texto puro da frase.
-Feedbacks a analisar:
-${JSON.stringify(feedbacks)}`
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://feedbackinteligente.app',
-          },
-          body: JSON.stringify({
-            model: modelo,
-            messages: [{ role: 'user', content: prompt }],
-          }),
+        const prompt = montarPrompt(prompts, 'ef_banner', PROMPT_PADRAO, {
+          nome: nomeDoAssistente(config.mascote_config),
+          tom: tomDoAssistente(config.mascote_config),
+          feedbacks: JSON.stringify(feedbacks),
         })
 
-        if (!response.ok) {
-          resultados.push({ id: rest.id, status: 'erro_api_llm' })
-          continue
-        }
+        const { result } = await chamarIA(db, {
+          messages: [{ role: 'user', content: prompt }],
+          params,
+          origem: 'atualizar-banner',
+          restauranteId: rest.id,
+          agenteId: AGENTE,
+          checarCotaAntes: false,
+        })
 
-        const aiData = await response.json()
-        const textoBanner =
-          aiData.choices?.[0]?.message?.content?.replace(/\*/g, '')?.trim() ?? textoPadrao
+        const textoBanner = String(result || '').replace(/\*/g, '').trim() || TEXTO_PADRAO
 
-        await supabaseAdmin
+        await db
           .from('restaurantes')
           .update({
             texto_banner: textoBanner,
@@ -160,18 +159,13 @@ ${JSON.stringify(feedbacks)}`
           .eq('id', rest.id)
 
         resultados.push({ id: rest.id, status: 'atualizado', texto: textoBanner })
-      } catch (err: any) {
-        resultados.push({ id: rest.id, status: 'erro', message: err.message })
+      } catch (err) {
+        resultados.push({ id: rest.id, status: 'erro', message: (err as Error).message })
       }
     }
 
-    return new Response(JSON.stringify({ message: 'Processamento concluído', resultados }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return json({ message: 'Processamento concluído', resultados })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
   }
 })

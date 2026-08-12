@@ -1,105 +1,95 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { json, preflight } from '../_shared/cors.ts'
+import { clienteAdmin } from '../_shared/auth.ts'
+import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { paramsDoAgente } from '../_shared/params.ts'
+import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
+import { blocoPerfil } from '../_shared/perfil.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const AGENTE = 'perguntas_direcionadas'
+
+/** Padrão do código; o admin sobrescreve pela chave ef_perguntas no painel. */
+const PROMPT_PADRAO = `Com base nesta ação que está sendo implementada no restaurante, gere 2 a 3
+perguntas curtas e naturais para fazer aos clientes, que captem se a solução está funcionando.
+As perguntas devem ser levemente direcionadas mas não enviesadas, e fazer sentido para o
+público deste restaurante.
+
+## Sobre este restaurante
+{perfil}
+
+## Ação
+Título: "{titulo}"
+Plano: "{plano}"
+Categoria: "{categoria}"
+
+Retorne APENAS um objeto JSON com a chave "perguntas" contendo um array de strings.`
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const pre = preflight(req)
+  if (pre) return pre
 
   try {
-    const { acao_id } = await req.json()
-    if (!acao_id) {
-      throw new Error('acao_id é obrigatório')
-    }
+    const { acao_id: acaoId } = await req.json().catch(() => ({}))
+    if (!acaoId) return json({ error: 'acao_id é obrigatório' }, 400)
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-    })
+    const db = clienteAdmin()
 
-    const { data: acao, error: acaoErr } = await supabaseAdmin
+    const { data: acao, error: acaoErr } = await db
       .from('acoes_operacionais')
-      .select('titulo_acao, plano_detalhado, categoria')
-      .eq('id', acao_id)
+      .select('titulo_acao, plano_detalhado, categoria, restaurante_id')
+      .eq('id', acaoId)
       .single()
+    if (acaoErr || !acao) return json({ error: 'Ação não encontrada' }, 404)
 
-    if (acaoErr || !acao) {
-      throw new Error('Ação não encontrada')
-    }
+    const { data: restaurante } = await db
+      .from('restaurantes')
+      .select('nome_restaurante, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante')
+      .eq('id', acao.restaurante_id)
+      .maybeSingle()
 
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.5-flash-lite'
-
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY não configurada')
-    }
-
-    const prompt = `Com base nesta ação que está sendo implementada no restaurante, gere 2 a 3 perguntas curtas e naturais para fazer aos clientes, que captem se a solução está funcionando. As perguntas devem ser levemente direcionadas mas não enviesadas. Retorne APENAS um objeto JSON com a chave "perguntas" contendo um array de strings.
-Ação: "${acao.titulo_acao}"
-Plano: "${acao.plano_detalhado}"
-Categoria: "${acao.categoria}"`
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://feedbackinteligente.app',
-      },
-      body: JSON.stringify({
-        model: modelo,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-      }),
+    const prompts = await carregarPrompts(db)
+    const prompt = montarPrompt(prompts, 'ef_perguntas', PROMPT_PADRAO, {
+      perfil: blocoPerfil(restaurante),
+      titulo: acao.titulo_acao ?? '',
+      plano: acao.plano_detalhado ?? '',
+      categoria: acao.categoria ?? '',
     })
 
-    if (!response.ok) {
-      throw new Error(`OpenRouter API Error: ${await response.text()}`)
-    }
+    const params = await paramsDoAgente(db, AGENTE, {
+      response_format: { type: 'json_object' },
+      max_tokens: 400,
+    })
+    if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
 
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content ?? '[]'
+    const { result } = await chamarIA(db, {
+      messages: [{ role: 'user', content: prompt }],
+      params,
+      origem: 'gerar-perguntas-direcionadas',
+      restauranteId: acao.restaurante_id,
+      agenteId: AGENTE,
+    })
 
     let perguntas: string[] = []
-    try {
-      const parsed = JSON.parse(content)
-      if (Array.isArray(parsed)) {
-        perguntas = parsed
-      } else if (parsed.perguntas && Array.isArray(parsed.perguntas)) {
-        perguntas = parsed.perguntas
-      } else {
-        perguntas = Object.values(parsed).filter((v) => typeof v === 'string') as string[]
-      }
-    } catch {
-      // Falha silenciosa
+    if (Array.isArray(result)) {
+      perguntas = result.filter((p): p is string => typeof p === 'string')
+    } else if (result && typeof result === 'object') {
+      perguntas = Array.isArray(result.perguntas)
+        ? result.perguntas.filter((p: unknown): p is string => typeof p === 'string')
+        : Object.values(result).filter((v): v is string => typeof v === 'string')
     }
 
-    if (perguntas.length > 0) {
-      const inserts = perguntas.slice(0, 3).map((p) => ({
-        acao_id,
-        pergunta: p,
-        ativa: true,
-      }))
-      const { error: insertErr } = await supabaseAdmin
-        .from('perguntas_direcionadas')
-        .insert(inserts)
+    if (perguntas.length) {
+      const { error: insertErr } = await db.from('perguntas_direcionadas').insert(
+        perguntas.slice(0, 3).map((p) => ({ acao_id: acaoId, pergunta: p, ativa: true })),
+      )
       if (insertErr) throw insertErr
     }
 
-    return new Response(JSON.stringify({ sucesso: true, perguntas_geradas: perguntas.length }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return json({ sucesso: true, perguntas_geradas: perguntas.length })
+  } catch (err) {
+    if (err instanceof ErroCota) {
+      return json({ error: 'Crédito de IA esgotado neste ciclo', codigo: 'sem_credito' }, 402)
+    }
+    return json({ error: (err as Error).message }, 500)
   }
 })
