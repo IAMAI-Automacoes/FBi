@@ -3,6 +3,7 @@ import type { PeriodInfo, DashboardData } from '@/lib/queries/visao-geral'
 import { KpiCards } from '@/components/dashboard/KpiCards'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { RecentFeedbacks } from '@/components/dashboard/RecentFeedbacks'
+import { TemasFeedback } from '@/components/dashboard/TemasFeedback'
 import {
   buscarKpis,
   buscarTendencia,
@@ -114,6 +115,7 @@ export default function Index() {
             period={period}
             onPeriodChange={setPeriod}
           />
+          <TemasFeedback restauranteId={usuario?.restaurante_id ?? null} />
           <RecentFeedbacks feedbacks={data.recentFeedbacks} />
         </>
       ) : null}

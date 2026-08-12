@@ -65,15 +65,15 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border bg-white text-sidebar-foreground">
       <SidebarHeader className="p-4 border-b border-border/50">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm overflow-hidden">
+          <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm overflow-hidden">
             {logoUrl ? (
               <img src={logoUrl} alt={nomeRestaurante} className="h-full w-full object-cover" />
             ) : (
-              <span className="text-sm font-bold">{getIniciais(nomeRestaurante, 2)}</span>
+              <span className="text-lg font-bold">{getIniciais(nomeRestaurante, 2)}</span>
             )}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-foreground leading-tight">
+            <span className="fonte-marca text-lg font-semibold text-foreground leading-tight">
               {nomeRestaurante}
             </span>
           </div>

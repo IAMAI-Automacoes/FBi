@@ -1,8 +1,29 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+/* Canela — fonte da marca (paga, não está no Google Fonts). Coloque os arquivos
+   em public/fonts/ (Canela-Regular.woff2 / Canela-Medium.woff2). Enquanto não
+   estiverem lá, o nome do restaurante cai num serif elegante de sistema. */
+@font-face {
+  font-family: 'Canela';
+  src: local('Canela'), url('/fonts/Canela-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Canela';
+  src: local('Canela Medium'), url('/fonts/Canela-Medium.woff2') format('woff2');
+  font-weight: 500 700;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Nome do restaurante usa a fonte da marca, com fallback serif. */
+.fonte-marca {
+  font-family: 'Canela', Georgia, 'Times New Roman', serif;
+}
 
 @layer base {
   :root {
