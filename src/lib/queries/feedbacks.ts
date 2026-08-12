@@ -13,7 +13,9 @@ export interface FiltrosFeedback {
 }
 
 export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, offset: number) {
-  let query = supabase.from('feedbacks_restaurante').select('*', { count: 'exact' })
+  // Mostra a MENSAGEM ORIGINAL do cliente (a view deriva sentimento geral +
+  // categorias dos pedaços). Os pedaços em si só servem pra IA dos temas.
+  let query = supabase.from('feedbacks_originais_view').select('*', { count: 'exact' })
 
   if (filtros.datas && filtros.datas.length > 0) {
     // OR de intervalos [início do dia, início do dia seguinte) — cada dia
@@ -37,7 +39,9 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
   }
 
   if (filtros.categorias.length > 0) {
-    query = query.in('categoria', filtros.categorias)
+    // A view tem `categorias` (array das categorias dos pontos daquela mensagem);
+    // o original entra se tocar em qualquer categoria escolhida.
+    query = query.overlaps('categorias', filtros.categorias)
   }
 
   if (filtros.busca) {

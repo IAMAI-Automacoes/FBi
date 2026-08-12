@@ -333,8 +333,10 @@ export const buscarUltimosFeedbacks = async (
 ): Promise<FeedbackItem[]> => {
   if (!restauranteId) return []
 
+  // Mensagem ORIGINAL do cliente (transcrição exata). A view deriva o sentimento
+  // geral e as categorias a partir dos pedaços separados.
   const { data, error } = await supabase
-    .from('feedbacks_restaurante')
+    .from('feedbacks_originais_view')
     .select('*')
     .eq('restaurante_id', restauranteId)
     .order('created_at', { ascending: false })
@@ -374,8 +376,8 @@ export const buscarUltimosFeedbacks = async (
 
     return {
       id: String(f.id),
-      text: f.texto_original || f.resumo || '',
-      categories: f.categoria ? [f.categoria] : [],
+      text: f.texto_original || '',
+      categories: (f.categorias ?? []) as string[],
       sentiment,
       timeAgo,
     }

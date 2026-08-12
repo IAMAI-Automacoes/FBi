@@ -107,15 +107,15 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
         ) : (
           <ul className="divide-y divide-border/50">
             {temas.map((t) => (
-              <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
+              <li key={t.id} className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-muted/30 transition-colors">
                 <span
-                  className={cn('h-2 w-2 rounded-full shrink-0', dotCor[t.tipo] ?? dotCor.neutro)}
+                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotCor[t.tipo] ?? dotCor.neutro)}
                   title={t.tipo === 'elogio' ? 'Positivo' : t.tipo === 'reclamacao' ? 'Negativo' : 'Neutro'}
                 />
-                <span className="flex-1 min-w-0 text-sm text-foreground truncate">{t.rotulo}</span>
-                <span className="text-sm font-semibold text-foreground tabular-nums shrink-0">
+                <span className="text-base font-bold tabular-nums text-foreground shrink-0">
                   {t.quantidade}
                 </span>
+                <span className="text-[15px] text-foreground/90 truncate min-w-0">{t.rotulo}</span>
               </li>
             ))}
           </ul>

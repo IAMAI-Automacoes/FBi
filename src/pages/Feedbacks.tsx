@@ -317,10 +317,17 @@ export default function Feedbacks() {
                       })}
                     </span>
                   </div>
-                  {fb.categoria && (
-                    <span className="bg-[#EFF6FF] text-[#1D4ED8] px-2 py-0.5 rounded-md font-medium text-[11px] tracking-wide">
-                      {fb.categoria}
-                    </span>
+                  {(fb.categorias ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(fb.categorias as string[]).map((cat) => (
+                        <span
+                          key={cat}
+                          className="bg-[#EFF6FF] text-[#1D4ED8] px-2 py-0.5 rounded-md font-medium text-[11px] tracking-wide"
+                        >
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
