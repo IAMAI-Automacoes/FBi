@@ -105,23 +105,22 @@ export function RotaProtegida() {
   const naRotaDePagamento = ROTAS_DE_PAGAMENTO.includes(location.pathname)
   const semPlanoAtivo = usuario.assinatura_status !== 'ativa'
 
-  // Admin da plataforma não é cliente: não assina e não configura restaurante.
-  // Sem esta exceção ele seria mandado para /assinatura antes de `Admin.tsx`
-  // montar — trancado para fora do painel que administra.
-  //
-  // O valor vem do AuthProvider e resolve junto com o usuário, então aqui já é
-  // confiável. Se viesse de um hook com loading próprio, o primeiro render
-  // decidiria com `false` e o expulsaria de forma intermitente.
-  //
-  // Só as checagens de COBRANÇA são puladas. Sessão ausente, cadastro que não
-  // carregou e conta encerrada continuam valendo — são integridade, não cobrança.
+  // Admin da plataforma não é cliente: não precisa assinar. Mas agora ele TAMBÉM
+  // passa pela tela de assinatura (pra ver/testar o fluxo real como qualquer
+  // conta sem plano). Lá existe um botão "pular" só para admin, que grava esta
+  // marca de sessão; enquanto ele não pular, o gate o manda para /assinatura.
+  // Cliente comum nunca tem essa marca, então continua obrigado a pagar — o
+  // paywall segue intacto. O valor de `ehAdminPlataforma` vem do AuthProvider e
+  // resolve junto com o usuário, então aqui já é confiável (não pisca `false`).
+  const adminPulouPagamento =
+    ehAdminPlataforma && sessionStorage.getItem('admin_pulou_pagamento') === '1'
 
   // ── Pagamento antes do onboarding ──
   // Esta ordem é o centro da correção. Antes existia só a checagem de
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
-  // que o dinheiro entrou.
-  if (!ehAdminPlataforma && semPlanoAtivo && !naRotaDePagamento) {
+  // que o dinheiro entrou (ou, para o admin, depois que ele optou por pular).
+  if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
   }
 

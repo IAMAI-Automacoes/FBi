@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
+import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
 import {
   buscarTodasSugestoes, responderSugestao, uploadArquivosResposta,
   editarRespostaAdmin, excluirRespostaAdmin, excluirArquivosAdmin,
@@ -1013,10 +1014,10 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes'
+type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento'
 
 const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA',
+  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento',
 }
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
@@ -1356,7 +1357,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes'] as Tab[]).map((tab) => (
+          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento'] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
@@ -1742,6 +1743,9 @@ export default function Admin() {
 
         {/* ── AGENTES DE IA ── */}
         {activeTab === 'agentes' && <PainelAgentes />}
+
+        {/* ── CONHECIMENTO GLOBAL ── */}
+        {activeTab === 'conhecimento' && <ConhecimentoGlobal />}
       </div>
 
       {/* ── Dialog: Divisão ── */}

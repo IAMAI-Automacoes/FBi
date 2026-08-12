@@ -238,6 +238,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     setLoading(true)
+    // Marca de "admin pulou pagamento" é por sessão de uso — some ao sair, pra o
+    // admin ver a tela de assinatura de novo no próximo login.
+    sessionStorage.removeItem('admin_pulou_pagamento')
     const { error } = await supabase.auth.signOut()
     setUsuario(null)
     setUser(null)

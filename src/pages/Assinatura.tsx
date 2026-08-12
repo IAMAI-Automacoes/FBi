@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
 import { CICLOS, RECURSOS_INCLUSOS } from '@/components/vendas/ciclos-plano'
@@ -10,8 +10,17 @@ import { Check, LogOut } from 'lucide-react'
    nunca assinou, abandonou o checkout no meio, ou a assinatura venceu.
    O texto muda conforme o status; o resto é igual. */
 export default function Assinatura() {
-  const { usuario, logout } = useAuth()
+  const { usuario, logout, ehAdminPlataforma } = useAuth()
+  const navigate = useNavigate()
   const status = usuario?.assinatura_status ?? 'sem_assinatura'
+
+  // Admin não é cliente: pode ver esta tela mas seguir sem pagar. A marca de
+  // sessão libera o gate (RotaProtegida) até o fim da sessão; num novo login ele
+  // vê a tela de novo. Cliente comum não tem este botão.
+  const pularComoAdmin = () => {
+    sessionStorage.setItem('admin_pulou_pagamento', '1')
+    navigate('/', { replace: true })
+  }
 
   const copy =
     status === 'inadimplente'
@@ -129,6 +138,18 @@ export default function Assinatura() {
             Falar com o suporte
           </a>
         </div>
+
+        {/* Só admin: segue sem pagar (não é cliente). Discreto, fora do fluxo. */}
+        {ehAdminPlataforma && (
+          <div className="text-center" style={{ marginTop: '16px' }}>
+            <button
+              onClick={pularComoAdmin}
+              style={{ fontSize: '13px', fontWeight: 500, color: cores.corpoSuave, background: 'transparent', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Pular pagamento (admin) →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

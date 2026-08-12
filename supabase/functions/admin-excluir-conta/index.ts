@@ -1,15 +1,10 @@
-// Exclusão reversível da PRÓPRIA conta, pedida pelo cliente.
+// Admin da plataforma exclui/restaura a conta de um restaurante (soft-delete).
 //
-// O trigger `proteger_colunas_assinatura` impede o usuário de mexer direto em
-// `excluida_em` — por isso a marcação é feita aqui, com service_role, e SÓ na
-// linha do próprio usuário (achada pelo id do JWT). É soft-delete: a pessoa
-// perde o acesso e não recupera sozinha (nem recriando conta no mesmo email,
-// pois o login continua existindo), mas os dados ficam no banco e o admin da
-// plataforma pode restaurar.
+// Ao EXCLUIR: marca `excluida_em`, derruba a instância do WhatsApp na uazapi
+// (libera o slot pago) e limpa o token. Ao RESTAURAR: só zera `excluida_em`
+// (a instância não volta — é só reconectar o WhatsApp depois).
 //
-// Ao excluir, também DERRUBA a instância do WhatsApp na uazapi (libera o slot
-// pago — conta bloqueada não deve segurar uma instância) e limpa o token. Se a
-// conta for restaurada depois, é só reconectar o WhatsApp.
+// Só quem está em `platform_admins` (casado por email) pode chamar. verify_jwt=true.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -24,7 +19,6 @@ function json(body: unknown, status = 200) {
   })
 }
 
-// Base da uazapi: env (preferencial) ou tabela privada integracao_config.
 async function baseUazapi(admin: ReturnType<typeof createClient>): Promise<string> {
   let base = (Deno.env.get('UAZAPI_BASE_URL') ?? '').replace(/\/+$/, '')
   if (!base) {
@@ -38,10 +32,7 @@ async function baseUazapi(admin: ReturnType<typeof createClient>): Promise<strin
   return base
 }
 
-// Apaga a instância na uazapi pelo token dela (DELETE /instance encerra a sessão
-// E remove a instância do banco da uazapi, liberando o slot). Best-effort: se
-// falhar, a exclusão da conta segue mesmo assim.
-export async function apagarInstancia(admin: ReturnType<typeof createClient>, token: string | null) {
+async function apagarInstancia(admin: ReturnType<typeof createClient>, token: string | null) {
   if (!token) return
   const base = await baseUazapi(admin)
   if (!base) return
@@ -64,28 +55,46 @@ Deno.serve(async (req) => {
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!
     const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Quem está pedindo (a partir do JWT).
     const authClient = createClient(url, anon, {
       global: { headers: { Authorization: authHeader } },
     })
     const { data: { user }, error: userErr } = await authClient.auth.getUser()
-    if (userErr || !user) return json({ error: 'Sessão inválida.' }, 401)
+    if (userErr || !user?.email) return json({ error: 'Sessão inválida.' }, 401)
 
-    // Soft-delete só da própria conta, e só se ainda não estiver excluída.
     const admin = createClient(url, service)
+
+    // Confere que quem chama é admin da plataforma.
+    const { data: ehAdmin } = await admin
+      .from('platform_admins')
+      .select('email')
+      .ilike('email', user.email)
+      .maybeSingle()
+    if (!ehAdmin) return json({ error: 'Sem permissão.' }, 403)
+
+    const { restaurante_id, excluir } = await req.json().catch(() => ({}))
+    if (typeof restaurante_id !== 'number' || typeof excluir !== 'boolean') {
+      return json({ error: 'Parâmetros inválidos (restaurante_id, excluir).' }, 400)
+    }
+
+    if (!excluir) {
+      // Restaurar: só limpa a marca de exclusão.
+      const { error } = await admin
+        .from('restaurantes')
+        .update({ excluida_em: null })
+        .eq('id', restaurante_id)
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true })
+    }
+
+    // Excluir: marca a data e derruba a instância da uazapi.
     const { data, error } = await admin
       .from('restaurantes')
       .update({ excluida_em: new Date().toISOString() })
-      .eq('auth_user_id', user.id)
-      .is('excluida_em', null)
+      .eq('id', restaurante_id)
       .select('id, whatsapp_token')
-
     if (error) return json({ error: error.message }, 500)
-    if (!data || data.length === 0) {
-      return json({ error: 'Conta não encontrada ou já excluída.' }, 404)
-    }
+    if (!data || data.length === 0) return json({ error: 'Restaurante não encontrado.' }, 404)
 
-    // Derruba a instância da uazapi e limpa as credenciais guardadas.
     const rest = data[0] as { id: number; whatsapp_token: string | null }
     if (rest.whatsapp_token) {
       await apagarInstancia(admin, rest.whatsapp_token)

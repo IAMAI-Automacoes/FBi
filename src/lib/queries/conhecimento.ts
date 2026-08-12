@@ -114,9 +114,13 @@ export async function extrairTextoDePdf(file: File): Promise<string> {
 }
 
 export async function listarDocumentos(): Promise<DocumentoIA[]> {
+  // Só os documentos DO restaurante. Os globais (escopo='global', material de
+  // referência da plataforma) são usados pela IA por trás, mas NÃO aparecem nas
+  // Configurações do restaurante.
   const { data, error } = await supabase
     .from('documentos_ia')
     .select('*')
+    .eq('escopo', 'restaurante')
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data || []) as DocumentoIA[]
@@ -193,6 +197,87 @@ export async function indexarDocumento(
 export async function removerDocumento(id: string): Promise<void> {
   const { error } = await supabase.from('documentos_ia').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── Base de conhecimento GLOBAL (só admin da plataforma) ──────────────────────
+// São documentos com restaurante_id = NULL / escopo = 'global', compartilhados
+// com TODOS os restaurantes pela busca da IA. Gerenciados na tela do painel admin.
+
+/** Lista só os documentos globais (material de referência da plataforma). */
+export async function listarDocumentosGlobais(): Promise<DocumentoIA[]> {
+  const { data, error } = await supabase
+    .from('documentos_ia')
+    .select('*')
+    .eq('escopo', 'global')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []) as DocumentoIA[]
+}
+
+/**
+ * Indexa um documento GLOBAL (restaurante_id = null, escopo = 'global'). Mesma
+ * mecânica do indexarDocumento, mas o material vale para todos os restaurantes.
+ * Só passa na RLS se quem chama for admin da plataforma (platform_admins).
+ */
+export async function indexarDocumentoGlobal(
+  entrada: { titulo: string; descricao?: string; texto: string; origem?: string; url?: string },
+  onProgresso?: (feito: number, total: number) => void,
+): Promise<DocumentoIA> {
+  const trechos = dividirEmTrechos(entrada.texto)
+  if (!trechos.length) throw new Error('Não foi possível extrair texto suficiente.')
+
+  const { data: doc, error: erroDoc } = await supabase
+    .from('documentos_ia')
+    .insert({
+      restaurante_id: null,
+      titulo: entrada.titulo.slice(0, 200),
+      descricao: entrada.descricao || null,
+      origem: entrada.origem || 'texto',
+      url: entrada.url || null,
+      escopo: 'global',
+      status: 'pendente',
+    })
+    .select()
+    .single()
+  if (erroDoc) throw erroDoc
+
+  try {
+    let gravados = 0
+    for (let i = 0; i < trechos.length; i += LOTE_EMBED) {
+      const lote = trechos.slice(i, i + LOTE_EMBED)
+      const { embeddings } = await chamarConhecimento({
+        acao: 'embed',
+        textos: lote.map((c) => `${entrada.titulo}. ${c}`),
+      })
+
+      const linhas = lote.map((conteudo, idx) => ({
+        documento_id: doc.id,
+        restaurante_id: null,
+        conteudo,
+        posicao: i + idx,
+        embedding: embeddings[idx],
+      }))
+      const { error } = await supabase.from('documento_trechos').insert(linhas)
+      if (error) throw error
+
+      gravados += lote.length
+      onProgresso?.(gravados, trechos.length)
+    }
+
+    const { data: atualizado } = await supabase
+      .from('documentos_ia')
+      .update({ status: 'indexado', total_trechos: trechos.length })
+      .eq('id', doc.id)
+      .select()
+      .single()
+    return (atualizado || doc) as DocumentoIA
+  } catch (err: any) {
+    await supabase
+      .from('documentos_ia')
+      .update({ status: 'erro', erro: String(err.message || err).slice(0, 500) })
+      .eq('id', doc.id)
+    throw err
+  }
 }
 
 /**

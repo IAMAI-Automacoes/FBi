@@ -469,12 +469,21 @@ export async function definirAssinatura(id: number, status: AssinaturaStatus): P
   if (error) throw error
 }
 
-/** Exclusão reversível. Não apaga nada: só marca a data.
-    Conta excluída não entra no software, mas os dados continuam no banco. */
+/** Exclusão reversível. Não apaga os dados: só marca a data. Conta excluída não
+    entra no software, mas continua no banco. Ao excluir, uma edge function
+    (service_role) também derruba a instância do WhatsApp na uazapi (libera o
+    slot pago) — por isso não é mais um UPDATE direto daqui. */
 export async function definirExclusaoConta(id: number, excluir: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('restaurantes')
-    .update({ excluida_em: excluir ? new Date().toISOString() : null } as never)
-    .eq('id', id)
-  if (error) throw error
+  const { data, error } = await supabase.functions.invoke('admin-excluir-conta', {
+    body: { restaurante_id: id, excluir },
+  })
+  if (error) {
+    let detalhe = error.message
+    try {
+      const corpo = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.()
+      if (corpo?.error) detalhe = corpo.error
+    } catch { /* mantém a mensagem original */ }
+    throw new Error(detalhe)
+  }
+  if (data?.error) throw new Error(data.error)
 }

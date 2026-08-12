@@ -62,8 +62,6 @@ export default function Onboarding() {
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   // Passo 5 conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
   const [autoProgresso, setAutoProgresso] = useState(0)
-  // Admin pode pular o onboarding (não é cliente). Se não pular, preenche igual.
-  const [pulando, setPulando] = useState(false)
   // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
   // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
   // aparece na hora enquanto a imagem definitiva ainda carrega do Storage.
@@ -149,6 +147,10 @@ export default function Onboarding() {
 
   // Cada passo exige seus campos preenchidos; o passo 4 exige o WhatsApp conectado.
   const validarStep = (s: number): string | null => {
+    // Admin não é cliente: pode deixar tudo em branco e avançar/finalizar. Não há
+    // botão de "pular tudo" — são os próprios campos (e o WhatsApp) que ficam
+    // opcionais pra ele. Cliente comum continua com tudo obrigatório.
+    if (ehAdminPlataforma) return null
     if (s === 1) {
       if (!data.restaurante_nome.trim()) return 'Informe o nome do restaurante.'
       if (!data.restaurante_culinaria) return 'Selecione o tipo de culinária.'
@@ -208,7 +210,9 @@ export default function Onboarding() {
       const { error } = await supabase
         .from('restaurantes')
         .update({
-          nome_restaurante: data.restaurante_nome,
+          // Não sobrescreve o nome com vazio (admin pode deixar em branco); o
+          // cliente comum sempre chega aqui com o nome preenchido (obrigatório).
+          ...(data.restaurante_nome.trim() && { nome_restaurante: data.restaurante_nome.trim() }),
           tipo_culinaria: data.restaurante_culinaria || null,
           numero_mesas: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null,
           metodo_coleta_feedback: data.como_coleta_feedbacks || null,
@@ -232,24 +236,6 @@ export default function Onboarding() {
     } finally {
       setLoadingSubmit(false)
     }
-  }
-
-  // Admin pula a configuração: marca o onboarding como concluído (sem preencher
-  // dados) e vai pro painel. onboarding_completo não é campo protegido, então o
-  // próprio usuário grava.
-  const handlePular = async () => {
-    if (!usuario?.restaurante_id) return
-    setPulando(true)
-    const { error } = await supabase
-      .from('restaurantes')
-      .update({ onboarding_completo: true })
-      .eq('id', usuario.restaurante_id)
-    if (error) {
-      toast({ title: 'Erro ao pular', description: error.message, variant: 'destructive' })
-      setPulando(false)
-      return
-    }
-    window.location.href = '/'
   }
 
   // Auto-finalizar no passo 5: o botão vai "preenchendo" e conclui sozinho se a
@@ -292,27 +278,14 @@ export default function Onboarding() {
               empilhados obrigariam a ler "passo 2 de 4 dentro da etapa 3 de 3". */}
           <p className="text-sm text-gray-500">
             {ehAdminPlataforma
-              ? 'Admin · a configuração é opcional pra você'
+              ? 'Admin · pode deixar os campos em branco e avançar'
               : 'Pagamento confirmado · configurando seu acesso'}
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          {ehAdminPlataforma && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handlePular}
-              disabled={pulando}
-              className="text-[#1D4ED8]"
-            >
-              {pulando ? 'Pulando…' : 'Pular configuração'}
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => logout()} className="text-gray-500">
-            <LogOut className="h-4 w-4 mr-2" />
-            Sair
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={() => logout()} className="text-gray-500">
+          <LogOut className="h-4 w-4 mr-2" />
+          Sair
+        </Button>
       </div>
 
       <Card className="w-full max-w-xl shadow-lg border-0 ring-1 ring-gray-200">
@@ -364,7 +337,7 @@ export default function Onboarding() {
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-2">
                 <Label htmlFor="nome" className="text-gray-700">
-                  Nome do restaurante <span className="text-red-500">*</span>
+                  Nome do restaurante {!ehAdminPlataforma && <span className="text-red-500">*</span>}
                 </Label>
                 <Input
                   id="nome"
