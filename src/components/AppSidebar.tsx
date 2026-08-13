@@ -62,7 +62,7 @@ export function AppSidebar() {
   }, [isSugestoesActive])
 
   return (
-    <Sidebar className="border-r border-border bg-white text-sidebar-foreground">
+    <Sidebar collapsible="offcanvas" className="border-r border-border bg-white text-sidebar-foreground">
       <SidebarHeader className="p-4 border-b border-border/50">
         <div className="flex items-center gap-3">
           <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm overflow-hidden">

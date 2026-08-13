@@ -1,10 +1,10 @@
 {
-  "id": "/admin",
+  "id": "/admin?app=mensagens",
   "name": "Easy Feed — Mensagens",
   "short_name": "Mensagens",
   "description": "Atenda os clientes do Easy Feed pelo chat, direto do celular.",
   "lang": "pt-BR",
-  "start_url": "/admin",
+  "start_url": "/admin?app=mensagens",
   "scope": "/",
   "display": "standalone",
   "background_color": "#128c7e",

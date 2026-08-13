@@ -15,6 +15,7 @@ import {
   Globe,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Check,
   FileText,
   Zap,
@@ -33,7 +34,6 @@ import {
   SheetTrigger,
   SheetDescription,
 } from '@/components/ui/sheet'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Dialog,
   DialogContent,
@@ -64,7 +64,6 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
-import { getIniciais } from '@/lib/iniciais'
 import { useToast } from '@/hooks/use-toast'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -177,35 +176,17 @@ function Fontes({ fontes }: { fontes: { url: string; titulo: string }[] }) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+const LARGURA_CHAT = 380 // largura fixa do chat no desktop (px)
+
 export function ChatFab({
   open,
   onOpenChange,
-  largura,
-  onLarguraChange,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  largura: number
-  onLarguraChange: (v: number) => void
 }) {
   const { pathname } = useLocation()
   const isMobile = useIsMobile()
-
-  // Arrasta a borda esquerda pra aumentar/diminuir o chat (os limites moram no Layout).
-  const iniciarResize = (e: React.PointerEvent) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = largura
-    const onMove = (ev: PointerEvent) => onLarguraChange(startW - (ev.clientX - startX))
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      document.body.style.userSelect = ''
-    }
-    document.body.style.userSelect = 'none'
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
 
   const { user, usuario, refetchUsuario } = useAuth()
   const { mascote, refetch: refetchConfig } = useRestauranteConfig()
@@ -917,6 +898,18 @@ export function ChatFab({
 
   return (
     <>
+      {/* Aba na borda direita (mesma altura da setinha de recolher) para ABRIR o
+          chat quando está fechado — desktop. No celular usa o botão flutuante. */}
+      {!open && !isMobile && (
+        <button
+          onClick={() => onOpenChange(true)}
+          title="Abrir o chat"
+          className="fixed right-0 top-1/2 z-40 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-gray-300 bg-white text-gray-500 shadow hover:bg-gray-50 hover:text-gray-800"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+
       {/* modal={false}: o chat fica aberto sem escurecer nem travar o resto do app */}
       <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
         <SheetTrigger asChild>
@@ -931,8 +924,8 @@ export function ChatFab({
         <SheetContent
           semOverlay
           className="w-full p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.25)]"
-          // No desktop a largura é controlada (redimensionável); no celular é tela cheia.
-          style={isMobile ? undefined : { width: largura, maxWidth: '100vw' }}
+          // Largura fixa no desktop; no celular é tela cheia.
+          style={isMobile ? undefined : { width: LARGURA_CHAT }}
           // Sem isto, fechar o popup (Esc ou clique fora) fecha o chat junto:
           // o evento do dialog aninhado borbulha para o Sheet.
           onEscapeKeyDown={(e) => { if (temPopupAberto) e.preventDefault() }}
@@ -940,22 +933,15 @@ export function ChatFab({
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
-          {/* Borda esquerda: arrastar redimensiona; a setinha no meio recolhe. Só desktop. */}
+          {/* Setinha no meio da borda esquerda: recolhe o chat. Só desktop. */}
           {!isMobile && (
-            <>
-              <div
-                onPointerDown={iniciarResize}
-                title="Arraste para redimensionar"
-                className="absolute left-0 top-0 z-20 h-full w-2 cursor-ew-resize transition-colors hover:bg-primary/20"
-              />
-              <button
-                onClick={() => onOpenChange(false)}
-                title="Recolher o chat"
-                className="absolute left-0 top-1/2 z-30 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-gray-300 bg-white text-gray-500 shadow hover:bg-gray-50 hover:text-gray-800"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </>
+            <button
+              onClick={() => onOpenChange(false)}
+              title="Recolher o chat"
+              className="absolute left-0 top-1/2 z-30 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-gray-300 bg-white text-gray-500 shadow hover:bg-gray-50 hover:text-gray-800"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           )}
 
           {/* ── Header ── */}
@@ -973,12 +959,6 @@ export function ChatFab({
                 </>
               ) : (
                 <>
-                  <Avatar className="h-10 w-10 border border-gray-100 shadow-sm shrink-0">
-                    {mascote.fotoUrl && <AvatarImage src={mascote.fotoUrl} alt={mascoteNome} className="object-cover" />}
-                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                      {getIniciais(mascoteNome, 1)}
-                    </AvatarFallback>
-                  </Avatar>
                   <span className="font-bold text-gray-900 truncate min-w-0">{mascoteNome}</span>
                   <div className="flex items-center gap-1">
                     <button onClick={handleOpenHistory} title="Histórico" className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">

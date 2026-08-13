@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
   X, Video, FileText, FileSpreadsheet, Check, Play, MessageSquare, Tag, Users,
@@ -818,7 +818,7 @@ function ConversaView({
   return (
     <div className="flex h-full">
       <div className="flex flex-col h-full flex-1 min-w-0">
-      <div className="shrink-0 flex items-stretch" style={{ background: WA_TEAL }}>
+      <div className="shrink-0 flex items-stretch" style={{ background: WA_TEAL, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         {onVoltar && (
           <button
             type="button"
@@ -912,7 +912,7 @@ function ConversaView({
           </button>
         </div>
       ) : (
-      <div className="shrink-0 px-3 py-3" style={{ background: '#F0F2F5' }}>
+      <div className="shrink-0 px-3 py-3" style={{ background: '#F0F2F5', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
         {replyTo && (
           <div className="mb-2">
             <QuoteBox
@@ -1048,6 +1048,13 @@ const EMPTY_CUPON = {
 export default function Admin() {
   const navigate = useNavigate()
   const { isAdmin, loading: loadingAdmin } = usePlatformAdmin()
+  const location = useLocation()
+  // App "Mensagens" instalado (start_url /admin?app=mensagens rodando em standalone):
+  // abre direto na lista, sem a barra do Painel Admin — estilo WhatsApp.
+  const ehAppMensagens =
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true) &&
+    new URLSearchParams(location.search).get('app') === 'mensagens'
   const [activeTab, setActiveTab] = useState<Tab>('suporte')
 
   // ── Suporte ──
@@ -1345,7 +1352,8 @@ export default function Admin() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      {/* Header */}
+      {/* Header — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
+      {!ehAppMensagens && (
       <div className="shrink-0 bg-white border-b border-gray-200">
         <div className="px-4 py-3 flex items-center gap-3">
           <Link to="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-gray-700 transition-colors">
@@ -1367,6 +1375,7 @@ export default function Admin() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-hidden flex">
@@ -1381,7 +1390,7 @@ export default function Admin() {
                 selectedId ? 'hidden md:flex' : 'flex w-full',
               )}
             >
-              <div className="px-4 py-3" style={{ background: WA_TEAL }}>
+              <div className="px-4 py-3" style={{ background: WA_TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
                 <p className="text-[15px] font-semibold text-white">Suporte</p>
               </div>
               {loadingSugestoes ? (

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
+import { WhatsAppIcon } from '@/components/auth/AuthLayout'
 import { cores, orbe, textoGradiente, TRANSICAO } from './tokens'
 
 export function CtaFinal() {
@@ -114,10 +114,6 @@ export function RodapeVendas() {
         className="mx-auto flex flex-col sm:flex-row items-center justify-between"
         style={{ maxWidth: '1180px', padding: '30px 24px', gap: '16px' }}
       >
-        <div className="flex items-center">
-          <BrandMark size={52} />
-        </div>
-
         <div
           className="flex flex-wrap items-center justify-center"
           style={{ gap: '20px', fontSize: '13px', color: cores.corpoSuave }}
