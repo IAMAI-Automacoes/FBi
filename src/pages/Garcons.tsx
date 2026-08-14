@@ -21,9 +21,9 @@ function gerarSlug(n = 8) {
 }
 
 // Sem nome do garçom na imagem — o QR já é único por garçom
-async function posterCanvas(url: string, nome: string, temaId: string, tagline: string, filtroId: string): Promise<HTMLCanvasElement> {
+async function posterCanvas(url: string, nome: string, temaId: string, tagline: string): Promise<HTMLCanvasElement> {
   const c = document.createElement('canvas')
-  await desenharPoster(c, { url, nome, temaId, tagline, filtroId })
+  await desenharPoster(c, { url, nome, temaId, tagline })
   return c
 }
 
@@ -34,7 +34,6 @@ export default function Garcons() {
   const [qrs, setQrs] = useState<Record<number, QrInfo>>({})
   const [posterTema, setPosterTema] = useState('classico')
   const [posterMsg, setPosterMsg] = useState('')
-  const [posterFiltro, setPosterFiltro] = useState('nenhum')
   const [loading, setLoading] = useState(true)
   const [novo, setNovo] = useState('')
   const [saving, setSaving] = useState(false)
@@ -45,7 +44,7 @@ export default function Garcons() {
     if (!u?.user) { setLoading(false); return }
     const { data: r } = await supabase
       .from('restaurantes')
-      .select('id, nome_restaurante, qr_estilo, qr_mensagem, qr_filtro')
+      .select('id, nome_restaurante, qr_estilo, qr_mensagem')
       .eq('auth_user_id', u.user.id)
       .single()
     if (!r) { setLoading(false); return }
@@ -53,7 +52,6 @@ export default function Garcons() {
     if (r.nome_restaurante) setRestaurantName(r.nome_restaurante)
     setPosterTema(r.qr_estilo ?? 'classico')
     setPosterMsg(r.qr_mensagem ?? '')
-    setPosterFiltro(r.qr_filtro ?? 'nenhum')
 
     const { data: gs } = await supabase
       .from('garcons')
@@ -119,7 +117,7 @@ export default function Garcons() {
   const baixarPng = async (g: Garcom) => {
     try {
       const slug = await ensureQr(g.id)
-      const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, posterFiltro)
+      const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg)
       const blob = await canvasToBlob(canvas)
       baixarBlob(blob, `qrcode-${g.nome_garcon.replace(/\s+/g, '-').toLowerCase()}.png`)
     } catch (e: any) {
@@ -142,7 +140,7 @@ export default function Garcons() {
       for (let i = 0; i < ativos.length; i++) {
         const g = ativos[i]
         const slug = await ensureQr(g.id)
-        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, posterFiltro)
+        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg)
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas, 'PNG', x, y, w, h)
       }

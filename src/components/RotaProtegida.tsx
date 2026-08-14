@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
+import Vendas from '@/pages/Vendas'
 
 /* Rotas que uma conta sem plano ativo ainda precisa alcançar — é por elas que
    se paga. Barrar tudo deixaria a pessoa sem saída, inclusive quem só atrasou
@@ -34,6 +35,11 @@ export function RotaProtegida() {
   }
 
   if (!session) {
+    // A raiz do site (easyfeed.com.br) é a página de vendas para quem ainda não
+    // tem conta — em vez de jogar direto no login. Quem está logado continua
+    // vendo o painel em `/` (mais abaixo, via Outlet). As demais rotas seguem
+    // protegidas e mandam para o login.
+    if (location.pathname === '/') return <Vendas />
     const indoAssinar = ROTAS_DE_COMPRA.includes(location.pathname)
     return (
       <Navigate to={indoAssinar ? '/cadastro' : '/login'} state={{ from: location }} replace />
