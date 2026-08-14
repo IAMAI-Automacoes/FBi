@@ -169,7 +169,8 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.restore()
   const logo = await carregarImg(easyFeedIcon)
   if (logo && logo.width > 1) {
-    const pad = 20
+    // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
+    const pad = 6
     const box = plate - pad * 2
     const escala = Math.min(box / logo.width, box / logo.height)
     const lw = logo.width * escala
