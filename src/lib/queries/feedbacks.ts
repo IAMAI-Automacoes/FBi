@@ -10,14 +10,27 @@ export interface FiltrosFeedback {
   /** Dias específicos escolhidos no calendário. Quando preenchido, tem
       precedência sobre `periodo`: mostra só os feedbacks desses dias. */
   datas?: Date[]
+  /** IDs exatos de `feedbacks_originais`. Usado ao abrir os feedbacks que
+      geraram um insight (/feedbacks?insight_id=...). Tem precedência sobre o
+      período: sem isso o padrão de 7 dias esconderia os feedbacks mais antigos
+      que originaram o insight. */
+  ids?: string[]
 }
 
 export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, offset: number) {
+  // Insight sem nenhum feedback ligado: devolve vazio em vez de emitir um
+  // `in('id', [])`, que o PostgREST rejeita.
+  if (filtros.ids && filtros.ids.length === 0) {
+    return { feedbacks: [], total: 0 }
+  }
+
   // Mostra a MENSAGEM ORIGINAL do cliente (a view deriva sentimento geral +
   // categorias dos pedaços). Os pedaços em si só servem pra IA dos temas.
   let query = supabase.from('feedbacks_originais_view').select('*', { count: 'exact' })
 
-  if (filtros.datas && filtros.datas.length > 0) {
+  if (filtros.ids && filtros.ids.length > 0) {
+    query = query.in('id', filtros.ids)
+  } else if (filtros.datas && filtros.datas.length > 0) {
     // OR de intervalos [início do dia, início do dia seguinte) — cada dia
     // escolhido vira uma janela; dias não contíguos são unidos com `or`.
     const janelas = filtros.datas.map((d) => {

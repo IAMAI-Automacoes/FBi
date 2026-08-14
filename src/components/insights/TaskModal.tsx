@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Dialog,
   DialogContent,
@@ -28,95 +29,118 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { InsightData, ActionTask, ActionPriority } from '@/lib/mock-data'
-import { PerguntasAcao } from '@/components/actions/PerguntasAcao'
 import { PlanoAcao } from '@/components/actions/PlanoAcao'
 import { Separator } from '@/components/ui/separator'
+
+/** Formato que o modal recebe do quadro e devolve ao salvar. Mistura os campos
+ *  da linha do banco com os apelidos que o TaskBoard já usava. */
+export interface DadosTarefaModal {
+  id?: string
+  title?: string
+  priority?: string
+  source?: string
+  responsavel?: string | null
+  prazo?: string | null
+  plano_detalhado?: string | null
+  status?: string
+  insight_id?: string | null
+}
 
 interface TaskModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  insight?: InsightData | null
-  task?: ActionTask | null
-  onSave?: (task: Partial<ActionTask>) => void
+  task?: DadosTarefaModal | null
+  onSave?: (task: DadosTarefaModal) => void
   onDelete?: (taskId: string) => void
+  /** Ação arquivada: os campos ficam visíveis mas travados, e o rodapé mostra
+   *  só "Excluir" e "Fechar" — nada é editável. */
+  somenteLeitura?: boolean
 }
 
-export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete }: TaskModalProps) {
+export function TaskModal({
+  open,
+  onOpenChange,
+  task,
+  onSave,
+  onDelete,
+  somenteLeitura = false,
+}: TaskModalProps) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<string>('NORMAL')
-  const [responsible, setResponsible] = useState('')
-  const [date, setDate] = useState('')
+  const [responsavel, setResponsavel] = useState('')
+  const [prazo, setPrazo] = useState('')
   const [source, setSource] = useState('')
+  const [plano, setPlano] = useState('')
 
   useEffect(() => {
-    if (open) {
-      if (task) {
-        setTitle(task.title)
-        setPriority(task.priority)
-        setResponsible(task.responsible)
-        setDate(task.date)
-        setSource(task.source)
-      } else if (insight) {
-        setTitle(`Verificar: ${insight.title || 'Insight'}`)
-        setPriority('IMPORTANTE')
-        setSource(`Insight: ${insight.category || 'Geral'}`)
-        setResponsible('')
-        setDate('')
-      } else {
-        setTitle('')
-        setPriority('NORMAL')
-        setResponsible('')
-        setDate('')
-        setSource('')
-      }
+    if (!open) return
+    if (task) {
+      setTitle(task.title ?? '')
+      setPriority(task.priority ?? 'NORMAL')
+      setResponsavel(task.responsavel ?? '')
+      setPrazo(task.prazo ?? '')
+      setSource(task.source ?? '')
+      setPlano(task.plano_detalhado ?? '')
+    } else {
+      setTitle('')
+      setPriority('NORMAL')
+      setResponsavel('')
+      setPrazo('')
+      setSource('')
+      setPlano('')
     }
-  }, [insight, task, open])
+  }, [task, open])
 
   const handleSave = () => {
     if (onSave) {
       onSave({
         title,
-        priority: priority as ActionPriority,
-        responsible,
-        date,
+        priority,
         source,
+        responsavel: responsavel.trim() || null,
+        prazo: prazo || null,
+        plano_detalhado: plano,
       })
     } else {
       toast({
-        title: 'Tarefa criada com sucesso',
-        description: `A tarefa "${title}" foi adicionada ao backlog.`,
+        title: 'Ação criada com sucesso',
+        description: `A ação "${title}" foi adicionada ao backlog.`,
       })
     }
     onOpenChange(false)
   }
+
+  const acaoId = task?.id ? Number(task.id) : undefined
+  // Arquivada também não se edita, então o plano trava junto.
+  const isConcluido = task?.status === 'CONCLUIDO' || somenteLeitura
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            {task ? 'Editar Tarefa' : 'Criar Nova Tarefa'}
+            {somenteLeitura ? 'Ação Arquivada' : task ? 'Editar Ação' : 'Criar Nova Ação'}
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-5 py-4">
           <div className="grid gap-2">
             <Label htmlFor="title" className="font-semibold">
-              Título da Tarefa
+              Título da Ação
             </Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Digite o título da tarefa..."
+              placeholder="Digite o título da ação..."
+              disabled={somenteLeitura}
             />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="priority" className="font-semibold">
               Prioridade
             </Label>
-            <Select value={priority} onValueChange={setPriority}>
+            <Select value={priority} onValueChange={setPriority} disabled={somenteLeitura}>
               <SelectTrigger id="priority">
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
@@ -129,13 +153,14 @@ export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete 
           </div>
           <div className="grid gap-2">
             <Label htmlFor="source" className="font-semibold">
-              Origem
+              Categoria
             </Label>
             <Input
               id="source"
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              placeholder="Ex: Feedback #47"
+              placeholder="Ex: Atendimento"
+              disabled={somenteLeitura}
             />
           </div>
           <div className="grid gap-2">
@@ -144,9 +169,10 @@ export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete 
             </Label>
             <Input
               id="assignee"
-              value={responsible}
-              onChange={(e) => setResponsible(e.target.value)}
+              value={responsavel}
+              onChange={(e) => setResponsavel(e.target.value)}
               placeholder="Ex: Chef Pepê"
+              disabled={somenteLeitura}
             />
           </div>
           <div className="grid gap-2">
@@ -155,37 +181,35 @@ export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete 
             </Label>
             <Input
               id="deadline"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              placeholder="Ex: 24 Jan"
+              type="date"
+              value={prazo}
+              onChange={(e) => setPrazo(e.target.value)}
+              disabled={somenteLeitura}
             />
           </div>
 
-          {task && (
-            <>
-              <Separator className="my-2" />
-              <div className="grid gap-2">
-                <Separator className="my-2" />
-                <div className="grid gap-2">
-                  <Label className="font-semibold">Plano de Ação</Label>
-                  <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                    <PlanoAcao
-                      acaoId={parseInt(task.id)}
-                      planoInicial={(task as any)._original?.plano_detalhado || ''}
-                      isConcluido={task.status === 'CONCLUIDO'}
-                    />
-                  </div>
-                </div>
+          {/* Fora de qualquer condicional: o plano também aparece ao criar uma
+              ação manualmente, não só ao editar. */}
+          <Separator className="my-2" />
+          <div className="grid gap-2">
+            <Label className="font-semibold">Plano de Ação</Label>
+            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <PlanoAcao
+                acaoId={acaoId}
+                planoInicial={plano}
+                isConcluido={isConcluido}
+                onPlanoUpdate={setPlano}
+              />
+            </div>
+          </div>
 
-                <Label className="font-semibold">Perguntas de Validação</Label>
-                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                  <PerguntasAcao
-                    acaoId={parseInt(task.id)}
-                    isConcluido={task.status === 'CONCLUIDO'}
-                  />
-                </div>
-              </div>
-            </>
+          {task?.insight_id && (
+            <Link
+              to={`/feedbacks?insight_id=${task.insight_id}`}
+              className="text-sm text-[#1D4ED8] hover:underline font-medium"
+            >
+              Ver feedbacks relacionados
+            </Link>
           )}
         </div>
         <DialogFooter className="sm:justify-between w-full flex-col-reverse sm:flex-row gap-2 sm:gap-0">
@@ -200,14 +224,14 @@ export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete 
                 <AlertDialogHeader>
                   <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Isso excluirá permanentemente a tarefa e os
+                    Esta ação não pode ser desfeita. Isso excluirá permanentemente a ação e os
                     dados associados a ela.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={() => onDelete(task.id)}
+                    onClick={() => task.id && onDelete(task.id)}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Excluir
@@ -224,14 +248,17 @@ export function TaskModal({ open, onOpenChange, insight, task, onSave, onDelete 
               onClick={() => onOpenChange(false)}
               className="w-full sm:w-auto mt-2 sm:mt-0"
             >
-              Cancelar
+              {somenteLeitura ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button
-              onClick={handleSave}
-              className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white"
-            >
-              Salvar
-            </Button>
+            {/* Nada é editável numa ação arquivada, então não há o que salvar. */}
+            {!somenteLeitura && (
+              <Button
+                onClick={handleSave}
+                className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white"
+              >
+                Salvar
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

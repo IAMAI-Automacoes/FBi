@@ -43,7 +43,6 @@ export function SugestoesSidebar({ onActionProcessed }: SugestoesSidebarProps) {
     try {
       await aprovarSugestao(id)
       toast.success('Sugestão aprovada e movida para Pendente')
-      // Perguntas geradas automaticamente pelo banco via trigger — não disparar pelo frontend
       setSugestoes((s) => s.filter((sug) => sug.id !== id))
       onActionProcessed?.()
     } catch (err) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -21,16 +22,20 @@ import { rotuloSentimento, coresSentimento } from '@/lib/sentimento'
 import { PontoSentimento } from '@/components/PontoSentimento'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
+import { supabase } from '@/lib/supabase/client'
 
 
 export default function Feedbacks() {
   const { toast } = useToast()
   const { usuario } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [feedbacks, setFeedbacks] = useState<any[]>([])
   const [totalFeedbacks, setTotalFeedbacks] = useState(0)
   const [loading, setLoading] = useState(true)
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([])
+  /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
+  const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
   const [filtros, setFiltros] = useState<FiltrosFeedback>({
     periodo: '7d',
@@ -41,6 +46,42 @@ export default function Feedbacks() {
   })
   const [offset, setOffset] = useState(0)
   const LIMIT = 10
+
+  // /feedbacks?insight_id=... → mostra só os feedbacks que geraram o insight.
+  const insightIdParam = searchParams.get('insight_id')
+  useEffect(() => {
+    if (!insightIdParam) {
+      setFiltroInsight(null)
+      return
+    }
+    let vivo = true
+    void (async () => {
+      const { data, error } = await supabase
+        .from('insights')
+        .select('id, titulo, feedback_ids')
+        .eq('id', insightIdParam)
+        .single()
+
+      if (!vivo) return
+      if (error || !data) {
+        toast({ title: 'Insight não encontrado', variant: 'destructive' })
+        setSearchParams({})
+        return
+      }
+
+      setFiltroInsight({ id: data.id, titulo: data.titulo ?? 'Insight' })
+      // `periodo: 'all'` é essencial: o padrão de 7 dias esconderia os
+      // feedbacks mais antigos que originaram o insight.
+      setFiltros((prev) => ({ ...prev, periodo: 'all', ids: data.feedback_ids ?? [] }))
+    })()
+    return () => { vivo = false }
+  }, [insightIdParam, toast, setSearchParams])
+
+  const limparFiltroInsight = () => {
+    setFiltroInsight(null)
+    setFiltros((prev) => ({ ...prev, ids: undefined, periodo: '7d' }))
+    setSearchParams({})
+  }
 
   useEffect(() => {
     buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined, filtros.periodo)
@@ -99,6 +140,22 @@ export default function Feedbacks() {
 
   return (
     <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">
+      {filtroInsight && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+          <span className="text-sm text-blue-900">
+            Filtrando pelos feedbacks que geraram o insight{' '}
+            <strong className="font-semibold">"{filtroInsight.titulo}"</strong>
+          </span>
+          <button
+            onClick={limparFiltroInsight}
+            title="Limpar filtro"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-blue-700 hover:bg-blue-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col xl:flex-row gap-3 mb-6 items-start xl:items-center justify-between">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <Select

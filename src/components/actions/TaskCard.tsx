@@ -1,32 +1,44 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais } from '@/lib/iniciais'
 import { Progress } from '@/components/ui/progress'
-import { CheckCircle2, MessageCircleQuestion, ArrowRight, RotateCcw } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { PerguntasAcao } from './PerguntasAcao'
+import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDraggable } from '@dnd-kit/core'
 import { Button } from '@/components/ui/button'
+import { Link } from 'react-router-dom'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 interface TaskCardProps {
+  // Linha de `acoes_operacionais` com apelidos do quadro; tipar por completo
+  // exigiria refatorar o TaskBoard inteiro, fora do escopo desta mudança.
   task: any
   onClick?: () => void
   onProgress?: () => void
   onUndo?: () => void
+  onArquivar?: () => void
+  onDesarquivar?: () => void
   canUndo?: boolean
   isOverlay?: boolean
+  /** Na página de arquivadas o card não arrasta nem avança de status. */
+  somenteLeitura?: boolean
 }
 
-export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay }: TaskCardProps) {
+export function TaskCard({
+  task,
+  onClick,
+  onProgress,
+  onUndo,
+  onArquivar,
+  onDesarquivar,
+  canUndo,
+  isOverlay,
+  somenteLeitura = false,
+}: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: isOverlay ? `overlay-${task.id}` : task.id.toString(),
     data: { task },
+    disabled: somenteLeitura,
   })
 
   const style =
@@ -52,18 +64,25 @@ export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay
   const isCompleted = task.status === 'CONCLUIDO'
   const isOngoing = task.status === 'EM_ANDAMENTO'
 
+  // Prazo é `date` no banco; sem prazo mostra a data de criação, como antes.
+  const dataExibida = task.prazo
+    ? `Prazo: ${format(parseISO(task.prazo), "d 'de' MMM", { locale: ptBR })}`
+    : task.date
+
   return (
     <div
-      ref={isOverlay ? undefined : setNodeRef}
+      ref={isOverlay || somenteLeitura ? undefined : setNodeRef}
       style={style}
-      {...(isOverlay ? {} : listeners)}
-      {...(isOverlay ? {} : attributes)}
-      onClick={(e) => {
+      {...(isOverlay || somenteLeitura ? {} : listeners)}
+      {...(isOverlay || somenteLeitura ? {} : attributes)}
+      onClick={() => {
         if (!isDragging && !isOverlay && onClick) onClick()
       }}
       className={cn(
         'bg-white p-5 rounded-xl border border-[#E5E7EB] hover:shadow-md transition-all shadow-sm flex flex-col',
-        !isOverlay && 'cursor-grab active:cursor-grabbing',
+        !isOverlay && !somenteLeitura && 'cursor-grab active:cursor-grabbing',
+        // Arquivada não arrasta, mas abre o modal no clique.
+        somenteLeitura && onClick && 'cursor-pointer',
         isCompleted && 'opacity-75 bg-slate-50/50',
         isDragging && !isOverlay && 'opacity-50 ring-2 ring-primary ring-offset-2 z-50 relative',
         isOverlay && 'rotate-2 shadow-xl scale-105 cursor-grabbing z-50',
@@ -78,28 +97,7 @@ export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay
         >
           {isCompleted ? 'CONCLUÍDO' : task.prioridade || 'NORMAL'}
         </span>
-        <div className="flex items-center gap-2">
-          {!isDragging && !isOverlay && task.status !== 'SUGERIDA' && (
-            <Dialog>
-              <DialogTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Perguntas de Feedback"
-                >
-                  <MessageCircleQuestion className="w-4 h-4" />
-                </button>
-              </DialogTrigger>
-              <DialogContent onClick={(e) => e.stopPropagation()} className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Validação da Ação</DialogTitle>
-                </DialogHeader>
-                <PerguntasAcao acaoId={parseInt(task.id)} isConcluido={isCompleted} />
-              </DialogContent>
-            </Dialog>
-          )}
-          {isCompleted && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-        </div>
+        {isCompleted && <CheckCircle2 className="w-5 h-5 text-green-500" />}
       </div>
 
       <h4
@@ -121,12 +119,25 @@ export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay
 
       <p
         className={cn(
-          'text-[11px] font-medium mb-4 inline-flex px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md self-start',
+          'text-[11px] font-medium mb-2 inline-flex px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md self-start',
           isCompleted && 'bg-slate-100 text-slate-500',
         )}
       >
         {task.categoria}
       </p>
+
+      {/* Mesmo destino do link nos Insights: os feedbacks que geraram o insight
+          de onde esta ação nasceu. */}
+      {task.insight_id && (
+        <Link
+          to={`/feedbacks?insight_id=${task.insight_id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-[11px] text-[#1D4ED8] hover:underline font-medium mb-3 inline-flex items-center gap-1 self-start"
+        >
+          <MessageSquare className="w-3 h-3" />
+          Feedbacks relacionados
+        </Link>
+      )}
 
       {isOngoing && task.progress !== undefined && (
         <div className="mb-4">
@@ -138,15 +149,19 @@ export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Avatar className="w-6 h-6 border border-border">
             <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
-              {getIniciais(task.responsible || 'Equipe', 2)}
+              {getIniciais(task.responsavel || 'Sem responsável', 2)}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate max-w-[100px] font-medium">{task.responsible || 'Equipe'}</span>
+          <span className="truncate max-w-[100px] font-medium">
+            {task.responsavel || 'Sem responsável'}
+          </span>
         </div>
-        <span className="text-xs text-muted-foreground font-medium">{task.date}</span>
+        <span className="text-xs text-muted-foreground font-medium">{dataExibida}</span>
       </div>
 
-      {!isOverlay && !isDragging && (canUndo || !isCompleted) && (
+      {/* A barra some só quando não há nada a oferecer: card concluído sem
+          desfazer disponível e sem arquivar/desarquivar. */}
+      {!isOverlay && !isDragging && (canUndo || !isCompleted || !!onArquivar || !!onDesarquivar) && (
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 animate-fade-in-up">
           {canUndo && (
             <Button
@@ -177,6 +192,32 @@ export function TaskCard({ task, onClick, onProgress, onUndo, canUndo, isOverlay
             >
               {task.status === 'PENDENTE' ? 'Iniciar Ação' : 'Concluir'}
               <ArrowRight className="w-3 h-3 ml-1.5" />
+            </Button>
+          )}
+          {isCompleted && onArquivar && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-3 text-xs flex-1 text-slate-600 hover:text-slate-900"
+              onClick={(e) => {
+                e.stopPropagation()
+                onArquivar()
+              }}
+            >
+              <Archive className="w-3 h-3 mr-1.5" /> Arquivar
+            </Button>
+          )}
+          {onDesarquivar && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-3 text-xs flex-1 text-slate-600 hover:text-slate-900"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDesarquivar()
+              }}
+            >
+              <ArchiveRestore className="w-3 h-3 mr-1.5" /> Desarquivar
             </Button>
           )}
         </div>

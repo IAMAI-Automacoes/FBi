@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase/client'
 import { atualizarAcao } from '@/lib/queries/acoes'
 
 interface PlanoAcaoProps {
-  acaoId: number
+  /** Ausente enquanto a ação ainda não existe no banco (modo criação): o texto
+   *  fica só no estado do pai até a linha ser inserida. */
+  acaoId?: number
   planoInicial?: string
   isConcluido?: boolean
   onPlanoUpdate?: (novoPlano: string) => void
@@ -38,13 +40,17 @@ export function PlanoAcao({
 
     try {
       setSalvando(true)
-      await atualizarAcao(acaoId, {
-        plano_detalhado: planoTemporario.trim(),
-      })
+      // Sem acaoId a ação ainda não existe: o pai guarda o texto e grava junto
+      // com o resto no insert.
+      if (acaoId !== undefined) {
+        await atualizarAcao(acaoId, {
+          plano_detalhado: planoTemporario.trim(),
+        })
+      }
       setPlano(planoTemporario)
       setEditando(false)
       onPlanoUpdate?.(planoTemporario.trim())
-      toast.success('Plano atualizado com sucesso!')
+      if (acaoId !== undefined) toast.success('Plano atualizado com sucesso!')
     } catch (err) {
       toast.error('Erro ao atualizar plano')
       console.error(err)
@@ -59,6 +65,9 @@ export function PlanoAcao({
   }
 
   const handleGerarComIA = async () => {
+    // A edge function lê a ação no banco para montar o prompt, então só faz
+    // sentido depois que a linha existe.
+    if (acaoId === undefined) return
     try {
       setGerandoComIA(true)
       toast.info('Gerando plano com IA...')
@@ -146,7 +155,12 @@ export function PlanoAcao({
               variant="outline"
               size="sm"
               onClick={handleGerarComIA}
-              disabled={gerandoComIA}
+              disabled={gerandoComIA || acaoId === undefined}
+              title={
+                acaoId === undefined
+                  ? 'Salve a ação primeiro para gerar o plano com IA'
+                  : undefined
+              }
               className="flex-1 flex items-center justify-center gap-1"
             >
               {gerandoComIA ? (

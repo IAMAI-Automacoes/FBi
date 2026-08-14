@@ -20,11 +20,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { InsightCard } from '@/components/insights/InsightCard'
-import { TaskModal } from '@/components/insights/TaskModal'
-import { AiChatSheet } from '@/components/insights/AiChatSheet'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
-import { criarAcao } from '@/lib/queries/acoes'
+import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
+import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useToast } from '@/hooks/use-toast'
@@ -36,14 +35,13 @@ export default function Insights() {
   const [filterPriority, setFilterPriority] = useState<string>('Todos')
   const [filterCategory, setFilterCategory] = useState<string>('Todas')
 
-  const [insights, setInsights] = useState<any[]>([])
+  const [insights, setInsights] = useState<Insight[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
 
-  const [taskModalOpen, setTaskModalOpen] = useState(false)
-  const [aiChatOpen, setAiChatOpen] = useState(false)
-  const [selectedInsight, setSelectedInsight] = useState<any>(null)
+  /** Id do insight cuja ação está sendo gerada pela IA (trava só aquele botão). */
+  const [criandoAcaoId, setCriandoAcaoId] = useState<string | null>(null)
 
   // Configuração da geração automática (feedbacks acumulados que disparam análise)
   const [configOpen, setConfigOpen] = useState(false)
@@ -69,9 +67,10 @@ export default function Insights() {
       if (error) throw error
 
       if (data) {
-        setInsights(data)
+        const linhas = data as Insight[]
+        setInsights(linhas)
         const cats = Array.from(
-          new Set(data.map((i: any) => i.categoria).filter(Boolean)),
+          new Set(linhas.map((i) => i.categoria).filter(Boolean)),
         ) as string[]
         setCategories(cats)
       }
@@ -184,14 +183,34 @@ export default function Insights() {
     }
   }
 
-  const handleCreateTask = (insight: any) => {
-    setSelectedInsight(insight)
-    setTaskModalOpen(true)
+  /**
+   * "Criar Ação" não abre mais formulário: pede para a IA montar a ação a
+   * partir deste insight. Ela nasce com status SUGERIDA, e o dono confirma ou
+   * rejeita em Ações › Sugestões da IA.
+   */
+  const handleCriarAcao = async (insight: Insight) => {
+    if (!usuario?.restaurante_id) return
+    setCriandoAcaoId(insight.id)
+    try {
+      await sugerirAcoesManualmente(usuario.restaurante_id, insight.id)
+      toast({
+        title: 'Ação sugerida pela IA',
+        description: 'Abra Ações › Sugestões da IA para confirmar ou rejeitar.',
+      })
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar ação', description: e.message, variant: 'destructive' })
+    } finally {
+      setCriandoAcaoId(null)
+    }
   }
 
-  const handleAiChat = (insight: any) => {
-    setSelectedInsight(insight)
-    setAiChatOpen(true)
+  /**
+   * Manda o insight para o chat principal (ChatFab), que carrega os feedbacks
+   * de origem e mantém o contexto em todas as mensagens. Antes isso abria um
+   * painel separado cujo código de contexto nunca rodava.
+   */
+  const handleAiChat = (insight: Insight) => {
+    document.dispatchEvent(new CustomEvent('open-ai-chat', { detail: { insight } }))
   }
 
   const handleDeleteInsight = async (id: string) => {
@@ -202,35 +221,6 @@ export default function Insights() {
       toast({ title: 'Insight excluído', description: 'O insight foi removido com sucesso.' })
     } catch (e: any) {
       toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' })
-    }
-  }
-
-  const handleSaveTask = async (taskData: any) => {
-    if (!usuario?.restaurante_id) return
-    try {
-      const novaAcao = await criarAcao({
-        titulo_acao: taskData.title,
-        prioridade: taskData.priority,
-        categoria: selectedInsight?.categoria || 'Geral',
-        texto: selectedInsight?.descricao,
-        status: 'PENDENTE',
-        restaurante_id: usuario.restaurante_id,
-        client_id: null,
-        ordem: 0,
-      })
-
-      toast({
-        title: 'Tarefa criada com sucesso',
-        description: 'Ação adicionada ao seu painel operacional.',
-      })
-
-      if (novaAcao?.id) {
-        supabase.functions
-          .invoke('gerar-perguntas-direcionadas', { body: { acao_id: novaAcao.id } })
-          .catch(console.error)
-      }
-    } catch (e: any) {
-      toast({ title: 'Erro ao criar tarefa', description: e.message, variant: 'destructive' })
     }
   }
 
@@ -452,7 +442,8 @@ export default function Insights() {
               <InsightCard
                 key={insight.id}
                 insight={insight}
-                onCreateTask={() => handleCreateTask(insight)}
+                criandoAcao={criandoAcaoId === insight.id}
+                onCreateTask={() => handleCriarAcao(insight)}
                 onAiChat={() => handleAiChat(insight)}
                 onDelete={() => handleDeleteInsight(insight.id)}
               />
@@ -468,14 +459,6 @@ export default function Insights() {
         </div>
       )}
 
-      <TaskModal
-        open={taskModalOpen}
-        onOpenChange={setTaskModalOpen}
-        insight={selectedInsight}
-        onSave={handleSaveTask}
-      />
-
-      <AiChatSheet open={aiChatOpen} onOpenChange={setAiChatOpen} insight={selectedInsight} />
     </div>
   )
 }

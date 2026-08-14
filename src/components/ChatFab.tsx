@@ -23,6 +23,10 @@ import {
   Sparkles,
   ArrowDown,
   Reply,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  FolderInput,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -61,6 +65,21 @@ import { buscarMemoria, FatoMemoria } from '@/lib/queries/memoria-assistente'
 import { buscarKpis } from '@/lib/queries/visao-geral'
 import { buscarEstatisticasRelatorio } from '@/lib/queries/relatorios'
 import { supabase } from '@/lib/supabase/client'
+import {
+  PastaChat,
+  buscarConversas,
+  buscarPastas,
+  salvarNomeConversa,
+  alternarFixada,
+  moverConversaParaPasta,
+  excluirConversa,
+  criarPasta,
+  renomearPasta,
+  excluirPasta,
+  migrarNomesLocaisParaBanco,
+} from '@/lib/queries/conversas-chat'
+import { buscarFeedbacks } from '@/lib/queries/feedbacks'
+import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
@@ -74,34 +93,10 @@ const SUGGESTIONS = [
   'Elogios recentes à equipe',
 ]
 
-// ── localStorage helpers ─────────────────────────────────────────────────────
-
-const LS = {
-  nomes: 'chat_sessao_nomes',
-  fixadas: 'chat_sessao_fixadas',
-}
-
-function getSessaoNomes(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(LS.nomes) || '{}') } catch { return {} }
-}
-function setSessaoNome(id: string, nome: string) {
-  const nomes = getSessaoNomes()
-  if (nome.trim()) nomes[id] = nome.trim()
-  else delete nomes[id]
-  localStorage.setItem(LS.nomes, JSON.stringify(nomes))
-}
-function getSessaoFixadas(): string[] {
-  try { return JSON.parse(localStorage.getItem(LS.fixadas) || '[]') } catch { return [] }
-}
-function toggleFixada(id: string): boolean {
-  const fixadas = getSessaoFixadas()
-  const isFixed = fixadas.includes(id)
-  localStorage.setItem(
-    LS.fixadas,
-    JSON.stringify(isFixed ? fixadas.filter((f) => f !== id) : [...fixadas, id]),
-  )
-  return !isFixed
-}
+// Os nomes e as fixações das conversas moraram no localStorage até a migration
+// `20260813000000_conversas_e_pastas_chat`. Agora vivem na tabela
+// `conversas_chat` (ver src/lib/queries/conversas-chat.ts), então sincronizam
+// entre aparelhos e sobrevivem a uma limpeza de cache.
 
 /** Texto do botão que abre a confirmação, por tipo de alteração. */
 const ROTULO_ACAO: Record<string, string> = {
@@ -136,7 +131,14 @@ interface SessaoItem {
   date: Date
   pinned: boolean
   nome?: string
+  /** `null` = conversa na raiz da lista (fora de qualquer pasta). */
+  pastaId: string | null
 }
+
+/** Um bloco do histórico: uma pasta com suas conversas, ou um período. */
+type GrupoHistorico =
+  | { tipo: 'pasta'; pasta: PastaChat; items: SessaoItem[] }
+  | { tipo: 'data'; label: string; items: SessaoItem[] }
 
 /** Botão que revela as fontes usadas na pesquisa. */
 function Fontes({ fontes }: { fontes: { url: string; titulo: string }[] }) {
@@ -210,6 +212,21 @@ export function ChatFab({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  // ── Pastas do histórico ──
+  const [pastas, setPastas] = useState<PastaChat[]>([])
+  const [expandidas, setExpandidas] = useState<Set<string>>(new Set())
+  const [criandoPasta, setCriandoPasta] = useState(false)
+  const [novaPastaNome, setNovaPastaNome] = useState('')
+  const [renomeandoPastaId, setRenomeandoPastaId] = useState<string | null>(null)
+  const [nomePastaEdit, setNomePastaEdit] = useState('')
+  const [excluirPastaId, setExcluirPastaId] = useState<string | null>(null)
+  const [moverSessaoId, setMoverSessaoId] = useState<string | null>(null)
+  // Insight em discussão: entra no contexto de TODAS as mensagens, não só na
+  // primeira, para a IA não perder o assunto no meio da conversa.
+  const [contextoInsight, setContextoInsight] = useState<{
+    insight: Insight
+    feedbacksRelacionados: unknown[]
+  } | null>(null)
   // Vários anexos por mensagem, de tipos misturados
   const [anexos, setAnexos] = useState<AnexoPendente[]>([])
   const [enviandoImagem, setEnviandoImagem] = useState(false)
@@ -328,25 +345,75 @@ export function ChatFab({
     if (renamingId && renameInputRef.current) renameInputRef.current.focus()
   }, [renamingId])
 
+  // Abre o chat. Se vier um insight no evento ("Discutir com IA"), começa uma
+  // conversa nova já com o insight e os feedbacks que o originaram no contexto.
   useEffect(() => {
-    const handler = () => onOpenChange(true)
+    const handler = (e: Event) => {
+      onOpenChange(true)
+      const insight = (e as CustomEvent<{ insight?: Insight }>).detail?.insight
+      if (!insight) return
+
+      novaConversa()
+      setView('chat')
+      setHasError(false)
+      setFailedMessage('')
+      setAnexos([])
+
+      void (async () => {
+        let feedbacksRelacionados: unknown[] = []
+        const ids = insight.feedback_ids ?? []
+        if (ids.length > 0) {
+          try {
+            const { feedbacks } = await buscarFeedbacks(
+              { periodo: 'all', sentimento: 'all', categorias: [], busca: '', ordenacao: 'recent', ids },
+              30,
+              0,
+            )
+            feedbacksRelacionados = feedbacks
+          } catch {
+            // Sem os feedbacks a conversa ainda é útil: a IA fica com título,
+            // descrição e sugestão do insight.
+          }
+        }
+
+        const contextoDoInsight = { insight, feedbacksRelacionados }
+        setContextoInsight(contextoDoInsight)
+
+        const contexto = { ...(await fetchContexto()), ...contextoDoInsight }
+        const texto = `Vamos discutir o insight: "${insight.titulo}".`
+        const result = await enviar(texto, contexto, undefined, undefined, {
+          memoria: memoriaRef.current,
+          modoAcao: modoAcaoRef.current,
+        })
+        await tratarResultado(result, texto)
+      })()
+    }
     document.addEventListener('open-ai-chat', handler)
     return () => document.removeEventListener('open-ai-chat', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onOpenChange])
 
   // ── History fetch ──────────────────────────────────────────────────────────
 
   const fetchSessoes = useCallback(async () => {
     if (!user) return
+    const restauranteId = usuario?.restaurante_id
     setLoadingSessoes(true)
     try {
-      const { data } = await supabase
-        .from('mensagens_chat')
-        .select('sessao_id, created_at, mensagem, papel')
-        .eq('usuario_id', user.id)
-        .eq('papel', 'usuario')
-        .order('created_at', { ascending: false })
+      // As mensagens seguem sendo a única fonte de preview e data; os metadados
+      // (nome, fixada, pasta) vêm de `conversas_chat` e são juntados aqui.
+      const [{ data }, metadados, listaPastas] = await Promise.all([
+        supabase
+          .from('mensagens_chat')
+          .select('sessao_id, created_at, mensagem, papel')
+          .eq('usuario_id', user.id)
+          .eq('papel', 'usuario')
+          .order('created_at', { ascending: false }),
+        restauranteId ? buscarConversas(restauranteId) : Promise.resolve([]),
+        restauranteId ? buscarPastas(restauranteId) : Promise.resolve([]),
+      ])
 
+      setPastas(listaPastas)
       if (!data) return
 
       const previewMap = new Map<string, string>()
@@ -357,31 +424,53 @@ export function ChatFab({
         previewMap.set(msg.sessao_id, msg.mensagem)
       }
 
-      const nomes = getSessaoNomes()
-      const fixadas = getSessaoFixadas()
+      const metaPorSessao = new Map(metadados.map((c) => [c.sessao_id, c]))
 
       const result = Array.from(dateMap.entries())
         .sort(([, a], [, b]) => b.getTime() - a.getTime())
-        .map(([id, date]) => ({
-          id,
-          preview: previewMap.get(id)?.slice(0, 80) || '',
-          date,
-          pinned: fixadas.includes(id),
-          nome: nomes[id],
-        }))
+        .map(([id, date]) => {
+          const meta = metaPorSessao.get(id)
+          return {
+            id,
+            preview: previewMap.get(id)?.slice(0, 80) || '',
+            date,
+            pinned: meta?.fixada ?? false,
+            nome: meta?.titulo ?? undefined,
+            pastaId: meta?.pasta_id ?? null,
+          }
+        })
 
       setSessoes(result)
     } finally {
       setLoadingSessoes(false)
     }
-  }, [user])
+  }, [user, usuario?.restaurante_id])
+
+  // Sobe uma única vez os nomes/fixações que estavam no localStorage.
+  useEffect(() => {
+    const rid = usuario?.restaurante_id
+    if (!rid) return
+    void migrarNomesLocaisParaBanco(rid)
+  }, [usuario?.restaurante_id])
 
   // ── Grouped sessions ───────────────────────────────────────────────────────
 
-  const groupedSessoes = useMemo(() => {
+  const groupedSessoes = useMemo<GrupoHistorico[]>(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
     const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7)
+
+    const grupos: GrupoHistorico[] = []
+
+    // As pastas vêm primeiro e aparecem mesmo vazias — senão não dá para
+    // arrastar a primeira conversa para dentro de uma pasta recém-criada.
+    for (const pasta of pastas) {
+      grupos.push({
+        tipo: 'pasta',
+        pasta,
+        items: sessoes.filter((s) => s.pastaId === pasta.id),
+      })
+    }
 
     const pinned: SessaoItem[] = []
     const todays: SessaoItem[] = []
@@ -389,7 +478,9 @@ export function ChatFab({
     const thisWeek: SessaoItem[] = []
     const older: SessaoItem[] = []
 
+    // Só as conversas fora de pasta entram nos períodos.
     for (const s of sessoes) {
+      if (s.pastaId) continue
       if (s.pinned) { pinned.push(s); continue }
       const d = new Date(s.date); d.setHours(0, 0, 0, 0)
       if (d.getTime() === today.getTime()) todays.push(s)
@@ -398,14 +489,13 @@ export function ChatFab({
       else older.push(s)
     }
 
-    const groups: { label: string; items: SessaoItem[] }[] = []
-    if (pinned.length) groups.push({ label: 'Fixadas', items: pinned })
-    if (todays.length) groups.push({ label: 'Hoje', items: todays })
-    if (yesterdays.length) groups.push({ label: 'Ontem', items: yesterdays })
-    if (thisWeek.length) groups.push({ label: 'Esta semana', items: thisWeek })
-    if (older.length) groups.push({ label: 'Mais antigas', items: older })
-    return groups
-  }, [sessoes])
+    if (pinned.length) grupos.push({ tipo: 'data', label: 'Fixadas', items: pinned })
+    if (todays.length) grupos.push({ tipo: 'data', label: 'Hoje', items: todays })
+    if (yesterdays.length) grupos.push({ tipo: 'data', label: 'Ontem', items: yesterdays })
+    if (thisWeek.length) grupos.push({ tipo: 'data', label: 'Esta semana', items: thisWeek })
+    if (older.length) grupos.push({ tipo: 'data', label: 'Mais antigas', items: older })
+    return grupos
+  }, [sessoes, pastas])
 
   // ── History actions ────────────────────────────────────────────────────────
 
@@ -422,6 +512,9 @@ export function ChatFab({
     setView('chat')
     setHasError(false)
     setFailedMessage('')
+    // O insight em discussão pertence à conversa que o abriu; ao trocar de
+    // conversa ele não pode continuar no contexto.
+    setContextoInsight(null)
   }
 
   const handleNovaConversa = () => {
@@ -431,12 +524,22 @@ export function ChatFab({
     setFailedMessage('')
     setFormularioPendente(null)
     setAnexos([])
+    setContextoInsight(null)
   }
 
-  const handleTogglePin = (e: React.MouseEvent, id: string) => {
+  const handleTogglePin = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    toggleFixada(id)
-    setSessoes((prev) => prev.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)))
+    const rid = usuario?.restaurante_id
+    if (!rid) return
+    const atual = sessoes.find((s) => s.id === id)?.pinned ?? false
+    // Otimista: inverte na hora e volta atrás se o banco recusar.
+    setSessoes((prev) => prev.map((s) => (s.id === id ? { ...s, pinned: !atual } : s)))
+    try {
+      await alternarFixada(rid, id, !atual)
+    } catch {
+      setSessoes((prev) => prev.map((s) => (s.id === id ? { ...s, pinned: atual } : s)))
+      toast({ title: 'Erro ao fixar conversa', variant: 'destructive' })
+    }
   }
 
   const handleStartRename = (e: React.MouseEvent, s: SessaoItem) => {
@@ -446,12 +549,18 @@ export function ChatFab({
     setRenamingId(s.id)
   }
 
-  const handleSaveRename = (id: string) => {
-    setSessaoNome(id, renameValue)
-    setSessoes((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, nome: renameValue.trim() || undefined } : s)),
-    )
+  const handleSaveRename = async (id: string) => {
+    const rid = usuario?.restaurante_id
+    const novo = renameValue.trim()
     setRenamingId(null)
+    if (!rid) return
+    setSessoes((prev) => prev.map((s) => (s.id === id ? { ...s, nome: novo || undefined } : s)))
+    try {
+      await salvarNomeConversa(rid, id, novo)
+    } catch {
+      toast({ title: 'Erro ao renomear conversa', variant: 'destructive' })
+      fetchSessoes()
+    }
   }
 
   const handleDeleteRequest = (e: React.MouseEvent, id: string) => {
@@ -461,12 +570,10 @@ export function ChatFab({
   }
 
   const handleDeleteConfirm = async (id: string) => {
+    const rid = usuario?.restaurante_id
+    if (!rid) return
     try {
-      await supabase
-        .from('mensagens_chat')
-        .delete()
-        .eq('sessao_id', id)
-        .eq('usuario_id', user!.id)
+      await excluirConversa(rid, id)
 
       setSessoes((prev) => prev.filter((s) => s.id !== id))
       // Excluir a conversa aberta não deve jogar o dono para um chat novo:
@@ -480,6 +587,80 @@ export function ChatFab({
       toast({ title: 'Erro ao excluir', variant: 'destructive' })
     }
     setDeleteConfirmId(null)
+  }
+
+  // ── Pastas ─────────────────────────────────────────────────────────────────
+
+  const handleCriarPasta = async () => {
+    const rid = usuario?.restaurante_id
+    const nome = novaPastaNome.trim()
+    if (!rid || !nome) { setCriandoPasta(false); setNovaPastaNome(''); return }
+    try {
+      const pasta = await criarPasta(rid, nome)
+      setPastas((prev) => [...prev, pasta])
+      setExpandidas((prev) => new Set(prev).add(pasta.id))
+    } catch {
+      toast({ title: 'Erro ao criar pasta', variant: 'destructive' })
+    }
+    setCriandoPasta(false)
+    setNovaPastaNome('')
+  }
+
+  const handleSalvarNomePasta = async (pastaId: string) => {
+    const nome = nomePastaEdit.trim()
+    setRenomeandoPastaId(null)
+    if (!nome) return
+    setPastas((prev) => prev.map((p) => (p.id === pastaId ? { ...p, nome } : p)))
+    try {
+      await renomearPasta(pastaId, nome)
+    } catch {
+      toast({ title: 'Erro ao renomear pasta', variant: 'destructive' })
+      fetchSessoes()
+    }
+  }
+
+  const handleExcluirPasta = async (pastaId: string) => {
+    setExcluirPastaId(null)
+    try {
+      await excluirPasta(pastaId)
+      setPastas((prev) => prev.filter((p) => p.id !== pastaId))
+      // As conversas não são apagadas: o FK usa `on delete set null`, então
+      // voltam para a raiz da lista.
+      setSessoes((prev) =>
+        prev.map((s) => (s.pastaId === pastaId ? { ...s, pastaId: null } : s)),
+      )
+      toast({ title: 'Pasta excluída', description: 'As conversas voltaram para a lista.' })
+    } catch {
+      toast({ title: 'Erro ao excluir pasta', variant: 'destructive' })
+    }
+  }
+
+  const handleMoverParaPasta = async (sessaoIdAlvo: string, pastaId: string | null) => {
+    const rid = usuario?.restaurante_id
+    setMoverSessaoId(null)
+    if (!rid) return
+    const anterior = sessoes.find((s) => s.id === sessaoIdAlvo)?.pastaId ?? null
+    setSessoes((prev) =>
+      prev.map((s) => (s.id === sessaoIdAlvo ? { ...s, pastaId } : s)),
+    )
+    if (pastaId) setExpandidas((prev) => new Set(prev).add(pastaId))
+    try {
+      await moverConversaParaPasta(rid, sessaoIdAlvo, pastaId)
+    } catch {
+      setSessoes((prev) =>
+        prev.map((s) => (s.id === sessaoIdAlvo ? { ...s, pastaId: anterior } : s)),
+      )
+      toast({ title: 'Erro ao mover conversa', variant: 'destructive' })
+    }
+  }
+
+  const alternarExpansao = (pastaId: string) => {
+    setExpandidas((prev) => {
+      const novo = new Set(prev)
+      if (novo.has(pastaId)) novo.delete(pastaId)
+      else novo.add(pastaId)
+      return novo
+    })
   }
 
   // ── Image upload ───────────────────────────────────────────────────────────
@@ -671,6 +852,9 @@ export function ChatFab({
       insights: insightsRes.data || [],
       acoes: acoesRes.data || [],
       feedbacks: feedbacksRes.data || [],
+      // Quando a conversa nasceu de "Discutir com IA", o insight e os feedbacks
+      // que o originaram acompanham TODAS as mensagens — não só a primeira.
+      ...(contextoInsight ?? {}),
     }
   }
 
@@ -953,6 +1137,13 @@ export function ChatFab({
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <span className="font-bold text-gray-900 flex-1">Conversas</span>
+                  <button
+                    onClick={() => { setCriandoPasta(true); setNovaPastaNome('') }}
+                    title="Nova pasta"
+                    className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                  </button>
                   <button onClick={handleNovaConversa} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#1D4ED8] rounded-full hover:bg-blue-700 transition-colors">
                     <Plus className="h-3.5 w-3.5" /> Nova
                   </button>
@@ -980,6 +1171,26 @@ export function ChatFab({
           {/* ── History view ── */}
           {!anexoAberto && view === 'history' && (
             <div className="flex-1 overflow-y-auto sem-barra bg-gray-50">
+              {/* Campo de nome da nova pasta: mesmo padrão inline do renomear */}
+              {criandoPasta && (
+                <div className="px-4 py-3 flex items-center gap-2 bg-white border-b border-gray-100">
+                  <FolderPlus className="h-4 w-4 text-gray-400 shrink-0" />
+                  <input
+                    autoFocus
+                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                    placeholder="Nome da pasta"
+                    value={novaPastaNome}
+                    onChange={(e) => setNovaPastaNome(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCriarPasta()
+                      if (e.key === 'Escape') { setCriandoPasta(false); setNovaPastaNome('') }
+                    }}
+                    onBlur={handleCriarPasta}
+                  />
+                  <button onClick={handleCriarPasta} className="text-xs font-medium text-blue-600 hover:text-blue-800 shrink-0">OK</button>
+                </div>
+              )}
+
               {loadingSessoes ? (
                 <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">Carregando...</div>
               ) : groupedSessoes.length === 0 ? (
@@ -991,12 +1202,73 @@ export function ChatFab({
               ) : (
                 <div className="py-2">
                   {groupedSessoes.map((group) => (
-                    <div key={group.label}>
-                      <p className="px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                        {group.label === 'Fixadas' && <Pin className="h-3 w-3" />}
-                        {group.label}
-                      </p>
-                      {group.items.map((s) => (
+                    <div key={group.tipo === 'pasta' ? group.pasta.id : group.label}>
+                      {group.tipo === 'pasta' ? (
+                        renomeandoPastaId === group.pasta.id ? (
+                          <div className="px-4 py-2 flex items-center gap-2 bg-white">
+                            <Folder className="h-4 w-4 text-gray-400 shrink-0" />
+                            <input
+                              autoFocus
+                              className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                              value={nomePastaEdit}
+                              onChange={(e) => setNomePastaEdit(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSalvarNomePasta(group.pasta.id)
+                                if (e.key === 'Escape') setRenomeandoPastaId(null)
+                              }}
+                              onBlur={() => handleSalvarNomePasta(group.pasta.id)}
+                            />
+                            <button onClick={() => handleSalvarNomePasta(group.pasta.id)} className="text-xs font-medium text-blue-600 hover:text-blue-800 shrink-0">OK</button>
+                          </div>
+                        ) : excluirPastaId === group.pasta.id ? (
+                          <div className="px-4 py-3 flex items-center justify-between gap-2 bg-rose-50">
+                            <p className="text-xs text-rose-700 font-medium">Excluir esta pasta? As conversas voltam para a lista.</p>
+                            <div className="flex gap-3 shrink-0">
+                              <button onClick={() => setExcluirPastaId(null)} className="text-xs text-gray-500 hover:text-gray-800">Cancelar</button>
+                              <button onClick={() => handleExcluirPasta(group.pasta.id)} className="text-xs font-semibold text-rose-600 hover:text-rose-800">Excluir</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="group/pasta flex items-center gap-1.5 px-4 py-2 hover:bg-white transition-colors">
+                            <button
+                              onClick={() => alternarExpansao(group.pasta.id)}
+                              className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                            >
+                              {expandidas.has(group.pasta.id)
+                                ? <FolderOpen className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                : <Folder className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate">
+                                {group.pasta.nome}
+                              </span>
+                              <span className="text-[11px] text-gray-400 shrink-0">({group.items.length})</span>
+                            </button>
+                            <div className="hidden group-hover/pasta:flex items-center gap-0.5 shrink-0">
+                              <button
+                                onClick={() => { setNomePastaEdit(group.pasta.nome); setRenomeandoPastaId(group.pasta.id); setExcluirPastaId(null) }}
+                                title="Renomear pasta"
+                                className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => { setExcluirPastaId(group.pasta.id); setRenomeandoPastaId(null) }}
+                                title="Excluir pasta"
+                                className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-rose-600 transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <p className="px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                          {group.label === 'Fixadas' && <Pin className="h-3 w-3" />}
+                          {group.label}
+                        </p>
+                      )}
+                      {group.tipo === 'pasta' && !expandidas.has(group.pasta.id)
+                        ? null
+                        : group.items.map((s) => (
                         <div
                           key={s.id}
                           className={cn(
@@ -1052,6 +1324,13 @@ export function ChatFab({
                                     {s.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                                   </button>
                                   <button
+                                    onClick={(e) => { e.stopPropagation(); setMoverSessaoId(moverSessaoId === s.id ? null : s.id) }}
+                                    title="Mover para pasta"
+                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-amber-600 transition-colors"
+                                  >
+                                    <FolderInput className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
                                     onClick={(e) => handleStartRename(e, s)}
                                     title="Renomear"
                                     className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
@@ -1071,6 +1350,43 @@ export function ChatFab({
                                 {formatDistanceToNow(s.date, { addSuffix: true, locale: ptBR })}
                               </p>
                             </button>
+                          )}
+
+                          {/* Escolha da pasta de destino */}
+                          {moverSessaoId === s.id && (
+                            <div className="px-4 pb-3 pt-1 bg-white border-t border-gray-100">
+                              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                                Mover para
+                              </p>
+                              <div className="flex flex-col gap-0.5">
+                                {pastas.length === 0 && (
+                                  <p className="text-xs text-gray-400 py-1">
+                                    Nenhuma pasta ainda. Crie uma no topo da lista.
+                                  </p>
+                                )}
+                                {pastas.map((p) => (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => handleMoverParaPasta(s.id, p.id)}
+                                    disabled={s.pastaId === p.id}
+                                    className="flex items-center gap-2 text-xs text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-transparent rounded px-2 py-1.5 text-left"
+                                  >
+                                    <Folder className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    <span className="truncate">{p.nome}</span>
+                                    {s.pastaId === p.id && <Check className="h-3 w-3 ml-auto shrink-0" />}
+                                  </button>
+                                ))}
+                                {s.pastaId && (
+                                  <button
+                                    onClick={() => handleMoverParaPasta(s.id, null)}
+                                    className="flex items-center gap-2 text-xs text-rose-600 hover:bg-rose-50 rounded px-2 py-1.5 text-left"
+                                  >
+                                    <X className="h-3.5 w-3.5 shrink-0" />
+                                    Remover da pasta
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       ))}

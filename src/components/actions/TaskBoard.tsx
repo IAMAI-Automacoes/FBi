@@ -4,7 +4,8 @@ import { TaskCard } from './TaskCard'
 import { TaskModal } from '@/components/insights/TaskModal'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Plus } from 'lucide-react'
+import { Plus, Archive } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   DndContext,
   DragEndEvent,
@@ -23,6 +24,7 @@ import {
   atualizarAcao,
   excluirAcao,
   atualizarOrdemAcoes,
+  arquivarAcao,
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
@@ -40,7 +42,11 @@ export type ExtendedActionTask = {
   restaurante_id?: number | null
   created_at?: string
   ordem: number
-  responsible?: string
+  /** Insight que originou a ação — alimenta o link "Feedbacks relacionados". */
+  insight_id?: string | null
+  arquivada_em?: string | null
+  responsavel?: string | null
+  prazo?: string | null
   date?: string
   progress?: number
 }
@@ -57,31 +63,25 @@ function DroppableTask({ task, children }: any) {
   )
 }
 
-function DroppableColumn({ id, title, count, children, onAdd, showAddButton }: any) {
+function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${id}` })
   return (
     <div
       ref={setNodeRef}
       className={`flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border/50 p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
     >
+      {/* O cabeçalho fica FORA da área rolável, então o botão da coluna
+          continua visível por mais que a lista de cards role. */}
       <div className="flex items-center gap-2 mb-4">
         <h3 className="font-semibold text-sm text-foreground tracking-wide">{title}</h3>
         <span className="bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
           {count}
         </span>
+        <div className="flex-1" />
+        {acaoCabecalho}
       </div>
       <div className="flex flex-col gap-3 flex-1 overflow-y-auto min-h-[150px]">
         {children}
-        {showAddButton && (
-          <Button
-            variant="ghost"
-            className="w-full mt-2 border-2 border-dashed border-muted-foreground/20 text-muted-foreground hover:text-foreground hover:bg-muted/50 justify-center py-6"
-            onClick={() => onAdd(id)}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Adicionar tarefa
-          </Button>
-        )}
       </div>
     </div>
   )
@@ -129,7 +129,10 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           feedback_id: d.feedback_id,
           restaurante_id: d.restaurante_id,
           created_at: d.created_at,
-          responsible: 'Equipe',
+          insight_id: d.insight_id,
+          arquivada_em: d.arquivada_em,
+          responsavel: d.responsavel,
+          prazo: d.prazo,
           date: new Date(d.created_at).toLocaleDateString(),
           status: d.status as ActionStatus,
           progress: d.status === 'EM_ANDAMENTO' ? 50 : undefined,
@@ -412,39 +415,46 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           titulo_acao: taskData.title || taskData.titulo_acao,
           prioridade: taskData.priority || taskData.prioridade,
           categoria: taskData.source || taskData.categoria,
-          plano_detalhado:
-            taskData.description || taskData.plano_detalhado || editingTask.plano_detalhado || '',
+          // O modal agora envia o plano de fato; antes nunca vinha e isto caía
+          // sempre no fallback, gravando string vazia.
+          plano_detalhado: taskData.plano_detalhado ?? editingTask.plano_detalhado ?? '',
+          responsavel: taskData.responsavel ?? null,
+          prazo: taskData.prazo ?? null,
         })
-        toast({ title: 'Tarefa atualizada' })
+        toast({ title: 'Ação atualizada' })
       } else {
         const currentPendente = tasks.filter((t) => t.status === 'PENDENTE')
         const maxOrdem =
           currentPendente.length > 0 ? Math.max(...currentPendente.map((t) => t.ordem)) : -1
 
-        const novaAcao = await criarAcao({
-          titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Tarefa',
+        await criarAcao({
+          titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Ação',
           prioridade: taskData.priority || taskData.prioridade || 'NORMAL',
           categoria: taskData.source || taskData.categoria || 'Geral',
-          plano_detalhado: taskData.description || taskData.plano_detalhado || '',
+          plano_detalhado: taskData.plano_detalhado || '',
+          responsavel: taskData.responsavel ?? null,
+          prazo: taskData.prazo ?? null,
           status: 'PENDENTE',
           restaurante_id: usuario?.restaurante_id,
           ordem: maxOrdem + 1,
         })
-        toast({ title: 'Tarefa criada' })
-
-        if (novaAcao?.id) {
-          supabase.functions
-            .invoke('gerar-perguntas-direcionadas', {
-              body: { acao_id: novaAcao.id },
-            })
-            .catch(() => console.log('Geração de perguntas iniciada em background'))
-        }
+        toast({ title: 'Ação criada' })
       }
       load()
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao salvar tarefa', variant: 'destructive' })
+      toast({ title: 'Erro', description: 'Falha ao salvar ação', variant: 'destructive' })
     }
     setModalOpen(false)
+  }
+
+  const handleArquivar = async (taskId: string) => {
+    try {
+      await arquivarAcao(parseInt(taskId))
+      setTasks((prev) => prev.filter((t) => t.id !== taskId))
+      toast({ title: 'Ação arquivada', description: 'Veja em Ações › Arquivadas.' })
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao arquivar a ação', variant: 'destructive' })
+    }
   }
 
   const columns: { title: string; status: ActionStatus }[] = [
@@ -495,36 +505,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     )
   }
 
-  if (tasks.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border border-dashed border-border/60 min-h-[400px]">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 mb-5">
-          <Plus className="h-8 w-8 text-[#1D4ED8]" />
-        </div>
-        <h3 className="text-lg font-semibold text-foreground mb-1">Nenhuma ação no momento</h3>
-        <p className="text-sm text-muted-foreground max-w-md mb-6">
-          As ações aparecem aqui quando você aprova sugestões da IA ou cria uma tarefa manualmente.
-        </p>
-        {usuario?.restaurante_id && (
-          <Button onClick={() => handleOpenModal('PENDENTE')} className="bg-[#1D4ED8] hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Adicionar tarefa
-          </Button>
-        )}
-
-        {modalOpen && (
-          <TaskModal
-            open={modalOpen}
-            onOpenChange={setModalOpen}
-            task={null as any}
-            onSave={handleSaveTask}
-            onDelete={handleDeleteTask}
-          />
-        )}
-      </div>
-    )
-  }
-
+  // Sem `return` antecipado para o estado vazio: o quadro continua montado,
+  // com um único TaskModal e um único botão de adicionar, e as colunas seguem
+  // visíveis como alvos de arraste.
   return (
     <DndContext
       sensors={sensors}
@@ -541,8 +524,33 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               id={col.status}
               title={col.title}
               count={colTasks.length}
-              onAdd={() => handleOpenModal(col.status)}
-              showAddButton={col.status === 'PENDENTE'}
+              acaoCabecalho={
+                col.status === 'PENDENTE' ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs shrink-0 bg-white"
+                    onClick={() => handleOpenModal(col.status)}
+                    title="Adicionar Ação"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Adicionar Ação
+                  </Button>
+                ) : col.status === 'CONCLUIDO' ? (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs shrink-0 bg-white"
+                    title="Ver ações arquivadas"
+                  >
+                    <Link to="/acoes/arquivadas">
+                      <Archive className="w-3.5 h-3.5 mr-1" />
+                      Arquivadas
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
             >
               {colTasks.map((task) => (
                 <DroppableTask key={task.id} task={task}>
@@ -551,6 +559,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                     onClick={() => handleOpenModal(col.status, task)}
                     canUndo={!!undoableTasks[task.id]}
                     onUndo={() => handleUndo(task.id)}
+                    onArquivar={
+                      task.status === 'CONCLUIDO' ? () => handleArquivar(task.id) : undefined
+                    }
                     onProgress={() => {
                       const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
                       moveTask(task.id, task.status, next)
@@ -558,6 +569,22 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   />
                 </DroppableTask>
               ))}
+
+              {/* Estado vazio dentro da coluna PENDENTE, sem substituir o quadro */}
+              {tasks.length === 0 && col.status === 'PENDENTE' && (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 mb-3">
+                    <Plus className="h-6 w-6 text-[#1D4ED8]" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-foreground mb-1">
+                    Nenhuma ação no momento
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    As ações aparecem aqui quando você aprova sugestões da IA ou cria uma ação
+                    manualmente.
+                  </p>
+                </div>
+              )}
             </DroppableColumn>
           )
         })}
@@ -571,13 +598,17 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             task={
               editingTask
                 ? {
-                    ...editingTask,
+                    id: editingTask.id,
                     title: editingTask.titulo_acao,
                     priority: editingTask.prioridade,
                     source: editingTask.categoria,
-                    description: editingTask.plano_detalhado,
+                    status: editingTask.status,
+                    insight_id: editingTask.insight_id,
+                    responsavel: editingTask.responsavel,
+                    prazo: editingTask.prazo,
+                    plano_detalhado: editingTask.plano_detalhado,
                   }
-                : (null as any)
+                : null
             }
             onSave={handleSaveTask}
             onDelete={handleDeleteTask}

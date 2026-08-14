@@ -23,10 +23,11 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor especialista em gestao de re
 2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
 3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
 4. "categoria": Servico, Comida, Ambiente, Preco, Agilidade ou Geral.
+5. "insight_id": o "id" EXATO do insight que originou esta acao, copiado da lista abaixo. Nao invente ID.
 Escreva em portugues do Brasil, direto.
 
 ## Formato (retorne SOMENTE este JSON)
-{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "..." } ] }
+{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "insight_id": "..." } ] }
 
 ## Insights disponiveis
 {insights}`
@@ -38,6 +39,9 @@ serve(async (req: Request) => {
   try {
     const body = await req.json().catch(() => ({}))
     const targetRestauranteId = body.restaurante_id
+    // Quando vem `insight_id`, é o dono clicando "Criar Ação" naquele insight
+    // específico — e não o ciclo automático varrendo todos os insights.
+    const insightSolicitado: string | undefined = body.insight_id
 
     // Sem restaurante_id a função pegava o primeiro restaurante ativo do banco
     // e gerava ações para ele — um restaurante recebia sugestões a partir de
@@ -48,15 +52,19 @@ serve(async (req: Request) => {
 
     const db = clienteAdmin()
 
-    // Nao gera novas sugestoes enquanto ha sugestoes aguardando aprovacao
-    const { count } = await db
-      .from('acoes_operacionais')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'SUGERIDA')
-      .eq('restaurante_id', targetRestauranteId)
+    // Nao gera novas sugestoes enquanto ha sugestoes aguardando aprovacao.
+    // A trava vale so para o ciclo automatico: um clique explicito em "Criar
+    // Acao" e outra intencao e nao pode ser bloqueado por uma sugestao alheia.
+    if (!insightSolicitado) {
+      const { count } = await db
+        .from('acoes_operacionais')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'SUGERIDA')
+        .eq('restaurante_id', targetRestauranteId)
 
-    if (count && count > 0) {
-      return json({ status: 'aguardando_aprovacao', sugestoes_criadas: 0 })
+      if (count && count > 0) {
+        return json({ status: 'aguardando_aprovacao', sugestoes_criadas: 0 })
+      }
     }
 
     // Configuracao (mora em restaurantes) + perfil para contexto
@@ -68,14 +76,20 @@ serve(async (req: Request) => {
 
     // deno-lint-ignore no-explicit-any
     const ci = (restauranteData?.config_insights as any) || {}
-    const maxSugestoes = ci.max_sugestoes_acoes_por_ciclo || 3
+    // No modo por-insight sai exatamente UMA acao para o dono confirmar ou rejeitar.
+    const maxSugestoes = insightSolicitado ? 1 : ci.max_sugestoes_acoes_por_ciclo || 3
 
-    // Insights ativos
-    const { data: insights, error: insightsErr } = await db
+    // O filtro por restaurante_id tambem barra um insight_id forjado de outro
+    // dono: a busca simplesmente nao acha a linha.
+    let insightsQuery = db
       .from('insights')
       .select('*')
       .eq('ativo', true)
       .eq('restaurante_id', targetRestauranteId)
+
+    if (insightSolicitado) insightsQuery = insightsQuery.eq('id', insightSolicitado)
+
+    const { data: insights, error: insightsErr } = await insightsQuery
     if (insightsErr) throw insightsErr
 
     if (!insights || insights.length === 0) {
@@ -90,9 +104,15 @@ serve(async (req: Request) => {
       return (b.feedbacks_relacionados || 0) - (a.feedbacks_relacionados || 0)
     })
 
-    const insightsValidos = insightsOrdenados
-      .filter((i) => i.prioridade?.toUpperCase() === 'URGENTE' || (i.feedbacks_relacionados || 0) >= 2)
-      .slice(0, 10)
+    // O corte de relevancia so vale para o ciclo automatico. Se o dono pediu
+    // acao PARA ESTE insight, ela sai. O corte caiu de >= 2 para >= 1 porque
+    // `feedbacks_relacionados` agora e a contagem REAL (antes era um numero
+    // inflado inventado pelo modelo, que passava no >= 2 com folga).
+    const insightsValidos = insightSolicitado
+      ? insightsOrdenados
+      : insightsOrdenados
+          .filter((i) => i.prioridade?.toUpperCase() === 'URGENTE' || (i.feedbacks_relacionados || 0) >= 1)
+          .slice(0, 10)
 
     if (insightsValidos.length === 0) {
       return json({ status: 'sem_insights_relevantes', sugestoes_criadas: 0 })
@@ -127,6 +147,7 @@ serve(async (req: Request) => {
         : '',
       insights: JSON.stringify(
         insightsValidos.map((i) => ({
+          id: i.id,
           prioridade: i.prioridade,
           categoria: i.categoria,
           titulo: i.titulo,
@@ -157,6 +178,11 @@ serve(async (req: Request) => {
 
     let criadas = 0
     if (acoesGeradas.length > 0) {
+      // Um uuid alucinado violaria o FK e derrubaria o insert do lote inteiro,
+      // entao so passa id que veio na lista enviada ao modelo.
+      const idsDeInsight = new Set(insightsValidos.map((i) => String(i.id)))
+      const insightPadrao = insightSolicitado ?? null
+
       const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => ({
         titulo_acao: a.titulo_acao || 'Acao sugerida',
         plano_detalhado: a.plano_detalhado || '',
@@ -164,6 +190,7 @@ serve(async (req: Request) => {
         categoria: a.categoria || 'Geral',
         status: 'SUGERIDA',
         restaurante_id: targetRestauranteId,
+        insight_id: idsDeInsight.has(String(a.insight_id)) ? a.insight_id : insightPadrao,
         texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
       }))
 

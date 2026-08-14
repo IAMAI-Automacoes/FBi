@@ -12,6 +12,7 @@ import Index from './pages/Index'
 import Feedbacks from './pages/Feedbacks'
 import Insights from './pages/Insights'
 import Actions from './pages/Actions'
+import AcoesArquivadas from './pages/AcoesArquivadas'
 import Reports from './pages/Reports'
 import QRCodes from './pages/QRCodes'
 import Garcons from './pages/Garcons'
@@ -104,6 +105,14 @@ const App = () => (
                 element={
                   <RotaPermitida modulo="acoes">
                     <Actions />
+                  </RotaPermitida>
+                }
+              />
+              <Route
+                path="/acoes/arquivadas"
+                element={
+                  <RotaPermitida modulo="acoes">
+                    <AcoesArquivadas />
                   </RotaPermitida>
                 }
               />

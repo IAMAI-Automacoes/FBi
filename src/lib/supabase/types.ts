@@ -1,4 +1,3 @@
-// AVOID UPDATING THIS FILE DIRECTLY. It is automatically generated.
 export type Json =
   | string
   | number
@@ -15,99 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
-      usuarios: {
+      acoes_operacionais: {
         Row: {
-          avatar_url: string | null
-          cargo: string
-          configuracoes: Json | null
+          arquivada_em: string | null
+          categoria: string | null
           created_at: string
-          email: string | null
-          id: string
-          nome: string | null
-          perfil_notas: string | null
-          restaurante_id: number
-          username: string | null
+          feedback_id: number | null
+          id: number
+          insight_id: string | null
+          ordem: number
+          plano_detalhado: string | null
+          prazo: string | null
+          prioridade: string | null
+          responsavel: string | null
+          restaurante_id: number | null
+          status: string | null
+          texto: string | null
+          titulo_acao: string | null
         }
         Insert: {
-          avatar_url?: string | null
-          cargo?: string
-          configuracoes?: Json | null
+          arquivada_em?: string | null
+          categoria?: string | null
           created_at?: string
-          email?: string | null
-          id: string
-          nome?: string | null
-          perfil_notas?: string | null
-          restaurante_id: number
-          username?: string | null
+          feedback_id?: number | null
+          id?: number
+          insight_id?: string | null
+          ordem?: number
+          plano_detalhado?: string | null
+          prazo?: string | null
+          prioridade?: string | null
+          responsavel?: string | null
+          restaurante_id?: number | null
+          status?: string | null
+          texto?: string | null
+          titulo_acao?: string | null
         }
         Update: {
-          avatar_url?: string | null
-          cargo?: string
-          configuracoes?: Json | null
+          arquivada_em?: string | null
+          categoria?: string | null
           created_at?: string
-          email?: string | null
-          id?: string
-          nome?: string | null
-          perfil_notas?: string | null
-          restaurante_id?: number
-          username?: string | null
+          feedback_id?: number | null
+          id?: number
+          insight_id?: string | null
+          ordem?: number
+          plano_detalhado?: string | null
+          prazo?: string | null
+          prioridade?: string | null
+          responsavel?: string | null
+          restaurante_id?: number | null
+          status?: string | null
+          texto?: string | null
+          titulo_acao?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "usuarios_restaurante_id_fkey"
-            columns: ["restaurante_id"]
+            foreignKeyName: "acoes_operacionais_insight_id_fkey"
+            columns: ["insight_id"]
             isOneToOne: false
-            referencedRelation: "restaurantes"
+            referencedRelation: "insights"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      ia_log_alteracoes: {
-        Row: {
-          alvo_id: string | null
-          alvo_tabela: string | null
-          antes: Json | null
-          created_at: string
-          depois: Json | null
-          descricao: string
-          id: string
-          modo: string
-          restaurante_id: number
-          revertido: boolean
-          revertido_em: string | null
-          tipo: string
-        }
-        Insert: {
-          alvo_id?: string | null
-          alvo_tabela?: string | null
-          antes?: Json | null
-          created_at?: string
-          depois?: Json | null
-          descricao: string
-          id?: string
-          modo?: string
-          restaurante_id: number
-          revertido?: boolean
-          revertido_em?: string | null
-          tipo: string
-        }
-        Update: {
-          alvo_id?: string | null
-          alvo_tabela?: string | null
-          antes?: Json | null
-          created_at?: string
-          depois?: Json | null
-          descricao?: string
-          id?: string
-          modo?: string
-          restaurante_id?: number
-          revertido?: boolean
-          revertido_em?: string | null
-          tipo?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "acoes_ia_restaurante_id_fkey"
+            foreignKeyName: "acoes_operacionais_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
@@ -178,310 +146,41 @@ export type Database = {
         }
         Relationships: []
       }
-      divisao_receita: {
+      agentes_ia: {
         Row: {
-          ativo: boolean | null
-          chave_pix: string | null
-          created_at: string | null
+          ativo: boolean
+          avancado: Json
           id: string
-          nome: string
-          tipo: string
-          valor: number
-        }
-        Insert: {
-          ativo?: boolean | null
-          chave_pix?: string | null
-          created_at?: string | null
-          id?: string
-          nome: string
-          tipo: string
-          valor: number
-        }
-        Update: {
-          ativo?: boolean | null
-          chave_pix?: string | null
-          created_at?: string | null
-          id?: string
-          nome?: string
-          tipo?: string
-          valor?: number
-        }
-        Relationships: []
-      }
-      integracao_config: {
-        Row: {
-          chave: string
+          max_tokens: number | null
+          modelo: string | null
+          temperature: number | null
+          top_p: number | null
           updated_at: string
-          valor: string
+          updated_by: string | null
         }
         Insert: {
-          chave: string
+          ativo?: boolean
+          avancado?: Json
+          id: string
+          max_tokens?: number | null
+          modelo?: string | null
+          temperature?: number | null
+          top_p?: number | null
           updated_at?: string
-          valor: string
+          updated_by?: string | null
         }
         Update: {
-          chave?: string
+          ativo?: boolean
+          avancado?: Json
+          id?: string
+          max_tokens?: number | null
+          modelo?: string | null
+          temperature?: number | null
+          top_p?: number | null
           updated_at?: string
-          valor?: string
+          updated_by?: string | null
         }
         Relationships: []
-      }
-      platform_admins: {
-        Row: {
-          email: string
-        }
-        Insert: {
-          email: string
-        }
-        Update: {
-          email?: string
-        }
-        Relationships: []
-      }
-      reacoes_sugestoes: {
-        Row: {
-          autor: string
-          created_at: string
-          emoji: string
-          id: string
-          mensagem_id: string
-          sugestao_id: string
-        }
-        Insert: {
-          autor: string
-          created_at?: string
-          emoji: string
-          id?: string
-          mensagem_id: string
-          sugestao_id: string
-        }
-        Update: {
-          autor?: string
-          created_at?: string
-          emoji?: string
-          id?: string
-          mensagem_id?: string
-          sugestao_id?: string
-        }
-        Relationships: []
-      }
-      respostas_sugestoes: {
-        Row: {
-          arquivos: Json | null
-          autor: string
-          created_at: string
-          id: string
-          responde_a: string | null
-          sugestao_id: string
-          texto: string
-        }
-        Insert: {
-          arquivos?: Json | null
-          autor?: string
-          created_at?: string
-          id?: string
-          responde_a?: string | null
-          sugestao_id: string
-          texto: string
-        }
-        Update: {
-          arquivos?: Json | null
-          autor?: string
-          created_at?: string
-          id?: string
-          responde_a?: string | null
-          sugestao_id?: string
-          texto?: string
-        }
-        Relationships: []
-      }
-      sugestoes_plataforma: {
-        Row: {
-          admin_leu_em: string | null
-          arquivos: Json
-          cliente_leu_em: string | null
-          created_at: string
-          id: string
-          restaurante_id: number | null
-          status: string
-          texto: string
-          titulo: string | null
-          usuario_id: string | null
-        }
-        Insert: {
-          admin_leu_em?: string | null
-          arquivos?: Json
-          cliente_leu_em?: string | null
-          created_at?: string
-          id?: string
-          restaurante_id?: number | null
-          status?: string
-          texto: string
-          titulo?: string | null
-          usuario_id?: string | null
-        }
-        Update: {
-          admin_leu_em?: string | null
-          arquivos?: Json
-          cliente_leu_em?: string | null
-          created_at?: string
-          id?: string
-          restaurante_id?: number | null
-          status?: string
-          texto?: string
-          titulo?: string | null
-          usuario_id?: string | null
-        }
-        Relationships: []
-      }
-      memoria_assistente: {
-        Row: {
-          categoria: string
-          created_at: string
-          fato: string
-          id: string
-          restaurante_id: number
-        }
-        Insert: {
-          categoria?: string
-          created_at?: string
-          fato: string
-          id?: string
-          restaurante_id: number
-        }
-        Update: {
-          categoria?: string
-          created_at?: string
-          fato?: string
-          id?: string
-          restaurante_id?: number
-        }
-        Relationships: []
-      }
-      documentos_ia: {
-        Row: {
-          created_at: string
-          arquivo_url: string | null
-          descricao: string | null
-          erro: string | null
-          escopo: string
-          id: string
-          origem: string
-          restaurante_id: number | null
-          status: string
-          titulo: string
-          total_trechos: number
-          url: string | null
-        }
-        Insert: {
-          created_at?: string
-          arquivo_url?: string | null
-          descricao?: string | null
-          erro?: string | null
-          escopo?: string
-          id?: string
-          origem?: string
-          restaurante_id?: number | null
-          status?: string
-          titulo: string
-          total_trechos?: number
-          url?: string | null
-        }
-        Update: {
-          created_at?: string
-          arquivo_url?: string | null
-          descricao?: string | null
-          erro?: string | null
-          escopo?: string
-          id?: string
-          origem?: string
-          restaurante_id?: number | null
-          status?: string
-          titulo?: string
-          total_trechos?: number
-          url?: string | null
-        }
-        Relationships: []
-      }
-      documento_trechos: {
-        Row: {
-          conteudo: string
-          created_at: string
-          documento_id: string
-          embedding: string | null
-          id: string
-          posicao: number
-          restaurante_id: number | null
-        }
-        Insert: {
-          conteudo: string
-          created_at?: string
-          documento_id: string
-          embedding?: string | null
-          id?: string
-          posicao?: number
-          restaurante_id?: number | null
-        }
-        Update: {
-          conteudo?: string
-          created_at?: string
-          documento_id?: string
-          embedding?: string | null
-          id?: string
-          posicao?: number
-          restaurante_id?: number | null
-        }
-        Relationships: []
-      }
-      acoes_operacionais: {
-        Row: {
-          categoria: string | null
-          created_at: string
-          feedback_id: number | null
-          id: number
-          ordem: number
-          plano_detalhado: string | null
-          prioridade: string | null
-          restaurante_id: number | null
-          status: string | null
-          texto: string | null
-          titulo_acao: string | null
-        }
-        Insert: {
-          categoria?: string | null
-          created_at?: string
-          feedback_id?: number | null
-          id?: number
-          ordem?: number
-          plano_detalhado?: string | null
-          prioridade?: string | null
-          restaurante_id?: number | null
-          status?: string | null
-          texto?: string | null
-          titulo_acao?: string | null
-        }
-        Update: {
-          categoria?: string | null
-          created_at?: string
-          feedback_id?: number | null
-          id?: number
-          ordem?: number
-          plano_detalhado?: string | null
-          prioridade?: string | null
-          restaurante_id?: number | null
-          status?: string | null
-          texto?: string | null
-          titulo_acao?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "acoes_operacionais_restaurante_id_fkey"
-            columns: ["restaurante_id"]
-            isOneToOne: false
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       categorias: {
         Row: {
@@ -515,6 +214,108 @@ export type Database = {
           },
         ]
       }
+      conversas: {
+        Row: {
+          arquivada: boolean
+          created_at: string
+          fixada: boolean
+          id: string
+          pasta_id: string | null
+          restaurante_id: number
+          sessao_origem: string | null
+          titulo: string | null
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          arquivada?: boolean
+          created_at?: string
+          fixada?: boolean
+          id?: string
+          pasta_id?: string | null
+          restaurante_id: number
+          sessao_origem?: string | null
+          titulo?: string | null
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          arquivada?: boolean
+          created_at?: string
+          fixada?: boolean
+          id?: string
+          pasta_id?: string | null
+          restaurante_id?: number
+          sessao_origem?: string | null
+          titulo?: string | null
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversas_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "pastas_conversa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversas_chat: {
+        Row: {
+          atualizada_em: string
+          created_at: string
+          fixada: boolean
+          id: string
+          pasta_id: string | null
+          restaurante_id: number
+          sessao_id: string
+          titulo: string | null
+        }
+        Insert: {
+          atualizada_em?: string
+          created_at?: string
+          fixada?: boolean
+          id?: string
+          pasta_id?: string | null
+          restaurante_id: number
+          sessao_id: string
+          titulo?: string | null
+        }
+        Update: {
+          atualizada_em?: string
+          created_at?: string
+          fixada?: boolean
+          id?: string
+          pasta_id?: string | null
+          restaurante_id?: number
+          sessao_id?: string
+          titulo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversas_chat_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "pastas_chat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_chat_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cupons: {
         Row: {
           ativo: boolean | null
@@ -526,7 +327,7 @@ export type Database = {
           porcentagem_desconto: number | null
           valor_desconto: number | null
           vezes_usado: number
-          vezes_uso_maximo: number
+          vezes_uso_maximo: number | null
         }
         Insert: {
           ativo?: boolean | null
@@ -538,7 +339,7 @@ export type Database = {
           porcentagem_desconto?: number | null
           valor_desconto?: number | null
           vezes_usado?: number
-          vezes_uso_maximo?: number
+          vezes_uso_maximo?: number | null
         }
         Update: {
           ativo?: boolean | null
@@ -550,50 +351,278 @@ export type Database = {
           porcentagem_desconto?: number | null
           valor_desconto?: number | null
           vezes_usado?: number
-          vezes_uso_maximo?: number
+          vezes_uso_maximo?: number | null
         }
         Relationships: []
       }
-      feedbacks_restaurante: {
+      divisao_receita: {
         Row: {
-          categoria: string | null
+          ativo: boolean | null
+          chave_pix: string | null
+          created_at: string | null
+          id: string
+          nome: string
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean | null
+          chave_pix?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+          tipo: string
+          valor: number
+        }
+        Update: {
+          ativo?: boolean | null
+          chave_pix?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+          tipo?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      documento_trechos: {
+        Row: {
+          conteudo: string
           created_at: string
-          garcom_id: string | null
-          id: number
+          documento_id: string
+          embedding: string | null
+          id: string
+          posicao: number
           restaurante_id: number | null
-          resumo: string | null
+          tsv: unknown
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string
+          documento_id: string
+          embedding?: string | null
+          id?: string
+          posicao?: number
+          restaurante_id?: number | null
+          tsv?: unknown
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string
+          documento_id?: string
+          embedding?: string | null
+          id?: string
+          posicao?: number
+          restaurante_id?: number | null
+          tsv?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_trechos_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_ia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_trechos_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_ia: {
+        Row: {
+          arquivo_url: string | null
+          created_at: string
+          descricao: string | null
+          erro: string | null
+          escopo: string
+          id: string
+          origem: string
+          restaurante_id: number | null
+          status: string
+          titulo: string
+          total_trechos: number
+          url: string | null
+        }
+        Insert: {
+          arquivo_url?: string | null
+          created_at?: string
+          descricao?: string | null
+          erro?: string | null
+          escopo?: string
+          id?: string
+          origem?: string
+          restaurante_id?: number | null
+          status?: string
+          titulo: string
+          total_trechos?: number
+          url?: string | null
+        }
+        Update: {
+          arquivo_url?: string | null
+          created_at?: string
+          descricao?: string | null
+          erro?: string | null
+          escopo?: string
+          id?: string
+          origem?: string
+          restaurante_id?: number | null
+          status?: string
+          titulo?: string
+          total_trechos?: number
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_ia_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_temas: {
+        Row: {
+          atualizado_em: string
+          created_at: string
+          id: string
+          quantidade: number
+          restaurante_id: number | null
+          rotulo: string
+          tipo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          created_at?: string
+          id?: string
+          quantidade?: number
+          restaurante_id?: number | null
+          rotulo: string
+          tipo?: string
+        }
+        Update: {
+          atualizado_em?: string
+          created_at?: string
+          id?: string
+          quantidade?: number
+          restaurante_id?: number | null
+          rotulo?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_temas_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedbacks_originais: {
+        Row: {
+          created_at: string
+          id: string
+          restaurante_id: number | null
           sentimento: string | null
           telefone_cliente: string | null
           texto_original: string | null
         }
         Insert: {
-          categoria?: string | null
           created_at?: string
-          garcom_id?: string | null
-          id?: number
+          id?: string
           restaurante_id?: number | null
-          resumo?: string | null
           sentimento?: string | null
           telefone_cliente?: string | null
           texto_original?: string | null
         }
         Update: {
-          categoria?: string | null
           created_at?: string
-          garcom_id?: string | null
-          id?: number
+          id?: string
           restaurante_id?: number | null
-          resumo?: string | null
           sentimento?: string | null
           telefone_cliente?: string | null
           texto_original?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "feedbacks_originais_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedbacks_restaurante: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          id: number
+          origem_id: string | null
+          restaurante_id: number | null
+          resumo: string | null
+          sentimento: string | null
+          telefone_cliente: string | null
+          tema_id: string | null
+          texto_original: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          id?: number
+          origem_id?: string | null
+          restaurante_id?: number | null
+          resumo?: string | null
+          sentimento?: string | null
+          telefone_cliente?: string | null
+          tema_id?: string | null
+          texto_original?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          id?: number
+          origem_id?: string | null
+          restaurante_id?: number | null
+          resumo?: string | null
+          sentimento?: string | null
+          telefone_cliente?: string | null
+          tema_id?: string | null
+          texto_original?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "feedbacks_restaurante_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_tema_id_fkey"
+            columns: ["tema_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_temas"
             referencedColumns: ["id"]
           },
         ]
@@ -622,12 +651,96 @@ export type Database = {
         }
         Relationships: []
       }
+      ia_log_alteracoes: {
+        Row: {
+          alvo_id: string | null
+          alvo_tabela: string | null
+          antes: Json | null
+          created_at: string
+          depois: Json | null
+          descricao: string
+          id: string
+          modo: string
+          restaurante_id: number
+          revertido: boolean
+          revertido_em: string | null
+          tipo: string
+        }
+        Insert: {
+          alvo_id?: string | null
+          alvo_tabela?: string | null
+          antes?: Json | null
+          created_at?: string
+          depois?: Json | null
+          descricao: string
+          id?: string
+          modo?: string
+          restaurante_id: number
+          revertido?: boolean
+          revertido_em?: string | null
+          tipo: string
+        }
+        Update: {
+          alvo_id?: string | null
+          alvo_tabela?: string | null
+          antes?: Json | null
+          created_at?: string
+          depois?: Json | null
+          descricao?: string
+          id?: string
+          modo?: string
+          restaurante_id?: number
+          revertido?: boolean
+          revertido_em?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acoes_ia_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insight_feedbacks: {
+        Row: {
+          feedback_id: number
+          insight_id: string
+        }
+        Insert: {
+          feedback_id: number
+          insight_id: string
+        }
+        Update: {
+          feedback_id?: number
+          insight_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insight_feedbacks_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_feedbacks_insight_id_fkey"
+            columns: ["insight_id"]
+            isOneToOne: false
+            referencedRelation: "insights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insights: {
         Row: {
           ativo: boolean | null
           categoria: string | null
           created_at: string | null
           descricao: string | null
+          feedback_ids: string[]
           feedbacks_relacionados: number | null
           gerado_por: string | null
           id: string
@@ -641,6 +754,7 @@ export type Database = {
           categoria?: string | null
           created_at?: string | null
           descricao?: string | null
+          feedback_ids?: string[]
           feedbacks_relacionados?: number | null
           gerado_por?: string | null
           id?: string
@@ -654,6 +768,7 @@ export type Database = {
           categoria?: string | null
           created_at?: string | null
           descricao?: string | null
+          feedback_ids?: string[]
           feedbacks_relacionados?: number | null
           gerado_por?: string | null
           id?: string
@@ -672,10 +787,61 @@ export type Database = {
           },
         ]
       }
+      integracao_config: {
+        Row: {
+          chave: string
+          updated_at: string
+          valor: string
+        }
+        Insert: {
+          chave: string
+          updated_at?: string
+          valor: string
+        }
+        Update: {
+          chave?: string
+          updated_at?: string
+          valor?: string
+        }
+        Relationships: []
+      }
+      memoria_assistente: {
+        Row: {
+          categoria: string
+          created_at: string
+          fato: string
+          id: string
+          restaurante_id: number
+        }
+        Insert: {
+          categoria?: string
+          created_at?: string
+          fato: string
+          id?: string
+          restaurante_id: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          fato?: string
+          id?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memoria_assistente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mensagens_chat: {
         Row: {
           contexto_dados: Json | null
           contexto_pagina: string | null
+          conversa_id: string | null
           created_at: string | null
           id: string
           mensagem: string
@@ -686,6 +852,7 @@ export type Database = {
         Insert: {
           contexto_dados?: Json | null
           contexto_pagina?: string | null
+          conversa_id?: string | null
           created_at?: string | null
           id?: string
           mensagem: string
@@ -696,6 +863,7 @@ export type Database = {
         Update: {
           contexto_dados?: Json | null
           contexto_pagina?: string | null
+          conversa_id?: string | null
           created_at?: string | null
           id?: string
           mensagem?: string
@@ -703,7 +871,15 @@ export type Database = {
           sessao_id?: string
           usuario_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_chat_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_buffer: {
         Row: {
@@ -726,6 +902,30 @@ export type Database = {
           message_content?: string | null
           message_data?: Json
           remote_id?: string
+        }
+        Relationships: []
+      }
+      modelos_ia: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          modelo: string
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          modelo: string
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          modelo?: string
+          nome?: string
         }
         Relationships: []
       }
@@ -767,37 +967,132 @@ export type Database = {
           },
         ]
       }
-      perguntas_direcionadas: {
+      pastas_chat: {
         Row: {
-          acao_id: number | null
-          ativa: boolean | null
-          created_at: string | null
+          created_at: string
           id: string
-          pergunta: string
+          nome: string
+          ordem: number
+          restaurante_id: number
         }
         Insert: {
-          acao_id?: number | null
-          ativa?: boolean | null
-          created_at?: string | null
+          created_at?: string
           id?: string
-          pergunta: string
+          nome: string
+          ordem?: number
+          restaurante_id: number
         }
         Update: {
-          acao_id?: number | null
-          ativa?: boolean | null
-          created_at?: string | null
+          created_at?: string
           id?: string
-          pergunta?: string
+          nome?: string
+          ordem?: number
+          restaurante_id?: number
         }
         Relationships: [
           {
-            foreignKeyName: "perguntas_direcionadas_acao_id_fkey"
-            columns: ["acao_id"]
+            foreignKeyName: "pastas_chat_restaurante_id_fkey"
+            columns: ["restaurante_id"]
             isOneToOne: false
-            referencedRelation: "acoes_operacionais"
+            referencedRelation: "restaurantes"
             referencedColumns: ["id"]
           },
         ]
+      }
+      pastas_conversa: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          restaurante_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          restaurante_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pastas_conversa_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_admins: {
+        Row: {
+          email: string
+        }
+        Insert: {
+          email: string
+        }
+        Update: {
+          email?: string
+        }
+        Relationships: []
+      }
+      prompts_editaveis: {
+        Row: {
+          chave: string
+          conteudo: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          chave: string
+          conteudo: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          chave?: string
+          conteudo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          auth_user_id: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          auth_user_id: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          auth_user_id?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       qr_codes: {
         Row: {
@@ -831,6 +1126,13 @@ export type Database = {
           total_scans?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "qr_codes_garcom_id_fkey"
+            columns: ["garcom_id"]
+            isOneToOne: false
+            referencedRelation: "garcons"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "qr_codes_restaurante_id_fkey"
             columns: ["restaurante_id"]
@@ -868,6 +1170,41 @@ export type Database = {
             columns: ["qr_code_id"]
             isOneToOne: false
             referencedRelation: "qr_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reacoes_sugestoes: {
+        Row: {
+          autor: string
+          created_at: string
+          emoji: string
+          id: string
+          mensagem_id: string
+          sugestao_id: string
+        }
+        Insert: {
+          autor: string
+          created_at?: string
+          emoji: string
+          id?: string
+          mensagem_id: string
+          sugestao_id: string
+        }
+        Update: {
+          autor?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          mensagem_id?: string
+          sugestao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reacoes_sugestoes_sugestao_id_fkey"
+            columns: ["sugestao_id"]
+            isOneToOne: false
+            referencedRelation: "sugestoes_plataforma"
             referencedColumns: ["id"]
           },
         ]
@@ -910,113 +1247,335 @@ export type Database = {
           },
         ]
       }
+      respostas_sugestoes: {
+        Row: {
+          arquivos: Json | null
+          autor: string
+          created_at: string
+          id: string
+          responde_a: string | null
+          sugestao_id: string
+          texto: string
+        }
+        Insert: {
+          arquivos?: Json | null
+          autor?: string
+          created_at?: string
+          id?: string
+          responde_a?: string | null
+          sugestao_id: string
+          texto: string
+        }
+        Update: {
+          arquivos?: Json | null
+          autor?: string
+          created_at?: string
+          id?: string
+          responde_a?: string | null
+          sugestao_id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "respostas_sugestoes_sugestao_id_fkey"
+            columns: ["sugestao_id"]
+            isOneToOne: false
+            referencedRelation: "sugestoes_plataforma"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurantes: {
         Row: {
-          assinatura_status: string
+          assinatura_cancelada_em: string | null
           assinatura_expira_em: string | null
-          plano_ciclo: string | null
-          stripe_customer_id: string | null
-          stripe_subscription_id: string | null
-          auth_user_id: string | null
+          assinatura_status: string
+          auth_user_id: string
           config_insights: Json | null
           created_at: string
+          credito_ia_ciclo_inicio: string
+          credito_ia_limite_usd: number
           detalhes: string | null
-          ia_modo_acao: string
-          perfil_restaurante: Json
+          excluida_em: string | null
           frequencia_relatorios: string | null
           funcoes_config: Json | null
+          ia_modo_acao: string
           id: number
           logo_url: string | null
           mascote_config: Json | null
           metodo_coleta_feedback: string | null
           nome_restaurante: string | null
+          numero_mesas: number | null
+          numero_whatsapp: string | null
+          onboarding_completo: boolean
+          perfil_restaurante: Json
+          plano_ciclo: string | null
           qr_bg_imagem: string | null
           qr_bg_modo: string | null
           qr_estilo: string | null
           qr_filtro: string | null
           qr_mensagem: string | null
-          numero_mesas: number | null
-          numero_whatsapp: string | null
-          onboarding_completo: boolean
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           texto_banner: string | null
           tipo_culinaria: string | null
           ultima_analise_insights: string | null
           ultima_atualizacao_banner: string | null
+          whatsapp_admin_token: string | null
+          whatsapp_base_url: string | null
           whatsapp_token: string | null
         }
         Insert: {
-          assinatura_status?: string
+          assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
-          plano_ciclo?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          auth_user_id?: string | null
+          assinatura_status?: string
+          auth_user_id: string
           config_insights?: Json | null
           created_at?: string
+          credito_ia_ciclo_inicio?: string
+          credito_ia_limite_usd?: number
           detalhes?: string | null
-          ia_modo_acao?: string
-          perfil_restaurante?: Json
+          excluida_em?: string | null
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
+          ia_modo_acao?: string
           id?: number
           logo_url?: string | null
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
           nome_restaurante?: string | null
+          numero_mesas?: number | null
+          numero_whatsapp?: string | null
+          onboarding_completo?: boolean
+          perfil_restaurante?: Json
+          plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
-          numero_mesas?: number | null
-          numero_whatsapp?: string | null
-          onboarding_completo?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null
           ultima_atualizacao_banner?: string | null
+          whatsapp_admin_token?: string | null
+          whatsapp_base_url?: string | null
           whatsapp_token?: string | null
         }
         Update: {
-          assinatura_status?: string
+          assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
-          plano_ciclo?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          auth_user_id?: string | null
+          assinatura_status?: string
+          auth_user_id?: string
           config_insights?: Json | null
           created_at?: string
+          credito_ia_ciclo_inicio?: string
+          credito_ia_limite_usd?: number
           detalhes?: string | null
-          ia_modo_acao?: string
-          perfil_restaurante?: Json
+          excluida_em?: string | null
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
+          ia_modo_acao?: string
           id?: number
           logo_url?: string | null
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
           nome_restaurante?: string | null
+          numero_mesas?: number | null
+          numero_whatsapp?: string | null
+          onboarding_completo?: boolean
+          perfil_restaurante?: Json
+          plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
-          numero_mesas?: number | null
-          numero_whatsapp?: string | null
-          onboarding_completo?: boolean
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null
           ultima_atualizacao_banner?: string | null
+          whatsapp_admin_token?: string | null
+          whatsapp_base_url?: string | null
           whatsapp_token?: string | null
         }
         Relationships: []
       }
+      sugestoes_plataforma: {
+        Row: {
+          admin_leu_em: string | null
+          arquivos: Json
+          cliente_leu_em: string | null
+          created_at: string
+          id: string
+          restaurante_id: number | null
+          status: string
+          texto: string
+          titulo: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          admin_leu_em?: string | null
+          arquivos?: Json
+          cliente_leu_em?: string | null
+          created_at?: string
+          id?: string
+          restaurante_id?: number | null
+          status?: string
+          texto: string
+          titulo?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          admin_leu_em?: string | null
+          arquivos?: Json
+          cliente_leu_em?: string | null
+          created_at?: string
+          id?: string
+          restaurante_id?: number | null
+          status?: string
+          texto?: string
+          titulo?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
+      uso_ia: {
+        Row: {
+          agente_id: string | null
+          completion_tokens: number | null
+          created_at: string
+          custo_usd: number
+          id: string
+          modelo: string | null
+          origem: string
+          prompt_tokens: number | null
+          restaurante_id: number | null
+        }
+        Insert: {
+          agente_id?: string | null
+          completion_tokens?: number | null
+          created_at?: string
+          custo_usd?: number
+          id?: string
+          modelo?: string | null
+          origem: string
+          prompt_tokens?: number | null
+          restaurante_id?: number | null
+        }
+        Update: {
+          agente_id?: string | null
+          completion_tokens?: number | null
+          created_at?: string
+          custo_usd?: number
+          id?: string
+          modelo?: string | null
+          origem?: string
+          prompt_tokens?: number | null
+          restaurante_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uso_ia_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usuarios: {
+        Row: {
+          avatar_url: string | null
+          cargo: string
+          configuracoes: Json | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string | null
+          perfil_notas: string | null
+          restaurante_id: number
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          cargo?: string
+          configuracoes?: Json | null
+          created_at?: string
+          email?: string | null
+          id: string
+          nome?: string | null
+          perfil_notas?: string | null
+          restaurante_id: number
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          cargo?: string
+          configuracoes?: Json | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          perfil_notas?: string | null
+          restaurante_id?: number
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuarios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      feedbacks_originais_view: {
+        Row: {
+          categorias: string[] | null
+          created_at: string | null
+          id: string | null
+          restaurante_id: number | null
+          sentimento: string | null
+          telefone_cliente: string | null
+          texto_original: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_originais_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      admin_push_subscriptions: {
+        Args: never
+        Returns: {
+          auth: string
+          endpoint: string
+          p256dh: string
+        }[]
+      }
+      assinaturas_expirar_e_listar: {
+        Args: never
+        Returns: {
+          id: number
+          whatsapp_base_url: string
+          whatsapp_token: string
+        }[]
+      }
+      ativar_modelo_ia: { Args: { p_id: string }; Returns: undefined }
       buscar_conhecimento: {
         Args: {
           consulta_embedding: string
@@ -1047,11 +1606,35 @@ export type Database = {
           url: string
         }[]
       }
-      criar_restaurante_onboarding: {
-        Args: { p_mascote_config: Json; p_nome_restaurante: string }
-        Returns: number
+      consumir_credito_ia: {
+        Args: { p_custo?: number; p_restaurante_id: number }
+        Returns: {
+          ciclo_inicio: string
+          gasto: number
+          limite: number
+          permitido: boolean
+        }[]
       }
+      expirar_assinaturas: { Args: never; Returns: number }
       get_user_restaurante_id: { Args: never; Returns: number }
+      limpar_contas_abandonadas: { Args: never; Returns: number }
+      meu_uso_ia: {
+        Args: never
+        Returns: {
+          ciclo_inicio: string
+          gasto: number
+          limite: number
+        }[]
+      }
+      temas_agrupados: {
+        Args: { p_desde?: string; p_restaurante_id: number; p_tipo?: string }
+        Returns: {
+          id: string
+          quantidade: number
+          rotulo: string
+          tipo: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

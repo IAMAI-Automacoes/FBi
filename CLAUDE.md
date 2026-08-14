@@ -96,6 +96,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `/feedbacks` | `src/pages/Feedbacks.tsx` | Supabase |
 | `/insights` | `src/pages/Insights.tsx` | Supabase |
 | `/acoes` | `src/pages/Actions.tsx` | Supabase |
+| `/acoes/arquivadas` | `src/pages/AcoesArquivadas.tsx` | Supabase |
 | `/relatorios` | `src/pages/Reports.tsx` | Supabase |
 | `/qrcode` | `src/pages/QRCodes.tsx` | Supabase |
 | `/configuracoes` | `src/pages/Settings.tsx` | Supabase |
@@ -117,7 +118,6 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `gerar-insights` | Agrega feedbacks → gera insights + ações (cron) |
 | `sugerir-acoes` | Sugere ações a partir de insights (trigger automático) |
 | `gerar-plano-acao` | Gera plano detalhado para uma ação |
-| `gerar-perguntas-direcionadas` | Gera perguntas direcionadas para ação PENDENTE |
 | `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
@@ -157,3 +157,26 @@ Todas as tabelas principais usam `get_user_restaurante_id()`:
 SELECT id FROM public.restaurantes WHERE auth_user_id = auth.uid() LIMIT 1;
 ```
 Garante que gestor A nunca vê dados do restaurante B.
+
+### Conversas do chat (`conversas_chat` / `pastas_chat`)
+
+Nome, fixação e pasta de cada conversa. Antes viviam no `localStorage` (sumiam
+ao limpar o cache, não passavam para outro aparelho). As MENSAGENS continuam em
+`mensagens_chat`, que segue intocada — uma "conversa" é o agrupamento por
+`sessao_id`, e estas tabelas guardam só os metadados dela.
+
+- Dono por `restaurante_id` (bigint), com policies via `get_user_restaurante_id()`.
+  **Não** copiar o `USING (true)` de `mensagens_chat`.
+- Apagar uma pasta não apaga as conversas: o FK usa `on delete set null` e elas
+  voltam para a raiz da lista.
+- Query layer: `src/lib/queries/conversas-chat.ts`.
+
+### Ligação insight → feedbacks
+
+`insights.feedback_ids` (`uuid[]`) guarda os IDs de `feedbacks_originais` que
+originaram o insight, e `acoes_operacionais.insight_id` propaga o vínculo para a
+ação. É o que faz o botão "Feedbacks Relacionados" levar a
+`/feedbacks?insight_id=...`. A ponte de id-space é
+`feedbacks_restaurante.origem_id → feedbacks_originais.id` (ambos uuid).
+`feedbacks_relacionados` deixou de ser um número inventado pela IA: agora é o
+tamanho de `feedback_ids`.

@@ -397,6 +397,7 @@ Máximo de 3 fatos por conversa.` }],
 - Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
 - Agrupe feedbacks do mesmo tema num unico insight, nao repita.
 - Escreva em portugues do Brasil, direto, sem jargao.
+- "feedback_ids": liste os IDs EXATOS dos feedbacks abaixo que sustentam este insight. Use somente IDs que aparecem na lista. Nao invente ID.
 
 ## Formato OBRIGATORIO (retorne SOMENTE este JSON)
 {
@@ -407,7 +408,7 @@ Máximo de 3 fatos por conversa.` }],
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedbacks_relacionados": 2
+      "feedback_ids": ["id-do-feedback-1", "id-do-feedback-2"]
     }
   ]
 }

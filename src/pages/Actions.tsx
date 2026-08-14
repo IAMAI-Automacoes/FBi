@@ -9,6 +9,8 @@ export default function Actions() {
   return (
     <div className="flex flex-col h-full max-w-[1600px] w-full mx-auto space-y-6 p-6 md:p-8 relative">
       <SugestoesSidebar onActionProcessed={() => setRefreshTrigger((t) => t + 1)} />
+      {/* O botão "Arquivadas" fica no cabeçalho da coluna Concluído (TaskBoard),
+          junto com "Adicionar Ação" na coluna Pendente. */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Ações</h2>
         <p className="text-muted-foreground text-sm mt-1">

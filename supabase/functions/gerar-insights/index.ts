@@ -36,6 +36,7 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
 - Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
 - Agrupe feedbacks do mesmo tema num unico insight, nao repita.
 - Escreva em portugues do Brasil, direto, sem jargao.
+- "feedback_ids": liste os IDs EXATOS dos feedbacks abaixo que sustentam este insight. Use somente IDs que aparecem na lista. Nao invente ID.
 
 ## Formato OBRIGATORIO (retorne SOMENTE este JSON)
 {
@@ -46,7 +47,7 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedbacks_relacionados": 2
+      "feedback_ids": ["id-do-feedback-1", "id-do-feedback-2"]
     }
   ]
 }
@@ -138,8 +139,12 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     conhecimento: conhecimento
       ? `\n## Boas praticas de referencia (use para embasar as sugestoes)\n${conhecimento}`
       : '',
+    // O `id` enviado é o `origem_id` (a MENSAGEM original do cliente), que é o
+    // mesmo espaço de ID da página /feedbacks. Assim o modelo cita IDs já
+    // prontos para navegar, sem tradução no meio do caminho.
     feedbacks: JSON.stringify(
       (feedbacks || []).map((f: any) => ({
+        id: f.origem_id ?? f.id,
         texto: f.texto_original,
         sentimento: f.sentimento,
         categoria: f.categoria,
@@ -188,17 +193,31 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
       .filter((i) => i.prioridade === 'OBSERVACAO' || i.prioridade === 'OBSERVAÇÃO')
       .slice(0, max_observacoes)
 
-    const finalInsights = [...urgentes, ...importantes, ...observacoes].map((i) => ({
-      restaurante_id: restauranteId,
-      prioridade: i.prioridade === 'OBSERVAÇÃO' ? 'OBSERVACAO' : i.prioridade,
-      categoria: i.categoria || 'Geral',
-      titulo: i.titulo || 'Insight detectado',
-      descricao: i.descricao || '',
-      sugestao: i.sugestao || '',
-      feedbacks_relacionados: i.feedbacks_relacionados || 1,
-      gerado_por: 'ia',
-      ativo: true,
-    }))
+    // O modelo às vezes inventa ID. Só passam os que realmente vieram na lista,
+    // senão o link "feedbacks relacionados" levaria a um feedback inexistente.
+    const idsValidos = new Set(
+      (feedbacks || []).map((f: any) => String(f.origem_id ?? f.id)),
+    )
+
+    const finalInsights = [...urgentes, ...importantes, ...observacoes].map((i) => {
+      const ids = (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
+        .map((id: unknown) => String(id))
+        .filter((id: string) => idsValidos.has(id))
+
+      return {
+        restaurante_id: restauranteId,
+        prioridade: i.prioridade === 'OBSERVAÇÃO' ? 'OBSERVACAO' : i.prioridade,
+        categoria: i.categoria || 'Geral',
+        titulo: i.titulo || 'Insight detectado',
+        descricao: i.descricao || '',
+        sugestao: i.sugestao || '',
+        feedback_ids: ids,
+        // Deriva da lista real: o número deixa de ser um palpite do modelo.
+        feedbacks_relacionados: ids.length || 1,
+        gerado_por: 'ia',
+        ativo: true,
+      }
+    })
 
     if (ultimaAnalise) {
       await db.from('insights').update({ ativo: false }).eq('restaurante_id', restauranteId).lt('created_at', ultimaAnalise.toISOString())
