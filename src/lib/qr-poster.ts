@@ -1,5 +1,6 @@
+import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
-import { getTema, getFiltro } from '@/lib/qr-temas'
+import { getTema } from '@/lib/qr-temas'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -71,10 +72,14 @@ export interface PosterOpts {
   nome: string
   tagline?: string
   temaId?: string | null
-  filtroId?: string | null
 }
 
-/** Desenha o pôster retangular (em pé) do QR no canvas. */
+/**
+ * Desenha o cartaz retangular (em pé) do QR no canvas.
+ * Design limpo para impressão: fundo suave do tema, tipografia forte, QR num
+ * cartão branco (sem borda colorida) e um quadradinho com a logo no centro.
+ * O QR é gerado localmente (lib `qrcode`), sem depender de API externa.
+ */
 export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts): Promise<void> {
   canvas.width = POSTER_W
   canvas.height = POSTER_H
@@ -83,122 +88,134 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const W = POSTER_W
   const H = POSTER_H
   const t = getTema(opts.temaId)
-  const filtro = getFiltro(opts.filtroId)
+  const cx = W / 2
 
-  // Fundo (gradiente diagonal do tema)
-  const g = ctx.createLinearGradient(0, 0, W, H)
+  // ── Fundo (gradiente suave e claro do tema) ──
+  const g = ctx.createLinearGradient(0, 0, 0, H)
   g.addColorStop(0, t.posterBg[0])
   g.addColorStop(1, t.posterBg[1])
   ctx.fillStyle = g
   ctx.fillRect(0, 0, W, H)
 
-  // Textura de culinária (marca d'água grande e diagonal)
-  ctx.save()
-  ctx.globalAlpha = 0.07
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  let k = 0
-  for (let row = -1; row < 8; row++) {
-    for (let col = -1; col < 6; col++) {
-      const em = t.emojis[k % t.emojis.length]; k++
-      ctx.save()
-      ctx.translate(col * 150 + (row % 2 ? 75 : 0), row * 150 + 40)
-      ctx.rotate(-0.35)
-      ctx.font = '90px serif'
-      ctx.fillText(em, 0, 0)
-      ctx.restore()
-    }
-  }
-  ctx.restore()
-
-  // Filtro sobre o fundo
-  if (filtro.overlay !== 'transparent') {
-    ctx.fillStyle = filtro.overlay
-    ctx.fillRect(0, 0, W, H)
-  }
+  // Brilho suave da cor de acento no topo (profundidade, sem poluir)
+  const glow = ctx.createRadialGradient(cx, 40, 20, cx, 40, 520)
+  glow.addColorStop(0, hexComAlpha(t.acento, 0.14))
+  glow.addColorStop(1, hexComAlpha(t.acento, 0))
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, 560)
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
 
-  // Faixa decorativa de emojis (tema bem visível) no topo
-  const strip = [...t.emojis, ...t.emojis].slice(0, 5)
-  ctx.font = '52px serif'
-  strip.forEach((em, i) => ctx.fillText(em, W / 2 + (i - 2) * 96, 108))
+  // ── Sobrenome/rótulo ──
+  ctx.fillStyle = t.acento
+  ctx.font = 'bold 24px sans-serif'
+  ctx.save()
+  espacado(ctx, 'RESTAURANTE', cx, 132, 6)
+  ctx.restore()
 
-  // Título "Restaurante {nome}"
-  ctx.fillStyle = t.posterTexto
-  ctx.font = 'bold 48px sans-serif'
-  const yTitulo = wrapText(ctx, `Restaurante ${opts.nome}`, W / 2, 200, W - 110, 56)
+  // ── Nome do restaurante (fonte adaptativa: nomes longos não invadem o QR) ──
+  ctx.fillStyle = t.posterTinta
+  const tamNome = opts.nome.length > 22 ? 38 : opts.nome.length > 15 ? 46 : 52
+  ctx.font = `bold ${tamNome}px Georgia, serif`
+  const yTitulo = wrapText(ctx, opts.nome, cx, 196, W - 110, tamNome + 10)
 
-  // Linha de destaque
-  ctx.fillStyle = t.posterAccent
-  roundRect(ctx, W / 2 - 45, yTitulo + 6, 90, 6, 3)
+  // Traço curto de destaque
+  ctx.fillStyle = t.acento
+  roundRect(ctx, cx - 34, yTitulo + 10, 68, 5, 2.5)
   ctx.fill()
 
-  // Frase de incentivo
-  ctx.fillStyle = t.posterTexto
-  ctx.globalAlpha = 0.92
-  ctx.font = '26px sans-serif'
-  wrapText(ctx, opts.tagline?.trim() || 'É rapidinho! Escaneie e conte como foi sua experiência 💬', W / 2, yTitulo + 56, W - 140, 34)
-  ctx.globalAlpha = 1
+  // ── Frase de incentivo ──
+  ctx.fillStyle = t.posterSuave
+  ctx.font = '25px sans-serif'
+  wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 58, W - 150, 33)
 
-  // Cartão branco com borda em volta do QR
-  const card = { x: 105, y: 400, w: 510, h: 510, r: 34 }
+  // ── Cartão branco do QR (sem borda colorida) ──
+  const card = { x: 130, y: 402, w: 460, h: 460, r: 40 }
   ctx.save()
-  ctx.shadowColor = 'rgba(0,0,0,0.28)'
-  ctx.shadowBlur = 34
-  ctx.shadowOffsetY = 12
+  ctx.shadowColor = 'rgba(23,23,23,0.16)'
+  ctx.shadowBlur = 42
+  ctx.shadowOffsetY = 18
   roundRect(ctx, card.x, card.y, card.w, card.h, card.r)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.restore()
-  roundRect(ctx, card.x, card.y, card.w, card.h, card.r)
-  ctx.lineWidth = 9
-  ctx.strokeStyle = t.posterAccent
-  ctx.stroke()
 
-  // QR (correção de erro alta para permitir o logo no centro)
-  const qs = 418
+  // ── QR (gerado localmente, correção alta p/ caber a logo no centro) ──
+  const dataUrl = await QRCode.toDataURL(opts.url, {
+    errorCorrectionLevel: 'H',
+    margin: 1,
+    width: 560,
+    color: { dark: '#171717ff', light: '#ffffffff' },
+  }).catch(() => '')
+  const qs = 372
   const qx = card.x + (card.w - qs) / 2
   const qy = card.y + (card.h - qs) / 2
-  const qr = await carregarImg(
-    `https://api.qrserver.com/v1/create-qr-code/?size=440x440&margin=0&ecc=H&data=${encodeURIComponent(opts.url)}`,
-    true,
-  )
-  ctx.drawImage(qr, qx, qy, qs, qs)
-
-  // Ícone do Easy Feed no centro do QR (fallback: texto "Easy Feed")
-  const cx = W / 2
-  const cy = card.y + card.h / 2
-  const r = 56
-  ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.fillStyle = '#ffffff'
-  ctx.fill()
-  ctx.lineWidth = 4
-  ctx.strokeStyle = t.posterAccent
-  ctx.stroke()
-  const logo = await carregarImg(easyFeedIcon)
-  if (logo && logo.width > 1) {
-    const lw = r * 3
-    const lh = (logo.height / logo.width) * lw
-    ctx.drawImage(logo, cx - lw / 2, cy - lh / 2, lw, lh)
-  } else {
-    ctx.fillStyle = t.posterAccent
-    ctx.font = 'bold 18px sans-serif'
-    ctx.fillText('Easy Feed', cx, cy + 7)
+  if (dataUrl) {
+    const qr = await carregarImg(dataUrl)
+    ctx.drawImage(qr, qx, qy, qs, qs)
   }
 
-  // Instrução abaixo do cartão
-  ctx.fillStyle = t.posterTexto
-  ctx.globalAlpha = 0.92
-  ctx.font = '24px sans-serif'
-  ctx.fillText('Aponte a câmera do celular para o QR Code', W / 2, card.y + card.h + 60)
-  ctx.globalAlpha = 1
+  // ── Quadrado central com a logo do Easy Feed (não é mais um círculo) ──
+  const plate = 104
+  const px = cx - plate / 2
+  const py = card.y + card.h / 2 - plate / 2
+  ctx.save()
+  ctx.shadowColor = 'rgba(23,23,23,0.18)'
+  ctx.shadowBlur = 12
+  roundRect(ctx, px, py, plate, plate, 22)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.restore()
+  const logo = await carregarImg(easyFeedIcon)
+  if (logo && logo.width > 1) {
+    const pad = 20
+    const box = plate - pad * 2
+    const escala = Math.min(box / logo.width, box / logo.height)
+    const lw = logo.width * escala
+    const lh = logo.height * escala
+    ctx.drawImage(logo, cx - lw / 2, card.y + card.h / 2 - lh / 2, lw, lh)
+  } else {
+    ctx.fillStyle = t.acento
+    ctx.font = 'bold 16px sans-serif'
+    ctx.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
+  }
 
-  // Rodapé: crédito do produto
-  ctx.globalAlpha = 0.75
+  // ── Instrução abaixo do cartão ──
+  ctx.fillStyle = t.posterTinta
+  ctx.font = 'bold 27px sans-serif'
+  ctx.fillText('Aponte a câmera do celular', cx, card.y + card.h + 66)
+  ctx.fillStyle = t.posterSuave
+  ctx.font = '21px sans-serif'
+  ctx.fillText('e toque no link que aparecer na tela', cx, card.y + card.h + 100)
+
+  // ── Rodapé: crédito do produto ──
+  ctx.fillStyle = t.posterSuave
+  ctx.globalAlpha = 0.85
   ctx.font = '18px sans-serif'
-  ctx.fillText('Easy Feed', W / 2, H - 34)
+  espacado(ctx, 'FEITO COM EASY FEED', cx, H - 40, 3)
   ctx.globalAlpha = 1
+}
+
+/** Escreve um texto com espaçamento entre letras (canvas não tem letter-spacing nativo confiável). */
+function espacado(ctx: CanvasRenderingContext2D, texto: string, cx: number, y: number, sp: number) {
+  const larguras = [...texto].map((ch) => ctx.measureText(ch).width + sp)
+  const total = larguras.reduce((a, b) => a + b, 0) - sp
+  let x = cx - total / 2
+  const antes = ctx.textAlign
+  ctx.textAlign = 'left'
+  for (let i = 0; i < texto.length; i++) {
+    ctx.fillText(texto[i], x, y)
+    x += larguras[i]
+  }
+  ctx.textAlign = antes
+}
+
+/** Converte '#rrggbb' + alpha (0..1) em 'rgba(...)'. */
+function hexComAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const gg = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${gg},${b},${alpha})`
 }

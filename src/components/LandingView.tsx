@@ -1,104 +1,87 @@
-import { getTema, getFiltro } from '@/lib/qr-temas'
+import { getTema } from '@/lib/qr-temas'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { easyFeedLogo } from '@/assets/brand'
 
 export interface LandingViewProps {
   restauranteNome: string
-  garcomNome?: string | null
+  garcomNome?: string | null // recebido mas NÃO exibido (QR de garçom = igual ao comum)
   modo: string
   imagem?: string | null
   estilo: string
-  filtro: string
+  filtro?: string // legado — ignorado
   mensagem?: string | null
   whatsapp?: string | null
   preview?: boolean // no preview o botão não navega
 }
 
-// Textura de fundo com emojis da culinária
-function FundoEmojis({ emojis }: { emojis: string[] }) {
-  const itens = Array.from({ length: 60 }, (_, i) => emojis[i % emojis.length])
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.16]">
-      <div className="flex flex-wrap gap-8 p-6 -rotate-[18deg] scale-150">
-        {itens.map((e, i) => (
-          <span key={i} className="text-5xl leading-none select-none">{e}</span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
+// Estilos inline (sem Tailwind) de propósito: assim a LandingView funciona tanto
+// no painel (preview) quanto na entrada leve `f.html` — que NÃO carrega o CSS do
+// app — mantendo a página que o cliente abre pequena e rápida.
 export function LandingView({
-  restauranteNome, garcomNome, modo, imagem, estilo, filtro, mensagem, whatsapp, preview,
+  restauranteNome, modo, imagem, estilo, mensagem, whatsapp, preview,
 }: LandingViewProps) {
   const tema = getTema(estilo)
-  const f = getFiltro(filtro)
-  const usaImagem = modo === 'upload' && !!imagem
+  // Foto de fundo: imagem própria (upload) ou a foto do tema escolhido.
+  const fundo = modo === 'upload' && imagem ? imagem : tema.foto
   const waLink = whatsapp ? `https://wa.me/${whatsapp}` : null
 
-  const Marca = (
-    <div className="flex flex-col items-center">
-      <div className="bg-white rounded-md px-3 py-1.5 shadow-sm">
-        <img src={easyFeedLogo} alt="Easy Feed" className="h-10 w-auto object-contain" />
-      </div>
-    </div>
+  const botaoStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    borderRadius: '16px',
+    background: '#25D366',
+    padding: '15px 24px',
+    fontSize: '16px',
+    fontWeight: 700,
+    color: '#ffffff',
+    textDecoration: 'none',
+    boxShadow: '0 14px 34px -10px rgba(37,211,102,0.75)',
+    border: '1px solid rgba(255,255,255,0.22)',
+  }
+  const Icone = <WhatsappIcon style={{ width: 22, height: 22 }} />
+  const Botao = !whatsapp ? (
+    <p style={{ textAlign: 'center', fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>WhatsApp ainda não configurado.</p>
+  ) : preview || !waLink ? (
+    <div style={botaoStyle}>{Icone} Dar meu feedback</div>
+  ) : (
+    <a href={waLink} style={botaoStyle}>{Icone} Dar meu feedback</a>
   )
 
-  const botaoClasses =
-    'inline-flex items-center justify-center gap-2.5 rounded-full bg-white px-6 py-3 text-[15px] font-bold text-emerald-950 shadow-[0_10px_26px_-8px_rgba(0,0,0,0.5)] ring-1 ring-black/5 transition active:scale-[0.96] hover:shadow-[0_14px_32px_-8px_rgba(0,0,0,0.55)]'
-  const IconeVerde = <WhatsappIcon className="h-6 w-6 text-[#25D366]" />
-  const Botao =
-    !whatsapp ? (
-      <p className="text-sm opacity-70">WhatsApp ainda não configurado.</p>
-    ) : preview || !waLink ? (
-      <div className={botaoClasses}>{IconeVerde} Dar meu feedback</div>
-    ) : (
-      <a href={waLink} className={botaoClasses}>{IconeVerde} Dar meu feedback</a>
-    )
-
-  if (usaImagem) {
-    return (
-      <div className="relative h-full w-full overflow-hidden bg-black">
-        <img
-          src={imagem!}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          style={{ filter: f.css === 'none' ? undefined : f.css }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-        <div className="relative z-10 h-full flex flex-col items-center justify-end gap-4 px-5 pb-10 text-white">
-          {garcomNome && <p className="text-sm font-medium drop-shadow">Atendimento de {garcomNome}</p>}
-          <div className="flex justify-center">{Botao}</div>
-          <div className="text-white">{Marca}</div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div
-      className="relative h-full w-full flex flex-col items-center justify-center px-6 py-10 overflow-hidden"
-      style={{ background: tema.bg, color: tema.texto }}
-    >
-      <FundoEmojis emojis={tema.emojis} />
-      {f.overlay !== 'transparent' && (
-        <div className="pointer-events-none absolute inset-0" style={{ background: f.overlay }} />
-      )}
+    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden', background: '#171717', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
+      {/* Foto de fundo */}
+      <img src={fundo} alt="" style={{ position: 'absolute', inset: 0, height: '100%', width: '100%', objectFit: 'cover' }} />
+      {/* Scrim para leitura */}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.42) 55%, rgba(0,0,0,0.22))' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 96, background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))' }} />
 
-      <div className="relative z-10 w-full max-w-xs flex flex-col items-center text-center gap-5">
-        <div className="flex items-center gap-2 text-3xl drop-shadow-sm">
-          {tema.emojis.slice(0, 5).map((e, i) => <span key={i}>{e}</span>)}
+      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px 32px', color: '#fff' }}>
+        {/* Selo topo */}
+        <div style={{ position: 'absolute', left: '50%', top: 24, transform: 'translateX(-50%)' }}>
+          <span style={{ borderRadius: 999, background: 'rgba(255,255,255,0.12)', padding: '6px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.15)', WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}>
+            Sua opinião
+          </span>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-widest opacity-70">Restaurante</p>
-          <h1 className="text-3xl font-bold leading-tight">{restauranteNome}</h1>
-          {garcomNome && <p className="mt-1 text-sm opacity-85">Atendimento de {garcomNome}</p>}
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.7)' }}>Restaurante</p>
+          <h1 style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 700, lineHeight: 1.15 }}>{restauranteNome}</h1>
+          <p style={{ margin: '12px 0 0', maxWidth: '19rem', fontSize: 15, lineHeight: 1.5, color: 'rgba(255,255,255,0.9)' }}>
+            {mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.'}
+          </p>
+
+          <div style={{ marginTop: 24, width: '100%', maxWidth: '18rem' }}>{Botao}</div>
+
+          <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>feito com</span>
+            <span style={{ borderRadius: 6, background: 'rgba(255,255,255,0.95)', padding: '4px 8px', display: 'inline-flex' }}>
+              <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 16, width: 'auto', objectFit: 'contain', display: 'block' }} />
+            </span>
+          </div>
         </div>
-        <p className="text-base opacity-95">
-          {mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente. 💬'}
-        </p>
-        <div className="mt-1 flex justify-center">{Botao}</div>
-        <div className="mt-6">{Marca}</div>
       </div>
     </div>
   )

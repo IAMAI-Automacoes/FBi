@@ -16,6 +16,13 @@ export default defineConfig(({ mode }) => ({
     minify: mode !== 'development',
     sourcemap: mode === 'development',
     rolldownOptions: {
+      // Duas entradas: o app (index.html) e a landing pública LEVE (f.html),
+      // que o cliente abre ao escanear o QR. A landing vira um bundle mínimo,
+      // sem o app de ~2 MB — o `.htaccess` reescreve /f/:slug → /f.html.
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        landing: path.resolve(__dirname, 'f.html'),
+      },
       onwarn(warning, warn) {
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
           return

@@ -3,6 +3,10 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  # Página pública do QR (/f/:slug): serve o bundle LEVE f.html em vez do app
+  # de ~2 MB. A URL continua /f/:slug (reescrita interna). Precisa vir ANTES do
+  # fallback do SPA abaixo, senão cairia no index.html.
+  RewriteRule ^f/[^/]+/?$ /f.html [L]
   # React Router (BrowserRouter): tudo que NÃO é arquivo/pasta real cai no
   # index.html — faz /admin, F5 e links profundos funcionarem em vez de 404.
   RewriteRule ^index\.html$ - [L]
@@ -20,7 +24,7 @@
   # O service worker, o index e os manifests NÃO podem ficar em cache longo,
   # senão o PWA trava numa versão antiga. Os assets com hash (/assets/…) o
   # navegador cacheia sozinho com segurança.
-  <FilesMatch "(^sw\.js$|index\.html$|\.webmanifest$)">
+  <FilesMatch "(^sw\.js$|index\.html$|f\.html$|\.webmanifest$)">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>
