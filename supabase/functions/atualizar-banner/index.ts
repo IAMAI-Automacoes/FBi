@@ -15,6 +15,11 @@ destaque dos feedbacks das últimas horas.
 
 {tom}
 
+Se a frase precisar de uma contagem ou porcentagem (ex.: "12 feedbacks, 83% positivos"), NUNCA
+calcule de cabeça — use a ferramenta de calculadora disponível para contar/calcular com exatidão
+antes de escrever o número. Nunca escreva um número que você não tenha certeza de ter contado ou
+calculado corretamente.
+
 Exemplos: "Ontem recebemos 12 feedbacks, 83% positivos. Destaque: 4 elogios à nova sobremesa."
 ou "Nas últimas 24h, surgiram 3 menções negativas sobre tempo de espera. Vale investigar."
 NÃO use formatação JSON nem markdown (asteriscos). Retorne apenas o texto puro da frase.

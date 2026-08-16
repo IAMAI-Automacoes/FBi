@@ -169,7 +169,7 @@ export default function Garcons() {
     <div className="flex-1">
       <Tabs defaultValue="ranking" className="w-full">
         <TabsList className="mb-6">
-          <TabsTrigger value="ranking">Ranking de feedbacks</TabsTrigger>
+          <TabsTrigger value="ranking">Ranking de aberturas do QR</TabsTrigger>
           <TabsTrigger value="equipe">Equipe</TabsTrigger>
         </TabsList>
 
@@ -197,7 +197,7 @@ export default function Garcons() {
                         </div>
                         <div className="shrink-0 text-right">
                           <span className="text-lg font-bold text-emerald-600">{scans}</span>
-                          <span className="text-xs text-muted-foreground ml-1">feedbacks</span>
+                          <span className="text-xs text-muted-foreground ml-1">aberturas</span>
                         </div>
                       </li>
                     )

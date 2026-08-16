@@ -90,7 +90,7 @@ export async function buscarEstatisticasRelatorio(
   const { currentStart } = getPeriodDates(periodo)
   const { data, error } = await supabase
     .from('feedbacks_restaurante')
-    .select('created_at, categoria, sentimento, telefone_cliente')
+    .select('id, created_at, categoria, sentimento, telefone_cliente, origem_id')
     .eq('restaurante_id', restauranteId)
     .gte('created_at', currentStart.toISOString())
   if (error) throw error
@@ -98,15 +98,24 @@ export async function buscarEstatisticasRelatorio(
   const fs = data || []
   if (!fs.length) return vazio
 
-  // Clientes (telefone é o identificador do cliente no WhatsApp)
-  const porTelefone = new Map<string, number>()
+  // Clientes (telefone é o identificador do cliente no WhatsApp).
+  // `feedbacks_restaurante` é a tabela SEPARADA POR TÓPICO: uma única mensagem
+  // do cliente com sentimento misto ("comida ótima, mas demorou") vira 2+
+  // linhas aqui. Contar linhas por telefone inflava "recorrência" — um cliente
+  // que mandou 1 mensagem só já parecia ter avaliado 2 vezes. `origem_id` liga
+  // as linhas que vieram da MESMA mensagem (mesmo uuid gerado pelo n8n); linhas
+  // sem origem_id (dado antigo) contam como mensagem própria via o `id`.
+  const porTelefone = new Map<string, Set<string>>()
   for (const f of fs) {
     if (!f.telefone_cliente) continue
-    porTelefone.set(f.telefone_cliente, (porTelefone.get(f.telefone_cliente) ?? 0) + 1)
+    const chaveMensagem = f.origem_id ?? `linha-${f.id}`
+    if (!porTelefone.has(f.telefone_cliente)) porTelefone.set(f.telefone_cliente, new Set())
+    porTelefone.get(f.telefone_cliente)!.add(chaveMensagem)
   }
   const clientesUnicos = porTelefone.size
-  const clientesRecorrentes = [...porTelefone.values()].filter((n) => n > 1).length
-  const avaliacoesPorCliente = clientesUnicos ? Number((fs.length / clientesUnicos).toFixed(1)) : 0
+  const clientesRecorrentes = [...porTelefone.values()].filter((mensagens) => mensagens.size > 1).length
+  const totalMensagens = [...porTelefone.values()].reduce((soma, mensagens) => soma + mensagens.size, 0)
+  const avaliacoesPorCliente = clientesUnicos ? Number((totalMensagens / clientesUnicos).toFixed(1)) : 0
 
   // Melhor / pior categoria (exige amostra mínima para não eleger categoria de 1 avaliação)
   const porCategoria = new Map<string, any[]>()
@@ -239,7 +248,7 @@ function analiseFallback(dados: any): AnaliseRelatorio {
     resumo: [
       `No período (${String(dados.periodo || '').toLowerCase()}), o restaurante recebeu ${k.totalFeedbacks || 0} avaliações de ${e.clientesUnicos || 0} clientes.`,
       `O índice de satisfação ficou em ${k.sentiment ?? 0} de 100.`,
-      comparar ? `No período anterior era ${(k.sentiment ?? 0) - parseInt(String(k.sentimentTrend), 10) || 0} de 100.` : '',
+      comparar ? `No período anterior era ${k.prevSentiment ?? 0} de 100.` : '',
     ].filter(Boolean).join(' '),
     ponto_forte: k.positivos
       ? `${k.positivos} de ${k.totalFeedbacks} avaliações foram positivas (${k.positivePercent}%).`
@@ -262,6 +271,38 @@ function analiseFallback(dados: any): AnaliseRelatorio {
         : '',
     porIa: false,
   }
+}
+
+/**
+ * Números "de verdade" que a IA tem permissão de citar no texto livre do
+ * relatório — todo o resto do dado já calculado em código (ver `dados.kpis`/
+ * `dados.estatisticas`). Usado por `numerosSuspeitos` para flagar quando a IA
+ * escreveu um percentual ou um "X de 100" que não bate com nada real (sinal
+ * de que ela recalculou ou inventou em vez de só ler o que foi dado).
+ */
+function numerosPermitidos(dados: any): Set<number> {
+  const k = dados.kpis || {}
+  const e = dados.estatisticas || {}
+  const nums = new Set<number>()
+  const add = (v: unknown) => {
+    if (typeof v === 'number' && Number.isFinite(v)) nums.add(Math.round(v))
+  }
+  add(k.positivePercent)
+  add(k.negativePercent)
+  add(k.neutralPercent)
+  add(k.criticalPercent)
+  add(k.sentiment)
+  add(k.prevSentiment)
+  for (const c of e.porCategoria || []) add(c.satisfacao)
+  return nums
+}
+
+/** Extrai "X%" e "X de 100" do texto e devolve os que NÃO batem com nenhum número real. */
+function numerosSuspeitos(texto: string, permitidos: Set<number>): number[] {
+  const achados = new Set<number>()
+  for (const m of texto.matchAll(/(\d{1,3})\s*%/g)) achados.add(Number(m[1]))
+  for (const m of texto.matchAll(/(\d{1,3})\s*de\s*100/gi)) achados.add(Number(m[1]))
+  return [...achados].filter((n) => !permitidos.has(n))
 }
 
 /**
@@ -289,7 +330,7 @@ export async function gerarAnaliseRelatorio(dados: any): Promise<AnaliseRelatori
     const texto = (v: any, padrao: string) =>
       typeof v === 'string' && v.trim() ? v.trim() : padrao
 
-    return {
+    const resultado: AnaliseRelatorio = {
       titulo: texto(bruto.titulo, fallback.titulo),
       resumo: texto(bruto.resumo, fallback.resumo),
       ponto_forte: texto(bruto.ponto_forte, fallback.ponto_forte),
@@ -303,6 +344,23 @@ export async function gerarAnaliseRelatorio(dados: any): Promise<AnaliseRelatori
       alerta_amostra: typeof bruto.alerta_amostra === 'string' ? bruto.alerta_amostra.trim() : '',
       porIa: true,
     }
+
+    // Rede de segurança final: o prompt já instrui "nunca invente número", mas
+    // isso é uma instrução de linguagem natural — nada garantia até aqui que a
+    // IA de fato só citou os números reais. Se ela citar um % ou um "X de 100"
+    // que não bate com nenhum dado calculado, descarta a resposta inteira e
+    // usa o texto 100% determinístico (nunca mostra um número não verificado).
+    const textoLivre = [
+      resultado.resumo, resultado.ponto_forte, resultado.ponto_fraco,
+      resultado.leitura_categorias, resultado.leitura_clientes,
+    ].join(' ')
+    const suspeitos = numerosSuspeitos(textoLivre, numerosPermitidos(dados))
+    if (suspeitos.length) {
+      console.warn('Análise da IA citou número(s) fora dos dados reais, usando texto calculado:', suspeitos)
+      return fallback
+    }
+
+    return resultado
   } catch (err) {
     console.warn('Análise por IA indisponível, usando texto calculado:', err)
     return fallback
@@ -325,7 +383,18 @@ export async function gerarResumoExecutivo(dadosRelatorio: any): Promise<string>
       paramsDoAgente('resumo_executivo', { max_tokens: 400 }),
       'resumo_executivo',
     )
-    return String(resposta ?? '')
+    const texto = String(resposta ?? '')
+
+    // Mesma rede de segurança de `gerarAnaliseRelatorio`: texto livre não tem
+    // como ser validado por schema, então checamos os números citados contra
+    // os dados reais. Se algo não bater, prefere não mostrar nada a mostrar
+    // um número que pode estar errado — a tela já trata resumo vazio.
+    const suspeitos = numerosSuspeitos(texto, numerosPermitidos(dadosRelatorio))
+    if (suspeitos.length) {
+      console.warn('Resumo executivo citou número(s) fora dos dados reais, ocultando:', suspeitos)
+      return ''
+    }
+    return texto
   } catch (err) {
     console.warn('Resumo executivo indisponível:', err)
     return ''

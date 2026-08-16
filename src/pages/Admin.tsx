@@ -35,6 +35,7 @@ import {
 } from '@/lib/queries/admin'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
+import { avisarConversaAtiva } from '@/lib/notificacoes-app'
 import { DoubleCheck } from '@/components/DoubleCheck'
 import { LinkifiedText } from '@/components/LinkifiedText'
 import { MessageMenu } from '@/components/MessageMenu'
@@ -745,6 +746,23 @@ function ConversaView({
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [s.id])
+
+  // Avisa o Service Worker que ESTA conversa (usuario_id) está aberta e
+  // visível — é o que faz ele só suprimir a notificação de push desta
+  // conversa específica, e continuar notificando qualquer outra. Se a aba sai
+  // de foco (troca de app, minimiza), avisa "nenhuma" para voltar a notificar
+  // mesmo esta, já que o admin deixou de estar olhando.
+  useEffect(() => {
+    const aoMudarVisibilidade = () => {
+      avisarConversaAtiva(document.visibilityState === 'visible' ? s.usuario_id : null)
+    }
+    aoMudarVisibilidade() // estado inicial já respeitando a visibilidade atual da aba
+    document.addEventListener('visibilitychange', aoMudarVisibilidade)
+    return () => {
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade)
+      avisarConversaAtiva(null)
+    }
+  }, [s.usuario_id])
 
   // Scroll: ao montar vai à última mensagem
   useEffect(() => {

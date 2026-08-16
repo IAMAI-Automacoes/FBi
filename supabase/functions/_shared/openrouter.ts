@@ -7,6 +7,7 @@
  * Toda chamada de IA do servidor passa por aqui.
  */
 import type { ParamsAgente } from './params.ts'
+import { FERRAMENTA_CALCULADORA, executarFerramentaCalculadora } from './calculadora.ts'
 
 const URL_OPENROUTER = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -14,9 +15,12 @@ const URL_OPENROUTER = 'https://openrouter.ai/api/v1/chat/completions'
 type Db = any
 
 export interface Mensagem {
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   // deno-lint-ignore no-explicit-any
-  content: string | any[]
+  content: string | any[] | null
+  // deno-lint-ignore no-explicit-any
+  tool_calls?: any[]
+  tool_call_id?: string
 }
 
 export interface FonteWeb {
@@ -93,7 +97,7 @@ async function registrarUso(
 }
 
 /** Só os parâmetros que o OpenRouter aceita, sem as chaves vazias. */
-function corpoDaChamada(messages: Mensagem[], params: ParamsAgente) {
+function corpoDaChamada(messages: Mensagem[], params: ParamsAgente, usarCalculadora: boolean) {
   // deno-lint-ignore no-explicit-any
   const body: Record<string, any> = {
     model: params.model,
@@ -114,6 +118,16 @@ function corpoDaChamada(messages: Mensagem[], params: ParamsAgente) {
 
   if (params.response_format) body.response_format = params.response_format
 
+  // Calculadora: só em respostas de texto livre. Em `json_object` alguns
+  // modelos, ao rotearem por provedores diferentes no OpenRouter, não
+  // combinam bem tool-calling com saída JSON forçada — nesses agentes os
+  // números já chegam prontos no prompt (não pedimos conta à IA), então a
+  // ferramenta não faz falta e preferimos não arriscar a combinação.
+  if (usarCalculadora) {
+    body.tools = [FERRAMENTA_CALCULADORA]
+    body.tool_choice = 'auto'
+  }
+
   if (params.web) {
     const max = Math.min(Math.max(Number(params.web_max_results) || 4, 1), 8)
     body.plugins = [{
@@ -132,6 +146,15 @@ function corpoDaChamada(messages: Mensagem[], params: ParamsAgente) {
  *
  * `restauranteId` nulo significa chamada sem dono identificável (cron); nesse
  * caso o uso é gravado sem vínculo, para o custo continuar visível no total.
+ *
+ * CALCULADORA: por padrão toda chamada ganha uma ferramenta `calcular` (ver
+ * `./calculadora.ts`) que a IA pode invocar sempre que precisar fazer conta —
+ * porcentagem, soma, diferença de dias etc. — em vez de calcular de cabeça e
+ * arriscar alucinar um número. Quando o modelo pede a ferramenta, resolvemos
+ * em código (determinístico) e devolvemos o resultado para ele terminar a
+ * resposta; isso é invisível para quem chamou `chamarIA` — o retorno continua
+ * sendo só a resposta final. Passe `calculadora: false` para desativar num
+ * caso específico (não deveria ser necessário hoje).
  */
 export async function chamarIA(
   db: Db,
@@ -142,6 +165,7 @@ export async function chamarIA(
     restauranteId?: number | null
     agenteId?: string | null
     checarCotaAntes?: boolean
+    calculadora?: boolean
   },
 ): Promise<RespostaIA> {
   const apiKey = Deno.env.get('OPENROUTER_API_KEY')
@@ -150,55 +174,99 @@ export async function chamarIA(
   const restauranteId = opcoes.restauranteId ?? null
   if (opcoes.checarCotaAntes !== false) await checarCota(db, restauranteId)
 
-  const body = corpoDaChamada(opcoes.messages, opcoes.params)
+  const usarCalculadora =
+    opcoes.calculadora !== false && opcoes.params.response_format?.type !== 'json_object'
 
-  const resposta = await fetch(URL_OPENROUTER, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://feedbackinteligente.app',
+  // A IA sempre sabe a data/hora real de "hoje" — sem isso ela não tem como
+  // calcular diferença de dias ou julgar "recente" de forma confiável, e
+  // tenderia a supor a data do próprio treinamento.
+  const agora = new Date()
+  const mensagens: Mensagem[] = [
+    {
+      role: 'system',
+      content: `Contexto: agora é ${agora.toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short', timeZone: 'America/Sao_Paulo' })} (${agora.toISOString().slice(0, 10)}, fuso de Brasília).`,
     },
-    body: JSON.stringify(body),
-  })
+    ...opcoes.messages,
+  ]
 
-  if (!resposta.ok) {
-    const detalhe = await resposta.text()
-    throw new ErroIA(resposta.status, `OpenRouter error: ${resposta.status}`, detalhe)
-  }
+  let modelo = opcoes.params.model || ''
+  let custoTotal = 0
+  const fontes: FonteWeb[] = []
 
-  const data = await resposta.json()
-  const message = data.choices?.[0]?.message ?? {}
-  const content = message.content ?? ''
-  const modelo = data.model || body.model
-  const custo = Number(data.usage?.cost ?? 0)
+  const MAX_RODADAS = 4
+  for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
+    const body = corpoDaChamada(mensagens, opcoes.params, usarCalculadora)
 
-  await registrarUso(db, {
-    restauranteId,
-    origem: opcoes.origem,
-    agenteId: opcoes.agenteId,
-    modelo,
-    usage: data.usage,
-    custo,
-  })
+    const resposta = await fetch(URL_OPENROUTER, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://feedbackinteligente.app',
+      },
+      body: JSON.stringify(body),
+    })
 
-  const fontes: FonteWeb[] = Array.isArray(message.annotations)
-    // deno-lint-ignore no-explicit-any
-    ? message.annotations
-        .filter((a: any) => a?.type === 'url_citation' && a?.url_citation?.url)
-        .map((a: any) => ({ url: a.url_citation.url, titulo: a.url_citation.title ?? '' }))
-    : []
-
-  let result = content
-  if (opcoes.params.response_format?.type === 'json_object') {
-    try {
-      result = JSON.parse(String(content).replace(/^```(?:json)?|```$/g, '').trim())
-    } catch {
-      result = content
+    if (!resposta.ok) {
+      const detalhe = await resposta.text()
+      throw new ErroIA(resposta.status, `OpenRouter error: ${resposta.status}`, detalhe)
     }
+
+    const data = await resposta.json()
+    const message = data.choices?.[0]?.message ?? {}
+    modelo = data.model || body.model
+    const custoRodada = Number(data.usage?.cost ?? 0)
+    custoTotal += custoRodada
+
+    await registrarUso(db, {
+      restauranteId,
+      origem: opcoes.origem,
+      agenteId: opcoes.agenteId,
+      modelo,
+      usage: data.usage,
+      custo: custoRodada,
+    })
+
+    if (Array.isArray(message.annotations)) {
+      for (const a of message.annotations) {
+        if (a?.type === 'url_citation' && a?.url_citation?.url) {
+          fontes.push({ url: a.url_citation.url, titulo: a.url_citation.title ?? '' })
+        }
+      }
+    }
+
+    // deno-lint-ignore no-explicit-any
+    const toolCalls: any[] = Array.isArray(message.tool_calls) ? message.tool_calls : []
+    if (usarCalculadora && toolCalls.length > 0) {
+      // A IA pediu a calculadora: resolve cada chamada em código e devolve o
+      // resultado para ela terminar a resposta na próxima rodada. Essa
+      // troca fica só dentro desta função — quem chamou `chamarIA` nunca vê
+      // as mensagens intermediárias, só a resposta final.
+      mensagens.push({ role: 'assistant', content: message.content ?? null, tool_calls: message.tool_calls })
+      for (const tc of toolCalls) {
+        const resultadoFerramenta =
+          tc?.function?.name === 'calcular'
+            ? executarFerramentaCalculadora(tc.function?.arguments ?? '{}')
+            : JSON.stringify({ erro: 'ferramenta desconhecida' })
+        mensagens.push({ role: 'tool', tool_call_id: tc.id, content: resultadoFerramenta })
+      }
+      continue
+    }
+
+    const content = message.content ?? ''
+    let result = content
+    if (opcoes.params.response_format?.type === 'json_object') {
+      try {
+        result = JSON.parse(String(content).replace(/^```(?:json)?|```$/g, '').trim())
+      } catch {
+        result = content
+      }
+    }
+
+    return { result, fontes, modelo, custo: custoTotal }
   }
 
-  return { result, fontes, modelo, custo }
+  throw new ErroIA(500, 'A IA ficou presa chamando a calculadora repetidamente')
 }
 
 /** Atalho para as funções que só querem o texto da resposta. */

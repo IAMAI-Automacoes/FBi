@@ -12,6 +12,44 @@ function resumo(t: string | null | undefined, fallback: string): string {
   return s.length > 140 ? `${s.slice(0, 137)}…` : s
 }
 
+/**
+ * Total de mensagens de suporte não lidas pelo admin — mesmo cálculo de
+ * `buscarTotalNaoLidas` em `src/lib/queries/admin.ts`, portado aqui para que
+ * o número do badge do ícone do app (celular) bata com o que o painel mostra.
+ * Mantenha os dois em sincronia se a regra de "não lida" mudar num dos lados.
+ */
+async function contarNaoLidas(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+): Promise<number> {
+  const { data, error } = await admin
+    .from('sugestoes_plataforma')
+    .select('id, created_at, admin_leu_em, respostas_sugestoes(autor, created_at)')
+  if (error || !data) return 0
+
+  let total = 0
+  // deno-lint-ignore no-explicit-any
+  for (const s of data as any[]) {
+    const respostas = ((s.respostas_sugestoes ?? []) as { autor: string; created_at: string }[])
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+    if (s.admin_leu_em) {
+      const leuEm = new Date(s.admin_leu_em)
+      total += respostas.filter((r) => r.autor === 'usuario' && new Date(r.created_at) > leuEm).length
+    } else {
+      // Nunca lida: mensagens do usuário após a última resposta do admin
+      const adminReplies = respostas.filter((r) => r.autor !== 'usuario')
+      if (adminReplies.length === 0) {
+        total += 1 + respostas.filter((r) => r.autor === 'usuario').length
+      } else {
+        const lastAdmin = new Date(adminReplies[adminReplies.length - 1].created_at)
+        total += respostas.filter((r) => r.autor === 'usuario' && new Date(r.created_at) > lastAdmin).length
+      }
+    }
+  }
+  return total
+}
+
 serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
@@ -76,12 +114,21 @@ serve(async (req: Request) => {
       }
     }
 
+    // Total de não lidas (para o badge do ícone do app) — não pode derrubar o
+    // envio se falhar, então cai em `undefined` e o SW simplesmente não mexe
+    // no badge nessa notificação específica.
+    const totalNaoLido = await contarNaoLidas(admin).catch(() => undefined)
+
     const payload = JSON.stringify({
       title: nome,
       body: resumo(texto || titulo, tipo === 'sugestao' ? 'Enviou uma nova dúvida.' : 'Enviou uma nova mensagem.'),
       icon: foto,
       url: '/admin',
       tag: `easyfeed-cliente-${usuarioId ?? 'x'}`,
+      // Campo explícito (além da tag) — o Service Worker usa para saber se a
+      // conversa desta mensagem é exatamente a que o admin está olhando agora.
+      usuarioId: usuarioId ?? null,
+      totalNaoLido,
     })
 
     // Inscrições só de admins (função security definer).

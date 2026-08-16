@@ -171,10 +171,13 @@ export async function gerarPdfRelatorio(
     const pos = kpis.positivos || 0
     const neu = kpis.neutros || 0
     const neg = kpis.negativos || 0
+    // Percentuais vêm prontos de `buscarKpis` (mesmos números da tela) em vez
+    // de recalculados aqui — evita a legenda do PDF divergir da tela se a
+    // fórmula de arredondamento mudar num lugar só.
     const segs = [
-      { n: pos, c: VERDE, r: 'Positivas' },
-      { n: neu, c: CINZA_NEUTRO, r: 'Positivo / Negativo' },
-      { n: neg, c: VERMELHO, r: 'Negativas' },
+      { n: pos, pct: kpis.positivePercent ?? 0, c: VERDE, r: 'Positivas' },
+      { n: neu, pct: kpis.neutralPercent ?? 0, c: CINZA_NEUTRO, r: 'Neutras' },
+      { n: neg, pct: kpis.negativePercent ?? 0, c: VERMELHO, r: 'Negativas' },
     ]
     let x = M
     segs.forEach((s) => {
@@ -191,7 +194,7 @@ export async function gerarPdfRelatorio(
       setFundo(s.c)
       doc.circle(lx + 1.4, y - 1.4, 1.4, 'F')
       setCor(CINZA)
-      const txt = `${s.r}: ${s.n} (${total ? Math.round((s.n / total) * 100) : 0}%)`
+      const txt = `${s.r}: ${s.n} (${s.pct}%)`
       doc.text(txt, lx + 4.5, y)
       lx += doc.getTextWidth(txt) + 14
     })

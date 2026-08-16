@@ -4,6 +4,11 @@ import { ptBR } from 'date-fns/locale'
 
 export type PeriodInfo = '7d' | '30d' | '90d'
 
+/** Amostra mínima para eleger "melhor/pior/crítico" sem virar ruído estatístico
+ *  (1 avaliação negativa numa categoria não pode "vencer" 8 negativas em 20).
+ *  Mesmo valor usado em `src/lib/queries/relatorios.ts`. */
+export const MIN_AMOSTRA = 3
+
 export interface CategoryScore {
   name: string
   score: number
@@ -38,6 +43,11 @@ export interface DashboardData {
     neutros: number
     positivePercent: number
     negativePercent: number
+    neutralPercent: number
+    /** Valor bruto (0-100) do índice de satisfação do período anterior — para
+     *  textos que precisem citar o número sem reconstruí-lo a partir da string
+     *  formatada de `sentimentTrend` (ex.: "estável", "+5 pts"). */
+    prevSentiment: number
   }
   chartData: Array<{ date: string; sentiment: number | null; avaliacoes: number }>
   categories: CategoryScore[]
@@ -106,6 +116,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   const neutros = totalFeedbacks - positivos - negativos
   const positivePercent = totalFeedbacks ? Math.round((positivos / totalFeedbacks) * 100) : 0
   const negativePercent = totalFeedbacks ? Math.round((negativos / totalFeedbacks) * 100) : 0
+  const neutralPercent = totalFeedbacks ? Math.round((neutros / totalFeedbacks) * 100) : 0
 
   const getSentimentScore = (arr: any[]) => {
     if (!arr.length) return 0
@@ -145,6 +156,8 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
 
   // Tema crítico: usa RATIO (negativos/total na categoria) — não contagem bruta
   // Ex: Ambiente 1 neg / 1 total = 100% > Comida 1 neg / 2 total = 50%
+  // Só concorrem categorias com amostra mínima — senão 1 avaliação negativa
+  // isolada (ratio 100%) venceria uma categoria com 8 negativas em 20 (40%).
   type CatStats = { total: number; negative: number }
   const catStats: Record<string, CatStats> = {}
   for (const f of currentFeedbacks) {
@@ -159,7 +172,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   let worstRatio = 0
 
   for (const [cat, s] of Object.entries(catStats)) {
-    if (s.negative === 0) continue
+    if (s.negative === 0 || s.total < MIN_AMOSTRA) continue
     const ratio = s.negative / s.total
     if (ratio > worstRatio || (ratio === worstRatio && s.negative > catStats[criticalTheme]?.negative)) {
       worstRatio = ratio
@@ -185,6 +198,8 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     neutros,
     positivePercent,
     negativePercent,
+    neutralPercent,
+    prevSentiment,
   }
 }
 
@@ -288,36 +303,43 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
   const currentFeedbacks = feedbacks.filter((f) => isAfter(parseISO(f.created_at), currentStart))
   const previousFeedbacks = feedbacks.filter((f) => !isAfter(parseISO(f.created_at), currentStart))
 
+  // CSAT 0-100 (positivo=100, neutro=50, negativo=0) — mesma fórmula usada em
+  // `getSentimentScore` (índice geral) e em `calcSatisfacao` de relatorios.ts.
+  // Antes esta função usava só positivo/total*100 (ignorava neutro por completo),
+  // então a mesma categoria no mesmo período mostrava números diferentes no
+  // painel (aqui) e no relatório — agora os dois batem.
+  type CatAcc = { total: number; positive: number; neutral: number; prevTotal: number; prevPositive: number; prevNeutral: number }
   const categoryMap = currentFeedbacks.reduce(
     (acc, f) => {
       const cat = f.categoria || 'Geral'
-      if (!acc[cat]) acc[cat] = { total: 0, positive: 0, prevTotal: 0, prevPositive: 0 }
+      if (!acc[cat]) acc[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }
       acc[cat].total++
-      if (f.sentimento?.toLowerCase() === 'positivo' || f.sentimento?.toLowerCase() === 'positive')
-        acc[cat].positive++
+      const s = f.sentimento?.toLowerCase()
+      if (s === 'positivo' || s === 'positive') acc[cat].positive++
+      else if (s === 'neutro' || s === 'neutral') acc[cat].neutral++
       return acc
     },
-    {} as Record<
-      string,
-      { total: number; positive: number; prevTotal: number; prevPositive: number }
-    >,
+    {} as Record<string, CatAcc>,
   )
 
   previousFeedbacks.forEach((f) => {
     const cat = f.categoria || 'Geral'
     if (!categoryMap[cat])
-      categoryMap[cat] = { total: 0, positive: 0, prevTotal: 0, prevPositive: 0 }
+      categoryMap[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }
     categoryMap[cat].prevTotal++
-    if (f.sentimento?.toLowerCase() === 'positivo' || f.sentimento?.toLowerCase() === 'positive')
-      categoryMap[cat].prevPositive++
+    const s = f.sentimento?.toLowerCase()
+    if (s === 'positivo' || s === 'positive') categoryMap[cat].prevPositive++
+    else if (s === 'neutro' || s === 'neutral') categoryMap[cat].prevNeutral++
   })
+
+  const csat = (positive: number, neutral: number, total: number) =>
+    total === 0 ? 0 : Math.round((positive * 100 + neutral * 50) / total)
 
   return Object.entries(categoryMap)
     .filter(([_, stats]) => stats.total > 0)
     .map(([name, stats]) => {
-      const score = Math.round((stats.positive / stats.total) * 100)
-      const prevScore =
-        stats.prevTotal === 0 ? 0 : Math.round((stats.prevPositive / stats.prevTotal) * 100)
+      const score = csat(stats.positive, stats.neutral, stats.total)
+      const prevScore = csat(stats.prevPositive, stats.prevNeutral, stats.prevTotal)
 
       let trend: 'up' | 'down' | 'neutral' = 'neutral'
       if (score > prevScore) trend = 'up'

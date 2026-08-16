@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
+import { buscarTotalNaoLidas } from '@/lib/queries/admin'
+import { atualizarBadgeApp } from '@/lib/notificacoes-app'
 
 // Chave pública VAPID (é pública por design — pode ficar no bundle). A privada
 // vive só no servidor (integracao_config), usada pela edge function enviar-push.
@@ -87,6 +89,42 @@ export function AdminNotificacoes() {
       removerGesto?.()
     }
   }, [ehAdminPlataforma, user])
+
+  /**
+   * Mantém o badge do ícone do app (celular) com o total de mensagens de
+   * suporte não lidas — igual ao numerozinho que WhatsApp/Instagram mostram.
+   * Este componente fica montado o tempo todo (App.tsx), então funciona em
+   * qualquer página do painel, não só dentro de /admin.
+   *
+   * Três fontes, para o número nunca ficar desatualizado:
+   *  1. Busca inicial ao montar.
+   *  2. Evento `fib-unread-update`: quando o Admin.tsx está aberto, ele já
+   *     recalcula o total localmente — reaproveita em vez de buscar de novo.
+   *  3. Realtime: cobre quando o admin está em outra página (Admin.tsx
+   *     desmontado) e chega mensagem nova ou uma conversa é marcada como lida.
+   */
+  useEffect(() => {
+    if (!ehAdminPlataforma) return
+
+    const atualizar = () => buscarTotalNaoLidas().then(atualizarBadgeApp).catch(() => {})
+    atualizar()
+
+    const aoAtualizarEvento = (e: Event) => {
+      atualizarBadgeApp((e as CustomEvent<{ count: number }>).detail.count)
+    }
+    window.addEventListener('fib-unread-update', aoAtualizarEvento)
+
+    const ch = supabase
+      .channel('badge-app-nao-lidas')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'respostas_sugestoes' }, atualizar)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sugestoes_plataforma' }, atualizar)
+      .subscribe()
+
+    return () => {
+      window.removeEventListener('fib-unread-update', aoAtualizarEvento)
+      supabase.removeChannel(ch)
+    }
+  }, [ehAdminPlataforma])
 
   return null
 }

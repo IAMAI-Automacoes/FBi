@@ -2,6 +2,7 @@ import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import type { DashboardData } from '@/lib/queries/visao-geral'
+import { MIN_AMOSTRA } from '@/lib/queries/visao-geral'
 import { cn } from '@/lib/utils'
 
 export function CategoryScores({ categories }: { categories: DashboardData['categories'] }) {
@@ -12,8 +13,11 @@ export function CategoryScores({ categories }: { categories: DashboardData['cate
       </CardHeader>
       <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
         {categories.map((cat, i) => {
-          const isGood = cat.score >= 60
-          const isBad = cat.score < 50
+          // Amostra pequena (1-2 avaliações) não tem confiança pra colorir de
+          // verde/vermelho — uma única avaliação decidiria 0 ou 100.
+          const amostraPequena = cat.count < MIN_AMOSTRA
+          const isGood = !amostraPequena && cat.score >= 60
+          const isBad = !amostraPequena && cat.score < 50
           const progressClass = cn({
             'progress-success': isGood,
             'progress-destructive': isBad,
@@ -32,6 +36,11 @@ export function CategoryScores({ categories }: { categories: DashboardData['cate
                 </div>
               </div>
               <Progress value={cat.score} className={cn('h-1.5 bg-muted', progressClass)} />
+              {amostraPequena && (
+                <span className="text-[11px] text-muted-foreground">
+                  {cat.count} avaliaç{cat.count !== 1 ? 'ões' : 'ão'} — poucas para confiar no número
+                </span>
+              )}
             </div>
           )
         })}

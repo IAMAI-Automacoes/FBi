@@ -147,6 +147,11 @@ export default function Reports() {
         kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum'
           ? `${kpis.criticalTheme} (${kpis.criticalPercent}% negativas)` : 'Nenhum'
 
+      // Mesma regra da tela e do PDF: só mostra variação vs. período anterior
+      // quando ele tem base suficiente (senão "+200%" saindo de 1 avaliação
+      // engana). Antes o CSV só checava `hasPrevData`, ignorando essa trava.
+      const comparavelCsv = kpis.hasPrevData && kpis.prevConfiavel
+
       const linhas: string[][] = [
         ['RELATÓRIO', nomeRestaurante],
         ['Período', PERIOD_LABEL[period]],
@@ -154,10 +159,10 @@ export default function Reports() {
         [],
         ['RESUMO'],
         ['Métrica', 'Valor', 'vs. período anterior'],
-        ['Total de avaliações', String(kpis.totalFeedbacks), kpis.hasPrevData ? kpis.totalTrend : '—'],
-        ['Índice de satisfação (0-100)', String(kpis.sentiment), kpis.hasPrevData ? kpis.sentimentTrend : '—'],
+        ['Total de avaliações', String(kpis.totalFeedbacks), comparavelCsv ? kpis.totalTrend : '—'],
+        ['Índice de satisfação (0-100)', String(kpis.sentiment), comparavelCsv ? kpis.sentimentTrend : '—'],
         ['Avaliações positivas', `${kpis.positivos} (${kpis.positivePercent}%)`, ''],
-        ['Avaliações Positivo / Negativo', String(kpis.neutros), ''],
+        ['Avaliações neutras', `${kpis.neutros} (${kpis.neutralPercent}%)`, ''],
         ['Avaliações negativas', `${kpis.negativos} (${kpis.negativePercent}%)`, ''],
         ['Tema que mais preocupa', temaCritico, ''],
         ['Clientes únicos', String(stats.clientesUnicos), ''],
@@ -451,8 +456,8 @@ export default function Reports() {
           </Card>
 
           {/* Leitura em linguagem simples, escrita pela IA */}
-          <Card className="border-primary/20 bg-primary/[0.03] shadow-none">
-            <CardContent className="p-5">
+          <Card className="border-primary/20 border-l-4 border-l-primary bg-primary/[0.03] shadow-none">
+            <CardContent className="p-6">
               {analise ? (
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
@@ -507,17 +512,22 @@ export default function Reports() {
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Sparkles className="h-5 w-5 text-primary" />
+                <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-foreground">Não entendeu os números?</p>
+                      <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                        A IA lê tudo isso pra você e explica, em português simples, o que aconteceu e o que fazer.
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">Não entendeu os números?</p>
-                    <p className="text-sm text-muted-foreground">
-                      A IA lê tudo isso e te explica em português o que aconteceu e o que fazer.
-                    </p>
-                  </div>
-                  <Button onClick={handleAnalisar} disabled={analisando} className="shrink-0">
+                  <Button
+                    onClick={handleAnalisar} disabled={analisando} size="lg"
+                    className="w-full shrink-0 rounded-full px-6 shadow-sm sm:w-auto"
+                  >
                     {analisando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     {analisando ? 'Analisando…' : 'Explicar para mim'}
                   </Button>
@@ -528,29 +538,38 @@ export default function Reports() {
 
           {/* Tema crítico */}
           {kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum' ? (
-            <Card className="border-amber-200 bg-amber-50 shadow-none">
-              <CardContent className="flex items-start gap-4 p-5">
-                <div className="h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <Card className="border-amber-200/80 border-l-4 border-l-amber-500 bg-amber-50 shadow-none">
+              <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                    <AlertTriangle className="h-6 w-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                      Tema que mais precisa de atenção
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-amber-900">{kpis.criticalTheme}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-amber-800">Tema que mais precisa de atenção</p>
-                  <p className="text-xl font-bold text-amber-900 mt-0.5">{kpis.criticalTheme}</p>
-                  <p className="text-sm text-amber-700 mt-1">
-                    {kpis.criticalPercent}% das avaliações sobre esse tema foram negativas no período.
-                  </p>
+                <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-0.5 sm:text-right">
+                  <span className="text-3xl font-bold tabular-nums text-amber-700">{kpis.criticalPercent}%</span>
+                  <span className="text-xs text-amber-700/80">das avaliações foram negativas</span>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-emerald-200 bg-emerald-50 shadow-none">
-              <CardContent className="flex items-center gap-4 p-5">
-                <div className="h-11 w-11 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <PartyPopper className="h-5 w-5 text-emerald-600" />
+            <Card className="border-emerald-200/80 border-l-4 border-l-emerald-500 bg-emerald-50 shadow-none">
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100">
+                  <PartyPopper className="h-6 w-6 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-emerald-800">Nenhum tema concentrando reclamações</p>
-                  <p className="text-sm text-emerald-700 mt-0.5">Nenhuma categoria teve reclamações em destaque neste período. Continue assim!</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Nenhum tema concentrando reclamações
+                  </p>
+                  <p className="mt-1 text-sm text-emerald-800">
+                    Nenhuma categoria teve reclamações em destaque neste período. Continue assim!
+                  </p>
                 </div>
               </CardContent>
             </Card>
