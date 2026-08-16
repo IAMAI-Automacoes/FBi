@@ -6,6 +6,7 @@ import {
   Lightbulb,
   Zap,
   FileBarChart,
+  ArrowLeftRight,
   QrCode,
   Users,
   HelpCircle,
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Insights', href: '/insights', icon: Lightbulb, modulo: 'insights' },
   { name: 'Ações', href: '/acoes', icon: Zap, modulo: 'acoes' },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart, modulo: 'relatorios' },
+  { name: 'Comparativo', href: '/comparativo', icon: ArrowLeftRight, modulo: 'relatorios' },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },
 ]
