@@ -3,8 +3,8 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { DateRange } from 'react-day-picker'
 import {
-  ArrowLeftRight, ArrowUp, ArrowDown, Minus, Loader2, Users, Smile, ThumbsUp,
-  ThumbsDown, MessageSquare, Save, Trash2, CalendarRange, Sparkles, TrendingUp, TrendingDown,
+  ArrowLeftRight, ArrowUp, ArrowDown, Minus, Loader2, Users, ThumbsUp,
+  ThumbsDown, MessageSquare, Save, Trash2, CalendarRange, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,79 +17,159 @@ import { useUserProfile } from '@/hooks/use-user-profile'
 import {
   compararPeriodos, gerarPreset, salvarComparativo, listarComparativosSalvos, excluirComparativo,
   PRESET_LABEL, type PresetComparativo, type PeriodoIntervalo, type ResultadoComparativo,
-  type MetricaComparada, type Direcao, type CategoriaComparada, type ComparativoSalvo,
+  type MetricaComparada, type CategoriaComparada, type ComparativoSalvo,
 } from '@/lib/queries/comparativo'
 import { toast } from 'sonner'
 
 const PRESETS: PresetComparativo[] = ['7d', '30d', 'mes', 'ano']
 
+// Cor por direção: nunca a única pista (sempre junto de ícone + sinal + texto),
+// porque verde/vermelho puros ficam quase iguais sob daltonismo vermelho-verde.
+const COR = {
+  melhorou: { texto: 'text-emerald-700', bg: 'bg-emerald-50', barra: 'bg-emerald-500', anel: 'bg-emerald-100' },
+  piorou: { texto: 'text-rose-700', bg: 'bg-rose-50', barra: 'bg-rose-500', anel: 'bg-rose-100' },
+  estavel: { texto: 'text-slate-500', bg: 'bg-slate-50', barra: 'bg-slate-400', anel: 'bg-slate-100' },
+  sem_dados: { texto: 'text-slate-400', bg: 'bg-slate-50', barra: 'bg-slate-300', anel: 'bg-slate-100' },
+} as const
+
 function fmt(d: Date | string): string {
   return format(typeof d === 'string' ? new Date(d) : d, "d 'de' MMM", { locale: ptBR })
 }
-
 /** Última data realmente incluída no intervalo (fim é exclusivo). */
 function fmtFimInclusivo(fimExclusivo: Date | string): string {
-  const d = new Date(typeof fimExclusivo === 'string' ? fimExclusivo : fimExclusivo)
+  const d = new Date(fimExclusivo)
   d.setDate(d.getDate() - 1)
   return fmt(d)
 }
+function assinado(n: number): string {
+  return n > 0 ? `+${n}` : String(n)
+}
 
-function DirecaoPill({ direcao, invertido }: { direcao: Direcao; invertido?: boolean }) {
-  const cfg: Record<Direcao, { texto: string; cor: string; Icon: typeof ArrowUp }> = {
-    melhorou: { texto: 'Melhorou', cor: 'bg-emerald-50 text-emerald-700', Icon: invertido ? ArrowDown : ArrowUp },
-    piorou: { texto: 'Piorou', cor: 'bg-rose-50 text-rose-700', Icon: invertido ? ArrowUp : ArrowDown },
-    estavel: { texto: 'Estável', cor: 'bg-slate-100 text-slate-600', Icon: Minus },
-    sem_dados: { texto: 'Sem dados', cor: 'bg-slate-50 text-slate-400', Icon: Minus },
-  }
-  const { texto, cor, Icon } = cfg[direcao]
+/** O número que resume tudo — a primeira e maior coisa que o olho encontra. */
+function HeroDelta({ satisfacao }: { satisfacao: MetricaComparada }) {
+  const c = COR[satisfacao.direcao]
+  const Icone = satisfacao.direcao === 'melhorou' ? ArrowUp : satisfacao.direcao === 'piorou' ? ArrowDown : Minus
+  const frase =
+    satisfacao.direcao === 'melhorou' ? 'A satisfação melhorou' :
+    satisfacao.direcao === 'piorou' ? 'A satisfação piorou' :
+    satisfacao.direcao === 'sem_dados' ? 'Ainda não há dados suficientes' : 'A satisfação ficou estável'
+
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold', cor)}>
-      <Icon className="h-3 w-3" /> {texto}
-    </span>
+    <div className={cn('rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6', c.bg)}>
+      <div className="flex items-center gap-4 shrink-0">
+        <div className={cn('flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white shadow-sm', c.texto)}>
+          <Icone className="h-8 w-8" strokeWidth={3} />
+        </div>
+        <div>
+          <p className={cn('text-6xl font-bold leading-none tracking-tight', c.texto)}>
+            {satisfacao.delta != null ? assinado(satisfacao.delta) : '—'}
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">pontos de satisfação (em 100)</p>
+        </div>
+      </div>
+      <div className="sm:border-l sm:border-black/10 sm:pl-6 flex-1 text-center sm:text-left">
+        <p className="text-lg font-semibold text-foreground">{frase}</p>
+        {satisfacao.atual != null && satisfacao.anterior != null && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Foi de <b className="text-foreground tabular-nums">{satisfacao.anterior}</b> para{' '}
+            <b className="text-foreground tabular-nums">{satisfacao.atual}</b> de 100.
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
-function KpiComparado({
-  titulo, icone: Icone, m, sufixo = '',
-}: { titulo: string; icone: typeof Users; m: MetricaComparada; sufixo?: string }) {
+function StatTile({
+  titulo, icone: Icone, m, sufixo = '', neutro = false,
+}: { titulo: string; icone: typeof Users; m: MetricaComparada; sufixo?: string; neutro?: boolean }) {
+  const c = COR[m.direcao]
+  return (
+    <div className="rounded-xl border bg-white p-4">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Icone className="h-3.5 w-3.5" />
+        <p className="text-xs font-medium">{titulo}</p>
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="text-2xl font-bold text-foreground tabular-nums">
+          {m.atual ?? '—'}{m.atual != null ? sufixo : ''}
+        </span>
+        {!neutro && m.delta != null && (
+          <span className={cn('text-xs font-bold tabular-nums', c.texto)}>{assinado(m.delta)}{sufixo}</span>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-0.5">era {m.anterior ?? '—'}{sufixo}</p>
+    </div>
+  )
+}
+
+/**
+ * Gráfico de barras divergentes: cada categoria é UMA linha, a barra cresce
+ * pra direita (melhorou) ou esquerda (piorou) a partir de uma linha central —
+ * dá pra ver o que mudou (e o quanto) numa olhada só, sem ler texto.
+ * Cor nunca é a única pista: cada barra também tem ícone + sinal + a posição
+ * (direita/esquerda), que sozinha já mostra a direção pra quem não distingue
+ * verde de vermelho.
+ */
+function GraficoMudancas({ categorias }: { categorias: CategoriaComparada[] }) {
+  const comAmostra = categorias.filter((c) => c.amostraSuficiente && c.delta != null)
+  const semAmostra = categorias.filter((c) => !c.amostraSuficiente)
+  const ordenadas = [...comAmostra].sort((a, b) => Math.abs(b.delta as number) - Math.abs(a.delta as number))
+  const dominio = Math.max(10, ...ordenadas.map((c) => Math.abs(c.delta as number)))
+
   return (
     <Card className="bg-white shadow-sm border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{titulo}</CardTitle>
-        <Icone className="h-4 w-4 text-primary" />
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-foreground">{m.atual ?? '—'}{m.atual != null ? sufixo : ''}</span>
-          <span className="text-xs text-muted-foreground">era {m.anterior ?? '—'}{m.anterior != null ? sufixo : ''}</span>
-        </div>
-        <div className="mt-2.5"><DirecaoPill direcao={m.direcao} /></div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function LinhaCategoria({ c }: { c: CategoriaComparada }) {
-  const subiu = (c.delta ?? 0) > 0
-  return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{c.nome}</p>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">O que mudou, por categoria</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {c.satisfacaoAnterior ?? '—'} → {c.satisfacaoAtual ?? '—'} de 100
-          {!c.amostraSuficiente && <span className="text-amber-600"> · poucas avaliações</span>}
+          Barra pra direita = melhorou · pra esquerda = piorou. Da maior mudança pra menor.
         </p>
-      </div>
-      {c.delta != null && (
-        <span className={cn(
-          'shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums',
-          subiu ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700',
-        )}>
-          {subiu ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-          {Math.abs(c.delta)}
-        </span>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {ordenadas.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            Ainda não há categorias com avaliações suficientes nos dois períodos pra comparar com confiança.
+          </p>
+        ) : (
+          <div className="divide-y divide-border">
+            {ordenadas.map((c) => {
+              const delta = c.delta as number
+              const subiu = delta > 0
+              const cor = subiu ? COR.melhorou : COR.piorou
+              const largura = `${Math.max((Math.abs(delta) / dominio) * 100, 4)}%`
+              return (
+                <div key={c.nome} className="grid grid-cols-[minmax(88px,1fr)_minmax(110px,2.2fr)_50px] items-center gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{c.nome}</p>
+                    <p className="text-[11px] text-muted-foreground tabular-nums">{c.satisfacaoAnterior} → {c.satisfacaoAtual}</p>
+                  </div>
+
+                  <div className="flex items-center h-6">
+                    <div className="flex-1 flex justify-end">
+                      {!subiu && <div className="h-5 rounded-l-[4px]" style={{ width: largura, backgroundColor: '#e11d48' }} />}
+                    </div>
+                    <div className="w-px self-stretch bg-slate-300 shrink-0" />
+                    <div className="flex-1 flex justify-start">
+                      {subiu && <div className="h-5 rounded-r-[4px]" style={{ width: largura, backgroundColor: '#059669' }} />}
+                    </div>
+                  </div>
+
+                  <div className={cn('flex items-center justify-end gap-0.5 text-xs font-bold tabular-nums', cor.texto)}>
+                    {subiu ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                    {Math.abs(delta)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+      {semAmostra.length > 0 && (
+        <div className="border-t px-6 py-3 text-xs text-muted-foreground">
+          <b>Poucas avaliações pra comparar com confiança:</b> {semAmostra.map((c) => c.nome).join(', ')}.
+        </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -105,9 +185,7 @@ function SeletorIntervalo({
           <Button variant="outline" className="w-full justify-start gap-2 bg-white font-normal">
             <CalendarRange className="h-4 w-4 text-muted-foreground" />
             {range?.from
-              ? range.to
-                ? `${fmt(range.from)} — ${fmt(range.to)}`
-                : fmt(range.from)
+              ? range.to ? `${fmt(range.from)} — ${fmt(range.to)}` : fmt(range.from)
               : 'Escolher datas'}
           </Button>
         </PopoverTrigger>
@@ -138,10 +216,7 @@ export default function Comparativo() {
 
   const carregarSalvos = useCallback(() => {
     if (!restauranteId) { setCarregandoSalvos(false); return }
-    listarComparativosSalvos(restauranteId)
-      .then(setSalvos)
-      .catch(() => {})
-      .finally(() => setCarregandoSalvos(false))
+    listarComparativosSalvos(restauranteId).then(setSalvos).catch(() => {}).finally(() => setCarregandoSalvos(false))
   }, [restauranteId])
 
   useEffect(() => { carregarSalvos() }, [carregarSalvos])
@@ -162,7 +237,6 @@ export default function Comparativo() {
     }
   }, [restauranteId])
 
-  // Roda automaticamente ao trocar de preset (não exige clique extra).
   useEffect(() => {
     if (profileLoading || !restauranteId) return
     if (preset === 'personalizado') return
@@ -200,7 +274,7 @@ export default function Comparativo() {
   }
 
   const handleExcluirSalvo = async (id: string) => {
-    setSalvos((prev) => prev.filter((s) => s.id !== id)) // otimista
+    setSalvos((prev) => prev.filter((s) => s.id !== id))
     try {
       await excluirComparativo(id)
     } catch {
@@ -226,9 +300,7 @@ export default function Comparativo() {
           <ArrowLeftRight className="h-8 w-8 text-primary" />
           Comparativo de Períodos
         </h2>
-        <p className="text-muted-foreground mt-1">
-          Escolha dois períodos e veja exatamente o que melhorou e o que piorou.
-        </p>
+        <p className="text-muted-foreground mt-1">Veja o que melhorou e o que piorou entre dois períodos, numa olhada.</p>
       </div>
 
       {/* Seletor de período */}
@@ -274,23 +346,21 @@ export default function Comparativo() {
       </Card>
 
       {carregando && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-32" /><Skeleton className="h-32" />
-          <Skeleton className="h-32" /><Skeleton className="h-32" />
+        <div className="space-y-6">
+          <Skeleton className="h-32 rounded-2xl" />
+          <div className="grid gap-4 sm:grid-cols-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>
+          <Skeleton className="h-64" />
         </div>
       )}
 
       {!carregando && resultado && (
         <>
-          {/* Faixa com os dois períodos sendo comparados */}
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-slate-50/60 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">
               {fmt(resultado.periodoA.inicio)} – {fmtFimInclusivo(resultado.periodoA.fim)}
             </span>
-            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-muted-foreground">
-              comparado a {fmt(resultado.periodoB.inicio)} – {fmtFimInclusivo(resultado.periodoB.fim)}
-            </span>
+            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
+            <span>comparado a {fmt(resultado.periodoB.inicio)} – {fmtFimInclusivo(resultado.periodoB.fim)}</span>
           </div>
 
           {resultado.amostraPequena && (
@@ -310,78 +380,17 @@ export default function Comparativo() {
             </Card>
           ) : (
             <>
-              {/* KPIs principais */}
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="bg-white shadow-sm border-border/60">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total de avaliações</CardTitle>
-                    <MessageSquare className="h-4 w-4 text-primary" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-foreground">{resultado.totalAtual}</span>
-                      <span className="text-xs text-muted-foreground">era {resultado.totalAnterior}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2.5">volume, sem juízo de bom/ruim</p>
-                  </CardContent>
-                </Card>
-                <KpiComparado titulo="Índice de satisfação" icone={Smile} m={resultado.satisfacao} />
-                <KpiComparado titulo="Avaliações positivas" icone={ThumbsUp} m={resultado.positivas} sufixo="%" />
-                <KpiComparado titulo="Avaliações negativas" icone={ThumbsDown} m={resultado.negativas} sufixo="%" />
+              <HeroDelta satisfacao={resultado.satisfacao} />
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatTile titulo="Total de avaliações" icone={MessageSquare} m={{ atual: resultado.totalAtual, anterior: resultado.totalAnterior, delta: resultado.totalAtual - resultado.totalAnterior, deltaPercentual: null, direcao: 'estavel' }} neutro />
+                <StatTile titulo="Avaliações positivas" icone={ThumbsUp} m={resultado.positivas} sufixo="%" />
+                <StatTile titulo="Avaliações negativas" icone={ThumbsDown} m={resultado.negativas} sufixo="%" />
+                <StatTile titulo="Clientes únicos" icone={Users} m={resultado.clientesUnicos} />
               </div>
 
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="md:col-span-1">
-                  <KpiComparado titulo="Clientes únicos" icone={Users} m={resultado.clientesUnicos} />
-                </div>
-              </div>
+              <GraficoMudancas categorias={resultado.categorias} />
 
-              {/* Melhorou / Piorou por categoria */}
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card className="border-emerald-200/70 bg-emerald-50/40 shadow-none">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2 text-emerald-800">
-                      <TrendingUp className="h-5 w-5" /> O que melhorou
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 divide-y divide-emerald-100">
-                    {resultado.melhorou.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4">Nenhuma categoria melhorou de forma clara neste comparativo.</p>
-                    ) : (
-                      resultado.melhorou.map((c) => <LinhaCategoria key={c.nome} c={c} />)
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-rose-200/70 bg-rose-50/40 shadow-none">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2 text-rose-800">
-                      <TrendingDown className="h-5 w-5" /> O que piorou
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 divide-y divide-rose-100">
-                    {resultado.piorou.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4">Nenhuma categoria piorou de forma clara neste comparativo.</p>
-                    ) : (
-                      resultado.piorou.map((c) => <LinhaCategoria key={c.nome} c={c} />)
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Todas as categorias */}
-              {resultado.categorias.length > 0 && (
-                <Card className="bg-white shadow-sm border-border/60">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">Todas as categorias</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 divide-y divide-border">
-                    {resultado.categorias.map((c) => <LinhaCategoria key={c.nome} c={c} />)}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Salvar comparação */}
               <Card className="bg-white shadow-sm border-border/60">
                 <CardContent className="p-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <Input
@@ -401,7 +410,6 @@ export default function Comparativo() {
         </>
       )}
 
-      {/* Comparações salvas */}
       {!carregandoSalvos && salvos.length > 0 && (
         <Card className="bg-white shadow-sm border-border/60">
           <CardHeader className="pb-2">
