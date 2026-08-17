@@ -107,7 +107,7 @@ export default function Index() {
               Nenhum feedback recebido neste período. Altere o intervalo ou aguarde novos feedbacks.
             </div>
           )}
-          <KpiCards data={data.kpis} />
+          <KpiCards data={data.kpis} period={period} />
           <TrendChart
             data={data.chartData}
             categories={data.categories}

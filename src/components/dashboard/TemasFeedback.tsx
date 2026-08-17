@@ -6,7 +6,7 @@ import {
 import { supabase } from '@/lib/supabase/client'
 import { buscarTemas, type TemaFeedback, type SentimentoFiltro } from '@/lib/queries/temas'
 import { cn } from '@/lib/utils'
-import { MessagesSquare } from 'lucide-react'
+import { Check, AlertTriangle, MessagesSquare } from 'lucide-react'
 
 const SENTIMENTOS: { key: SentimentoFiltro; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -21,18 +21,46 @@ const PERIODOS = [
   { dias: 0, label: 'Todo o período' },
 ]
 
-// Sem bolinha (poluía): o próprio NÚMERO é colorido pelo sentimento.
-// elogio=verde, reclamação=vermelho, neutro=amarelo.
-const numCor: Record<string, string> = {
-  elogio: 'text-emerald-600',
-  reclamacao: 'text-rose-600',
-  neutro: 'text-slate-500',
+function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atencao' }) {
+  const isPositivo = tom === 'positivo'
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-full pl-2 pr-2 py-1.5',
+        isPositivo ? 'bg-emerald-100' : 'bg-red-100',
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0',
+          isPositivo ? 'bg-emerald-500' : 'bg-red-500',
+        )}
+      >
+        {isPositivo
+          ? <Check className="h-3 w-3" strokeWidth={3} />
+          : <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />}
+      </span>
+      <span className="flex-1 min-w-0 truncate text-sm text-foreground/90">{tema.rotulo}</span>
+      <span
+        className={cn(
+          'shrink-0 min-w-[26px] text-center rounded-full text-white text-xs font-bold px-2 py-0.5 tabular-nums',
+          isPositivo ? 'bg-emerald-600' : 'bg-red-600',
+        )}
+      >
+        {tema.quantidade}
+      </span>
+    </div>
+  )
 }
 
 /**
  * "O que os clientes estão comentando": os feedbacks semelhantes já agrupados em
- * temas (pela IA, no momento que chegam), em lista, do mais falado pro menos.
- * Filtros de sentimento e período. Atualiza sozinho por Realtime — sem recarregar.
+ * temas (pela IA, no momento que chegam), em duas colunas por sentimento
+ * (positivos / pontos de atenção). Temas neutros não entram aqui — continuam
+ * contados normalmente no resto do dashboard, só não aparecem nesta lista.
+ * As abas Todos/Positivos/Negativos controlam só a exibição (a busca sempre
+ * traz tudo, então trocar de aba não recarrega). Atualiza sozinho por
+ * Realtime — sem recarregar a página.
  */
 export function TemasFeedback({ restauranteId }: { restauranteId: number | null }) {
   const [temas, setTemas] = useState<TemaFeedback[]>([])
@@ -41,9 +69,9 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
   const [carregado, setCarregado] = useState(false)
 
   const carregar = useCallback(async () => {
-    try { setTemas(await buscarTemas(restauranteId, dias, sentimento)) } catch { /* silencioso */ }
+    try { setTemas(await buscarTemas(restauranteId, dias, 'todos')) } catch { /* silencioso */ }
     setCarregado(true)
-  }, [restauranteId, dias, sentimento])
+  }, [restauranteId, dias])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -60,6 +88,13 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId, carregar])
+
+  const positivos = temas.filter((t) => t.tipo === 'elogio')
+  const negativos = temas.filter((t) => t.tipo === 'reclamacao')
+
+  const mostrarPositivos = sentimento === 'todos' || sentimento === 'positivo'
+  const mostrarNegativos = sentimento === 'todos' || sentimento === 'negativo'
+  const nadaAgrupado = positivos.length === 0 && negativos.length === 0
 
   return (
     <Card className="shadow-subtle">
@@ -100,26 +135,48 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
       <CardContent className="p-0">
         {!carregado ? (
           <p className="text-sm text-muted-foreground px-5 py-10 text-center">Carregando…</p>
-        ) : temas.length === 0 ? (
+        ) : nadaAgrupado ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <MessagesSquare className="h-8 w-8 text-gray-300 mb-3" />
             <p className="text-sm font-medium text-gray-500">Nada agrupado neste filtro ainda</p>
           </div>
         ) : (
-          <ul className="divide-y divide-border/50">
-            {temas.map((t) => (
-              <li
-                key={t.id}
-                className="flex items-baseline gap-4 px-5 py-3 hover:bg-muted/30 transition-colors"
-                title={t.tipo === 'elogio' ? 'Positivo' : t.tipo === 'reclamacao' ? 'Negativo' : 'Neutro'}
-              >
-                <span className="text-[15px] text-foreground/90 truncate min-w-0">{t.rotulo}</span>
-                <span className={cn('text-lg font-bold tabular-nums shrink-0', numCor[t.tipo] ?? numCor.neutro)}>
-                  {t.quantidade}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div
+            className={cn(
+              'grid gap-x-8 gap-y-6 p-5',
+              mostrarPositivos && mostrarNegativos ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1',
+            )}
+          >
+            {mostrarPositivos && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 mb-3">
+                  Sentimentos Positivos
+                </p>
+                <div className="flex flex-col gap-2">
+                  {positivos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum tema positivo neste período</p>
+                  ) : (
+                    positivos.map((t) => <TemaPill key={t.id} tema={t} tom="positivo" />)
+                  )}
+                </div>
+              </div>
+            )}
+
+            {mostrarNegativos && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-red-600 mb-3">
+                  Pontos de Atenção
+                </p>
+                <div className="flex flex-col gap-2">
+                  {negativos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum ponto de atenção neste período</p>
+                  ) : (
+                    negativos.map((t) => <TemaPill key={t.id} tema={t} tom="atencao" />)
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

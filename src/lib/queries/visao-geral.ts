@@ -44,12 +44,21 @@ export interface DashboardData {
     positivePercent: number
     negativePercent: number
     neutralPercent: number
+    /** Pontos percentuais vs. período anterior, ex: "+8 pts". Usada no card "Avaliações positivas". */
+    positivePercentTrend: string
     /** Valor bruto (0-100) do índice de satisfação do período anterior — para
      *  textos que precisem citar o número sem reconstruí-lo a partir da string
      *  formatada de `sentimentTrend` (ex.: "estável", "+5 pts"). */
     prevSentiment: number
   }
-  chartData: Array<{ date: string; sentiment: number | null; avaliacoes: number }>
+  chartData: Array<{
+    date: string
+    sentiment: number | null
+    avaliacoes: number
+    positivos: number
+    negativos: number
+    neutros: number
+  }>
   categories: CategoryScore[]
   recentFeedbacks: FeedbackItem[]
 }
@@ -117,6 +126,19 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   const positivePercent = totalFeedbacks ? Math.round((positivos / totalFeedbacks) * 100) : 0
   const negativePercent = totalFeedbacks ? Math.round((negativos / totalFeedbacks) * 100) : 0
   const neutralPercent = totalFeedbacks ? Math.round((neutros / totalFeedbacks) * 100) : 0
+
+  // % positivo do período anterior — só para a seta de tendência do card
+  // "Avaliações positivas" (Relatórios). Mesma regra de pontos percentuais
+  // usada em `sentimentTrend`.
+  const prevPositivos = previousFeedbacks.filter(isPositivo).length
+  const prevPositivePercent = prevTotal ? Math.round((prevPositivos / prevTotal) * 100) : 0
+  let positivePercentTrend: string
+  if (!hasPrevData) {
+    positivePercentTrend = totalFeedbacks > 0 ? 'novo' : '—'
+  } else {
+    const v = positivePercent - prevPositivePercent
+    positivePercentTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v} pts`
+  }
 
   const getSentimentScore = (arr: any[]) => {
     if (!arr.length) return 0
@@ -199,6 +221,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivePercent,
     negativePercent,
     neutralPercent,
+    positivePercentTrend,
     prevSentiment,
   }
 }
@@ -221,6 +244,13 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
   const calcSentiment = (b: Bucket): number | null =>
     b.total === 0 ? null : Math.round((b.positive * 100 + b.neutral * 50) / b.total)
 
+  // Breakdown por sentimento do dia/mês — usado no tooltip do gráfico.
+  const breakdown = (b: Bucket) => ({
+    positivos: b.positive,
+    neutros: b.neutral,
+    negativos: b.total - b.positive - b.neutral,
+  })
+
   if (periodo === '7d') {
     // 7 slots fixos (um por dia). Dias sem feedback ficam null.
     // O chart usa connectNulls=true + linhas tracejadas de referência para indicar gaps.
@@ -237,6 +267,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
       date,
       sentiment: calcSentiment(b),
       avaliacoes: b.total,
+      ...breakdown(b),
     }))
   }
 
@@ -264,6 +295,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
         date: b.label,
         sentiment: calcSentiment(b),
         avaliacoes: b.total,
+        ...breakdown(b),
       }))
   }
 
@@ -292,6 +324,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
       date: format(monthDate, 'MMM', { locale: ptBR }),
       sentiment: calcSentiment(monthMap[key]),
       avaliacoes: monthMap[key].total,
+      ...breakdown(monthMap[key]),
     }
   })
 }

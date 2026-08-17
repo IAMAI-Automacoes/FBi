@@ -7,6 +7,7 @@ import {
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { Button } from '@/components/ui/button'
+import { TrendIndicator } from '@/components/dashboard/TrendIndicator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -53,7 +54,7 @@ function SatisfacaoTooltip({ active, payload }: { active?: boolean; payload?: an
       <p className="text-xs font-semibold text-foreground mb-0.5">{d.date}</p>
       {d.avaliacoes > 0 ? (
         <p className="text-xs text-muted-foreground">
-          Satisfação: <span className="font-semibold text-foreground">{d.sentiment}/100</span>
+          Satisfação: <span className="font-semibold text-foreground">{d.sentiment}%</span>
           {' · '}{d.avaliacoes} avaliaç{d.avaliacoes !== 1 ? 'ões' : 'ão'}
         </p>
       ) : (
@@ -307,16 +308,7 @@ export default function Reports() {
     )
   }
 
-  // Só mostra variação quando o período anterior tem base suficiente:
-  // "+200%" saindo de 1 avaliação engana mais do que informa.
-  const comparavel = kpis.hasPrevData && kpis.prevConfiavel
   const diasComDados = tendencia.filter((t) => t.avaliacoes > 0).length
-  const trendTexto = (t: string) =>
-    comparavel
-      ? `${t} vs. período anterior`
-      : kpis.hasPrevData
-        ? `período anterior teve só ${kpis.prevTotal} avaliação${kpis.prevTotal !== 1 ? 'ões' : ''}`
-        : 'primeiro período com dados'
 
   return (
     <div className="flex-1 space-y-6 p-6 md:p-8 max-w-7xl mx-auto w-full animate-fade-in-up">
@@ -375,7 +367,14 @@ export default function Reports() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-foreground">{kpis.totalFeedbacks}</div>
-                <p className="text-xs text-muted-foreground mt-1">{trendTexto(kpis.totalTrend)}</p>
+                <TrendIndicator
+                  trend={kpis.totalTrend}
+                  hasPrevData={kpis.hasPrevData}
+                  prevConfiavel={kpis.prevConfiavel}
+                  prevTotal={kpis.prevTotal}
+                  suffix="vs. período anterior"
+                  className="mt-1"
+                />
               </CardContent>
             </Card>
 
@@ -385,12 +384,17 @@ export default function Reports() {
                 <Smile className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground">
-                  {kpis.sentiment}<span className="text-lg font-medium text-muted-foreground">/100</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {comparavel ? `${kpis.sentimentTrend} · ` : ''}quanto maior, melhor
-                </p>
+                <div className="text-3xl font-bold text-foreground">{kpis.sentiment}%</div>
+                <TrendIndicator
+                  trend={kpis.sentimentTrend}
+                  hasPrevData={kpis.hasPrevData}
+                  prevConfiavel={kpis.prevConfiavel}
+                  prevTotal={kpis.prevTotal}
+                  suffix="vs. período anterior"
+                  isPontosCsat
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-muted-foreground mt-0.5">quanto maior, melhor</p>
               </CardContent>
             </Card>
 
@@ -401,7 +405,16 @@ export default function Reports() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-emerald-600">{kpis.positivePercent}%</div>
-                <p className="text-xs text-muted-foreground mt-1">{kpis.positivos} de {kpis.totalFeedbacks} avaliações</p>
+                <TrendIndicator
+                  trend={kpis.positivePercentTrend}
+                  hasPrevData={kpis.hasPrevData}
+                  prevConfiavel={kpis.prevConfiavel}
+                  prevTotal={kpis.prevTotal}
+                  suffix="vs. período anterior"
+                  isPontosCsat
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-muted-foreground mt-0.5">{kpis.positivos} de {kpis.totalFeedbacks} avaliações</p>
               </CardContent>
             </Card>
 
