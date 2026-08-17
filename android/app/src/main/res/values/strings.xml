@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Easy Feed</string>
+    <string name="title_activity_main">Easy Feed</string>
+    <string name="package_name">com.iamai.easyfeed</string>
+    <string name="custom_url_scheme">com.iamai.easyfeed</string>
+</resources>
