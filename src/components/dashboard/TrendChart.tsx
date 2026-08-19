@@ -89,18 +89,20 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
   const dataComFlag = data.map((d, i) => ({ ...d, isAtual: i === data.length - 1 }))
 
   // Ranqueado por feedback NEGATIVO (não por volume total) — é sobre onde as
-  // reclamações se concentram. Nenhuma categoria é escondida num "Outros"
-  // agregado: as 14 categorias reais aparecem, só ficam atrás do "mostrar mais"
-  // quando passam de MAX_VISIVEL.
-  const categoriasOrdenadas = [...categories].sort((a, b) => b.negativeCount - a.negativeCount)
+  // reclamações se concentram. Categoria sem nenhum negativo nem aparece aqui
+  // (a lista é "pontos de atenção", não um censo de todas as categorias).
+  // Nenhuma categoria com negativo é escondida num "Outros" agregado: as
+  // categorias reais aparecem, só ficam atrás do "mostrar mais" quando passam
+  // de MAX_VISIVEL.
+  const categoriasOrdenadas = [...categories]
+    .filter((c) => c.negativeCount > 0)
+    .sort((a, b) => b.negativeCount - a.negativeCount)
   const temMais = categoriasOrdenadas.length > MAX_VISIVEL
   const listaCategorias = expandido ? categoriasOrdenadas : categoriasOrdenadas.slice(0, MAX_VISIVEL)
 
-  // As 3 com mais feedback negativo ganham o card destacado — categoria sem
-  // nenhum negativo nunca entra aqui, mesmo que sobre vaga no top 3.
+  // As 3 com mais feedback negativo ganham o card destacado.
   const destaque = new Set(
     categoriasOrdenadas
-      .filter((c) => c.negativeCount > 0)
       .slice(0, MAX_DESTAQUE)
       .map((c) => c.name),
   )
@@ -220,8 +222,8 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
         <div className="w-44 shrink-0 flex flex-col">
           <p className="text-sm font-semibold text-foreground mb-1">Categorias de Feedback</p>
           <p className="text-[11px] text-muted-foreground mb-2">Nº de reclamações por categoria</p>
-          {categories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma categoria neste período</p>
+          {categoriasOrdenadas.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma reclamação neste período 🎉</p>
           ) : (
             <>
               <div className="flex flex-col gap-1.5 max-h-[280px] overflow-y-auto pr-0.5">

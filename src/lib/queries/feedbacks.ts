@@ -7,9 +7,10 @@ export interface FiltrosFeedback {
   categorias: string[]
   busca: string
   ordenacao: 'recent' | 'oldest'
-  /** Dias específicos escolhidos no calendário. Quando preenchido, tem
-      precedência sobre `periodo`: mostra só os feedbacks desses dias. */
-  datas?: Date[]
+  /** Intervalo (início/fim) escolhido no calendário. Quando preenchido, tem
+      precedência sobre `periodo`: mostra só os feedbacks desse intervalo.
+      `to` ausente = só o dia de `from`. */
+  datas?: { from: Date; to?: Date }
   /** IDs exatos de `feedbacks_originais`. Usado ao abrir os feedbacks que
       geraram um insight (/feedbacks?insight_id=...). Tem precedência sobre o
       período: sem isso o padrão de 7 dias esconderia os feedbacks mais antigos
@@ -30,15 +31,11 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
 
   if (filtros.ids && filtros.ids.length > 0) {
     query = query.in('id', filtros.ids)
-  } else if (filtros.datas && filtros.datas.length > 0) {
-    // OR de intervalos [início do dia, início do dia seguinte) — cada dia
-    // escolhido vira uma janela; dias não contíguos são unidos com `or`.
-    const janelas = filtros.datas.map((d) => {
-      const ini = startOfDay(d)
-      const fim = addDays(ini, 1)
-      return `and(created_at.gte.${ini.toISOString()},created_at.lt.${fim.toISOString()})`
-    })
-    query = query.or(janelas.join(','))
+  } else if (filtros.datas) {
+    // Intervalo contínuo [início do dia de `from`, início do dia seguinte a `to`).
+    const ini = startOfDay(filtros.datas.from)
+    const fim = addDays(startOfDay(filtros.datas.to ?? filtros.datas.from), 1)
+    query = query.gte('created_at', ini.toISOString()).lt('created_at', fim.toISOString())
   } else if (filtros.periodo !== 'all') {
     const days = filtros.periodo === '7d' ? 7 : filtros.periodo === '30d' ? 30 : 90
     const startDate = startOfDay(subDays(new Date(), days)).toISOString()

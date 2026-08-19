@@ -1,11 +1,8 @@
 import { ArrowRight, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { DashboardData } from '@/lib/queries/visao-geral'
-import { cn } from '@/lib/utils'
-import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
-import { PontoSentimento } from '@/components/PontoSentimento'
+import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 
 export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recentFeedbacks'] }) {
   return (
@@ -27,48 +24,17 @@ export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recen
           </div>
         ) : (
           <div className="flex flex-col divide-y divide-border/50">
-            {feedbacks.map((item) => {
-              const cor = coresSentimento(item.sentiment)
-              return (
-                <div
-                  key={item.id}
-                  className="p-5 flex gap-4 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="pt-0.5 shrink-0">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap border',
-                        cor.badge,
-                      )}
-                    >
-                      <PontoSentimento sentimento={item.sentiment} className="h-1.5 w-1.5" />
-                      {rotuloSentimento(item.sentiment)}
-                    </span>
-                  </div>
-                  <div className="flex-1 flex flex-col gap-2 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm text-foreground leading-relaxed line-clamp-2">
-                        "{item.text}"
-                      </p>
-                      <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
-                        {item.timeAgo}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {item.categories.map((cat, i) => (
-                        <Badge
-                          key={i}
-                          variant="secondary"
-                          className="bg-accent text-primary hover:bg-accent/80 font-medium text-[10px] px-2 py-0 h-5"
-                        >
-                          {cat}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            {feedbacks.map((item) => (
+              <div key={item.id} className="p-5 hover:bg-muted/30 transition-colors">
+                <FeedbackOriginalCard
+                  texto={item.text}
+                  sentimento={item.sentiment}
+                  categorias={item.categories}
+                  quando={item.timeAgo}
+                  truncar
+                />
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { formatDistanceToNow, format } from 'date-fns'
+import { format, isSameDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import type { DateRange } from 'react-day-picker'
 import {
   Select,
   SelectContent,
@@ -18,12 +19,29 @@ import { CalendarDays, Search, Folder, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
-import { rotuloSentimento, coresSentimento } from '@/lib/sentimento'
-import { PontoSentimento } from '@/components/PontoSentimento'
+import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
+import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { supabase } from '@/lib/supabase/client'
 
+const LIMIT = 10
+
+const PERIODOS: { value: FiltrosFeedback['periodo']; label: string }[] = [
+  { value: '7d', label: 'Últimos 7 dias' },
+  { value: '30d', label: 'Últimos 30 dias' },
+  { value: '90d', label: 'Últimos 90 dias' },
+  { value: 'all', label: 'Todo o período' },
+]
+
+function rotuloPeriodo(filtros: FiltrosFeedback): string {
+  if (filtros.datas) {
+    const { from, to } = filtros.datas
+    if (!to || isSameDay(from, to)) return format(from, "d 'de' MMM", { locale: ptBR })
+    return `${format(from, 'd MMM', { locale: ptBR })} – ${format(to, 'd MMM', { locale: ptBR })}`
+  }
+  return PERIODOS.find((p) => p.value === filtros.periodo)?.label ?? 'Período'
+}
 
 export default function Feedbacks() {
   const { toast } = useToast()
@@ -34,6 +52,7 @@ export default function Feedbacks() {
   const [totalFeedbacks, setTotalFeedbacks] = useState(0)
   const [loading, setLoading] = useState(true)
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([])
+  const [periodoAberto, setPeriodoAberto] = useState(false)
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
@@ -45,7 +64,6 @@ export default function Feedbacks() {
     ordenacao: 'recent',
   })
   const [offset, setOffset] = useState(0)
-  const LIMIT = 10
 
   // /feedbacks?insight_id=... → mostra só os feedbacks que geraram o insight.
   const insightIdParam = searchParams.get('insight_id')
@@ -89,40 +107,59 @@ export default function Feedbacks() {
       .catch(console.error)
   }, [usuario?.restaurante_id, filtros.periodo])
 
-  const carregarFeedbacks = useCallback(
-    async (isLoadMore = false) => {
-      try {
-        setLoading(true)
-        const currentOffset = isLoadMore ? offset + LIMIT : 0
-        const { feedbacks: newFbs, total } = await buscarFeedbacks(filtros, LIMIT, currentOffset)
-
-        setFeedbacks((prev) => (isLoadMore ? [...prev, ...newFbs] : newFbs))
-        setTotalFeedbacks(total)
-        setOffset(currentOffset)
-      } catch (err) {
-        toast({
-          title: 'Erro ao carregar',
-          description: 'Não foi possível carregar os feedbacks.',
-          variant: 'destructive',
-        })
-      } finally {
-        setLoading(false)
-      }
-    },
-    [filtros, offset, toast],
-  )
+  // Recarrega do zero — dispara sempre que os filtros mudam. NÃO depende de
+  // `offset`: se dependesse, "Carregar mais" (que muda o offset) faria este
+  // efeito rodar de novo e resetar a lista pro início — era o bug do botão
+  // "carrega mais e depois some".
+  const carregarDoZero = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { feedbacks: newFbs, total } = await buscarFeedbacks(filtros, LIMIT, 0)
+      setFeedbacks(newFbs)
+      setTotalFeedbacks(total)
+      setOffset(0)
+    } catch (err) {
+      toast({
+        title: 'Erro ao carregar',
+        description: 'Não foi possível carregar os feedbacks.',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [filtros, toast])
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => carregarFeedbacks(false), 300)
+    const timeoutId = setTimeout(() => carregarDoZero(), 300)
     return () => clearTimeout(timeoutId)
-  }, [filtros, carregarFeedbacks])
+  }, [filtros, carregarDoZero])
 
   // Tempo real: novo feedback recarrega a lista sozinho.
   useRealtimeReload(
     ['feedbacks_originais', 'feedbacks_restaurante'],
     usuario?.restaurante_id ?? null,
-    () => carregarFeedbacks(false),
+    () => carregarDoZero(),
   )
+
+  // "Carregar mais" — função separada de propósito (ver comentário acima).
+  const carregarMais = async () => {
+    try {
+      setLoading(true)
+      const proximoOffset = offset + LIMIT
+      const { feedbacks: newFbs, total } = await buscarFeedbacks(filtros, LIMIT, proximoOffset)
+      setFeedbacks((prev) => [...prev, ...newFbs])
+      setTotalFeedbacks(total)
+      setOffset(proximoOffset)
+    } catch (err) {
+      toast({
+        title: 'Erro ao carregar',
+        description: 'Não foi possível carregar mais feedbacks.',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const toggleCategoria = (cat: string) => {
     setFiltros((prev) => ({
@@ -134,9 +171,18 @@ export default function Feedbacks() {
   }
 
   const dataToDisplay = feedbacks
-  const datas = filtros.datas ?? []
-  const setDatas = (novas: Date[] | undefined) =>
-    setFiltros((prev) => ({ ...prev, datas: novas && novas.length > 0 ? novas : undefined }))
+
+  const escolherPreset = (periodo: FiltrosFeedback['periodo']) => {
+    setFiltros((prev) => ({ ...prev, periodo, datas: undefined }))
+    setPeriodoAberto(false)
+  }
+
+  const escolherIntervalo = (range: DateRange | undefined) => {
+    setFiltros((prev) => ({
+      ...prev,
+      datas: range?.from ? { from: range.from, to: range.to } : undefined,
+    }))
+  }
 
   return (
     <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">
@@ -158,59 +204,29 @@ export default function Feedbacks() {
 
       <div className="flex flex-col xl:flex-row gap-3 mb-6 items-start xl:items-center justify-between">
         <div className="flex flex-wrap items-center gap-2 flex-1">
-          <Select
-            value={filtros.periodo}
-            disabled={datas.length > 0}
-            onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, periodo: val }))}
-          >
-            <SelectTrigger
-              className={cn(
-                'w-[150px] h-10 bg-white shadow-sm border-gray-200',
-                datas.length > 0 && 'opacity-50',
-              )}
-              title={datas.length > 0 ? 'Limpe as datas para usar o período' : undefined}
-            >
-              <SelectValue placeholder="Período" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Últimos 7 dias</SelectItem>
-              <SelectItem value="30d">Últimos 30 dias</SelectItem>
-              <SelectItem value="90d">Últimos 90 dias</SelectItem>
-              <SelectItem value="all">Todo o período</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Calendário: escolhe um ou mais dias específicos. Quando há dias
-              marcados, eles têm precedência sobre o período acima. */}
-          <Popover>
+          {/* Período: atalhos (7/30/90 dias, tudo) + calendário de intervalo, num controle só */}
+          <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  'h-10 bg-white shadow-sm border-gray-200 font-normal justify-start',
-                  datas.length === 0 && 'text-muted-foreground',
-                )}
+                className="h-10 bg-white shadow-sm border-gray-200 font-normal justify-start"
               >
-                <CalendarDays className="mr-2 h-4 w-4" />
-                {datas.length === 0
-                  ? 'Escolher datas'
-                  : datas.length === 1
-                    ? format(datas[0], "d 'de' MMM", { locale: ptBR })
-                    : `${datas.length} dias selecionados`}
-                {datas.length > 0 && (
+                <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
+                {rotuloPeriodo(filtros)}
+                {filtros.datas && (
                   <span
                     role="button"
                     tabIndex={0}
-                    aria-label="Limpar datas"
+                    aria-label="Limpar intervalo"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setDatas(undefined)
+                      setFiltros((prev) => ({ ...prev, datas: undefined }))
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
                         e.stopPropagation()
-                        setDatas(undefined)
+                        setFiltros((prev) => ({ ...prev, datas: undefined }))
                       }
                     }}
                     className="ml-2 -mr-1 rounded-sm p-0.5 hover:bg-gray-100 text-gray-500"
@@ -221,28 +237,48 @@ export default function Feedbacks() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="multiple"
-                selected={datas}
-                onSelect={setDatas}
-                locale={ptBR}
-                disabled={{ after: new Date() }}
-              />
-              {datas.length > 0 && (
-                <div className="flex items-center justify-between border-t p-2">
-                  <span className="text-xs text-muted-foreground pl-1">
-                    {datas.length} {datas.length === 1 ? 'dia' : 'dias'}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setDatas(undefined)}
-                  >
-                    Limpar
-                  </Button>
+              <div className="flex flex-col sm:flex-row">
+                <div className="flex sm:flex-col gap-0.5 p-2 sm:border-r border-b sm:border-b-0">
+                  {PERIODOS.map((p) => (
+                    <button
+                      key={p.value}
+                      onClick={() => escolherPreset(p.value)}
+                      className={cn(
+                        'text-left text-sm px-3 py-2 rounded-md whitespace-nowrap hover:bg-gray-100 transition-colors',
+                        !filtros.datas && filtros.periodo === p.value
+                          ? 'bg-[#EFF6FF] text-[#1D4ED8] font-medium'
+                          : 'text-gray-700',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+                <div>
+                  <Calendar
+                    mode="range"
+                    selected={filtros.datas}
+                    onSelect={escolherIntervalo}
+                    locale={ptBR}
+                    disabled={{ after: new Date() }}
+                  />
+                  {filtros.datas && (
+                    <div className="flex items-center justify-between border-t p-2">
+                      <span className="text-xs text-muted-foreground pl-1">
+                        {filtros.datas.to ? 'Escolha o início e o fim' : 'Escolha o fim (ou clique de novo pro mesmo dia)'}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs shrink-0"
+                        onClick={() => setFiltros((prev) => ({ ...prev, datas: undefined }))}
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </PopoverContent>
           </Popover>
 
@@ -258,7 +294,6 @@ export default function Feedbacks() {
               <SelectItem value="positivo">Positivo</SelectItem>
               <SelectItem value="negativo">Negativo</SelectItem>
               <SelectItem value="positivo e negativo">Positivo e negativo</SelectItem>
-              <SelectItem value="neutro">Neutro</SelectItem>
             </SelectContent>
           </Select>
 
@@ -329,8 +364,8 @@ export default function Feedbacks() {
               key={i}
               className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle flex flex-col sm:flex-row gap-4 sm:gap-6"
             >
-              <div className="w-full sm:w-[90px] shrink-0">
-                <Skeleton className="h-4 w-16" />
+              <div className="w-full sm:w-[152px] shrink-0">
+                <Skeleton className="h-6 w-full rounded-full" />
               </div>
               <div className="flex-1 space-y-4">
                 <Skeleton className="h-4 w-full" />
@@ -348,52 +383,19 @@ export default function Feedbacks() {
             </p>
           </div>
         ) : (
-          dataToDisplay.map((fb) => {
-            const cor = coresSentimento(fb.sentimento)
-            return (
-              <div
-                key={fb.id}
-                className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle flex flex-col sm:flex-row gap-4 sm:gap-6 hover:shadow-elevation transition-all duration-200"
-              >
-                <div className="w-full sm:w-[100px] flex sm:flex-col items-center justify-start sm:justify-start pt-1 gap-2 shrink-0 border-b sm:border-b-0 pb-3 sm:pb-0 border-gray-100">
-                  <PontoSentimento sentimento={fb.sentimento} className="w-2.5 h-2.5" />
-                  <span
-                    className={cn(
-                      'text-[10px] font-bold tracking-wide text-center leading-tight',
-                      cor.texto,
-                    )}
-                  >
-                    {rotuloSentimento(fb.sentimento).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <p className="text-[15px] text-[#1F2937] leading-relaxed font-normal">
-                      {fb.texto_original}
-                    </p>
-                    <span className="text-[12px] text-[#9CA3AF] whitespace-nowrap shrink-0 pt-0.5">
-                      {formatDistanceToNow(new Date(fb.created_at), {
-                        addSuffix: true,
-                        locale: ptBR,
-                      })}
-                    </span>
-                  </div>
-                  {(fb.categorias ?? []).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {(fb.categorias as string[]).map((cat) => (
-                        <span
-                          key={cat}
-                          className="bg-[#EFF6FF] text-[#1D4ED8] px-2 py-0.5 rounded-md font-medium text-[11px] tracking-wide"
-                        >
-                          {cat}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })
+          dataToDisplay.map((fb) => (
+            <div
+              key={fb.id}
+              className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle hover:shadow-elevation transition-all duration-200"
+            >
+              <FeedbackOriginalCard
+                texto={fb.texto_original}
+                sentimento={fb.sentimento}
+                categorias={fb.categorias ?? []}
+                quando={formatarDataFeedback(fb.created_at)}
+              />
+            </div>
+          ))
         )}
       </div>
 
@@ -401,7 +403,7 @@ export default function Feedbacks() {
         <div className="mt-8 flex justify-center">
           <Button
             variant="outline"
-            onClick={() => carregarFeedbacks(true)}
+            onClick={carregarMais}
             className="h-[44px] rounded-[8px] px-6 font-semibold shadow-sm hover:bg-gray-50 text-gray-700 bg-white border-gray-200"
           >
             Carregar mais feedbacks

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import { subDays, isAfter, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatarDataFeedback } from '@/lib/formatar-tempo'
 
 export type PeriodInfo = '7d' | '30d' | '90d'
 
@@ -406,33 +407,11 @@ export const buscarUltimosFeedbacks = async (
 
   if (error) throw error
 
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-  return (data || []).map((f) => {
-    const date = parseISO(f.created_at)
-    const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    const calendarDays = Math.round(
-      (todayStart.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24),
-    )
-    const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-    const h = date.getHours()
-    const m = date.getMinutes()
-    const hourStr = m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`
-
-    let timeAgo: string
-    if (diffMinutes < 2) timeAgo = 'agora mesmo'
-    else if (diffMinutes < 60) timeAgo = `há ${diffMinutes}min`
-    else if (calendarDays === 0) timeAgo = `hoje às ${hourStr}`
-    else if (calendarDays === 1) timeAgo = 'Ontem'
-    else timeAgo = `há ${calendarDays} dias`
-
-    return {
-      id: String(f.id),
-      text: f.texto_original || '',
-      categories: (f.categorias ?? []) as string[],
-      sentiment: (f.sentimento || 'neutro') as string,
-      timeAgo,
-    }
-  })
+  return (data || []).map((f) => ({
+    id: String(f.id),
+    text: f.texto_original || '',
+    categories: (f.categorias ?? []) as string[],
+    sentiment: (f.sentimento || 'neutro') as string,
+    timeAgo: formatarDataFeedback(f.created_at),
+  }))
 }

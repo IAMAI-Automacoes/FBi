@@ -39,10 +39,10 @@ export const CORES_SENTIMENTO: Record<
   TipoSentimento,
   { badge: string; texto: string; dot: string; dotStyle?: CSSProperties }
 > = {
-  positivo: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', texto: 'text-emerald-600', dot: 'bg-emerald-500' },
-  negativo: { badge: 'bg-rose-50 text-rose-700 border-rose-200', texto: 'text-rose-600', dot: 'bg-rose-500' },
-  neutro:   { badge: 'bg-slate-50 text-slate-600 border-slate-200', texto: 'text-slate-500', dot: 'bg-slate-400' },
-  misto:    { badge: 'bg-amber-50 text-amber-700 border-amber-200', texto: 'text-amber-600', dot: 'bg-amber-400' },
+  positivo: { badge: 'bg-emerald-200 text-emerald-800 border-emerald-300', texto: 'text-emerald-600', dot: 'bg-emerald-500' },
+  negativo: { badge: 'bg-rose-200 text-rose-800 border-rose-300', texto: 'text-rose-600', dot: 'bg-rose-500' },
+  neutro:   { badge: 'bg-slate-200 text-slate-700 border-slate-300', texto: 'text-slate-500', dot: 'bg-slate-400' },
+  misto:    { badge: 'bg-amber-200 text-amber-800 border-amber-300', texto: 'text-amber-600', dot: 'bg-amber-400' },
 }
 
 export function coresSentimento(valor?: string | null) {

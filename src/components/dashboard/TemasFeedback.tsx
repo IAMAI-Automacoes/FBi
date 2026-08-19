@@ -10,8 +10,8 @@ import { Check, AlertTriangle, MessagesSquare } from 'lucide-react'
 
 const SENTIMENTOS: { key: SentimentoFiltro; label: string }[] = [
   { key: 'todos', label: 'Todos' },
-  { key: 'positivo', label: 'Positivos' },
   { key: 'negativo', label: 'Negativos' },
+  { key: 'positivo', label: 'Positivos' },
 ]
 
 const PERIODOS = [
@@ -23,12 +23,17 @@ const PERIODOS = [
 
 function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atencao' }) {
   const isPositivo = tom === 'positivo'
+  // Só existe pra rótulo cortado — clicar alterna pra mostrar inteiro. Se o
+  // rótulo nem precisava cortar, o clique simplesmente não muda nada visível.
+  const [expandido, setExpandido] = useState(false)
   return (
     <div
       className={cn(
-        'flex items-center gap-2.5 rounded-full pl-2 pr-2 py-1.5',
+        'flex items-center gap-2.5 rounded-full pl-2 pr-2 py-1.5 cursor-pointer',
         isPositivo ? 'bg-emerald-100' : 'bg-red-100',
       )}
+      onClick={() => setExpandido((v) => !v)}
+      title={expandido ? 'Clique para recolher' : 'Clique para ver o rótulo inteiro'}
     >
       <span
         className={cn(
@@ -40,7 +45,14 @@ function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atenca
           ? <Check className="h-3 w-3" strokeWidth={3} />
           : <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />}
       </span>
-      <span className="flex-1 min-w-0 truncate text-sm text-foreground/90">{tema.rotulo}</span>
+      <span
+        className={cn(
+          'flex-1 min-w-0 text-sm text-foreground/90',
+          expandido ? 'whitespace-normal break-words' : 'truncate',
+        )}
+      >
+        {tema.rotulo}
+      </span>
       <span
         className={cn(
           'shrink-0 min-w-[26px] text-center rounded-full text-white text-xs font-bold px-2 py-0.5 tabular-nums',
@@ -147,21 +159,6 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
               mostrarPositivos && mostrarNegativos ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1',
             )}
           >
-            {mostrarPositivos && (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 mb-3">
-                  Sentimentos Positivos
-                </p>
-                <div className="flex flex-col gap-2">
-                  {positivos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum tema positivo neste período</p>
-                  ) : (
-                    positivos.map((t) => <TemaPill key={t.id} tema={t} tom="positivo" />)
-                  )}
-                </div>
-              </div>
-            )}
-
             {mostrarNegativos && (
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-red-600 mb-3">
@@ -172,6 +169,21 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
                     <p className="text-sm text-muted-foreground">Nenhum ponto de atenção neste período</p>
                   ) : (
                     negativos.map((t) => <TemaPill key={t.id} tema={t} tom="atencao" />)
+                  )}
+                </div>
+              </div>
+            )}
+
+            {mostrarPositivos && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 mb-3">
+                  Sentimentos Positivos
+                </p>
+                <div className="flex flex-col gap-2">
+                  {positivos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum tema positivo neste período</p>
+                  ) : (
+                    positivos.map((t) => <TemaPill key={t.id} tema={t} tom="positivo" />)
                   )}
                 </div>
               </div>
