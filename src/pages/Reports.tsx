@@ -192,7 +192,7 @@ export default function Reports() {
           const d = parseISO(f.created_at)
           return [
             format(d, 'dd/MM/yyyy'), format(d, 'HH:mm'),
-            f.categoria || 'Geral', f.sentimento || '',
+            f.categoria || 'Outros', f.sentimento || '',
             (f.texto_original || f.resumo || '').replace(/[\r\n]+/g, ' '),
           ]
         }),

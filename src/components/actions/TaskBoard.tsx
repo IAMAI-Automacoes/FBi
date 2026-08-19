@@ -123,7 +123,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           id: d.id.toString(),
           titulo_acao: d.titulo_acao || 'Sem título',
           prioridade: d.prioridade || 'NORMAL',
-          categoria: d.categoria || 'Geral',
+          categoria: d.categoria || 'Outros',
           plano_detalhado: d.plano_detalhado || undefined,
           texto: d.texto || undefined,
           feedback_id: d.feedback_id,
@@ -430,7 +430,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         await criarAcao({
           titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Ação',
           prioridade: taskData.priority || taskData.prioridade || 'NORMAL',
-          categoria: taskData.source || taskData.categoria || 'Geral',
+          categoria: taskData.source || taskData.categoria || 'Outros',
           plano_detalhado: taskData.plano_detalhado || '',
           responsavel: taskData.responsavel ?? null,
           prazo: taskData.prazo ?? null,

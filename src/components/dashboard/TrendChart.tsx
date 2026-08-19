@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -6,12 +7,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { MoreHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { DashboardData, PeriodInfo } from '@/lib/queries/visao-geral'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
+import { estiloCategoria } from '@/lib/categorias-feedback'
 
 const chartConfig = {
   sentiment: {
@@ -69,21 +71,14 @@ interface TrendChartProps {
   onPeriodChange: (p: PeriodInfo) => void
 }
 
-// Paleta fixa por nome de categoria — mesma família de cores já usada no resto
-// do app (emerald/blue/purple/slate/amber). Fallback pra nomes não mapeados.
-const CATEGORY_DOT: Record<string, string> = {
-  comida: 'bg-emerald-500',
-  ambiente: 'bg-blue-600',
-  atendimento: 'bg-purple-500',
-  agilidade: 'bg-slate-400',
-  'preço': 'bg-amber-500',
-  preco: 'bg-amber-500',
-}
-const dotColor = (name: string) => CATEGORY_DOT[name.trim().toLowerCase()] ?? 'bg-slate-400'
-
-const MAX_CATEGORIAS = 5
+/** Quantas categorias ficam visíveis antes de precisar expandir. */
+const MAX_VISIVEL = 6
+/** Quantas categorias (as com mais feedback NEGATIVO) ganham o card destacado. */
+const MAX_DESTAQUE = 3
 
 export function TrendChart({ data, categories, period, onPeriodChange }: TrendChartProps) {
+  const [expandido, setExpandido] = useState(false)
+
   // Intervalo derivado do tamanho real dos dados (não do period),
   // para evitar bug visual quando o period muda antes dos dados chegarem.
   // Mais de 10 pontos → espaça os rótulos; ≤10 → mostra todos.
@@ -93,14 +88,22 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
   // Marca o ponto mais recente pra o balão do tooltip mostrar "(Atual)"
   const dataComFlag = data.map((d, i) => ({ ...d, isAtual: i === data.length - 1 }))
 
-  // Mais de 5 categorias: agrupa o resto em "Outros" (soma das contagens)
-  const visiveis = categories.slice(0, MAX_CATEGORIAS)
-  const resto = categories.slice(MAX_CATEGORIAS)
-  const outrosCount = resto.reduce((s, c) => s + c.count, 0)
-  const listaCategorias =
-    outrosCount > 0
-      ? [...visiveis, { name: 'Outros', score: 0, count: outrosCount, trend: 'neutral' as const }]
-      : visiveis
+  // Ranqueado por feedback NEGATIVO (não por volume total) — é sobre onde as
+  // reclamações se concentram. Nenhuma categoria é escondida num "Outros"
+  // agregado: as 14 categorias reais aparecem, só ficam atrás do "mostrar mais"
+  // quando passam de MAX_VISIVEL.
+  const categoriasOrdenadas = [...categories].sort((a, b) => b.negativeCount - a.negativeCount)
+  const temMais = categoriasOrdenadas.length > MAX_VISIVEL
+  const listaCategorias = expandido ? categoriasOrdenadas : categoriasOrdenadas.slice(0, MAX_VISIVEL)
+
+  // As 3 com mais feedback negativo ganham o card destacado — categoria sem
+  // nenhum negativo nunca entra aqui, mesmo que sobre vaga no top 3.
+  const destaque = new Set(
+    categoriasOrdenadas
+      .filter((c) => c.negativeCount > 0)
+      .slice(0, MAX_DESTAQUE)
+      .map((c) => c.name),
+  )
 
   return (
     <Card className="shadow-subtle flex flex-col">
@@ -215,27 +218,73 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
         <div className="w-px bg-border/50 self-stretch shrink-0" />
 
         <div className="w-44 shrink-0 flex flex-col">
-          <p className="text-sm font-semibold text-foreground mb-3">Categorias de Feedback</p>
+          <p className="text-sm font-semibold text-foreground mb-1">Categorias de Feedback</p>
+          <p className="text-[11px] text-muted-foreground mb-2">Nº de reclamações por categoria</p>
           {categories.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma categoria neste período</p>
           ) : (
-            <div className="flex flex-col divide-y divide-border/40">
-              {listaCategorias.map((cat, i) => (
-                <div key={i} className="flex items-center gap-2 justify-between py-2">
-                  <span className="flex items-center gap-2 min-w-0">
-                    {cat.name === 'Outros' ? (
-                      <MoreHorizontal className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    ) : (
-                      <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotColor(cat.name))} />
-                    )}
-                    <span className="text-sm text-foreground truncate">{cat.name}</span>
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">
-                    {cat.count}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="flex flex-col gap-1.5 max-h-[280px] overflow-y-auto pr-0.5">
+                {listaCategorias.map((cat) => {
+                  const estilo = estiloCategoria(cat.name)
+                  const Icon = estilo.icon
+                  const emDestaque = destaque.has(cat.name)
+                  return (
+                    <div
+                      key={cat.name}
+                      className={cn(
+                        'flex items-center gap-2 justify-between rounded-lg px-2 py-1.5 shrink-0',
+                        emDestaque && cn('border', estilo.corFundo, estilo.corBorda),
+                      )}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        {emDestaque ? (
+                          <span
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0',
+                              estilo.corSolida,
+                            )}
+                          >
+                            <Icon className="h-3 w-3" />
+                          </span>
+                        ) : (
+                          <Icon className={cn('h-3.5 w-3.5 shrink-0', estilo.corTexto)} />
+                        )}
+                        <span
+                          className={cn(
+                            'text-sm truncate',
+                            estilo.corTexto,
+                            emDestaque && 'font-medium',
+                          )}
+                        >
+                          {cat.name}
+                        </span>
+                      </span>
+                      <span className={cn('text-sm font-semibold tabular-nums shrink-0', estilo.corTexto)}>
+                        {cat.negativeCount}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              {temMais && (
+                <button
+                  onClick={() => setExpandido((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground mt-2 pt-2 border-t border-border/40"
+                >
+                  {expandido ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5" /> Mostrar menos
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      Mostrar mais {categoriasOrdenadas.length - MAX_VISIVEL}
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
       </CardContent>

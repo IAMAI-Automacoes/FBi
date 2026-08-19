@@ -11,7 +11,9 @@ clientes do restaurante por WhatsApp (o cliente escaneia um QR Code, cai numa p�
 para a conversa), analisa cada mensagem com IA e organiza tudo em um painel.
 
 Como os dados nascem: cada avaliação vira um registro com texto original, uma CATEGORIA
-(ex: Comida, Atendimento, Agilidade, Preço, Ambiente) e um SENTIMENTO (positivo, neutro ou negativo).
+(uma destas 14: Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva,
+Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene, Outros) e um SENTIMENTO
+(positivo, neutro ou negativo).
 
 Páginas do painel que o dono usa:
 - Visão Geral: resumo com indicadores e tendência.
@@ -423,7 +425,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
     prompt += bloco(
       'Avaliações relacionadas a este insight',
       ctx.feedbacksRelacionados
-        .map((f: any) => `- [${f.categoria || 'Geral'} / ${f.sentimento || '?'}] "${(f.texto_original || f.resumo || '').replace(/\s+/g, ' ').slice(0, 300)}"`)
+        .map((f: any) => `- [${f.categoria || 'Outros'} / ${f.sentimento || '?'}] "${(f.texto_original || f.resumo || '').replace(/\s+/g, ' ').slice(0, 300)}"`)
         .join('\n'),
     )
   }
@@ -434,7 +436,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
       ctx.feedbacks
         .map((f: any) => {
           const data = f.created_at ? new Date(f.created_at).toLocaleDateString('pt-BR') : ''
-          return `- ${data} [${f.categoria || 'Geral'} / ${f.sentimento || '?'}] "${(f.texto_original || f.resumo || '').replace(/\s+/g, ' ').slice(0, 300)}"`
+          return `- ${data} [${f.categoria || 'Outros'} / ${f.sentimento || '?'}] "${(f.texto_original || f.resumo || '').replace(/\s+/g, ' ').slice(0, 300)}"`
         })
         .join('\n'),
     )

@@ -184,7 +184,7 @@ Assunto da ação: "{pedido}"
 
 JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
 "plano_detalhado": "passos práticos para resolver ESSE assunto",
-"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral",
+"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros",
 "status": "PENDENTE" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
@@ -197,7 +197,7 @@ Assunto do insight: "{pedido}"
 
 JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado",
 "sugestao": "o que fazer", "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO",
-"categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral" }
+"categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
 Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`,
@@ -404,7 +404,7 @@ Máximo de 3 fatos por conversa.` }],
   "insights": [
     {
       "prioridade": "URGENTE" | "IMPORTANTE" | "OBSERVACAO",
-      "categoria": "Servico" | "Comida" | "Ambiente" | "Preco" | "Agilidade" | "Geral",
+      "categoria": "Comida" | "Bebidas" | "Atendimento" | "Ambiente" | "Limpeza" | "Preço" | "Tempo de Espera" | "Reserva" | "Estacionamento" | "Acessibilidade" | "Música/Som" | "Cardápio/Variedade" | "Higiene" | "Outros",
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
@@ -439,7 +439,7 @@ Máximo de 3 fatos por conversa.` }],
 1. "titulo_acao": titulo curto e claro do que precisa ser feito.
 2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
 3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
-4. "categoria": Servico, Comida, Ambiente, Preco, Agilidade ou Geral.
+4. "categoria": uma destas 14 — Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva, Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene ou Outros.
 Escreva em portugues do Brasil, direto.
 
 ## Formato (retorne SOMENTE este JSON)

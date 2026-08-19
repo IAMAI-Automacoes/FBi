@@ -14,6 +14,8 @@ export interface CategoryScore {
   score: number
   count: number
   trend: 'up' | 'down' | 'neutral'
+  /** Quantos desses feedbacks são negativos — usado só pra decidir destaque visual. */
+  negativeCount: number
 }
 
 export interface FeedbackItem {
@@ -183,7 +185,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   type CatStats = { total: number; negative: number }
   const catStats: Record<string, CatStats> = {}
   for (const f of currentFeedbacks) {
-    const cat = f.categoria || 'Geral'
+    const cat = f.categoria || 'Outros'
     if (!catStats[cat]) catStats[cat] = { total: 0, negative: 0 }
     catStats[cat].total++
     if (isNegativo(f)) catStats[cat].negative++
@@ -344,7 +346,7 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
   type CatAcc = { total: number; positive: number; neutral: number; prevTotal: number; prevPositive: number; prevNeutral: number }
   const categoryMap = currentFeedbacks.reduce(
     (acc, f) => {
-      const cat = f.categoria || 'Geral'
+      const cat = f.categoria || 'Outros'
       if (!acc[cat]) acc[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }
       acc[cat].total++
       const s = f.sentimento?.toLowerCase()
@@ -356,7 +358,7 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
   )
 
   previousFeedbacks.forEach((f) => {
-    const cat = f.categoria || 'Geral'
+    const cat = f.categoria || 'Outros'
     if (!categoryMap[cat])
       categoryMap[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }
     categoryMap[cat].prevTotal++
@@ -378,7 +380,11 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
       if (score > prevScore) trend = 'up'
       else if (score < prevScore) trend = 'down'
 
-      return { name, score, count: stats.total, trend } as CategoryScore
+      // Reclamações da categoria — usado só pra decidir destaque visual (as 3
+      // categorias com mais feedback NEGATIVO), não pra mudar o `count` exibido.
+      const negativeCount = stats.total - stats.positive - stats.neutral
+
+      return { name, score, count: stats.total, trend, negativeCount } as CategoryScore
     })
     .sort((a, b) => b.count - a.count)
 }

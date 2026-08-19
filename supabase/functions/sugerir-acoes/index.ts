@@ -22,7 +22,7 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor especialista em gestao de re
 1. "titulo_acao": titulo curto e claro do que precisa ser feito.
 2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
 3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
-4. "categoria": Servico, Comida, Ambiente, Preco, Agilidade ou Geral.
+4. "categoria": uma destas 14 — Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva, Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene ou Outros.
 5. "insight_id": o "id" EXATO do insight que originou esta acao, copiado da lista abaixo. Nao invente ID.
 Escreva em portugues do Brasil, direto.
 
@@ -187,7 +187,7 @@ serve(async (req: Request) => {
         titulo_acao: a.titulo_acao || 'Acao sugerida',
         plano_detalhado: a.plano_detalhado || '',
         prioridade: a.prioridade || 'IMPORTANTE',
-        categoria: a.categoria || 'Geral',
+        categoria: a.categoria || 'Outros',
         status: 'SUGERIDA',
         restaurante_id: targetRestauranteId,
         insight_id: idsDeInsight.has(String(a.insight_id)) ? a.insight_id : insightPadrao,

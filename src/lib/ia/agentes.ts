@@ -263,7 +263,7 @@ Assunto da ação: "${pedido}"
 
 JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
 "plano_detalhado": "passos práticos para resolver ESSE assunto",
-"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral",
+"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros",
 "status": "PENDENTE" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
@@ -439,7 +439,7 @@ Assunto do insight: "${pedido}"
 
 JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado",
 "sugestao": "o que fazer", "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO",
-"categoria": "Servico|Comida|Ambiente|Preco|Agilidade|Geral" }
+"categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros" }
 
 Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
 Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`, { pedido }),

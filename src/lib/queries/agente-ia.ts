@@ -151,7 +151,7 @@ export async function executarAcao(
         titulo_acao: String(d.titulo_acao).trim(),
         plano_detalhado: String(d.plano_detalhado ?? '').trim(),
         prioridade: normalizarPrioridade(d.prioridade),
-        categoria: String(d.categoria ?? 'Geral'),
+        categoria: String(d.categoria ?? 'Outros'),
         status: normalizarStatus(d.status ?? 'PENDENTE'),
         texto: 'Criada pelo assistente de IA a pedido do dono.',
       }
@@ -194,7 +194,7 @@ export async function executarAcao(
         descricao: String(d.descricao ?? '').trim(),
         sugestao: String(d.sugestao ?? '').trim(),
         prioridade: normalizarPrioridade(d.prioridade),
-        categoria: String(d.categoria ?? 'Geral'),
+        categoria: String(d.categoria ?? 'Outros'),
         gerado_por: 'ia', // CHECK aceita apenas 'ia' ou 'manual'
         ativo: true,
       }

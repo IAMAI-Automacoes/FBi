@@ -328,7 +328,7 @@ export async function gerarPdfRelatorio(
       doc.setFontSize(7.5)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(cor[0], cor[1], cor[2])
-      doc.text(`${limpar(f.categoria || 'Geral').toUpperCase()} - ${sent.toUpperCase()}`, M + 4, y)
+      doc.text(`${limpar(f.categoria || 'Outros').toUpperCase()} - ${sent.toUpperCase()}`, M + 4, y)
       doc.setFontSize(9)
       doc.setFont('helvetica', 'italic')
       setCor(TINTA)

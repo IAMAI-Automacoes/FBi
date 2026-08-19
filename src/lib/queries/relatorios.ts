@@ -120,7 +120,7 @@ export async function buscarEstatisticasRelatorio(
   // Melhor / pior categoria (exige amostra mínima para não eleger categoria de 1 avaliação)
   const porCategoria = new Map<string, any[]>()
   for (const f of fs) {
-    const c = f.categoria || 'Geral'
+    const c = f.categoria || 'Outros'
     if (!porCategoria.has(c)) porCategoria.set(c, [])
     porCategoria.get(c)!.push(f)
   }

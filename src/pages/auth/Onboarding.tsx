@@ -510,7 +510,7 @@ export default function Onboarding() {
                   Áreas de foco principais
                 </Label>
                 <div className="flex flex-wrap gap-2">
-                  {['Atendimento', 'Comida', 'Ambiente', 'Preço', 'Agilidade'].map((foco) => (
+                  {['Atendimento', 'Comida', 'Ambiente', 'Preço', 'Tempo de Espera'].map((foco) => (
                     <div key={foco} className="flex items-center space-x-2">
                       <Checkbox
                         id={`foco-${foco}`}

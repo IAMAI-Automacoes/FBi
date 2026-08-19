@@ -43,7 +43,7 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
   "insights": [
     {
       "prioridade": "URGENTE" | "IMPORTANTE" | "OBSERVACAO",
-      "categoria": "Servico" | "Comida" | "Ambiente" | "Preco" | "Agilidade" | "Geral",
+      "categoria": "Comida" | "Bebidas" | "Atendimento" | "Ambiente" | "Limpeza" | "Preço" | "Tempo de Espera" | "Reserva" | "Estacionamento" | "Acessibilidade" | "Música/Som" | "Cardápio/Variedade" | "Higiene" | "Outros",
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
@@ -207,7 +207,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
       return {
         restaurante_id: restauranteId,
         prioridade: i.prioridade === 'OBSERVAÇÃO' ? 'OBSERVACAO' : i.prioridade,
-        categoria: i.categoria || 'Geral',
+        categoria: i.categoria || 'Outros',
         titulo: i.titulo || 'Insight detectado',
         descricao: i.descricao || '',
         sugestao: i.sugestao || '',
