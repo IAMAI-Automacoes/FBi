@@ -1173,7 +1173,7 @@ export function ChatFab({
             <div className="flex-1 overflow-y-auto sem-barra bg-gray-50">
               {/* Campo de nome da nova pasta: mesmo padrão inline do renomear */}
               {criandoPasta && (
-                <div className="px-4 py-3 flex items-center gap-2 bg-white border-b border-gray-100">
+                <div className="px-4 py-3 flex items-center gap-2 bg-white border-b border-gray-300">
                   <FolderPlus className="h-4 w-4 text-gray-400 shrink-0" />
                   <input
                     autoFocus
@@ -1272,7 +1272,7 @@ export function ChatFab({
                         <div
                           key={s.id}
                           className={cn(
-                            'group relative border-b border-gray-100 last:border-0',
+                            'group relative border-b border-gray-300 last:border-0',
                             s.id === sessaoId && 'border-l-2 border-l-[#1D4ED8] bg-white',
                           )}
                         >
@@ -1354,7 +1354,7 @@ export function ChatFab({
 
                           {/* Escolha da pasta de destino */}
                           {moverSessaoId === s.id && (
-                            <div className="px-4 pb-3 pt-1 bg-white border-t border-gray-100">
+                            <div className="px-4 pb-3 pt-1 bg-white border-t border-gray-300">
                               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
                                 Mover para
                               </p>
@@ -1429,7 +1429,7 @@ export function ChatFab({
                             msg.role === 'user' && 'order-2',
                             msg.role === 'user'
                               ? 'bg-[#1D4ED8] text-white rounded-tr-none'
-                              : 'bg-[#F9FAFB] text-[#1F2937] border border-gray-100 rounded-tl-none',
+                              : 'bg-[#F9FAFB] text-[#1F2937] border border-gray-300 rounded-tl-none',
                           )}
                         >
                           {msg.respondendoA && (
@@ -1635,7 +1635,7 @@ export function ChatFab({
 
                 {loading && (
                   <div className="flex w-full justify-start">
-                    <div className="px-4 py-3 rounded-2xl text-sm bg-[#F9FAFB] border border-gray-100 rounded-tl-none shadow-sm flex items-center gap-2">
+                    <div className="px-4 py-3 rounded-2xl text-sm bg-[#F9FAFB] border border-gray-300 rounded-tl-none shadow-sm flex items-center gap-2">
                       {buscandoWeb ? (
                         <>
                           <Globe className="h-3.5 w-3.5 text-blue-600 animate-pulse" />

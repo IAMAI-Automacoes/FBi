@@ -554,7 +554,7 @@ export default function Onboarding() {
 
           {step === 5 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 space-y-5">
+              <div className="bg-gray-50 p-5 rounded-xl border border-gray-300 space-y-5">
                 <div className="flex gap-3">
                   <Store className="h-5 w-5 text-[#1D4ED8] shrink-0" />
                   <div>
@@ -607,7 +607,7 @@ export default function Onboarding() {
           </p>
         )}
 
-        <CardFooter className="flex justify-between border-t border-gray-100 bg-gray-50/50 py-4 px-6 rounded-b-xl">
+        <CardFooter className="flex justify-between border-t border-gray-300 bg-gray-50/50 py-4 px-6 rounded-b-xl">
           {step > 1 ? (
             <Button variant="outline" onClick={handlePrev} className="bg-white">
               <ArrowLeft className="mr-2 h-4 w-4" />

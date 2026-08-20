@@ -132,7 +132,7 @@ export function PlanoAcao({
           <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{plano}</p>
         </div>
       ) : (
-        <div className="text-center py-6 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
+        <div className="text-center py-6 bg-slate-50 rounded-lg border border-slate-300 border-dashed">
           <p className="text-sm text-muted-foreground mb-3">Nenhum plano criado ainda.</p>
         </div>
       )}

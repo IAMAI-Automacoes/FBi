@@ -162,7 +162,7 @@ export function TaskCard({
       {/* A barra some só quando não há nada a oferecer: card concluído sem
           desfazer disponível e sem arquivar/desarquivar. */}
       {!isOverlay && !isDragging && (canUndo || !isCompleted || !!onArquivar || !!onDesarquivar) && (
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 animate-fade-in-up">
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-300 animate-fade-in-up">
           {canUndo && (
             <Button
               size="sm"

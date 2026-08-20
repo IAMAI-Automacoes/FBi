@@ -129,13 +129,13 @@ export function TopHeader() {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-[260px] mt-1.5 p-0 border-border/60 shadow-lg rounded-xl overflow-hidden"
+              className="w-[260px] mt-1.5 p-0 border-border shadow-lg rounded-xl overflow-hidden"
               align="end"
               sideOffset={8}
             >
               <div className="p-3 bg-secondary/20">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 border border-border/50 shadow-sm">
+                  <Avatar className="h-10 w-10 border border-border shadow-sm">
                     {(usuario?.avatar_url || profile?.avatar_url) && (
                       <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
                     )}

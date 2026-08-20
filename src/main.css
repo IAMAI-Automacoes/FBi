@@ -51,8 +51,8 @@
     --destructive: 0 84.2% 60.2%; /* #EF4444 */
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 214.3 22% 82%;
+    --input: 214.3 22% 82%;
     --ring: 224 76% 48%;
 
     --radius: 0.5rem;
@@ -63,7 +63,7 @@
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 214 100% 97%;
     --sidebar-accent-foreground: 224 76% 48%;
-    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-border: 214.3 22% 82%;
     --sidebar-ring: 224 76% 48%;
 
     --chart-1: 142 71% 45%; /* Success Green for the chart */
@@ -90,8 +90,8 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 222.2 84% 4.9%;
-    --input: 222.2 84% 4.9%;
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
     --ring: 214.3 31.8% 91.4%;
     --sidebar-background: 222.2 84% 4.9%;
     --sidebar-foreground: 210 40% 98%;
@@ -99,7 +99,7 @@
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 222.2 84% 4.9%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222.2 84% 4.9%;
+    --sidebar-border: 217 19% 27%;
     --sidebar-ring: 222.2 84% 4.9%;
     --chart-1: 142 71% 45%;
     --chart-2: 224 76% 48%;

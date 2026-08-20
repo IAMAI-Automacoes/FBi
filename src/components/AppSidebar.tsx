@@ -63,7 +63,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-border bg-white text-sidebar-foreground">
-      <SidebarHeader className="p-4 border-b border-border/50">
+      <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm overflow-hidden">
             {logoUrl ? (
@@ -108,7 +108,7 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="p-3 border-t border-border/50">
+      <SidebarFooter className="p-3">
         <Link
           to="/sugestoes"
           className={

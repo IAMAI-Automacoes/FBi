@@ -68,7 +68,7 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border/50 p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
+      className={`flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
     >
       {/* O cabeçalho fica FORA da área rolável, então o botão da coluna
           continua visível por mais que a lista de cards role. */}
@@ -469,7 +469,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border/50 p-4"
+            className="flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border p-4"
           >
             <div className="flex items-center gap-2 mb-4">
               <Skeleton className="h-5 w-24" />
@@ -489,7 +489,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-5/6" />
                   <Skeleton className="h-5 w-16 rounded-md mt-1" />
-                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-300">
                     <div className="flex gap-2 items-center">
                       <Skeleton className="h-6 w-6 rounded-full" />
                       <Skeleton className="h-3 w-16" />

@@ -7,7 +7,7 @@ import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recentFeedbacks'] }) {
   return (
     <Card className="shadow-subtle">
-      <CardHeader className="p-5 flex flex-row items-center justify-between border-b border-border/50">
+      <CardHeader className="p-5 flex flex-row items-center justify-between border-b border-border">
         <CardTitle className="text-base font-semibold">Últimos Feedbacks</CardTitle>
         <Link
           to="/feedbacks"
@@ -23,7 +23,7 @@ export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recen
             <p className="text-sm font-medium text-gray-500">Nenhum feedback recente</p>
           </div>
         ) : (
-          <div className="flex flex-col divide-y divide-border/50">
+          <div className="flex flex-col divide-y divide-border">
             {feedbacks.map((item) => (
               <div key={item.id} className="p-5 hover:bg-muted/30 transition-colors">
                 <FeedbackOriginalCard

@@ -272,7 +272,7 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
               {temMais && (
                 <button
                   onClick={() => setExpandido((v) => !v)}
-                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground mt-2 pt-2 border-t border-border/40"
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground mt-2 pt-2 border-t border-border"
                 >
                   {expandido ? (
                     <>

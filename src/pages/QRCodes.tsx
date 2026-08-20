@@ -268,7 +268,7 @@ export default function QRCodes() {
   if (!qrData) {
     return (
       <div className="flex-1 space-y-6">
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border border-dashed border-border/60">
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border border-dashed border-border">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 mb-5">
             <QrCode className="h-8 w-8 text-[#1D4ED8]" />
           </div>

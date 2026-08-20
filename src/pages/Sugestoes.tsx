@@ -500,7 +500,7 @@ function Bubble({
               <button
                 key={r.autor}
                 onClick={(e) => { e.stopPropagation(); onReact(r.emoji) }}
-                className="text-[13px] leading-none bg-white rounded-full shadow-sm border border-gray-100 px-1 py-0.5 hover:scale-110 transition-transform"
+                className="text-[13px] leading-none bg-white rounded-full shadow-sm border border-gray-300 px-1 py-0.5 hover:scale-110 transition-transform"
               >
                 {r.emoji}
               </button>

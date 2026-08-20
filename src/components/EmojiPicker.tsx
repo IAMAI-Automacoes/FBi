@@ -91,7 +91,7 @@ export function EmojiPicker({
   return (
     <div
       className={cn(
-        'w-[288px] max-h-[280px] overflow-y-auto rounded-2xl bg-white shadow-xl border border-gray-100 p-2',
+        'w-[288px] max-h-[280px] overflow-y-auto rounded-2xl bg-white shadow-xl border border-gray-300 p-2',
         className,
       )}
     >

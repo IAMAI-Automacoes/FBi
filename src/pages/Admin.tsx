@@ -214,7 +214,7 @@ function ConvItem({ s, selected, onClick }: { s: SugestaoAdmin; selected: boolea
     <button
       onClick={onClick}
       className={cn(
-        'w-full text-left flex items-center gap-3 px-4 py-3 transition-colors border-b border-gray-100 last:border-0',
+        'w-full text-left flex items-center gap-3 px-4 py-3 transition-colors border-b border-gray-300 last:border-0',
         selected ? 'bg-[#EFF6FF]' : 'hover:bg-gray-50',
       )}
     >
@@ -257,7 +257,7 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
 
   const Linha = ({ label, valor }: { label: string; valor: string | null }) =>
     valor ? (
-      <div className="flex justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
+      <div className="flex justify-between gap-3 py-2 border-b border-gray-300 last:border-0">
         <span className="text-[12px] text-gray-500 shrink-0">{label}</span>
         <span className="text-[13px] text-gray-800 text-right break-words">{valor}</span>
       </div>
@@ -265,7 +265,7 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
 
   return (
     <div className="w-full md:w-80 shrink-0 h-full flex flex-col border-l border-gray-200 bg-white animate-in slide-in-from-right duration-200">
-      <div className="shrink-0 flex items-center gap-2 px-4 h-16 border-b border-gray-100">
+      <div className="shrink-0 flex items-center gap-2 px-4 h-16 border-b border-gray-300">
         <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
           <X className="h-4 w-4" />
         </button>
@@ -274,7 +274,7 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
 
       <div className="flex-1 overflow-y-auto p-4">
         {/* Restaurante */}
-        <div className="flex flex-col items-center text-center gap-2 pb-4 border-b border-gray-100">
+        <div className="flex flex-col items-center text-center gap-2 pb-4 border-b border-gray-300">
           {p?.logo_url ? (
             <img src={p.logo_url} alt={nomeRest} className="h-24 w-24 rounded-full object-cover bg-gray-100" />
           ) : (
@@ -611,7 +611,7 @@ function AdminBubble({ msg, signedUrls, reacoes, quote, onReact, onReply, onEdit
               <button
                 key={r.autor}
                 onClick={(e) => { e.stopPropagation(); onReact(r.emoji) }}
-                className="text-[13px] leading-none bg-white rounded-full shadow-sm border border-gray-100 px-1 py-0.5 hover:scale-110 transition-transform"
+                className="text-[13px] leading-none bg-white rounded-full shadow-sm border border-gray-300 px-1 py-0.5 hover:scale-110 transition-transform"
               >
                 {r.emoji}
               </button>
@@ -1006,7 +1006,7 @@ function CrudTable({ children }: { children: React.ReactNode }) {
   )
 }
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left px-4 py-2.5 text-[12px] font-semibold text-gray-500 bg-gray-50 border-b border-gray-100">{children}</th>
+  return <th className="text-left px-4 py-2.5 text-[12px] font-semibold text-gray-500 bg-gray-50 border-b border-gray-300">{children}</th>
 }
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={cn('px-4 py-3', className)}>{children}</td>
@@ -1544,7 +1544,7 @@ export default function Admin() {
                       const excluida = !!c.excluida_em
                       const salvando = salvandoContaId === c.id
                       return (
-                        <tr key={c.id} className={cn('border-t border-gray-100', excluida && 'bg-red-50/40')}>
+                        <tr key={c.id} className={cn('border-t border-gray-300', excluida && 'bg-red-50/40')}>
                           {/* Conta */}
                           <Td>
                             <div className="flex flex-col">
@@ -1639,7 +1639,7 @@ export default function Admin() {
                   <thead><tr>{['Nome','Chave PIX','Tipo','Valor','Ativo',''].map((h) => <Th key={h}>{h}</Th>)}</tr></thead>
                   <tbody>
                     {divisoes.map((d) => (
-                      <tr key={d.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                      <tr key={d.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
                         <Td className="font-medium text-gray-800">{d.nome}</Td>
                         <Td className="text-gray-500 text-[13px]">{d.chave_pix ?? '—'}</Td>
                         <Td className="text-gray-500 text-[13px]">{d.tipo === 'porcentagem' ? 'Porcentagem' : 'Valor fixo'}</Td>
@@ -1680,7 +1680,7 @@ export default function Admin() {
                   </thead>
                   <tbody>
                     {cupons.map((c) => (
-                      <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                      <tr key={c.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
                         <Td>
                           <span className="font-mono font-semibold text-[13px] bg-gray-100 px-2 py-0.5 rounded text-gray-800">
                             {c.cupom}
@@ -1754,7 +1754,7 @@ export default function Admin() {
                           </div>
                           {!a.ativo && <span className="text-[10px] text-gray-400 shrink-0">inativo</span>}
                         </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-300">
                           <span className="font-mono text-[12px] bg-violet-50 text-violet-700 px-2 py-0.5 rounded font-semibold">{a.codigo}</span>
                           <span className="text-[13px] font-semibold text-gray-700">
                             {a.comissao_tipo === 'porcentagem' ? `${a.comissao_valor}%` : `R$ ${Number(a.comissao_valor).toFixed(2)}`}
@@ -1997,7 +1997,7 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
             className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" placeholder="Anotações internas…" />
         </Campo>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-300">
           <Button variant="outline" onClick={onBack}>Cancelar</Button>
           <Button onClick={onSave} disabled={saving || !form.nome || !form.codigo}>{saving ? 'Salvando…' : 'Salvar'}</Button>
         </div>

@@ -15,12 +15,14 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarDays, Search, Folder, X } from 'lucide-react'
+import { CalendarDays, Search, Folder, X, Tags, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
+import { DataSegmentada } from '@/components/DataSegmentada'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
+import { estiloCategoria } from '@/lib/categorias-feedback'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { supabase } from '@/lib/supabase/client'
@@ -53,6 +55,7 @@ export default function Feedbacks() {
   const [loading, setLoading] = useState(true)
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([])
   const [periodoAberto, setPeriodoAberto] = useState(false)
+  const [categoriaAberta, setCategoriaAberta] = useState(false)
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
@@ -64,6 +67,21 @@ export default function Feedbacks() {
     ordenacao: 'recent',
   })
   const [offset, setOffset] = useState(0)
+
+  const definirInicio = (data: Date | undefined) => {
+    if (!data) return
+    setFiltros((prev) => {
+      const to = prev.datas?.to
+      return { ...prev, datas: { from: data, to: to && to < data ? data : to } }
+    })
+  }
+  const definirFim = (data: Date | undefined) => {
+    if (!data) return
+    setFiltros((prev) => {
+      const from = prev.datas?.from ?? data
+      return { ...prev, datas: { from: from > data ? data : from, to: data } }
+    })
+  }
 
   // /feedbacks?insight_id=... → mostra só os feedbacks que geraram o insight.
   const insightIdParam = searchParams.get('insight_id')
@@ -237,40 +255,59 @@ export default function Feedbacks() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <div className="flex flex-col sm:flex-row">
-                <div className="flex sm:flex-col gap-0.5 p-2 sm:border-r border-b sm:border-b-0">
-                  {PERIODOS.map((p) => (
-                    <button
-                      key={p.value}
-                      onClick={() => escolherPreset(p.value)}
-                      className={cn(
-                        'text-left text-sm px-3 py-2 rounded-md whitespace-nowrap hover:bg-gray-100 transition-colors',
-                        !filtros.datas && filtros.periodo === p.value
-                          ? 'bg-[#EFF6FF] text-[#1D4ED8] font-medium'
-                          : 'text-gray-700',
-                      )}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+              <div className="flex flex-col">
+                <div className="flex flex-col sm:flex-row">
+                  <div className="flex sm:flex-col gap-0.5 p-2 sm:border-r border-b sm:border-b-0">
+                    {PERIODOS.map((p) => (
+                      <button
+                        key={p.value}
+                        onClick={() => escolherPreset(p.value)}
+                        className={cn(
+                          'text-left text-sm px-3 py-2 rounded-md whitespace-nowrap hover:bg-gray-100 transition-colors',
+                          !filtros.datas && filtros.periodo === p.value
+                            ? 'bg-[#EFF6FF] text-[#1D4ED8] font-medium'
+                            : 'text-gray-700',
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <Calendar
+                      mode="range"
+                      selected={filtros.datas}
+                      onSelect={escolherIntervalo}
+                      locale={ptBR}
+                      disabled={{ after: new Date() }}
+                      endMonth={new Date()}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Calendar
-                    mode="range"
-                    selected={filtros.datas}
-                    onSelect={escolherIntervalo}
-                    locale={ptBR}
-                    disabled={{ after: new Date() }}
-                  />
+                {/* Fileira só do tamanho do conteúdo — o campo "De" acaba caindo
+                    do lado esquerdo (embaixo dos atalhos) e o "até" do lado
+                    direito (embaixo do calendário), sem precisar de duas colunas. */}
+                <div className="border-t p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Datas selecionadas</p>
+                  <div className="flex items-center gap-2 w-fit">
+                    <DataSegmentada
+                      value={filtros.datas?.from}
+                      onChange={definirInicio}
+                      maxDate={new Date()}
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">até</span>
+                    <DataSegmentada
+                      value={filtros.datas?.to}
+                      onChange={definirFim}
+                      maxDate={new Date()}
+                    />
+                  </div>
                   {filtros.datas && (
-                    <div className="flex items-center justify-between border-t p-2">
-                      <span className="text-xs text-muted-foreground pl-1">
-                        {filtros.datas.to ? 'Escolha o início e o fim' : 'Escolha o fim (ou clique de novo pro mesmo dia)'}
-                      </span>
+                    <div className="flex justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs shrink-0"
+                        className="h-6 text-xs"
                         onClick={() => setFiltros((prev) => ({ ...prev, datas: undefined }))}
                       >
                         Limpar
@@ -297,6 +334,102 @@ export default function Feedbacks() {
             </SelectContent>
           </Select>
 
+          <Select
+            value={filtros.ordenacao}
+            onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, ordenacao: val }))}
+          >
+            <SelectTrigger className="w-[150px] h-10 bg-white shadow-sm border-gray-200">
+              <SelectValue placeholder="Ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Mais recentes</SelectItem>
+              <SelectItem value="oldest">Mais antigos</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {categoriasDisponiveis.length > 0 && (
+            <Popover open={categoriaAberta} onOpenChange={setCategoriaAberta}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-10 bg-white shadow-sm border-gray-200 font-normal justify-start max-w-[200px]"
+                >
+                  <Tags className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="truncate">
+                    {filtros.categorias.length === 0
+                      ? 'Categoria'
+                      : filtros.categorias.length === 1
+                        ? filtros.categorias[0]
+                        : `${filtros.categorias.length} categorias`}
+                  </span>
+                  {filtros.categorias.length > 0 && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Limpar categorias"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setFiltros((prev) => ({ ...prev, categorias: [] }))
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setFiltros((prev) => ({ ...prev, categorias: [] }))
+                        }
+                      }}
+                      className="ml-2 -mr-1 shrink-0 rounded-sm p-0.5 hover:bg-gray-100 text-gray-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <div className="max-h-72 overflow-y-auto p-1">
+                  {categoriasDisponiveis.map((cat) => {
+                    const estilo = estiloCategoria(cat)
+                    const Icon = estilo.icon
+                    const ativo = filtros.categorias.includes(cat)
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => toggleCategoria(cat)}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-gray-100 transition-colors',
+                          ativo && 'bg-gray-50',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0',
+                            estilo.corSolida,
+                          )}
+                        >
+                          <Icon className="h-3 w-3" />
+                        </span>
+                        <span className="flex-1 truncate text-gray-700">{cat}</span>
+                        {ativo && <Check className="h-4 w-4 text-[#1D4ED8] shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+                {filtros.categorias.length > 0 && (
+                  <div className="border-t p-2 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setFiltros((prev) => ({ ...prev, categorias: [] }))}
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -307,55 +440,7 @@ export default function Feedbacks() {
             />
           </div>
         </div>
-
-        <div className="flex items-center shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
-          <Select
-            value={filtros.ordenacao}
-            onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, ordenacao: val }))}
-          >
-            <SelectTrigger className="w-full xl:w-[150px] h-10 border xl:border-0 bg-white xl:bg-transparent shadow-sm xl:shadow-none hover:bg-gray-50 font-medium text-gray-600 focus:ring-0">
-              <SelectValue placeholder="Ordenar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Mais recentes</SelectItem>
-              <SelectItem value="oldest">Mais antigos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
-
-      {/* Chips de categorias */}
-      {categoriasDisponiveis.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs font-medium text-gray-400 shrink-0">Categoria:</span>
-          {categoriasDisponiveis.map((cat) => {
-            const ativo = filtros.categorias.includes(cat)
-            return (
-              <button
-                key={cat}
-                onClick={() => toggleCategoria(cat)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium border transition-all',
-                  ativo
-                    ? 'bg-[#1D4ED8] text-white border-[#1D4ED8] shadow-sm'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-800',
-                )}
-              >
-                {cat}
-                {ativo && <X className="h-3 w-3 opacity-80" />}
-              </button>
-            )
-          })}
-          {filtros.categorias.length > 0 && (
-            <button
-              onClick={() => setFiltros((prev) => ({ ...prev, categorias: [] }))}
-              className="text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-1"
-            >
-              Limpar
-            </button>
-          )}
-        </div>
-      )}
 
       <div className="space-y-4">
         {loading && feedbacks.length === 0 ? (

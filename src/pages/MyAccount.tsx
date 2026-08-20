@@ -272,7 +272,7 @@ export default function MyAccount() {
                       {getIniciais(usuario.nome, 2)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-2 -right-2 p-2 bg-white text-gray-600 rounded-full shadow-md border border-gray-100 hover:text-primary hover:border-primary/30 transition-colors">
+                  <div className="absolute -bottom-2 -right-2 p-2 bg-white text-gray-600 rounded-full shadow-md border border-gray-300 hover:text-primary hover:border-primary/30 transition-colors">
                     <Camera className="h-4 w-4" />
                   </div>
                   <input
@@ -314,7 +314,7 @@ export default function MyAccount() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-8 border-t border-gray-100 pt-8">
+              <div className="grid grid-cols-1 gap-8 border-t border-gray-300 pt-8">
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div className="space-y-2.5">
                     <Label htmlFor="nome" className="text-sm font-medium flex items-center gap-2">
@@ -385,7 +385,7 @@ export default function MyAccount() {
               </div>
             </div>
 
-            <div className="bg-gray-50/80 px-6 sm:px-10 py-5 border-t border-gray-100 flex justify-end">
+            <div className="bg-gray-50/80 px-6 sm:px-10 py-5 border-t border-gray-300 flex justify-end">
               <Button onClick={handleSave} disabled={!alterado || loading} className="min-w-[140px]">
                 {loading ? 'Salvando...' : 'Salvar Alterações'}
               </Button>

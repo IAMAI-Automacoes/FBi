@@ -66,7 +66,7 @@ function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
 
   return (
     <div className="rounded-lg border border-gray-200 overflow-hidden">
-      <div className="flex items-start justify-between gap-3 px-3.5 py-2.5 bg-gray-50/70 border-b border-gray-100">
+      <div className="flex items-start justify-between gap-3 px-3.5 py-2.5 bg-gray-50/70 border-b border-gray-300">
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-gray-800 flex items-center gap-1.5">
             {bloco.titulo}

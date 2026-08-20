@@ -160,7 +160,7 @@ export function SugestoesSidebar({ onActionProcessed }: SugestoesSidebarProps) {
                   </Badge>
                 )}
                 <p className="text-xs text-muted-foreground">{sug.plano_detalhado}</p>
-                <div className="flex gap-2 pt-2 mt-2 border-t border-border/50">
+                <div className="flex gap-2 pt-2 mt-2 border-t border-border">
                   <Button
                     size="sm"
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-sm"

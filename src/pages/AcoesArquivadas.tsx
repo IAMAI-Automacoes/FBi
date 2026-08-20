@@ -96,7 +96,7 @@ export default function AcoesArquivadas() {
           ))}
         </div>
       ) : acoes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border border-dashed border-border/60 min-h-[300px]">
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border border-dashed border-border min-h-[300px]">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 mb-5">
             <Archive className="h-8 w-8 text-slate-400" />
           </div>

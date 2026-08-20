@@ -360,7 +360,7 @@ export default function Reports() {
         <>
           {/* KPIs principais */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total de avaliações</CardTitle>
                 <Users className="h-4 w-4 text-primary" />
@@ -378,7 +378,7 @@ export default function Reports() {
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Índice de satisfação</CardTitle>
                 <Smile className="h-4 w-4 text-primary" />
@@ -398,7 +398,7 @@ export default function Reports() {
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Avaliações positivas</CardTitle>
                 <ThumbsUp className="h-4 w-4 text-emerald-600" />
@@ -418,7 +418,7 @@ export default function Reports() {
               </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Clientes que avaliaram</CardTitle>
                 <UserCheck className="h-4 w-4 text-primary" />
@@ -435,7 +435,7 @@ export default function Reports() {
           </div>
 
           {/* Distribuição — deixa as neutras visíveis e mostra que soma 100% */}
-          <Card className="bg-white shadow-sm border-border/60">
+          <Card className="bg-white shadow-sm border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold">Como as avaliações se dividem</CardTitle>
             </CardHeader>
@@ -589,7 +589,7 @@ export default function Reports() {
           )}
 
           {/* Evolução da satisfação */}
-          <Card className="bg-white shadow-sm border-border/60">
+          <Card className="bg-white shadow-sm border-border">
             <CardHeader className="pb-0">
               <CardTitle className="text-base font-semibold">Evolução da satisfação</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -639,7 +639,7 @@ export default function Reports() {
 
           {/* Categorias */}
           {stats.porCategoria.length > 0 && (
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold">Satisfação por categoria</CardTitle>
                 <p className="text-xs text-muted-foreground">
@@ -697,7 +697,7 @@ export default function Reports() {
 
           {/* Pontos de atenção derivados dos recortes */}
           {(stats.piorDia || stats.faixaCritica || stats.piorCategoria) && (
-            <Card className="bg-white shadow-sm border-border/60">
+            <Card className="bg-white shadow-sm border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold">Onde vale olhar de perto</CardTitle>
               </CardHeader>

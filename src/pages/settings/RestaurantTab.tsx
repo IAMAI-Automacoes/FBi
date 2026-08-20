@@ -80,7 +80,7 @@ export function RestaurantTab({
 
   return (
     <Card className="shadow-subtle border-gray-200/75 rounded-xl overflow-hidden">
-      <CardHeader className="bg-white pb-6 border-b border-gray-100">
+      <CardHeader className="bg-white pb-6 border-b border-gray-300">
         <CardTitle className="text-xl">Perfil do Restaurante</CardTitle>
         <CardDescription className="text-sm mt-1">
           Gerencie a identidade visual e as informações principais do seu restaurante.

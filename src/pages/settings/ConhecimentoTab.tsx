@@ -134,7 +134,7 @@ export function ConhecimentoTab({ restauranteId }: { restauranteId: number | nul
 
   return (
     <Card className="shadow-subtle border-gray-200/75 rounded-xl overflow-hidden">
-      <CardHeader className="bg-white pb-6 border-b border-gray-100">
+      <CardHeader className="bg-white pb-6 border-b border-gray-300">
         <CardTitle className="text-xl flex items-center gap-2">
           <BookOpen className="w-5 h-5 text-primary" />
           Base de conhecimento

@@ -69,8 +69,8 @@ export function MessageMenu({ side, onReact, onReply, onEdit, onDelete, myReacti
           {showAll ? (
             <EmojiPicker onSelect={react} highlight={myReaction} />
           ) : (
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden min-w-[160px]">
-              <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-100">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-300 overflow-hidden min-w-[160px]">
+              <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-300">
                 {quickList.map((em) => (
                   <button
                     key={em}

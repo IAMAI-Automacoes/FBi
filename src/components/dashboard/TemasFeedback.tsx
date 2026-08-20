@@ -110,7 +110,7 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
 
   return (
     <Card className="shadow-subtle">
-      <CardHeader className="p-5 border-b border-border/50 space-y-3">
+      <CardHeader className="p-5 border-b border-border space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle className="text-base font-semibold">O que os clientes estão comentando</CardTitle>
           <Select value={String(dias)} onValueChange={(v) => setDias(Number(v))}>
