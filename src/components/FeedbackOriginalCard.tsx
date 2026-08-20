@@ -3,6 +3,22 @@ import { cn } from '@/lib/utils'
 import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
 import { estiloCategoria } from '@/lib/categorias-feedback'
 
+/** Troca **trechos** (marcados pela IA em `texto_destacado`) por <strong>. Texto
+ *  sem nenhum marcador (feedback ainda não processado, ou "apenas avaliação")
+ *  passa direto, sem nenhum negrito. */
+function renderComDestaque(texto: string) {
+  return texto.split(/(\*\*.+?\*\*)/g).map((parte, i) => {
+    const match = parte.match(/^\*\*(.+)\*\*$/)
+    return match ? (
+      <strong key={i} className="font-bold text-black dark:text-white">
+        {match[1]}
+      </strong>
+    ) : (
+      parte
+    )
+  })
+}
+
 interface FeedbackOriginalCardProps {
   texto: string
   sentimento?: string | null
@@ -59,7 +75,7 @@ export function FeedbackOriginalCard({
             onClick={truncar ? () => setExpandido((v) => !v) : undefined}
             title={truncar ? (cortado ? 'Clique para ver o feedback inteiro' : 'Clique para recolher') : undefined}
           >
-            "{texto}"
+            "{renderComDestaque(texto)}"
           </p>
           <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
             {quando}

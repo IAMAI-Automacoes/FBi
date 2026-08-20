@@ -474,7 +474,7 @@ export default function Feedbacks() {
               className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle hover:shadow-elevation transition-all duration-200"
             >
               <FeedbackOriginalCard
-                texto={fb.texto_original}
+                texto={fb.texto_destacado || fb.texto_original}
                 sentimento={fb.sentimento}
                 categorias={fb.categorias ?? []}
                 quando={formatarDataFeedback(fb.created_at)}

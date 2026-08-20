@@ -409,7 +409,9 @@ export const buscarUltimosFeedbacks = async (
 
   return (data || []).map((f) => ({
     id: String(f.id),
-    text: f.texto_original || '',
+    // `texto_destacado` (com **trechos-chave**) vem da IA em segundo plano —
+    // enquanto não chega, cai no texto puro sem nenhum negrito.
+    text: f.texto_destacado || f.texto_original || '',
     categories: (f.categorias ?? []) as string[],
     sentiment: (f.sentimento || 'neutro') as string,
     timeAgo: formatarDataFeedback(f.created_at),
