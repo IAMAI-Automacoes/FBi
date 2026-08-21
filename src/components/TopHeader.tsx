@@ -199,7 +199,7 @@ export function TopHeader() {
           </div>
         </div>
 
-        {extra && <div className="px-4 pb-3 sm:px-6">{extra}</div>}
+        {extra && <div className="px-4 pt-2 pb-3 sm:px-6">{extra}</div>}
       </header>
 
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

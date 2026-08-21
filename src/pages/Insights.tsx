@@ -426,17 +426,17 @@ export default function Insights() {
   ])
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 bg-[#F9FAFB] min-h-[calc(100vh-4rem)] font-inter">
+    <div className="-m-4 sm:-m-6 lg:-m-8 px-3 md:px-4 pt-2 pb-4 md:pb-6 space-y-4 bg-[#F9FAFB] min-h-[calc(100vh-4rem)] font-inter">
       <div ref={topoRef} />
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-64 bg-gray-100 animate-pulse rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
           {filteredInsights.length > 0 ? (
             filteredInsights.map((insight) => (
               <InsightCard

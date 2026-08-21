@@ -13,12 +13,22 @@ import type { CSSProperties } from 'react'
  */
 export type TipoSentimento = 'positivo' | 'negativo' | 'misto' | 'neutro'
 
+/**
+ * O n8n às vezes grava o sentimento da mensagem original com variações fora
+ * dos 4 valores documentados (ex.: "Positivo e Negativo e Neutro", "...and
+ * Neutro") — provavelmente porque o próprio texto tem um ponto neutro/
+ * informativo junto com o elogio e a reclamação. Em vez de casar contra uma
+ * lista fixa de frases exatas (que quebra a cada variação nova), detecta por
+ * substring: se menciona "positivo" E "negativo", é misto — não importa o
+ * que mais tenha na frase.
+ */
 export function tipoSentimento(valor?: string | null): TipoSentimento {
   const v = (valor || '').toLowerCase().trim()
-  if (v === 'positivo' || v === 'positive') return 'positivo'
-  if (v === 'negativo' || v === 'negative') return 'negativo'
-  if (v === 'positivo e negativo' || v === 'positivo/negativo' || v === 'misto' || v === 'mixed')
-    return 'misto'
+  const temPositivo = v.includes('positivo') || v.includes('positive')
+  const temNegativo = v.includes('negativo') || v.includes('negative')
+  if (temPositivo && temNegativo) return 'misto'
+  if (temPositivo) return 'positivo'
+  if (temNegativo) return 'negativo'
   return 'neutro'
 }
 

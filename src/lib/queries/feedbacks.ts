@@ -43,9 +43,20 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
   }
 
   if (filtros.sentimento && filtros.sentimento !== 'all') {
-    // `ilike` sem curinga = igualdade sem diferenciar maiúsc./minúsc.; o banco
-    // guarda o sentimento em minúsculo ('neutro'), então `eq` MAIÚSCULO não batia.
-    query = query.ilike('sentimento', filtros.sentimento)
+    // O n8n às vezes grava o sentimento da mensagem original com variações
+    // fora dos 4 valores documentados (ex.: "Positivo e Negativo e Neutro") —
+    // filtra por substring (mesma lógica de `tipoSentimento()`, que também
+    // detecta por substring) em vez de igualdade exata, senão essas
+    // variações somem do filtro mesmo sendo exatamente o que ele pede.
+    if (filtros.sentimento === 'positivo e negativo') {
+      query = query.ilike('sentimento', '%positivo%').ilike('sentimento', '%negativo%')
+    } else if (filtros.sentimento === 'positivo') {
+      query = query.ilike('sentimento', '%positivo%').not('sentimento', 'ilike', '%negativo%')
+    } else if (filtros.sentimento === 'negativo') {
+      query = query.ilike('sentimento', '%negativo%').not('sentimento', 'ilike', '%positivo%')
+    } else {
+      query = query.ilike('sentimento', filtros.sentimento)
+    }
   }
 
   if (filtros.categorias.length > 0) {

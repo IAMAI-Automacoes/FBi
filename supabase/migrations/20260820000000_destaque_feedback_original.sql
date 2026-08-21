@@ -24,17 +24,23 @@ select
   o.texto_destacado,
   o.telefone_cliente,
   o.created_at,
-  case
-    when bool_or(lower(f.sentimento) in ('negativo','negative'))
-     and bool_or(lower(f.sentimento) in ('positivo','positive')) then 'neutro'   -- misto
-    when bool_or(lower(f.sentimento) in ('negativo','negative')) then 'negativo'
-    when bool_or(lower(f.sentimento) in ('positivo','positive')) then 'positivo'
-    else 'neutro'
-  end as sentimento,
+  -- Prioriza o sentimento que o n8n grava direto na mensagem original (pode
+  -- ser 'positivo e negativo' pra feedback misto); só deriva dos pedaços
+  -- separados (feedbacks_restaurante) quando o n8n ainda não gravou nada.
+  coalesce(
+    o.sentimento,
+    case
+      when bool_or(lower(f.sentimento) in ('negativo','negative'))
+       and bool_or(lower(f.sentimento) in ('positivo','positive')) then 'positivo e negativo'
+      when bool_or(lower(f.sentimento) in ('negativo','negative')) then 'negativo'
+      when bool_or(lower(f.sentimento) in ('positivo','positive')) then 'positivo'
+      else 'neutro'
+    end
+  ) as sentimento,
   array_remove(array_agg(distinct f.categoria), null) as categorias
 from public.feedbacks_originais o
 left join public.feedbacks_restaurante f on f.origem_id = o.id
-group by o.id, o.restaurante_id, o.texto_original, o.texto_destacado, o.telefone_cliente, o.created_at;
+group by o.id, o.restaurante_id, o.texto_original, o.texto_destacado, o.telefone_cliente, o.created_at, o.sentimento;
 
 -- Dispara o destaque automático a cada mensagem original que chega.
 create or replace function public.trg_destacar_feedback()
