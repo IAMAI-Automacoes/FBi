@@ -8,6 +8,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/hooks/use-auth'
 import { useUserProfile } from '@/hooks/use-user-profile'
+import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { getIniciais } from '@/lib/iniciais'
 import { easyFeedLogoInterna } from '@/assets/brand'
 import {
@@ -46,6 +47,7 @@ export function TopHeader() {
   const { profile } = useUserProfile()
   const title = routeTitles[location.pathname] || 'Dashboard'
 
+  const { extra } = useHeaderExtra()
   const { isAdmin } = usePlatformAdmin()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [adminUnread, setAdminUnread] = useState(0)
@@ -85,108 +87,119 @@ export function TopHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 relative flex h-16 w-full items-center justify-between border-b border-border bg-white px-4 shadow-sm sm:px-6">
-        <div className="flex items-center gap-4">
-          <SidebarTrigger className="-ml-2 md:hidden" />
-          <h1 className="text-xl font-semibold text-foreground">{title}</h1>
-        </div>
+      {/*
+        `extra` (setado via `useHeaderExtra` pelas páginas que precisam, ex.:
+        Feedbacks e Insights) cresce o cabeçalho pra dentro dele — tudo um
+        `<header>` só, sticky, sem costura entre dois blocos fixos separados
+        (era isso que deixava a lista rolando vazar entre o cabeçalho e uma
+        barra de filtros grudada logo abaixo, cada uma com seu próprio sticky).
+      */}
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-white shadow-sm">
+        <div className="relative flex h-16 w-full items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="-ml-2 md:hidden" />
+            <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+          </div>
 
-        {/* Logo centralizada na barra — entre o nome da página e os ícones à direita.
-            Escondida no mobile pra não colidir com o título e os ícones. */}
-        <Link
-          to="/"
-          aria-label="Easy Feed"
-          className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block"
-        >
-          {/* Quase a altura do header (64px), deixando só uma bordinha em cima/embaixo. */}
-          <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-[52px] w-auto" />
-        </Link>
+          {/* Logo centralizada na barra — entre o nome da página e os ícones à direita.
+              Escondida no mobile pra não colidir com o título e os ícones. */}
+          <Link
+            to="/"
+            aria-label="Easy Feed"
+            className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block"
+          >
+            {/* Quase a altura do header (64px), deixando só uma bordinha em cima/embaixo. */}
+            <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-[52px] w-auto" />
+          </Link>
 
-        <div className="flex items-center gap-4">
-          {isAdmin && (
-            <Link
-              to="/admin"
-              title="Painel Admin"
-              className="relative flex items-center justify-center h-9 w-9 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors border border-amber-200"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              {adminUnread > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none pointer-events-none">
-                  {adminUnread > 99 ? '99+' : adminUnread}
-                </span>
-              )}
-            </Link>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Avatar className="h-9 w-9 border border-border cursor-pointer hover:opacity-80 transition-opacity ring-offset-2 hover:ring-2 ring-primary/20">
-                {(usuario?.avatar_url || profile?.avatar_url) && (
-                  <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
+          <div className="flex items-center gap-4">
+            {isAdmin && (
+              <Link
+                to="/admin"
+                title="Painel Admin"
+                className="relative flex items-center justify-center h-9 w-9 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors border border-amber-200"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                {adminUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 leading-none pointer-events-none">
+                    {adminUnread > 99 ? '99+' : adminUnread}
+                  </span>
                 )}
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                  {getIniciais(usuario?.nome, 2)}
-                </AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className="w-[260px] mt-1.5 p-0 border-border shadow-lg rounded-xl overflow-hidden"
-              align="end"
-              sideOffset={8}
-            >
-              <div className="p-3 bg-secondary/20">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 border border-border shadow-sm">
-                    {(usuario?.avatar_url || profile?.avatar_url) && (
-                      <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
-                    )}
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                      {getIniciais(usuario?.nome, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col space-y-0.5 overflow-hidden">
-                    <p className="text-sm font-semibold leading-none text-foreground truncate">
-                      {usuario?.nome || 'Usuário'}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {usuario?.email || 'email@exemplo.com'}
-                    </p>
+              </Link>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="h-9 w-9 border border-border cursor-pointer hover:opacity-80 transition-opacity ring-offset-2 hover:ring-2 ring-primary/20">
+                  {(usuario?.avatar_url || profile?.avatar_url) && (
+                    <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                  )}
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
+                    {getIniciais(usuario?.nome, 2)}
+                  </AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[260px] mt-1.5 p-0 border-border shadow-lg rounded-xl overflow-hidden"
+                align="end"
+                sideOffset={8}
+              >
+                <div className="p-3 bg-secondary/20">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-border shadow-sm">
+                      {(usuario?.avatar_url || profile?.avatar_url) && (
+                        <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                      )}
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
+                        {getIniciais(usuario?.nome, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-0.5 overflow-hidden">
+                      <p className="text-sm font-semibold leading-none text-foreground truncate">
+                        {usuario?.nome || 'Usuário'}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {usuario?.email || 'email@exemplo.com'}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <DropdownMenuSeparator className="m-0" />
-              <DropdownMenuGroup className="p-1.5">
-                <DropdownMenuItem
-                  asChild
-                  className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
-                >
-                  <Link to="/minha-conta">
-                    <UserIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
-                    <span>Perfil</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  asChild
-                  className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
-                >
-                  <Link to="/configuracoes">
-                    <SettingsIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
-                    <span>Seu Restaurante</span>
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator className="m-0" />
-              <div className="p-1.5 bg-secondary/5">
-                <DropdownMenuItem
-                  className="cursor-pointer py-2 px-3 text-[13px] font-medium text-red-600 focus:text-red-700 focus:bg-red-50/80 rounded-md transition-colors"
-                  onSelect={() => setShowLogoutDialog(true)}
-                >
-                  <LogOut className="mr-2.5 h-[15px] w-[15px]" />
-                  <span>Sair da conta</span>
-                </DropdownMenuItem>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuSeparator className="m-0" />
+                <DropdownMenuGroup className="p-1.5">
+                  <DropdownMenuItem
+                    asChild
+                    className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
+                  >
+                    <Link to="/minha-conta">
+                      <UserIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
+                      <span>Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    asChild
+                    className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
+                  >
+                    <Link to="/configuracoes">
+                      <SettingsIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
+                      <span>Seu Restaurante</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator className="m-0" />
+                <div className="p-1.5 bg-secondary/5">
+                  <DropdownMenuItem
+                    className="cursor-pointer py-2 px-3 text-[13px] font-medium text-red-600 focus:text-red-700 focus:bg-red-50/80 rounded-md transition-colors"
+                    onSelect={() => setShowLogoutDialog(true)}
+                  >
+                    <LogOut className="mr-2.5 h-[15px] w-[15px]" />
+                    <span>Sair da conta</span>
+                  </DropdownMenuItem>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
+
+        {extra && <div className="px-4 pb-3 sm:px-6">{extra}</div>}
       </header>
 
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { format, isSameDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -15,16 +15,17 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarDays, Search, Folder, X, Tags, Check } from 'lucide-react'
+import { CalendarDays, Search, Folder, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 import { DataSegmentada } from '@/components/DataSegmentada'
+import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
-import { estiloCategoria } from '@/lib/categorias-feedback'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
+import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { supabase } from '@/lib/supabase/client'
 
 const LIMIT = 10
@@ -48,6 +49,7 @@ function rotuloPeriodo(filtros: FiltrosFeedback): string {
 export default function Feedbacks() {
   const { toast } = useToast()
   const { usuario } = useAuth()
+  const { setExtra } = useHeaderExtra()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [feedbacks, setFeedbacks] = useState<any[]>([])
@@ -55,7 +57,6 @@ export default function Feedbacks() {
   const [loading, setLoading] = useState(true)
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([])
   const [periodoAberto, setPeriodoAberto] = useState(false)
-  const [categoriaAberta, setCategoriaAberta] = useState(false)
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
@@ -67,6 +68,20 @@ export default function Feedbacks() {
     ordenacao: 'recent',
   })
   const [offset, setOffset] = useState(0)
+
+  // Ao trocar um filtro (não a busca por texto, que digita contínuo) a lista
+  // volta pro topo sozinha — senão o usuário muda o filtro rolado lá embaixo
+  // e não percebe que a lista já atualizou.
+  const topoRef = useRef<HTMLDivElement>(null)
+  const primeiraRenderRef = useRef(true)
+  useEffect(() => {
+    if (primeiraRenderRef.current) {
+      primeiraRenderRef.current = false
+      return
+    }
+    topoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.periodo, filtros.sentimento, filtros.ordenacao, filtros.categorias, filtros.datas])
 
   const definirInicio = (data: Date | undefined) => {
     if (!data) return
@@ -120,10 +135,10 @@ export default function Feedbacks() {
   }
 
   useEffect(() => {
-    buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined, filtros.periodo)
+    buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined)
       .then(setCategoriasDisponiveis)
       .catch(console.error)
-  }, [usuario?.restaurante_id, filtros.periodo])
+  }, [usuario?.restaurante_id])
 
   // Recarrega do zero — dispara sempre que os filtros mudam. NÃO depende de
   // `offset`: se dependesse, "Carregar mais" (que muda o offset) faria este
@@ -179,15 +194,6 @@ export default function Feedbacks() {
     }
   }
 
-  const toggleCategoria = (cat: string) => {
-    setFiltros((prev) => ({
-      ...prev,
-      categorias: prev.categorias.includes(cat)
-        ? prev.categorias.filter((c) => c !== cat)
-        : [...prev.categorias, cat],
-    }))
-  }
-
   const dataToDisplay = feedbacks
 
   const escolherPreset = (periodo: FiltrosFeedback['periodo']) => {
@@ -202,25 +208,11 @@ export default function Feedbacks() {
     }))
   }
 
-  return (
-    <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">
-      {filtroInsight && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
-          <span className="text-sm text-blue-900">
-            Filtrando pelos feedbacks que geraram o insight{' '}
-            <strong className="font-semibold">"{filtroInsight.titulo}"</strong>
-          </span>
-          <button
-            onClick={limparFiltroInsight}
-            title="Limpar filtro"
-            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-blue-700 hover:bg-blue-100"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-col xl:flex-row gap-3 mb-6 items-start xl:items-center justify-between">
+  // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
+  // página — um bloco fixo só, sem costura entre cabeçalho e barra de
+  // filtros onde a lista rolando pudesse vazar por cima.
+  const barraFiltros = (
+      <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center justify-between">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           {/* Período: atalhos (7/30/90 dias, tudo) + calendário de intervalo, num controle só */}
           <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
@@ -347,88 +339,11 @@ export default function Feedbacks() {
             </SelectContent>
           </Select>
 
-          {categoriasDisponiveis.length > 0 && (
-            <Popover open={categoriaAberta} onOpenChange={setCategoriaAberta}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-10 bg-white shadow-sm border-gray-200 font-normal justify-start max-w-[200px]"
-                >
-                  <Tags className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
-                  <span className="truncate">
-                    {filtros.categorias.length === 0
-                      ? 'Categoria'
-                      : filtros.categorias.length === 1
-                        ? filtros.categorias[0]
-                        : `${filtros.categorias.length} categorias`}
-                  </span>
-                  {filtros.categorias.length > 0 && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Limpar categorias"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setFiltros((prev) => ({ ...prev, categorias: [] }))
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setFiltros((prev) => ({ ...prev, categorias: [] }))
-                        }
-                      }}
-                      className="ml-2 -mr-1 shrink-0 rounded-sm p-0.5 hover:bg-gray-100 text-gray-500"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-0" align="start">
-                <div className="max-h-72 overflow-y-auto p-1">
-                  {categoriasDisponiveis.map((cat) => {
-                    const estilo = estiloCategoria(cat)
-                    const Icon = estilo.icon
-                    const ativo = filtros.categorias.includes(cat)
-                    return (
-                      <button
-                        key={cat}
-                        onClick={() => toggleCategoria(cat)}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left hover:bg-gray-100 transition-colors',
-                          ativo && 'bg-gray-50',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0',
-                            estilo.corSolida,
-                          )}
-                        >
-                          <Icon className="h-3 w-3" />
-                        </span>
-                        <span className="flex-1 truncate text-gray-700">{cat}</span>
-                        {ativo && <Check className="h-4 w-4 text-[#1D4ED8] shrink-0" />}
-                      </button>
-                    )
-                  })}
-                </div>
-                {filtros.categorias.length > 0 && (
-                  <div className="border-t p-2 flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setFiltros((prev) => ({ ...prev, categorias: [] }))}
-                    >
-                      Limpar
-                    </Button>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
-          )}
+          <FiltroCategorias
+            disponiveis={categoriasDisponiveis}
+            selecionadas={filtros.categorias}
+            onChange={(categorias) => setFiltros((prev) => ({ ...prev, categorias }))}
+          />
 
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -441,6 +356,37 @@ export default function Feedbacks() {
           </div>
         </div>
       </div>
+  )
+
+  // Precisa de deps de verdade (não pode rodar em todo render): `setExtra`
+  // muda o estado do contexto, que re-renderiza este componente (ele também
+  // consome `useHeaderExtra`) — sem lista de deps isso vira loop infinito
+  // (tela branca por "Maximum update depth exceeded").
+  useEffect(() => {
+    setExtra(barraFiltros)
+    return () => setExtra(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros, periodoAberto, categoriasDisponiveis])
+
+  return (
+    <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">
+      <div ref={topoRef} />
+
+      {filtroInsight && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+          <span className="text-sm text-blue-900">
+            Filtrando pelos feedbacks que geraram o insight{' '}
+            <strong className="font-semibold">"{filtroInsight.titulo}"</strong>
+          </span>
+          <button
+            onClick={limparFiltroInsight}
+            title="Limpar filtro"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-blue-700 hover:bg-blue-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {loading && feedbacks.length === 0 ? (

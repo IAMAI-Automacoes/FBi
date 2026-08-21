@@ -73,10 +73,14 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
   return { feedbacks: data || [], total: count || 0 }
 }
 
-export async function buscarCategoriasAtivas(
-  restauranteId?: number,
-  periodo?: FiltrosFeedback['periodo'],
-) {
+/**
+ * Categorias que o restaurante JÁ TEVE em algum feedback, sem filtro de
+ * período — se dependesse do período ativo, a lista encolheria/mudaria toda
+ * vez que o dono trocasse o filtro (ex.: uma categoria só aparecer de novo se
+ * teve movimento nos últimos 7 dias), o que parece bug pra quem só quer ver
+ * todas as categorias que esse restaurante já usou.
+ */
+export async function buscarCategoriasAtivas(restauranteId?: number) {
   let query = supabase
     .from('feedbacks_restaurante')
     .select('categoria')
@@ -84,12 +88,6 @@ export async function buscarCategoriasAtivas(
 
   if (restauranteId) {
     query = query.eq('restaurante_id', restauranteId)
-  }
-
-  if (periodo && periodo !== 'all') {
-    const days = periodo === '7d' ? 7 : periodo === '30d' ? 30 : 90
-    const startDate = startOfDay(subDays(new Date(), days)).toISOString()
-    query = query.gte('created_at', startDate)
   }
 
   const { data, error } = await query

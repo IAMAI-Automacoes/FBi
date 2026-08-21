@@ -1,13 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { RefreshCw, Settings2 } from 'lucide-react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { RoletaNumerica } from '@/components/RoletaNumerica'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,20 +14,26 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { InsightCard } from '@/components/insights/InsightCard'
+import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
+import { buscarCategoriasAtivas } from '@/lib/queries/feedbacks'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
+import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { useToast } from '@/hooks/use-toast'
 
-// Opções de gatilho da geração automática: de 5 em 5, mínimo 5, máximo 15
-const FEEDBACK_OPTIONS = [5, 10, 15]
+// Faixa aceita pro gatilho da geração automática (slider — qualquer valor no
+// meio, não só 3 opções fixas).
+const FEEDBACKS_MIN = 3
+const FEEDBACKS_MAX = 30
+const FEEDBACKS_PADRAO = 10
 
 export default function Insights() {
   const [filterPriority, setFilterPriority] = useState<string>('Todos')
-  const [filterCategory, setFilterCategory] = useState<string>('Todas')
+  const [filterCategories, setFilterCategories] = useState<string[]>([])
 
   const [insights, setInsights] = useState<Insight[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -51,6 +51,7 @@ export default function Insights() {
 
   const { usuario } = useAuth()
   const { mascote, configInsights, refetch: refetchConfig } = useRestauranteConfig()
+  const { setExtra } = useHeaderExtra()
   const { toast } = useToast()
 
   const fetchInsights = async () => {
@@ -67,12 +68,7 @@ export default function Insights() {
       if (error) throw error
 
       if (data) {
-        const linhas = data as Insight[]
-        setInsights(linhas)
-        const cats = Array.from(
-          new Set(linhas.map((i) => i.categoria).filter(Boolean)),
-        ) as string[]
-        setCategories(cats)
+        setInsights(data as Insight[])
       }
     } catch (e: any) {
       toast({ title: 'Erro ao buscar insights', description: e.message, variant: 'destructive' })
@@ -83,16 +79,18 @@ export default function Insights() {
 
   // Sincroniza o valor da engrenagem com a fonte única de config (contexto)
   useEffect(() => {
-    const atual = (configInsights as any)?.feedbacks_por_analise
-    const valor = FEEDBACK_OPTIONS.includes(atual) ? atual : 5
+    const atual = Number((configInsights as any)?.feedbacks_por_analise)
+    const valor = Number.isFinite(atual)
+      ? Math.min(Math.max(Math.round(atual), FEEDBACKS_MIN), FEEDBACKS_MAX)
+      : FEEDBACKS_PADRAO
     setFeedbacksPorAnalise(valor)
     setSavedFeedbacksPorAnalise(valor)
   }, [configInsights])
 
   const handleSalvarConfig = async () => {
     if (!usuario?.restaurante_id) return
-    // Defesa: garante valor dentro de [5, 15] em passos de 5
-    const valor = FEEDBACK_OPTIONS.includes(feedbacksPorAnalise) ? feedbacksPorAnalise : 5
+    // Defesa: garante valor dentro da faixa aceita pelo slider
+    const valor = Math.min(Math.max(Math.round(feedbacksPorAnalise), FEEDBACKS_MIN), FEEDBACKS_MAX)
     setSavingConfig(true)
     try {
       // Lê o jsonb atual para preservar as outras chaves
@@ -136,6 +134,15 @@ export default function Insights() {
       setLoading(false)
     }
   }, [usuario])
+
+  // Mesma fonte de categorias que a página de Feedbacks (todas que o
+  // restaurante já usou, sem filtro de período) — pra o filtro ser
+  // literalmente idêntico nas duas telas, não só parecido visualmente.
+  useEffect(() => {
+    buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined)
+      .then(setCategories)
+      .catch(console.error)
+  }, [usuario?.restaurante_id])
 
   const handleGerarInsights = async () => {
     setGenerating(true)
@@ -230,10 +237,21 @@ export default function Insights() {
         filterPriority === 'Todos' ||
         i.prioridade === filterPriority ||
         (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
-      const catMatch = filterCategory === 'Todas' || i.categoria === filterCategory
+      const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
       return prioMatch && catMatch
     })
-  }, [insights, filterPriority, filterCategory])
+  }, [insights, filterPriority, filterCategories])
+
+  // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.
+  const topoRef = useRef<HTMLDivElement>(null)
+  const primeiraRenderRef = useRef(true)
+  useEffect(() => {
+    if (primeiraRenderRef.current) {
+      primeiraRenderRef.current = false
+      return
+    }
+    topoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [filterPriority, filterCategories])
 
   const priorities = [
     {
@@ -262,172 +280,154 @@ export default function Insights() {
     },
   ]
 
+  // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
+  // página — um bloco fixo só, sem costura entre cabeçalho e barra de
+  // filtros onde a lista rolando pudesse vazar por cima.
+  const barraFiltros = (
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-white px-3 py-2.5 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 bg-gray-50 px-2 py-1.5 rounded-full border border-gray-200 overflow-x-auto">
+              {priorities.map((p) => {
+                const isActive = filterPriority === p.value
+                return (
+                  <button
+                    key={p.value}
+                    onClick={() => setFilterPriority(p.value)}
+                    className={cn(
+                      'px-4 py-1.5 text-sm font-bold rounded-full transition-all border outline-none whitespace-nowrap',
+                      p.colors,
+                      isActive ? p.activeClass : 'border-transparent hover:bg-gray-100',
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <FiltroCategorias
+              disponiveis={categories}
+              selecionadas={filterCategories}
+              onChange={setFilterCategories}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  disabled={generating}
+                  className="w-full lg:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium shadow-sm transition-all"
+                >
+                  <RefreshCw className={cn('w-4 h-4 mr-2', generating && 'animate-spin')} />
+                  {generating ? 'Analisando dados...' : 'Gerar insights agora'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Gerar insights agora?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O {mascote.nome} analisará todos os feedbacks recentes e gerará novos insights
+                    operacionais. Os insights anteriores serão substituídos.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleGerarInsights}
+                    className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
+                  >
+                    Gerar agora
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog
+              open={configOpen}
+              onOpenChange={(open) => {
+                setConfigOpen(open)
+                if (open) setFeedbacksPorAnalise(savedFeedbacksPorAnalise)
+              }}
+            >
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title="Configurar geração automática"
+                  className="shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm"
+                >
+                  <Settings2 className="w-4 h-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Geração automática de insights</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Defina quantos novos feedbacks acumulados disparam uma análise automática do Chef
+                    Pepê. Você sempre pode gerar insights manualmente a qualquer momento.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <div className="py-2">
+                  <p className="text-sm font-medium text-gray-700 mb-2 text-center">
+                    Analisar automaticamente a cada:
+                  </p>
+                  <RoletaNumerica
+                    min={FEEDBACKS_MIN}
+                    max={FEEDBACKS_MAX}
+                    value={feedbacksPorAnalise}
+                    onChange={setFeedbacksPorAnalise}
+                    className="mx-auto w-24"
+                  />
+                  <p className="text-xs text-gray-400 text-center -mt-1">feedbacks</p>
+                  <p className="text-xs text-gray-400 mt-3">
+                    Valores menores geram insights com mais frequência; valores maiores aguardam mais
+                    dados antes de analisar.
+                  </p>
+                </div>
+
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={savingConfig}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault()
+                      handleSalvarConfig()
+                    }}
+                    disabled={savingConfig}
+                    className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
+                  >
+                    {savingConfig ? 'Salvando...' : 'Salvar'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+  )
+
+  // Precisa de deps de verdade (não pode rodar em todo render): `setExtra`
+  // muda o estado do contexto, que re-renderiza este componente (ele também
+  // consome `useHeaderExtra`) — sem lista de deps isso vira loop infinito
+  // (tela branca por "Maximum update depth exceeded").
+  useEffect(() => {
+    setExtra(barraFiltros)
+    return () => setExtra(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filterPriority,
+    filterCategories,
+    categories,
+    generating,
+    configOpen,
+    feedbacksPorAnalise,
+    savingConfig,
+    mascote,
+  ])
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 bg-[#F9FAFB] min-h-[calc(100vh-4rem)] font-inter">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">
-            Insights da IA
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Análises automáticas dos feedbacks dos seus clientes.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                disabled={generating}
-                className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium shadow-sm transition-all"
-              >
-                <RefreshCw className={cn('w-4 h-4 mr-2', generating && 'animate-spin')} />
-                {generating ? 'Analisando dados...' : 'Gerar insights agora'}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Gerar insights agora?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  O {mascote.nome} analisará todos os feedbacks recentes e gerará novos insights
-                  operacionais. Os insights anteriores serão substituídos.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleGerarInsights}
-                  className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
-                >
-                  Gerar agora
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <AlertDialog
-            open={configOpen}
-            onOpenChange={(open) => {
-              setConfigOpen(open)
-              if (open) setFeedbacksPorAnalise(savedFeedbacksPorAnalise)
-            }}
-          >
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                title="Configurar geração automática"
-                className="order-first shrink-0 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm"
-              >
-                <Settings2 className="w-4 h-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Geração automática de insights</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Defina quantos novos feedbacks acumulados disparam uma análise automática do Chef
-                  Pepê. Você sempre pode gerar insights manualmente a qualquer momento.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-
-              <div className="py-2">
-                <p className="text-sm font-medium text-gray-700 mb-3">
-                  Analisar automaticamente a cada:
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  {FEEDBACK_OPTIONS.map((opt) => {
-                    const isActive = feedbacksPorAnalise === opt
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setFeedbacksPorAnalise(opt)}
-                        className={cn(
-                          'flex flex-col items-center justify-center rounded-xl border-2 py-4 transition-all outline-none',
-                          isActive
-                            ? 'border-[#1D4ED8] bg-blue-50/60 shadow-sm'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'text-2xl font-bold',
-                            isActive ? 'text-[#1D4ED8]' : 'text-gray-900',
-                          )}
-                        >
-                          {opt}
-                        </span>
-                        <span
-                          className={cn(
-                            'text-xs mt-0.5',
-                            isActive ? 'text-[#1D4ED8]' : 'text-gray-500',
-                          )}
-                        >
-                          feedbacks
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-xs text-gray-400 mt-3">
-                  Valores menores geram insights com mais frequência; valores maiores aguardam mais
-                  dados antes de analisar.
-                </p>
-              </div>
-
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={savingConfig}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handleSalvarConfig()
-                  }}
-                  disabled={savingConfig}
-                  className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
-                >
-                  {savingConfig ? 'Salvando...' : 'Salvar'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-300">
-        <div className="flex flex-wrap items-center gap-1.5 bg-gray-50 px-2 py-1.5 rounded-full border border-gray-200 w-full sm:w-auto overflow-x-auto">
-          {priorities.map((p) => {
-            const isActive = filterPriority === p.value
-            return (
-              <button
-                key={p.value}
-                onClick={() => setFilterPriority(p.value)}
-                className={cn(
-                  'px-4 py-1.5 text-sm font-semibold rounded-full transition-all border outline-none whitespace-nowrap',
-                  p.colors,
-                  isActive ? p.activeClass : 'border-transparent hover:bg-gray-100',
-                )}
-              >
-                {p.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-full sm:w-[220px] bg-white h-10 shadow-sm rounded-lg border-gray-200">
-            <SelectValue placeholder="Filtrar Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todas">Todas Categorias</SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div ref={topoRef} />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
