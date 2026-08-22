@@ -29,14 +29,25 @@ interface InsightCardProps {
 interface EstiloPrioridade {
   bg: string
   text: string
+  border: string
   label: string
 }
 
 const priorityConfig: Record<string, EstiloPrioridade> = {
-  URGENTE: { bg: 'bg-[#FEF2F2]', text: 'text-[#EF4444]', label: 'URGENTE' },
-  IMPORTANTE: { bg: 'bg-[#FFF7ED]', text: 'text-[#F59E0B]', label: 'IMPORTANTE' },
-  OBSERVAÇÃO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', label: 'OBSERVAÇÃO' },
-  OBSERVACAO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', label: 'OBSERVAÇÃO' },
+  URGENTE: { bg: 'bg-[#FEF2F2]', text: 'text-[#EF4444]', border: 'border-l-[#EF4444]', label: 'URGENTE' },
+  IMPORTANTE: { bg: 'bg-[#FFF7ED]', text: 'text-[#F59E0B]', border: 'border-l-[#F59E0B]', label: 'IMPORTANTE' },
+  OBSERVAÇÃO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', border: 'border-l-[#9CA3AF]', label: 'OBSERVAÇÃO' },
+  OBSERVACAO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', border: 'border-l-[#9CA3AF]', label: 'OBSERVAÇÃO' },
+  // "OBSERVAÇÃO" que é elogio (não existe como prioridade própria no banco —
+  // "elogio sem ação imediata" já cai dentro de OBSERVACAO pelo prompt da IA).
+  // Detectado por palavra-chave no título/descrição, ver `ehElogio()` abaixo.
+  ELOGIO: { bg: 'bg-[#F0FDF4]', text: 'text-[#22C55E]', border: 'border-l-[#22C55E]', label: 'OBSERVAÇÃO' },
+}
+
+/** Ver comentário em `ELOGIO` acima — mesma palavra que a IA usa pra gerar esses títulos. */
+function ehElogio(insight: Insight): boolean {
+  const texto = `${insight.titulo ?? ''} ${insight.descricao ?? ''}`.toLowerCase()
+  return texto.includes('elogi')
 }
 
 export function InsightCard({
@@ -47,7 +58,8 @@ export function InsightCard({
   criandoAcao = false,
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
-  const config = priorityConfig[prio] || priorityConfig['OBSERVACAO']
+  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && ehElogio(insight)
+  const config = (ehObservacaoElogio ? priorityConfig['ELOGIO'] : priorityConfig[prio]) || priorityConfig['OBSERVACAO']
 
   // Insights gerados antes da ligação por IDs têm `feedback_ids` vazio: não há
   // para onde navegar, então o contador vira texto simples em vez de link morto.
@@ -55,7 +67,12 @@ export function InsightCard({
   const totalFeedbacks = insight.feedback_ids?.length ?? insight.feedbacks_relacionados ?? 0
 
   return (
-    <Card className="bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative">
+    <Card
+      className={cn(
+        'bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative border-l-4',
+        config.border,
+      )}
+    >
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
@@ -89,7 +106,7 @@ export function InsightCard({
           <Badge
             variant="secondary"
             className={cn(
-              'text-[10px] font-bold tracking-wider rounded-md px-2 py-0.5',
+              'text-[10px] font-bold tracking-wider rounded-full px-2.5 py-0.5',
               config.bg,
               config.text,
               'hover:bg-opacity-80 border-none',
@@ -103,7 +120,7 @@ export function InsightCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-4 flex-1 space-y-4">
-        <p className="text-sm text-gray-600 leading-relaxed">{insight.descricao}</p>
+        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2">{insight.descricao}</p>
         <div className="flex items-start gap-2 text-sm text-[#1D4ED8] font-medium bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
           <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{insight.sugestao}</span>
@@ -115,7 +132,7 @@ export function InsightCard({
             to={`/feedbacks?insight_id=${insight.id}`}
             className="text-sm text-[#1D4ED8] hover:underline font-medium"
           >
-            {totalFeedbacks} feedbacks relacionados
+            {totalFeedbacks} feedbacks relacionados →
           </Link>
         ) : (
           <span
@@ -127,11 +144,10 @@ export function InsightCard({
         )}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
-            variant="outline"
             size="sm"
             onClick={onCreateTask}
             disabled={criandoAcao}
-            className="w-full sm:w-auto text-gray-700 border-gray-300 hover:bg-gray-50 h-9"
+            className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white h-9"
           >
             {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {criandoAcao ? 'Gerando...' : 'Criar Ação'}
