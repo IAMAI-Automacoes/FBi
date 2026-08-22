@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais } from '@/lib/iniciais'
 import { Progress } from '@/components/ui/progress'
-import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare } from 'lucide-react'
+import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDraggable } from '@dnd-kit/core'
 import { Button } from '@/components/ui/button'
@@ -67,7 +67,8 @@ export function TaskCard({
         if (!isDragging && !isOverlay && onClick) onClick()
       }}
       className={cn(
-        'bg-white p-5 rounded-xl border border-[#E5E7EB] hover:shadow-md transition-all shadow-sm flex flex-col',
+        'bg-white p-5 rounded-xl border border-[#E5E7EB] hover:shadow-md transition-all shadow-sm flex flex-col border-l-4',
+        estiloPrioridade(task.prioridade).corBorda,
         !isOverlay && !somenteLeitura && 'cursor-grab active:cursor-grabbing',
         // Arquivada não arrasta, mas abre o modal no clique.
         somenteLeitura && onClick && 'cursor-pointer',
@@ -96,6 +97,15 @@ export function TaskCard({
       >
         {task.titulo_acao}
       </h4>
+
+      {/* Só ações que nasceram de um insight (ver TaskBoard) — as criadas
+          manualmente pelo botão "Adicionar Ação" não têm insight_id. */}
+      {task.insight_id && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-600 mb-2 self-start">
+          <Sparkles className="w-3 h-3" />
+          Sugerida pela IA
+        </span>
+      )}
 
       {task.texto && (
         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{task.texto}</p>

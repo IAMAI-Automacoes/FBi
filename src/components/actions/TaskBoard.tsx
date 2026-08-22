@@ -29,6 +29,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
+import { estiloStatus } from '@/lib/status-acao'
+import { cn } from '@/lib/utils'
 
 export type ExtendedActionTask = {
   id: string
@@ -65,6 +67,7 @@ function DroppableTask({ task, children }: any) {
 
 function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${id}` })
+  const cor = estiloStatus(id)
   return (
     <div
       ref={setNodeRef}
@@ -73,8 +76,8 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
       {/* O cabeçalho fica FORA da área rolável, então o botão da coluna
           continua visível por mais que a lista de cards role. */}
       <div className="flex items-center gap-2 mb-4">
-        <h3 className="font-semibold text-sm text-foreground tracking-wide">{title}</h3>
-        <span className="bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
+        <h3 className={cn('font-semibold text-sm tracking-wide', cor.corTexto)}>{title}</h3>
+        <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', cor.corFundo, cor.corTexto)}>
           {count}
         </span>
         <div className="flex-1" />
