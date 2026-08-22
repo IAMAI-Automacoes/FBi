@@ -218,6 +218,23 @@ function DropIndicatorBar() {
   return <div aria-hidden className="h-1.5 rounded-full bg-slate-300 mx-1 shrink-0" />
 }
 
+/** Contorno tracejado no formato de um card — aparece em QUALQUER coluna que
+ *  esteja vazia (não só quando o quadro inteiro está vazio), avisando qual
+ *  status não tem nenhuma ação no momento. */
+function EstadoVazioColuna({ status }: { status: ActionStatus }) {
+  const texto =
+    status === 'PENDENTE'
+      ? 'Nenhuma ação pendente'
+      : status === 'EM_ANDAMENTO'
+        ? 'Nenhuma ação em andamento'
+        : 'Nenhuma ação concluída'
+  return (
+    <div className="flex min-h-[110px] items-center justify-center rounded-xl border-2 border-dashed border-slate-300 px-4 py-6 text-center text-sm text-muted-foreground">
+      {texto}
+    </div>
+  )
+}
+
 interface TaskBoardProps {
   refreshTrigger?: number
 }
@@ -896,21 +913,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               ))}
               {idAntesDaBarra === '__fim__' && <DropIndicatorBar />}
 
-              {/* Estado vazio dentro da coluna PENDENTE, sem substituir o quadro */}
-              {tasks.length === 0 && col.status === 'PENDENTE' && (
-                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 mb-3">
-                    <Plus className="h-6 w-6 text-[#1D4ED8]" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-foreground mb-1">
-                    Nenhuma ação no momento
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    As ações aparecem aqui quando você aprova sugestões da IA ou cria uma ação
-                    manualmente.
-                  </p>
-                </div>
-              )}
+              {colTasks.length === 0 && <EstadoVazioColuna status={col.status} />}
             </DroppableColumn>
           )
         })}
