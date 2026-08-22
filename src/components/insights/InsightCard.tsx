@@ -107,7 +107,7 @@ export function InsightCard({
           {insight.titulo}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-4 sm:px-5 pb-2 sm:pb-2 flex-1 space-y-1.5">
+      <CardContent className="px-4 sm:px-5 pb-1 sm:pb-1 flex-1 space-y-1.5">
         <p className="text-sm text-gray-600 leading-snug line-clamp-2">{insight.descricao}</p>
         <div className="flex items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1D4ED8] shrink-0">
@@ -116,7 +116,7 @@ export function InsightCard({
           <span className="mt-0.5">{insight.sugestao}</span>
         </div>
       </CardContent>
-      <CardFooter className="px-4 sm:px-5 pb-4 pt-2 sm:pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
+      <CardFooter className="px-4 sm:px-5 pb-3 sm:pb-3 pt-1 sm:pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
         {temFeedbacksLigados ? (
           <Link
             to={`/feedbacks?insight_id=${insight.id}`}
