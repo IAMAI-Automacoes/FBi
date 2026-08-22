@@ -17,12 +17,27 @@ Baseado na ação descrita abaixo, gere um plano detalhado de ação PARA ESTE r
 
 {tom}
 
+Se a ação já tem um "Plano já escrito pelo usuário" (veja abaixo), ele é a base:
+DESENVOLVA A PARTIR DELE — expanda, estruture em passos, complemente com os
+insights e boas práticas. NÃO ignore o que já foi escrito nem substitua por um
+plano genérico do zero. Se não houver plano escrito, use o título e a
+categoria da ação como ponto de partida.
+
 O plano deve:
 1. Explicar COMO resolver o problema
 2. Ser orientador e prático, sem ser rígido demais
 3. Fornecer direcionamentos claros para a equipe
 4. Levar em conta o porte, o público e a realidade deste restaurante — nada de
    conselho genérico que serviria para qualquer lugar
+
+Se o título da ação for vago demais (ex.: "Melhorar atendimento" sem mais
+nada) E não houver plano escrito nem insights relacionados suficientes para
+embasar algo específico, NÃO invente um plano genérico — nesse caso, retorne
+em vez disso:
+{
+  "contexto_insuficiente": true,
+  "motivo": "frase curta explicando que informação falta (ex.: qual problema exatamente, o que já foi tentado)"
+}
 
 ## Sobre este restaurante
 {perfil}
@@ -34,10 +49,11 @@ O plano deve:
 
 {conhecimento}
 
-Retorne SOMENTE um JSON neste formato, sem markdown:
+Se houver contexto suficiente, retorne SOMENTE um JSON neste formato, sem markdown:
 {
   "plano_detalhado": "Seu plano aqui com múltiplas linhas se necessário"
-}`
+}
+Caso contrário, retorne SOMENTE o JSON de "contexto_insuficiente" descrito acima.`
 
 serve(async (req: Request) => {
   const pre = preflight(req)
@@ -79,6 +95,9 @@ serve(async (req: Request) => {
       acao.categoria ? `Categoria: ${acao.categoria}` : '',
       acao.prioridade ? `Prioridade: ${acao.prioridade}` : '',
       acao.status ? `Status: ${acao.status}` : '',
+      acao.plano_detalhado
+        ? `Plano já escrito pelo usuário (desenvolva A PARTIR dele, não ignore):\n${acao.plano_detalhado}`
+        : '',
     ].filter(Boolean).join('\n')
 
     const blocoInsights = insights?.length
@@ -117,6 +136,17 @@ serve(async (req: Request) => {
       restauranteId: acao.restaurante_id,
       agenteId: AGENTE,
     })
+
+    // A IA pode julgar que não há informação suficiente pra gerar algo
+    // específico — nesse caso ela devolve este sinal em vez de um plano, e a
+    // ação não é tocada no banco (não sobrescreve um plano existente com nada).
+    if (result?.contexto_insuficiente) {
+      return json({
+        status: 'contexto_insuficiente',
+        motivo: result.motivo || 'Descreva melhor o título ou o plano da ação.',
+        acao_id: acaoId,
+      })
+    }
 
     const planoGerado =
       typeof result === 'string' ? result : (result?.plano_detalhado ?? '')

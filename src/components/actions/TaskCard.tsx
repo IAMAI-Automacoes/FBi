@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
-import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin } from 'lucide-react'
+import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -16,12 +16,14 @@ interface TaskCardProps {
   task: any
   onClick?: () => void
   onProgress?: () => void
-  onUndo?: () => void
+  /** Volta uma etapa (Em Andamento→Pendente ou Concluído→Em Andamento) —
+   *  botão permanente, sem limite de tempo. Ausente em cards PENDENTE (não
+   *  há pra onde voltar). */
+  onVoltar?: () => void
   onArquivar?: () => void
   onDesarquivar?: () => void
   /** Alterna o card fixado no topo da coluna (por cima da ordenação por prioridade). */
   onPin?: (fixado: boolean) => void
-  canUndo?: boolean
   isOverlay?: boolean
   /** Na página de arquivadas o card não arrasta nem avança de status. */
   somenteLeitura?: boolean
@@ -31,23 +33,24 @@ export function TaskCard({
   task,
   onClick,
   onProgress,
-  onUndo,
+  onVoltar,
   onArquivar,
   onDesarquivar,
   onPin,
-  canUndo,
   isOverlay,
   somenteLeitura = false,
 }: TaskCardProps) {
-  // `useSortable` (não o `useDraggable` puro) é o que faz as outras ações da
-  // coluna abrirem espaço suavemente enquanto esta é arrastada por cima —
-  // isso É o indicador visual de "vai entrar aqui", sem precisar desenhar
-  // uma linha à parte. O id da versão do DragOverlay é só pra não colidir
-  // com o card real, que continua montado (só fica com opacidade baixa).
+  // `disabled: isOverlay` é essencial, não cosmético: sem isso a cópia do
+  // DragOverlay (que segue o cursor) registra SEU PRÓPRIO droppable — e por
+  // estar sempre bem embaixo do ponteiro, `closestCorners` frequentemente a
+  // escolhe como alvo em vez do card/coluna de verdade, fazendo a barrinha
+  // sumir e o drop falhar silenciosamente (o id "overlay-x" não bate com
+  // nenhuma tarefa real nem com "col-"). `useSortable` com `disabled: true`
+  // tira o nó da lista de droppables candidatos da colisão.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: isOverlay ? `overlay-${task.id}` : task.id.toString(),
     data: { task },
-    disabled: somenteLeitura,
+    disabled: isOverlay || somenteLeitura,
   })
 
   const style =
@@ -89,13 +92,6 @@ export function TaskCard({
         isOverlay && 'shadow-xl scale-[1.03] cursor-grabbing z-50',
       )}
     >
-      {/* Barrinha marcando o ponto de inserção — sobreposta (não ocupa
-          espaço próprio), pra não mudar a altura do slot que as outras
-          ações abriram e causar um "pulo" quando soltar. */}
-      {isDragging && !isOverlay && (
-        <div className="pointer-events-none absolute inset-x-4 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-[#1D4ED8] z-10" />
-      )}
-
       <div className="flex items-start justify-between mb-3 gap-2">
         <span
           className={cn(
@@ -145,10 +141,6 @@ export function TaskCard({
         </span>
       )}
 
-      {task.texto && (
-        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{task.texto}</p>
-      )}
-
       {task.plano_detalhado && (
         <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{task.plano_detalhado}</p>
       )}
@@ -175,9 +167,14 @@ export function TaskCard({
         </Link>
       )}
 
-      <div className="flex items-center justify-between mt-auto pt-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Avatar className="w-6 h-6 border border-border">
+      {/* `min-w-0` no grupo da esquerda e no `span` do nome é o que faz o
+          `truncate` valer de verdade dentro de um flex — sem isso o item
+          flex recusa encolher abaixo do conteúdo e o nome comprido empurra
+          por cima do prazo (`shrink-0 whitespace-nowrap` do lado do prazo)
+          em vez de truncar com reticências. */}
+      <div className="flex items-center justify-between mt-auto pt-1 gap-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+          <Avatar className="w-6 h-6 border border-border shrink-0">
             <AvatarFallback
               className={cn(
                 'text-[10px] font-semibold',
@@ -188,28 +185,33 @@ export function TaskCard({
               {getIniciais(task.responsavel || 'Sem responsável', 2)}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate max-w-[100px] font-medium">
+          <span className="truncate min-w-0 font-medium">
             {task.responsavel || 'Sem responsável'}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground font-medium">{dataExibida}</span>
+        <span className="text-xs text-muted-foreground font-medium shrink-0 whitespace-nowrap">
+          {dataExibida}
+        </span>
       </div>
 
       {/* A barra some só quando não há nada a oferecer: card concluído sem
           desfazer disponível e sem arquivar/desarquivar. */}
-      {!isOverlay && !isDragging && (canUndo || !isCompleted || !!onArquivar || !!onDesarquivar) && (
+      {!isOverlay && !isDragging && (!isCompleted || !!onVoltar || !!onArquivar || !!onDesarquivar) && (
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-300 animate-fade-in-up">
-          {canUndo && (
+          {/* Botão pequeno e permanente — Em Andamento é a única coluna com
+              progresso (Concluir) e retrocesso (Pendente) lado a lado. */}
+          {task.status === 'EM_ANDAMENTO' && onVoltar && (
             <Button
               size="sm"
               variant="outline"
-              className="h-8 px-3 text-xs bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 flex-1 transition-colors"
+              className="h-8 w-8 p-0 shrink-0 text-slate-500 hover:text-slate-700"
               onClick={(e) => {
                 e.stopPropagation()
-                onUndo?.()
+                onVoltar()
               }}
+              title="Voltar para Pendente"
             >
-              <RotateCcw className="w-3 h-3 mr-1.5" /> Desfazer
+              <ArrowLeft className="w-3.5 h-3.5" />
             </Button>
           )}
           {!isCompleted && (
@@ -228,6 +230,19 @@ export function TaskCard({
             >
               {task.status === 'PENDENTE' ? 'Iniciar Ação' : 'Concluir'}
               <ArrowRight className="w-3 h-3 ml-1.5" />
+            </Button>
+          )}
+          {isCompleted && onVoltar && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-3 text-xs bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 flex-1 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                onVoltar()
+              }}
+            >
+              <RotateCcw className="w-3 h-3 mr-1.5" /> Desfazer
             </Button>
           )}
           {isCompleted && onArquivar && (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -73,7 +73,7 @@ export function TaskModal({
 }: TaskModalProps) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<string>('NORMAL')
+  const [priority, setPriority] = useState<string>('OBSERVACAO')
   const [responsavel, setResponsavel] = useState('')
   const [prazo, setPrazo] = useState('')
   const [source, setSource] = useState('')
@@ -87,24 +87,45 @@ export function TaskModal({
     setPrazo(data ? format(data, 'yyyy-MM-dd') : '')
   }
 
+  // Snapshot dos valores com que o modal abriu — é contra isto que comparamos
+  // pra saber se algo mudou (e portanto se o "Salvar" deve ficar clicável).
+  const valoresIniciaisRef = useRef({
+    title: '',
+    priority: 'OBSERVACAO',
+    responsavel: '',
+    prazo: '',
+    source: '',
+    plano: '',
+  })
+
   useEffect(() => {
     if (!open) return
-    if (task) {
-      setTitle(task.title ?? '')
-      setPriority(task.priority ?? 'NORMAL')
-      setResponsavel(task.responsavel ?? '')
-      setPrazo(task.prazo ?? '')
-      setSource(task.source ?? '')
-      setPlano(task.plano_detalhado ?? '')
-    } else {
-      setTitle('')
-      setPriority('NORMAL')
-      setResponsavel('')
-      setPrazo('')
-      setSource('')
-      setPlano('')
-    }
+    const iniciais = task
+      ? {
+          title: task.title ?? '',
+          priority: task.priority ?? 'OBSERVACAO',
+          responsavel: task.responsavel ?? '',
+          prazo: task.prazo ?? '',
+          source: task.source ?? '',
+          plano: task.plano_detalhado ?? '',
+        }
+      : { title: '', priority: 'OBSERVACAO', responsavel: '', prazo: '', source: '', plano: '' }
+    valoresIniciaisRef.current = iniciais
+    setTitle(iniciais.title)
+    setPriority(iniciais.priority)
+    setResponsavel(iniciais.responsavel)
+    setPrazo(iniciais.prazo)
+    setSource(iniciais.source)
+    setPlano(iniciais.plano)
   }, [task, open])
+
+  const houveAlteracao =
+    title !== valoresIniciaisRef.current.title ||
+    priority !== valoresIniciaisRef.current.priority ||
+    responsavel !== valoresIniciaisRef.current.responsavel ||
+    prazo !== valoresIniciaisRef.current.prazo ||
+    source !== valoresIniciaisRef.current.source ||
+    plano !== valoresIniciaisRef.current.plano
 
   const handleSave = () => {
     if (onSave) {
@@ -159,7 +180,7 @@ export function TaskModal({
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="NORMAL">Normal</SelectItem>
+                <SelectItem value="OBSERVACAO">Observação</SelectItem>
                 <SelectItem value="IMPORTANTE">Importante</SelectItem>
                 <SelectItem value="URGENTE">Urgente</SelectItem>
               </SelectContent>
@@ -235,7 +256,12 @@ export function TaskModal({
             <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
               <PlanoAcao
                 acaoId={acaoId}
-                planoInicial={plano}
+                // O SNAPSHOT fixo (não `plano` ao vivo) — senão, como
+                // `onPlanoUpdate` alimenta `plano` a cada tecla, o baseline
+                // interno do PlanoAcao (usado pra decidir se mostra
+                // "Desfazer") ficaria perseguindo o que o próprio usuário
+                // acabou de digitar e nunca detectaria alteração nenhuma.
+                planoInicial={valoresIniciaisRef.current.plano}
                 isConcluido={isConcluido}
                 onPlanoUpdate={setPlano}
               />
@@ -293,6 +319,7 @@ export function TaskModal({
             {!somenteLeitura && (
               <Button
                 onClick={handleSave}
+                disabled={!houveAlteracao}
                 className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white"
               >
                 Salvar

@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { ActionStatus } from '@/lib/mock-data'
 import { TaskCard } from './TaskCard'
 import { TaskModal } from '@/components/insights/TaskModal'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Archive } from 'lucide-react'
+import { Plus, Archive, ListOrdered, RotateCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   DndContext,
@@ -16,11 +16,47 @@ import {
   useSensors,
   DragOverlay,
   closestCorners,
+  pointerWithin,
   useDroppable,
   defaultDropAnimationSideEffects,
   type DropAnimation,
+  type CollisionDetection,
 } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable'
+
+// Cada TaskCard registra um droppable do próprio tamanho, e cada coluna
+// TAMBÉM registra um droppable grande (a área toda, pra dar pra soltar no
+// vazio). `closestCorners` compara TUDO por distância de cantos — como o
+// retângulo da coluna é bem maior que o de um card, ele podia "ganhar" a
+// colisão mesmo com o cursor bem em cima de um card específico no meio da
+// lista (a barra então pulava pro fim da coluna em vez de aparecer entre os
+// 2 cards certos). A correção: primeiro tenta achar um CARD onde o ponteiro
+// está literalmente em cima (`pointerWithin`, restrito aos cards) — isso
+// sempre ganha da coluna quando faz sentido ganhar. Só cai pro container da
+// coluna quando o ponteiro não está sobre nenhum card (topo/fim da lista,
+// coluna vazia). E só cai pro `closestCorners` bruto se nem isso achar nada
+// (ex.: ponteiro momentaneamente fora de tudo, arrasto muito rápido).
+const detectarColisao: CollisionDetection = (args) => {
+  const semAtivo = args.droppableContainers.filter((c) => c.id !== args.active.id)
+  const cards = semAtivo.filter((c) => !String(c.id).startsWith('col-'))
+  const colunas = semAtivo.filter((c) => String(c.id).startsWith('col-'))
+
+  const sobreCard = pointerWithin({ ...args, droppableContainers: cards })
+  if (sobreCard.length > 0) return sobreCard
+
+  const sobreColuna = pointerWithin({ ...args, droppableContainers: colunas })
+  if (sobreColuna.length > 0) return sobreColuna
+
+  return closestCorners({ ...args, droppableContainers: semAtivo })
+}
+
+// O board já usa `DragOverlay`, então o `useSortable` de cada card nunca
+// desloca o próprio card ativo por transform (só a `DragOverlay` segue o
+// cursor) — uma strategy que sempre retorna `null` desliga o reposicionamento
+// automático dos outros cards por transform, deixando o "abrir espaço" 100%
+// a cargo da barra cinza (ver `DropIndicatorBar`), que é só mais um item no
+// fluxo/gap da coluna.
+const noopSortingStrategy: SortingStrategy = () => null
 
 // Suave e rápida: sem o "bounce" padrão do dnd-kit, só um fade curto do
 // espaço de origem enquanto o card desliza pro lugar novo.
@@ -88,6 +124,43 @@ function ordenarColuna(tasks: ExtendedActionTask[]): ExtendedActionTask[] {
   })
 }
 
+/** `texto` é o sinal confiável de "veio da IA" (ver mesma lógica em
+ *  TaskCard.tsx): `sugerir-acoes` sempre grava esse texto padrão, mesmo
+ *  quando não consegue casar o insight_id citado; criação manual nunca
+ *  grava `texto`. */
+function ehCriadaPelaIA(task: ExtendedActionTask): boolean {
+  return !!task.texto
+}
+
+/** Ordem usada pelo botão "Organizar": prioridade primeiro (Urgente >
+ *  Importante > Observação); empatando, ação criada pelo usuário vem antes
+ *  da sugerida por IA; empatando ainda (mesma origem), a mais antiga vem
+ *  primeiro — quem está esperando há mais tempo não deve ser empurrada pra
+ *  trás só porque surgiu uma sugestão mais nova no mesmo nível. */
+function compararParaOrganizar(a: ExtendedActionTask, b: ExtendedActionTask): number {
+  const pesoA = pesoPrioridade(a.prioridade)
+  const pesoB = pesoPrioridade(b.prioridade)
+  if (pesoA !== pesoB) return pesoB - pesoA
+
+  const iaA = ehCriadaPelaIA(a)
+  const iaB = ehCriadaPelaIA(b)
+  if (iaA !== iaB) return iaA ? 1 : -1
+
+  const dataA = a.created_at ? new Date(a.created_at).getTime() : 0
+  const dataB = b.created_at ? new Date(b.created_at).getTime() : 0
+  return dataA - dataB
+}
+
+/** A ordem por prioridade (`compararParaOrganizar`) já é exatamente a ordem
+ *  atual da coluna? Usado pra desabilitar o botão "Organizar" quando não há
+ *  nada a fazer. */
+function jaEstaOrganizada(colunaOrdenada: ExtendedActionTask[]): boolean {
+  const fixados = colunaOrdenada.filter((t) => t.fixado).sort(compararParaOrganizar)
+  const livres = colunaOrdenada.filter((t) => !t.fixado).sort(compararParaOrganizar)
+  const alvo = [...fixados, ...livres]
+  return colunaOrdenada.every((t, i) => t.id === alvo[i].id)
+}
+
 /** Índice onde inserir um card que ACABOU de entrar numa coluna (mudou de
  *  status): no topo do seu nível de prioridade — acima de qualquer card já
  *  ali com prioridade igual ou menor. Cards fixados são pulados (sempre
@@ -107,14 +180,21 @@ function DroppableColumn({ id, title, count, taskIds, children, acaoCabecalho }:
   return (
     <div className="flex flex-col w-full min-w-0">
       {/* Cabeçalho fica FORA da caixa dos cards, direto no fundo da página —
-          nome do status e contador soltos, sem borda em volta. */}
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <h3 className={cn('font-semibold text-sm tracking-wide', cor.corTexto)}>{title}</h3>
-        <span className={cn('text-xs font-bold px-2 py-0.5 rounded-md', cor.corSolida)}>
-          {count}
-        </span>
-        <div className="flex-1" />
-        {acaoCabecalho}
+          nome do status e contador soltos, sem borda em volta. `justify-between`
+          entre os DOIS grupos (nome+contador de um lado, botões do outro) em
+          vez de um spacer `flex-1` solto entre irmãos: com `flex-wrap`, o
+          spacer competia pela linha e empurrava os botões pra uma 2ª linha
+          mesmo cabendo espaço, que era o bug do print. */}
+      <div className="flex items-center justify-between gap-2 mb-3 px-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className={cn('font-semibold text-sm tracking-wide whitespace-nowrap shrink-0', cor.corTexto)}>
+            {title}
+          </h3>
+          <span className={cn('text-xs font-bold px-2 py-0.5 rounded-md shrink-0', cor.corSolida)}>
+            {count}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">{acaoCabecalho}</div>
       </div>
       <div
         ref={setNodeRef}
@@ -123,12 +203,19 @@ function DroppableColumn({ id, title, count, taskIds, children, acaoCabecalho }:
           isOver && 'bg-slate-100/70 ring-2 ring-primary/20',
         )}
       >
-        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={taskIds} strategy={noopSortingStrategy}>
           {children}
         </SortableContext>
       </div>
     </div>
   )
+}
+
+/** Barrinha fina indicando onde o card cairia se solto agora — é só mais um
+ *  item no flex da coluna (empurra os vizinhos via `gap`, sem precisar
+ *  animar nada manualmente nem duplicar o card). */
+function DropIndicatorBar() {
+  return <div aria-hidden className="h-1.5 rounded-full bg-slate-300 mx-1 shrink-0" />
 }
 
 interface TaskBoardProps {
@@ -141,13 +228,29 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const [tasks, setTasks] = useState<ExtendedActionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTask, setActiveTask] = useState<ExtendedActionTask | null>(null)
+  /** Onde o card cairia se solto AGORA — puramente visual (não mexe em
+   *  `tasks`), calculado a cada `onDragOver`. `index` já exclui o próprio
+   *  card ativo, então serve tanto pra desenhar a barra quanto pro splice
+   *  real no `handleDragEnd`. */
+  const [dropIndicator, setDropIndicator] = useState<{ status: ActionStatus; index: number } | null>(
+    null,
+  )
+  /** Evita a barra "piscar" de lado quando o cursor está bem em cima do
+   *  centro de um card: só troca de antes/depois quando ultrapassa uma
+   *  margem, e mantém o último lado decidido dentro da zona morta. */
+  const ladoEstavelRef = useRef<'antes' | 'depois'>('antes')
+
+  /** Janela de 30s pra desfazer o último "Organizar" de cada coluna — a
+   *  chave presente (mesmo array vazio) significa "dentro da janela"; o
+   *  valor é a ordem de ANTES de organizar, pra onde um novo clique volta. */
+  const [desfazerOrganizar, setDesfazerOrganizar] = useState<
+    Partial<Record<ActionStatus, { id: string; ordem: number }[]>>
+  >({})
+  const organizarTimers = useRef<Partial<Record<ActionStatus, ReturnType<typeof setTimeout>>>>({})
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ExtendedActionTask | null>(null)
   const [activeColumn, setActiveColumn] = useState<ActionStatus>('PENDENTE')
-
-  const undoTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const [undoableTasks, setUndoableTasks] = useState<Record<string, ActionStatus>>({})
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -210,7 +313,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     load()
 
     return () => {
-      Object.values(undoTimers.current).forEach((timer) => clearTimeout(timer))
+      Object.values(organizarTimers.current).forEach((timer) => clearTimeout(timer))
     }
   }, [refreshTrigger, usuario])
 
@@ -250,18 +353,6 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           })
           .catch(console.error)
       }
-
-      setUndoableTasks((prev) => ({ ...prev, [taskId]: oldStatus }))
-      if (undoTimers.current[taskId]) clearTimeout(undoTimers.current[taskId])
-
-      undoTimers.current[taskId] = setTimeout(() => {
-        setUndoableTasks((prev) => {
-          const next = { ...prev }
-          delete next[taskId]
-          return next
-        })
-        delete undoTimers.current[taskId]
-      }, 60000)
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao atualizar o status.', variant: 'destructive' })
       load() // reload to reset state on error
@@ -303,113 +394,180 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }
   }
 
-  const handleUndo = async (taskId: string) => {
-    const oldStatus = undoableTasks[taskId]
-    if (!oldStatus) return
+  /** Botão permanente de "voltar uma etapa" (Em Andamento→Pendente ou
+   *  Concluído→Em Andamento) — sem timer, sempre disponível enquanto o card
+   *  não estiver em PENDENTE. Reaproveita `moveTask`, que já insere no topo
+   *  do nível de prioridade — a regra certa pra mudança via botão. */
+  const handleVoltar = (taskId: string, statusAtual: ActionStatus) => {
+    const anterior: ActionStatus = statusAtual === 'CONCLUIDO' ? 'EM_ANDAMENTO' : 'PENDENTE'
+    moveTask(taskId, statusAtual, anterior)
+  }
 
-    const taskDetails = tasks.find((t) => t.id === taskId)
-    if (!taskDetails) return
-
-    let updatedTasks: ExtendedActionTask[] = []
-
-    setTasks((prev) => {
-      const atual = prev.find((t) => t.id === taskId)
-      if (!atual) return prev
-      const movedTask = { ...atual, status: oldStatus }
-      const outros = prev.filter((t) => t.id !== taskId)
-
-      const byStatus: Record<ActionStatus, ExtendedActionTask[]> = {
-        PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
-        EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
-        CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
-      }
-      const idx = indiceInsercaoPorPrioridade(byStatus[oldStatus], movedTask.prioridade)
-      byStatus[oldStatus].splice(idx, 0, movedTask)
-
-      updatedTasks = [
-        ...byStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
-        ...byStatus.EM_ANDAMENTO.map((t, i) => ({ ...t, ordem: i })),
-        ...byStatus.CONCLUIDO.map((t, i) => ({ ...t, ordem: i })),
-      ]
-      return updatedTasks
+  /** Aplica uma lista de {id, ordem} já pronta — usado tanto por "Organizar"
+   *  quanto pelo desfazer dele, que é literalmente a mesma operação com a
+   *  lista invertida. */
+  const aplicarOrdem = (pares: { id: string; ordem: number }[]) => {
+    const porId = new Map(pares.map((p) => [p.id, p.ordem]))
+    setTasks((prev) =>
+      prev.map((t) => {
+        const novo = porId.get(t.id)
+        return novo !== undefined && novo !== t.ordem ? { ...t, ordem: novo } : t
+      }),
+    )
+    atualizarOrdemAcoes(pares.map((p) => ({ id: parseInt(p.id), ordem: p.ordem }))).catch(() => {
+      toast({ title: 'Erro', description: 'Falha ao organizar a coluna.', variant: 'destructive' })
     })
+  }
 
-    if (undoTimers.current[taskId]) clearTimeout(undoTimers.current[taskId])
-    setUndoableTasks((prev) => {
-      const next = { ...prev }
-      delete next[taskId]
-      return next
-    })
-    delete undoTimers.current[taskId]
+  /** Botão "Organizar": reordena a coluna por `compararParaOrganizar`. Um
+   *  segundo clique dentro de 30s desfaz (volta pra ordem de antes) — depois
+   *  disso, ou assim que a coluna já está na ordem organizada, o botão fica
+   *  desabilitado (nada a fazer até ela sair de novo dessa ordem). */
+  const handleOrganizar = (status: ActionStatus) => {
+    const snapshotAnterior = desfazerOrganizar[status]
 
-    await doMoveStatusApi(taskId, taskDetails.status, oldStatus, taskDetails)
-
-    if (updatedTasks.length > 0) {
-      const changedOrders = updatedTasks.map((t) => ({ id: parseInt(t.id), ordem: t.ordem }))
-      atualizarOrdemAcoes(changedOrders).catch(console.error)
+    if (snapshotAnterior) {
+      if (organizarTimers.current[status]) clearTimeout(organizarTimers.current[status])
+      setDesfazerOrganizar((prev) => ({ ...prev, [status]: undefined }))
+      aplicarOrdem(snapshotAnterior)
+      return
     }
+
+    const coluna = ordenarColuna(tasks.filter((t) => t.status === status))
+    if (jaEstaOrganizada(coluna)) return // botão deveria estar desabilitado; defensivo
+
+    const antes = coluna.map((t) => ({ id: t.id, ordem: t.ordem }))
+    const fixados = coluna.filter((t) => t.fixado).sort(compararParaOrganizar)
+    const livres = coluna.filter((t) => !t.fixado).sort(compararParaOrganizar)
+    const depois = [...fixados, ...livres].map((t, i) => ({ id: t.id, ordem: i }))
+
+    aplicarOrdem(depois)
+
+    setDesfazerOrganizar((prev) => ({ ...prev, [status]: antes }))
+    if (organizarTimers.current[status]) clearTimeout(organizarTimers.current[status])
+    organizarTimers.current[status] = setTimeout(() => {
+      setDesfazerOrganizar((prev) => ({ ...prev, [status]: undefined }))
+    }, 30000)
   }
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
     const task = tasks.find((t) => t.id === active.id)
     if (task) setActiveTask(task) // snapshot do status ORIGINAL, antes de qualquer coisa mudar
+    ladoEstavelRef.current = 'antes'
   }
 
   /** Motivo do bloqueio, setado durante o drag (ver handleDragOver) e
    *  consumido/limpo no handleDragEnd — pra avisar só uma vez, na soltada. */
   const movimentoBloqueadoRef = useRef<string | null>(null)
 
-  /** Enquanto arrasta: se cruzar pra uma coluna DIFERENTE da que o card está
-   *  agora, já muda o status localmente (sem chamar a API ainda) e insere no
-   *  topo do nível de prioridade — é isso que faz a coluna de destino abrir
-   *  espaço em tempo real, na posição final de verdade (sem "pulo" ao soltar).
-   *  Reordenar dentro da MESMA coluna não mexe em nada aqui: fica só o
-   *  preview visual do próprio dnd-kit até soltar de vez. */
+  /** Índice de inserção dentro de `destino` (lista JÁ SEM o card ativo,
+   *  ordenada) — decide antes/depois do card sob o cursor comparando os
+   *  centros verticais dos dois rects que o próprio evento do dnd-kit já
+   *  fornece. Uma margem de histerese em volta do centro evita a barra
+   *  "piscar" de lado quando o cursor está bem em cima da borda. */
+  const computeInsertIndex = (
+    event: DragOverEvent,
+    destino: ExtendedActionTask[],
+  ): number => {
+    const { active, over } = event
+    const overId = over!.id as string
+
+    if (overId.startsWith('col-')) {
+      // Área vazia da coluna (sem nenhum card por perto do ponteiro): decide
+      // topo ou fim comparando com o MEIO do próprio container — perto do
+      // topo dele = quer entrar em primeiro; perto do fim = quer ir pro final.
+      if (destino.length === 0) return 0
+      const overRect = over!.rect
+      const activeRect = active.rect.current?.translated
+      if (!overRect || !activeRect) return destino.length
+      const activeCenterY = activeRect.top + activeRect.height / 2
+      const colunaMeioY = overRect.top + overRect.height / 2
+      return activeCenterY < colunaMeioY ? 0 : destino.length
+    }
+
+    const overIdx = destino.findIndex((t) => t.id === overId)
+    if (overIdx === -1) return destino.length // pairando sobre o próprio card ativo
+
+    const overRect = over!.rect
+    const activeRect = active.rect.current?.translated
+    if (!overRect || !activeRect) return overIdx
+
+    const overCenterY = overRect.top + overRect.height / 2
+    const activeCenterY = activeRect.top + activeRect.height / 2
+    const MARGEM = 6
+
+    let lado: 'antes' | 'depois'
+    if (activeCenterY < overCenterY - MARGEM) lado = 'antes'
+    else if (activeCenterY > overCenterY + MARGEM) lado = 'depois'
+    else lado = ladoEstavelRef.current // zona morta: mantém a última decisão
+
+    ladoEstavelRef.current = lado
+    return lado === 'antes' ? overIdx : overIdx + 1
+  }
+
+  /** Enquanto arrasta: NUNCA muta `tasks` de verdade — só calcula onde o
+   *  card cairia (`dropIndicator`), pra desenhar a barra cinza. Isso é o que
+   *  garante que o fantasma (opacidade baixa) do card ativo fique sempre
+   *  preso na coluna/posição de ORIGEM, nunca "teleporta" pro destino. */
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
-    if (!over || !activeTask) return
+    if (!activeTask) return
     const activeId = active.id as string
+
+    if (!over) {
+      setDropIndicator(null)
+      return
+    }
     const overId = over.id as string
-    if (activeId === overId) return
+    if (activeId === overId) {
+      setDropIndicator(null)
+      return
+    }
 
-    setTasks((prev) => {
-      const atual = prev.find((t) => t.id === activeId)
-      if (!atual) return prev
+    const overStatus = overId.startsWith('col-')
+      ? (overId.replace('col-', '') as ActionStatus)
+      : tasks.find((t) => t.id === overId)?.status
+    // `over.id` não bateu com nenhuma tarefa nem coluna conhecida — ruído
+    // passageiro de colisão, não "saiu de tudo" (isso já é tratado acima,
+    // quando `over` é `null`). Mantém a barra como estava em vez de apagar,
+    // pra ela não sumir/piscar à toa enquanto o gesto continua válido.
+    if (!overStatus) return
 
-      const overStatus = overId.startsWith('col-')
-        ? (overId.replace('col-', '') as ActionStatus)
-        : prev.find((t) => t.id === overId)?.status
+    const mudaStatus = overStatus !== activeTask.status
+    if (mudaStatus && !isValidMove(activeTask.status, overStatus)) {
+      movimentoBloqueadoRef.current = overStatus
+      setDropIndicator(null)
+      return
+    }
+    movimentoBloqueadoRef.current = null // hover válido corrige um bloqueio anterior
 
-      if (!overStatus || overStatus === atual.status) return prev
+    const destino = ordenarColuna(tasks.filter((t) => t.status === overStatus && t.id !== activeId))
+    const index = computeInsertIndex(event, destino)
 
-      if (!isValidMove(activeTask.status, overStatus)) {
-        movimentoBloqueadoRef.current = overStatus
-        return prev
+    // Voltou pra posição exata de onde saiu (mesma coluna): não mostra barra,
+    // é como se estivesse "devolvida no lugar".
+    if (!mudaStatus) {
+      const posOrigem = ordenarColuna(tasks.filter((t) => t.status === activeTask.status)).findIndex(
+        (t) => t.id === activeId,
+      )
+      if (index === posOrigem) {
+        setDropIndicator(null)
+        return
       }
+    }
 
-      const movedTask = { ...atual, status: overStatus }
-      const outros = prev.filter((t) => t.id !== activeId)
-      const byStatus: Record<ActionStatus, ExtendedActionTask[]> = {
-        PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
-        EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
-        CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
-      }
-      const idx = indiceInsercaoPorPrioridade(byStatus[overStatus], movedTask.prioridade)
-      byStatus[overStatus].splice(idx, 0, movedTask)
-
-      return [
-        ...byStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
-        ...byStatus.EM_ANDAMENTO.map((t, i) => ({ ...t, ordem: i })),
-        ...byStatus.CONCLUIDO.map((t, i) => ({ ...t, ordem: i })),
-      ]
-    })
+    setDropIndicator((prev) =>
+      prev && prev.status === overStatus && prev.index === index ? prev : { status: overStatus, index },
+    )
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
+    const { active } = event
     const original = activeTask // status ORIGINAL, de antes do drag inteiro
+    const indicador = dropIndicator
     setActiveTask(null)
+    setDropIndicator(null)
 
     const bloqueado = movimentoBloqueadoRef.current
     movimentoBloqueadoRef.current = null
@@ -422,17 +580,14 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       toast({ title: 'Movimentação Bloqueada', description: reason, variant: 'destructive' })
     }
 
-    if (!over || !original) return
+    // Sem indicador: soltou fora de qualquer alvo válido, ou voltou pro
+    // lugar de origem sem soltar em outra posição — nada muda.
+    if (!original || !indicador) return
     const activeId = active.id as string
-    const overId = over.id as string
-
-    // Reflete onde o handleDragOver já deixou o card (se cruzou de coluna)
-    // ou onde ele sempre esteve (se só reordenou dentro da mesma).
     const atual = tasks.find((t) => t.id === activeId)
     if (!atual) return
 
-    const mudouStatus = original.status !== atual.status
-    const overTaskId = overId.startsWith('col-') ? null : overId
+    const mudouStatus = original.status !== indicador.status
 
     const outros = tasks.filter((t) => t.id !== activeId)
     const tasksByStatus: Record<ActionStatus, ExtendedActionTask[]> = {
@@ -441,16 +596,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
     }
 
-    // Mudou de status: já entrou no topo do nível de prioridade lá no
-    // handleDragOver — mantém essa posição, ignora onde exatamente foi
-    // solto. Só reordenou DENTRO da mesma coluna: respeita a posição exata.
-    const targetIndex = mudouStatus
-      ? indiceInsercaoPorPrioridade(tasksByStatus[atual.status], atual.prioridade)
-      : overTaskId
-        ? tasksByStatus[atual.status].findIndex((t) => t.id === overTaskId)
-        : tasksByStatus[atual.status].length
-
-    tasksByStatus[atual.status].splice(Math.max(targetIndex, 0), 0, atual)
+    const movedTask = { ...atual, status: indicador.status }
+    const destino = tasksByStatus[indicador.status]
+    destino.splice(Math.min(Math.max(indicador.index, 0), destino.length), 0, movedTask)
 
     const updatedTasks = [
       ...tasksByStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
@@ -461,7 +609,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     setTasks(updatedTasks)
 
     if (mudouStatus) {
-      doMoveStatusApi(activeId, original.status, atual.status, atual)
+      doMoveStatusApi(activeId, original.status, indicador.status, movedTask)
     }
 
     const changedOrders = updatedTasks
@@ -538,7 +686,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
         const criada = await criarAcao({
           titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Ação',
-          prioridade: taskData.priority || taskData.prioridade || 'NORMAL',
+          prioridade: taskData.priority || taskData.prioridade || 'OBSERVACAO',
           categoria: taskData.source || taskData.categoria || 'Outros',
           plano_detalhado: taskData.plano_detalhado || '',
           responsavel: taskData.responsavel ?? null,
@@ -648,7 +796,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={detectarColisao}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -656,6 +804,18 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {columns.map((col) => {
           const colTasks = ordenarColuna(tasks.filter((t) => t.status === col.status))
+          // Card ativo continua na lista real (fica com opacidade baixa no
+          // lugar de origem) — a barra é calculada sobre a lista SEM ele,
+          // que é exatamente como `dropIndicator.index` foi computado.
+          const outrosDaColuna = activeTask
+            ? colTasks.filter((t) => t.id !== activeTask.id)
+            : colTasks
+          const mostraBarra = !!activeTask && dropIndicator?.status === col.status
+          const idAntesDaBarra = mostraBarra
+            ? (outrosDaColuna[dropIndicator!.index]?.id ?? '__fim__')
+            : null
+          const dentroDaJanelaDeDesfazer = !!desfazerOrganizar[col.status]
+          const organizarDesabilitado = !dentroDaJanelaDeDesfazer && jaEstaOrganizada(colTasks)
           return (
             <DroppableColumn
               key={col.status}
@@ -664,50 +824,77 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               count={colTasks.length}
               taskIds={colTasks.map((t) => t.id)}
               acaoCabecalho={
-                col.status === 'PENDENTE' ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-2 text-xs shrink-0 bg-white"
-                    onClick={() => handleOpenModal(col.status)}
-                    title="Adicionar Ação"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Adicionar Ação
-                  </Button>
-                ) : col.status === 'CONCLUIDO' ? (
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-2 text-xs shrink-0 bg-white"
-                    title="Ver ações arquivadas"
-                  >
-                    <Link to="/acoes/arquivadas">
-                      <Archive className="w-3.5 h-3.5 mr-1" />
-                      Arquivadas
-                    </Link>
-                  </Button>
-                ) : undefined
+                <>
+                  {(col.status === 'PENDENTE' || col.status === 'EM_ANDAMENTO') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      onClick={() => handleOrganizar(col.status)}
+                      disabled={organizarDesabilitado}
+                      title={
+                        dentroDaJanelaDeDesfazer
+                          ? 'Desfazer organização'
+                          : organizarDesabilitado
+                            ? 'Coluna já organizada por prioridade'
+                            : 'Organizar por prioridade'
+                      }
+                    >
+                      {dentroDaJanelaDeDesfazer ? (
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      ) : (
+                        <ListOrdered className="w-3.5 h-3.5" />
+                      )}
+                    </Button>
+                  )}
+                  {col.status === 'PENDENTE' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      onClick={() => handleOpenModal(col.status)}
+                      title="Adicionar Ação"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {col.status === 'CONCLUIDO' && (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      title="Ver ações arquivadas"
+                    >
+                      <Link to="/acoes/arquivadas">
+                        <Archive className="w-3.5 h-3.5" />
+                      </Link>
+                    </Button>
+                  )}
+                </>
               }
             >
               {colTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onClick={() => handleOpenModal(col.status, task)}
-                  canUndo={!!undoableTasks[task.id]}
-                  onUndo={() => handleUndo(task.id)}
-                  onArquivar={
-                    task.status === 'CONCLUIDO' ? () => handleArquivar(task.id) : undefined
-                  }
-                  onProgress={() => {
-                    const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
-                    moveTask(task.id, task.status, next)
-                  }}
-                  onPin={(fixado) => handlePin(task.id, fixado)}
-                />
+                <Fragment key={task.id}>
+                  {idAntesDaBarra === task.id && <DropIndicatorBar />}
+                  <TaskCard
+                    task={task}
+                    onClick={() => handleOpenModal(col.status, task)}
+                    onVoltar={
+                      task.status !== 'PENDENTE' ? () => handleVoltar(task.id, task.status) : undefined
+                    }
+                    onArquivar={
+                      task.status === 'CONCLUIDO' ? () => handleArquivar(task.id) : undefined
+                    }
+                    onProgress={() => {
+                      const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
+                      moveTask(task.id, task.status, next)
+                    }}
+                    onPin={(fixado) => handlePin(task.id, fixado)}
+                  />
+                </Fragment>
               ))}
+              {idAntesDaBarra === '__fim__' && <DropIndicatorBar />}
 
               {/* Estado vazio dentro da coluna PENDENTE, sem substituir o quadro */}
               {tasks.length === 0 && col.status === 'PENDENTE' && (

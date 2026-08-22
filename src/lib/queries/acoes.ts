@@ -122,3 +122,17 @@ export async function sugerirAcoesManualmente(restauranteId: number, insightId?:
   if (error) throw error
   return data
 }
+
+/**
+ * Gera (ou expande, se já houver texto) o plano de ação via IA. A edge
+ * function retorna `{ status: 'sucesso', plano_detalhado }` ou, quando não há
+ * contexto suficiente pra gerar algo específico, `{ status: 'contexto_insuficiente', motivo }`
+ * — sem gravar nada no banco nesse segundo caso.
+ */
+export async function gerarPlanoAcao(acaoId: number) {
+  const { data, error } = await supabase.functions.invoke('gerar-plano-acao', {
+    body: { acao_id: acaoId },
+  })
+  if (error) throw error
+  return data
+}
