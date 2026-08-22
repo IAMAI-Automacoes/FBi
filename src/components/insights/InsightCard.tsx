@@ -59,6 +59,15 @@ export function InsightCard({
       className={cn(
         'bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative overflow-hidden',
       )}
+      // `border` (largura 1px em todo o perímetro) vem fixo no componente
+      // `Card` base — testei que `border-l-0` via className NÃO some com ele
+      // de forma confiável (o `border` sobrevive junto no merge do
+      // tailwind-merge, e a ordem das duas classes no CSS gerado decide, o
+      // que é frágil). `style` inline sempre vence sobre classe, sem essa
+      // ambiguidade: zera só a largura da borda esquerda de verdade, então a
+      // faixa colorida (`absolute left-0`) fica rente à borda real do card,
+      // sem fiapo cinza sobrando.
+      style={{ borderLeftWidth: 0 }}
     >
       {/* Faixa de prioridade como camada solta (não `border-l-4` colorido) —
           misturar largura de borda diferente com `rounded-xl` deixa uma

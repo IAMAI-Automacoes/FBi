@@ -78,7 +78,13 @@ export function TaskCard({
         if (!isDragging && !isOverlay && onClick) onClick()
       }}
       className={cn(
-        'relative overflow-hidden bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col',
+        // `border-l-0`: a borda cinza de 1px nos outros lados reservava uma
+        // fatia própria à esquerda TAMBÉM — como a faixa colorida abaixo é
+        // `absolute left-0`, ela nasce por DENTRO dessa borda (não por cima
+        // dela), sobrando um fiapo cinza visível à esquerda da faixa. Sem
+        // largura de borda reservada à esquerda, a faixa fica rente à
+        // borda de verdade do card.
+        'relative overflow-hidden bg-white p-5 rounded-xl border-y border-r border-l-0 border-[#E5E7EB] shadow-sm flex flex-col',
         // `transition-all` durante o arraste anima até o `transform` que o
         // dnd-kit atualiza a cada frame do ponteiro — o card fica "correndo
         // atrás" do cursor em vez de seguir 1:1. Só anima a sombra do hover.
