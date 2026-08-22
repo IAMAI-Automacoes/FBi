@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { DataSegmentada } from '@/components/DataSegmentada'
+import { CalendarDays } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,6 +78,14 @@ export function TaskModal({
   const [prazo, setPrazo] = useState('')
   const [source, setSource] = useState('')
   const [plano, setPlano] = useState('')
+  const [prazoAberto, setPrazoAberto] = useState(false)
+
+  // `prazo` fica como string "yyyy-MM-dd" (mesmo formato que já ia pro banco) —
+  // só converte pra Date na hora de alimentar o calendário/campo segmentado.
+  const prazoData = prazo ? parseISO(prazo) : undefined
+  const definirPrazo = (data: Date | undefined) => {
+    setPrazo(data ? format(data, 'yyyy-MM-dd') : '')
+  }
 
   useEffect(() => {
     if (!open) return
@@ -179,13 +193,38 @@ export function TaskModal({
             <Label htmlFor="deadline" className="font-semibold">
               Prazo
             </Label>
-            <Input
-              id="deadline"
-              type="date"
-              value={prazo}
-              onChange={(e) => setPrazo(e.target.value)}
-              disabled={somenteLeitura}
-            />
+            <Popover open={prazoAberto} onOpenChange={setPrazoAberto}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="deadline"
+                  type="button"
+                  variant="outline"
+                  disabled={somenteLeitura}
+                  className="w-full justify-start font-normal bg-white shadow-sm border-gray-200 h-10"
+                >
+                  <CalendarDays className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
+                  {prazoData
+                    ? format(prazoData, "d 'de' MMM 'de' yyyy", { locale: ptBR })
+                    : 'Selecionar prazo'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={prazoData}
+                  onSelect={(d) => {
+                    definirPrazo(d)
+                    setPrazoAberto(false)
+                  }}
+                  locale={ptBR}
+                  disabled={{ before: new Date() }}
+                />
+                <div className="border-t p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Data selecionada</p>
+                  <DataSegmentada value={prazoData} onChange={definirPrazo} />
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Fora de qualquer condicional: o plano também aparece ao criar uma

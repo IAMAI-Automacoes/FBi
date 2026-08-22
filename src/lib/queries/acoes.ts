@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 
 const CAMPOS_ACAO =
-  'id, titulo_acao, plano_detalhado, status, prioridade, categoria, texto, feedback_id, restaurante_id, created_at, ordem, insight_id, arquivada_em, responsavel, prazo'
+  'id, titulo_acao, plano_detalhado, status, prioridade, categoria, texto, feedback_id, restaurante_id, created_at, ordem, insight_id, arquivada_em, responsavel, prazo, fixado'
 
 export async function buscarAcoes(restauranteId: number, apenasAprovadas = true) {
   const { data, error } = await supabase
@@ -62,6 +62,10 @@ export async function atualizarStatusAcao(acaoId: number, novoStatus: string) {
 
   if (error) throw error
   return data
+}
+
+export async function alternarFixadoAcao(acaoId: number, fixado: boolean) {
+  return atualizarAcao(acaoId, { fixado })
 }
 
 export async function atualizarAcao(acaoId: number, dados: any) {

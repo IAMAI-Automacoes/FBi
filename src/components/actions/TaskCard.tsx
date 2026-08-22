@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { getIniciais } from '@/lib/iniciais'
-import { Progress } from '@/components/ui/progress'
-import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare, Sparkles } from 'lucide-react'
+import { getIniciais, corAvatar } from '@/lib/iniciais'
+import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDraggable } from '@dnd-kit/core'
 import { Button } from '@/components/ui/button'
@@ -19,6 +18,8 @@ interface TaskCardProps {
   onUndo?: () => void
   onArquivar?: () => void
   onDesarquivar?: () => void
+  /** Alterna o card fixado no topo da coluna (por cima da ordenação por prioridade). */
+  onPin?: (fixado: boolean) => void
   canUndo?: boolean
   isOverlay?: boolean
   /** Na página de arquivadas o card não arrasta nem avança de status. */
@@ -32,6 +33,7 @@ export function TaskCard({
   onUndo,
   onArquivar,
   onDesarquivar,
+  onPin,
   canUndo,
   isOverlay,
   somenteLeitura = false,
@@ -50,7 +52,6 @@ export function TaskCard({
       : undefined
 
   const isCompleted = task.status === 'CONCLUIDO'
-  const isOngoing = task.status === 'EM_ANDAMENTO'
 
   // Prazo é `date` no banco; sem prazo mostra a data de criação, como antes.
   const dataExibida = task.prazo
@@ -67,26 +68,47 @@ export function TaskCard({
         if (!isDragging && !isOverlay && onClick) onClick()
       }}
       className={cn(
-        'bg-white p-5 rounded-xl border border-[#E5E7EB] hover:shadow-md transition-all shadow-sm flex flex-col border-l-4',
+        'bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col border-l-4',
+        // `transition-all` durante o arraste anima até o `transform` que o
+        // dnd-kit atualiza a cada frame do ponteiro — o card fica "correndo
+        // atrás" do cursor em vez de seguir 1:1. Só anima a sombra do hover.
+        !isDragging && 'transition-shadow hover:shadow-md',
         estiloPrioridade(task.prioridade).corBorda,
         !isOverlay && !somenteLeitura && 'cursor-grab active:cursor-grabbing',
         // Arquivada não arrasta, mas abre o modal no clique.
         somenteLeitura && onClick && 'cursor-pointer',
         isCompleted && 'opacity-75 bg-slate-50/50',
-        isDragging && !isOverlay && 'opacity-50 ring-2 ring-primary ring-offset-2 z-50 relative',
-        isOverlay && 'rotate-2 shadow-xl scale-105 cursor-grabbing z-50',
+        isDragging && !isOverlay && 'opacity-40 z-50 relative',
+        isOverlay && 'shadow-xl scale-[1.03] cursor-grabbing z-50',
       )}
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 gap-2">
         <span
           className={cn(
             'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
             isCompleted ? 'bg-green-100 text-green-700' : estiloPrioridade(task.prioridade).corSolida,
           )}
         >
-          {isCompleted ? 'CONCLUÍDO' : task.prioridade || 'NORMAL'}
+          {isCompleted ? 'CONCLUÍDO' : estiloPrioridade(task.prioridade).label}
         </span>
-        {isCompleted && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+        <div className="flex items-center gap-1 shrink-0">
+          {isCompleted && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+          {!isOverlay && !somenteLeitura && onPin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onPin(!task.fixado)
+              }}
+              title={task.fixado ? 'Desafixar' : 'Fixar no topo da coluna'}
+              className={cn(
+                'h-6 w-6 flex items-center justify-center rounded transition-colors',
+                task.fixado ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500',
+              )}
+            >
+              <Pin className={cn('w-3.5 h-3.5', task.fixado && 'fill-current')} />
+            </button>
+          )}
+        </div>
       </div>
 
       <h4
@@ -101,8 +123,8 @@ export function TaskCard({
       {/* Só ações que nasceram de um insight (ver TaskBoard) — as criadas
           manualmente pelo botão "Adicionar Ação" não têm insight_id. */}
       {task.insight_id && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-600 mb-2 self-start">
-          <Sparkles className="w-3 h-3" />
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 mb-2 self-start">
+          <Zap className="w-3 h-3" />
           Sugerida pela IA
         </span>
       )}
@@ -137,16 +159,16 @@ export function TaskCard({
         </Link>
       )}
 
-      {isOngoing && task.progress !== undefined && (
-        <div className="mb-4">
-          <Progress value={task.progress} className="h-1.5 bg-blue-100 [&>div]:bg-[#1D4ED8]" />
-        </div>
-      )}
-
       <div className="flex items-center justify-between mt-auto pt-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Avatar className="w-6 h-6 border border-border">
-            <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+            <AvatarFallback
+              className={cn(
+                'text-[10px] font-semibold',
+                corAvatar(task.responsavel).bg,
+                corAvatar(task.responsavel).text,
+              )}
+            >
               {getIniciais(task.responsavel || 'Sem responsável', 2)}
             </AvatarFallback>
           </Avatar>

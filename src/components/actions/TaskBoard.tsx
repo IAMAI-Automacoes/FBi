@@ -16,7 +16,19 @@ import {
   DragOverlay,
   closestCorners,
   useDroppable,
+  defaultDropAnimationSideEffects,
+  type DropAnimation,
 } from '@dnd-kit/core'
+
+// Suave e rápida: sem o "bounce" padrão do dnd-kit, só um fade curto do
+// espaço de origem enquanto o card desliza pro lugar novo.
+const dropAnimationConfig: DropAnimation = {
+  duration: 180,
+  easing: 'cubic-bezier(0.2, 0, 0, 1)',
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: { active: { opacity: '0.4' } },
+  }),
+}
 import {
   buscarAcoes,
   atualizarStatusAcao,
@@ -25,6 +37,7 @@ import {
   excluirAcao,
   atualizarOrdemAcoes,
   arquivarAcao,
+  alternarFixadoAcao,
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
@@ -50,7 +63,37 @@ export type ExtendedActionTask = {
   responsavel?: string | null
   prazo?: string | null
   date?: string
-  progress?: number
+  /** Fixado no topo da coluna, por cima da ordenação automática por prioridade. */
+  fixado?: boolean
+}
+
+/** Peso pra ordenar por prioridade: Urgente > Importante > Observação/Normal/outros. */
+function pesoPrioridade(prioridade?: string | null): number {
+  const v = (prioridade || '').toUpperCase().trim()
+  if (v === 'URGENTE') return 3
+  if (v === 'IMPORTANTE') return 2
+  return 1
+}
+
+/** Ordem de exibição de uma coluna: fixados primeiro (entre si, pela `ordem`),
+ *  depois o resto pela `ordem` — sem re-embaralhar por prioridade aqui, isso
+ *  só acontece na hora de INSERIR um card que muda de status (ver `moveTask`
+ *  e `handleDragEnd`), pra não desfazer um reposicionamento manual do usuário. */
+function ordenarColuna(tasks: ExtendedActionTask[]): ExtendedActionTask[] {
+  return [...tasks].sort((a, b) => {
+    if (!!a.fixado !== !!b.fixado) return a.fixado ? -1 : 1
+    return a.ordem - b.ordem
+  })
+}
+
+/** Índice onde inserir um card que ACABOU de entrar numa coluna (mudou de
+ *  status): no topo do seu nível de prioridade — acima de qualquer card já
+ *  ali com prioridade igual ou menor. Cards fixados são pulados (sempre
+ *  ficam por cima, não fazem parte da disputa por prioridade). */
+function indiceInsercaoPorPrioridade(colunaOrdenada: ExtendedActionTask[], prioridadeNova?: string | null) {
+  const peso = pesoPrioridade(prioridadeNova)
+  const idx = colunaOrdenada.findIndex((t) => !t.fixado && pesoPrioridade(t.prioridade) <= peso)
+  return idx === -1 ? colunaOrdenada.length : idx
 }
 
 function DroppableTask({ task, children }: any) {
@@ -141,8 +184,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           prazo: d.prazo,
           date: new Date(d.created_at).toLocaleDateString(),
           status: d.status as ActionStatus,
-          progress: d.status === 'EM_ANDAMENTO' ? 50 : undefined,
           ordem: d.ordem || 0,
+          fixado: !!d.fixado,
         }))
         mapped.sort((a, b) => a.ordem - b.ordem)
         setTasks(mapped)
@@ -232,16 +275,20 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     let updatedTasks: ExtendedActionTask[] = []
 
     setTasks((prev) => {
-      const newTasks = prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-      const byStatus = {
-        PENDENTE: newTasks.filter((t) => t.status === 'PENDENTE').sort((a, b) => a.ordem - b.ordem),
-        EM_ANDAMENTO: newTasks
-          .filter((t) => t.status === 'EM_ANDAMENTO')
-          .sort((a, b) => a.ordem - b.ordem),
-        CONCLUIDO: newTasks
-          .filter((t) => t.status === 'CONCLUIDO')
-          .sort((a, b) => a.ordem - b.ordem),
+      const atual = prev.find((t) => t.id === taskId)
+      if (!atual) return prev
+      const movedTask = { ...atual, status: newStatus }
+      const outros = prev.filter((t) => t.id !== taskId)
+
+      const byStatus: Record<ActionStatus, ExtendedActionTask[]> = {
+        PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
+        EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
+        CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
       }
+      // Entra no topo do seu nível de prioridade — não junto no fim da lista.
+      const idx = indiceInsercaoPorPrioridade(byStatus[newStatus], movedTask.prioridade)
+      byStatus[newStatus].splice(idx, 0, movedTask)
+
       updatedTasks = [
         ...byStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
         ...byStatus.EM_ANDAMENTO.map((t, i) => ({ ...t, ordem: i })),
@@ -268,16 +315,19 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     let updatedTasks: ExtendedActionTask[] = []
 
     setTasks((prev) => {
-      const newTasks = prev.map((t) => (t.id === taskId ? { ...t, status: oldStatus } : t))
-      const byStatus = {
-        PENDENTE: newTasks.filter((t) => t.status === 'PENDENTE').sort((a, b) => a.ordem - b.ordem),
-        EM_ANDAMENTO: newTasks
-          .filter((t) => t.status === 'EM_ANDAMENTO')
-          .sort((a, b) => a.ordem - b.ordem),
-        CONCLUIDO: newTasks
-          .filter((t) => t.status === 'CONCLUIDO')
-          .sort((a, b) => a.ordem - b.ordem),
+      const atual = prev.find((t) => t.id === taskId)
+      if (!atual) return prev
+      const movedTask = { ...atual, status: oldStatus }
+      const outros = prev.filter((t) => t.id !== taskId)
+
+      const byStatus: Record<ActionStatus, ExtendedActionTask[]> = {
+        PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
+        EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
+        CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
       }
+      const idx = indiceInsercaoPorPrioridade(byStatus[oldStatus], movedTask.prioridade)
+      byStatus[oldStatus].splice(idx, 0, movedTask)
+
       updatedTasks = [
         ...byStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
         ...byStatus.EM_ANDAMENTO.map((t, i) => ({ ...t, ordem: i })),
@@ -321,16 +371,15 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     if (!activeTask) return
 
     let newStatus: ActionStatus
-    let targetIndex = -1
+    let overTaskId: string | null = null
 
     if (overId.startsWith('col-')) {
       newStatus = overId.replace('col-', '') as ActionStatus
-      targetIndex = tasks.filter((t) => t.status === newStatus).length
     } else {
       const overTask = tasks.find((t) => t.id === overId)
       if (!overTask) return
       newStatus = overTask.status
-      targetIndex = tasks.filter((t) => t.status === newStatus).findIndex((t) => t.id === overId)
+      overTaskId = overId
     }
 
     if (activeTask.status !== newStatus) {
@@ -349,23 +398,27 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }
 
     const oldStatus = activeTask.status
+    const mudouStatus = oldStatus !== newStatus
 
-    const newTasks = [...tasks]
-    const [removedTask] = newTasks.splice(
-      newTasks.findIndex((t) => t.id === activeId),
-      1,
-    )
-    removedTask.status = newStatus
+    const outros = tasks.filter((t) => t.id !== activeId)
+    const movedTask = { ...activeTask, status: newStatus }
 
-    const tasksByStatus = {
-      PENDENTE: newTasks.filter((t) => t.status === 'PENDENTE').sort((a, b) => a.ordem - b.ordem),
-      EM_ANDAMENTO: newTasks
-        .filter((t) => t.status === 'EM_ANDAMENTO')
-        .sort((a, b) => a.ordem - b.ordem),
-      CONCLUIDO: newTasks.filter((t) => t.status === 'CONCLUIDO').sort((a, b) => a.ordem - b.ordem),
+    const tasksByStatus: Record<ActionStatus, ExtendedActionTask[]> = {
+      PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
+      EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
+      CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
     }
 
-    tasksByStatus[newStatus].splice(targetIndex, 0, removedTask)
+    // Mudou de status: entra no topo do seu nível de prioridade (não importa
+    // sobre qual card específico foi soltado). Só reordenou DENTRO da mesma
+    // coluna: aí sim respeita a posição exata que o usuário soltou.
+    const targetIndex = mudouStatus
+      ? indiceInsercaoPorPrioridade(tasksByStatus[newStatus], movedTask.prioridade)
+      : overTaskId
+        ? tasksByStatus[newStatus].findIndex((t) => t.id === overTaskId)
+        : tasksByStatus[newStatus].length
+
+    tasksByStatus[newStatus].splice(targetIndex, 0, movedTask)
 
     const updatedTasks = [
       ...tasksByStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
@@ -375,7 +428,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
     setTasks(updatedTasks)
 
-    if (oldStatus !== newStatus) {
+    if (mudouStatus) {
       doMoveStatusApi(activeId, oldStatus, newStatus, activeTask)
     }
 
@@ -463,6 +516,16 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }
   }
 
+  const handlePin = async (taskId: string, fixado: boolean) => {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, fixado } : t)))
+    try {
+      await alternarFixadoAcao(parseInt(taskId), fixado)
+    } catch {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, fixado: !fixado } : t)))
+      toast({ title: 'Erro', description: 'Falha ao fixar a ação', variant: 'destructive' })
+    }
+  }
+
   const columns: { title: string; status: ActionStatus }[] = [
     { title: 'PENDENTE', status: 'PENDENTE' },
     { title: 'EM ANDAMENTO', status: 'EM_ANDAMENTO' },
@@ -520,7 +583,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     >
       <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {columns.map((col) => {
-          const colTasks = tasks.filter((t) => t.status === col.status)
+          const colTasks = ordenarColuna(tasks.filter((t) => t.status === col.status))
           return (
             <DroppableColumn
               key={col.status}
@@ -569,6 +632,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                       const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
                       moveTask(task.id, task.status, next)
                     }}
+                    onPin={(fixado) => handlePin(task.id, fixado)}
                   />
                 </DroppableTask>
               ))}
@@ -592,7 +656,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           )
         })}
 
-        <DragOverlay>{activeTask ? <TaskCard task={activeTask} isOverlay /> : null}</DragOverlay>
+        <DragOverlay dropAnimation={dropAnimationConfig}>
+          {activeTask ? <TaskCard task={activeTask} isOverlay /> : null}
+        </DragOverlay>
 
         {modalOpen && (
           <TaskModal
