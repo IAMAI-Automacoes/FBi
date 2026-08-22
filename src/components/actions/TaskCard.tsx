@@ -78,12 +78,11 @@ export function TaskCard({
         if (!isDragging && !isOverlay && onClick) onClick()
       }}
       className={cn(
-        'bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col border-l-4',
+        'relative overflow-hidden bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-sm flex flex-col',
         // `transition-all` durante o arraste anima até o `transform` que o
         // dnd-kit atualiza a cada frame do ponteiro — o card fica "correndo
         // atrás" do cursor em vez de seguir 1:1. Só anima a sombra do hover.
         !isDragging && 'transition-shadow hover:shadow-md',
-        estiloPrioridade(task.prioridade).corBorda,
         !isOverlay && !somenteLeitura && 'cursor-grab active:cursor-grabbing',
         // Arquivada não arrasta, mas abre o modal no clique.
         somenteLeitura && onClick && 'cursor-pointer',
@@ -92,6 +91,15 @@ export function TaskCard({
         isOverlay && 'shadow-xl scale-[1.03] cursor-grabbing z-50',
       )}
     >
+      {/* Faixa de prioridade como camada solta (não `border-l-4` colorido) —
+          misturar largura de borda diferente (1px nas outras bordas, 4px
+          nesta) com `rounded-xl` faz o navegador deixar uma frestinha no
+          canto arredondado, mostrando o cinza do fundo da página por trás
+          (o "risco cinza do lado da borda" que apareceu no print). Uma
+          camada `absolute` + `overflow-hidden` no card evita esse problema:
+          ela é sempre cortada exatamente no contorno arredondado do card. */}
+      <div className={cn('absolute inset-y-0 left-0 w-1', estiloPrioridade(task.prioridade).corSolida)} />
+
       <div className="flex items-start justify-between mb-3 gap-2">
         <span
           className={cn(

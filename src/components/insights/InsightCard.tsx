@@ -57,10 +57,16 @@ export function InsightCard({
   return (
     <Card
       className={cn(
-        'bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative border-l-4',
-        config.corBorda,
+        'bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative overflow-hidden',
       )}
     >
+      {/* Faixa de prioridade como camada solta (não `border-l-4` colorido) —
+          misturar largura de borda diferente com `rounded-xl` deixa uma
+          frestinha no canto arredondado, mostrando o fundo da página por
+          trás. `overflow-hidden` no Card corta esta camada exatamente no
+          contorno arredondado, sem esse risco. */}
+      <div className={cn('absolute inset-y-0 left-0 w-1 z-10', config.corSolida)} />
+
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
