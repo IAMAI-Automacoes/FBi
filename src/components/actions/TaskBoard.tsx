@@ -74,7 +74,7 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
           nome do status e contador soltos, sem borda em volta. */}
       <div className="flex items-center gap-2 mb-3 px-1">
         <h3 className={cn('font-semibold text-sm tracking-wide', cor.corTexto)}>{title}</h3>
-        <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', cor.corFundo, cor.corTexto)}>
+        <span className={cn('text-xs font-bold px-2 py-0.5 rounded-md', cor.corSolida)}>
           {count}
         </span>
         <div className="flex-1" />

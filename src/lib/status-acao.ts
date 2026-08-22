@@ -9,6 +9,8 @@ export type StatusAcao = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
 export interface EstiloStatus {
   corTexto: string
   corFundo: string
+  /** Cardzinho cheio (fundo sólido + texto branco) — usado no contador do cabeçalho. */
+  corSolida: string
   label: string
 }
 
@@ -16,16 +18,19 @@ const ESTILOS: Record<StatusAcao, EstiloStatus> = {
   PENDENTE: {
     corTexto: 'text-[#6B7280]',
     corFundo: 'bg-gray-200',
+    corSolida: 'bg-[#6B7280] text-white',
     label: 'PENDENTE',
   },
   EM_ANDAMENTO: {
     corTexto: 'text-[#1D4ED8]',
     corFundo: 'bg-blue-100',
+    corSolida: 'bg-[#1D4ED8] text-white',
     label: 'EM ANDAMENTO',
   },
   CONCLUIDO: {
     corTexto: 'text-[#16A34A]',
     corFundo: 'bg-green-100',
+    corSolida: 'bg-[#16A34A] text-white',
     label: 'CONCLUÍDO',
   },
 }
