@@ -76,7 +76,7 @@ export function InsightCard({
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
-            className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded border border-red-400 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors z-10"
+            className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors z-10"
             title="Excluir insight"
           >
             <Trash2 className="h-4 w-4" />
@@ -101,7 +101,7 @@ export function InsightCard({
         </AlertDialogContent>
       </AlertDialog>
 
-      <CardHeader className="pb-3 space-y-3 pr-12">
+      <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-2 pr-11">
         <div>
           <Badge
             variant="secondary"
@@ -119,14 +119,16 @@ export function InsightCard({
           {insight.titulo}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pb-4 flex-1 space-y-4">
-        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2">{insight.descricao}</p>
-        <div className="flex items-start gap-2 text-sm text-[#1D4ED8] font-medium bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
-          <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{insight.sugestao}</span>
+      <CardContent className="px-4 sm:px-5 pb-3 flex-1 space-y-3">
+        <p className="text-sm text-gray-600 leading-snug line-clamp-2">{insight.descricao}</p>
+        <div className="flex items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1D4ED8] shrink-0">
+            <Lightbulb className="h-3.5 w-3.5 text-white" />
+          </span>
+          <span className="mt-0.5">{insight.sugestao}</span>
         </div>
       </CardContent>
-      <CardFooter className="pt-0 pb-4 px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-gray-300 mt-auto pt-4">
+      <CardFooter className="px-4 sm:px-5 pb-4 pt-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-gray-300 mt-auto">
         {temFeedbacksLigados ? (
           <Link
             to={`/feedbacks?insight_id=${insight.id}`}
