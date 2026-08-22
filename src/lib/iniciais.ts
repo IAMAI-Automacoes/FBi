@@ -26,14 +26,14 @@ export function getIniciais(texto?: string | null, max = 2): string {
  *  (hash do nome), pra diferenciar responsáveis num relance sem precisar
  *  ler o nome inteiro. */
 const CORES_AVATAR = [
-  { bg: 'bg-blue-100', text: 'text-blue-700' },
-  { bg: 'bg-violet-100', text: 'text-violet-700' },
-  { bg: 'bg-pink-100', text: 'text-pink-700' },
-  { bg: 'bg-cyan-100', text: 'text-cyan-700' },
-  { bg: 'bg-indigo-100', text: 'text-indigo-700' },
-  { bg: 'bg-teal-100', text: 'text-teal-700' },
-  { bg: 'bg-orange-100', text: 'text-orange-700' },
-  { bg: 'bg-fuchsia-100', text: 'text-fuchsia-700' },
+  { bg: 'bg-blue-500', text: 'text-white' },
+  { bg: 'bg-violet-500', text: 'text-white' },
+  { bg: 'bg-pink-500', text: 'text-white' },
+  { bg: 'bg-cyan-600', text: 'text-white' },
+  { bg: 'bg-indigo-500', text: 'text-white' },
+  { bg: 'bg-teal-600', text: 'text-white' },
+  { bg: 'bg-orange-500', text: 'text-white' },
+  { bg: 'bg-fuchsia-500', text: 'text-white' },
 ]
 
 export function corAvatar(texto?: string | null): { bg: string; text: string } {

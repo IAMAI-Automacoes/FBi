@@ -2,7 +2,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { CheckCircle2, ArrowRight, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useDraggable } from '@dnd-kit/core'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
@@ -38,16 +39,22 @@ export function TaskCard({
   isOverlay,
   somenteLeitura = false,
 }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // `useSortable` (não o `useDraggable` puro) é o que faz as outras ações da
+  // coluna abrirem espaço suavemente enquanto esta é arrastada por cima —
+  // isso É o indicador visual de "vai entrar aqui", sem precisar desenhar
+  // uma linha à parte. O id da versão do DragOverlay é só pra não colidir
+  // com o card real, que continua montado (só fica com opacidade baixa).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: isOverlay ? `overlay-${task.id}` : task.id.toString(),
     data: { task },
     disabled: somenteLeitura,
   })
 
   const style =
-    transform && !isOverlay
+    !isOverlay
       ? {
-          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+          transform: CSS.Transform.toString(transform),
+          transition,
         }
       : undefined
 
@@ -102,7 +109,7 @@ export function TaskCard({
               title={task.fixado ? 'Desafixar' : 'Fixar no topo da coluna'}
               className={cn(
                 'h-6 w-6 flex items-center justify-center rounded transition-colors',
-                task.fixado ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500',
+                task.fixado ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700',
               )}
             >
               <Pin className={cn('w-3.5 h-3.5', task.fixado && 'fill-current')} />
@@ -120,9 +127,11 @@ export function TaskCard({
         {task.titulo_acao}
       </h4>
 
-      {/* Só ações que nasceram de um insight (ver TaskBoard) — as criadas
-          manualmente pelo botão "Adicionar Ação" não têm insight_id. */}
-      {task.insight_id && (
+      {/* `texto` (não `insight_id`!) é o sinal confiável de "veio da IA": a
+          edge function `sugerir-acoes` sempre grava esse texto padrão nela,
+          mesmo quando não consegue casar o insight_id que a IA citou (nesse
+          caso ele grava null) — ações criadas manualmente nunca têm `texto`. */}
+      {task.texto && (
         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 mb-2 self-start">
           <Zap className="w-3 h-3" />
           Sugerida pela IA

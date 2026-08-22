@@ -10,6 +10,7 @@ import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
+  DragOverEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -19,6 +20,7 @@ import {
   defaultDropAnimationSideEffects,
   type DropAnimation,
 } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
 // Suave e rápida: sem o "bounce" padrão do dnd-kit, só um fade curto do
 // espaço de origem enquanto o card desliza pro lugar novo.
@@ -96,19 +98,10 @@ function indiceInsercaoPorPrioridade(colunaOrdenada: ExtendedActionTask[], prior
   return idx === -1 ? colunaOrdenada.length : idx
 }
 
-function DroppableTask({ task, children }: any) {
-  const { setNodeRef, isOver } = useDroppable({ id: task.id })
-  return (
-    <div
-      ref={setNodeRef}
-      className={isOver ? 'opacity-50 ring-2 ring-primary rounded-xl transition-all' : ''}
-    >
-      {children}
-    </div>
-  )
-}
-
-function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
+function DroppableColumn({ id, title, count, taskIds, children, acaoCabecalho }: any) {
+  // `useDroppable` aqui cobre soltar na área vazia da coluna (sem card
+  // nenhum perto) — o reordenar/entrar por cima de um card específico é o
+  // `useSortable` de cada `TaskCard`, coordenado por este `SortableContext`.
   const { isOver, setNodeRef } = useDroppable({ id: `col-${id}` })
   const cor = estiloStatus(id)
   return (
@@ -130,7 +123,9 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
           isOver && 'bg-slate-100/70 ring-2 ring-primary/20',
         )}
       >
-        {children}
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {children}
+        </SortableContext>
       </div>
     </div>
   )
@@ -222,6 +217,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const isValidMove = (from: ActionStatus, to: ActionStatus) => {
     if (from === 'PENDENTE' && to === 'EM_ANDAMENTO') return true
     if (from === 'EM_ANDAMENTO' && to === 'CONCLUIDO') return true
+    // Voltar uma etapa (Em Andamento → Pendente) pode ser feito arrastando
+    // direto — só CONCLUÍDO que continua exigindo o botão "Desfazer".
+    if (from === 'EM_ANDAMENTO' && to === 'PENDENTE') return true
     return false
   }
 
@@ -355,70 +353,104 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
     const task = tasks.find((t) => t.id === active.id)
-    if (task) setActiveTask(task)
+    if (task) setActiveTask(task) // snapshot do status ORIGINAL, antes de qualquer coisa mudar
+  }
+
+  /** Motivo do bloqueio, setado durante o drag (ver handleDragOver) e
+   *  consumido/limpo no handleDragEnd — pra avisar só uma vez, na soltada. */
+  const movimentoBloqueadoRef = useRef<string | null>(null)
+
+  /** Enquanto arrasta: se cruzar pra uma coluna DIFERENTE da que o card está
+   *  agora, já muda o status localmente (sem chamar a API ainda) e insere no
+   *  topo do nível de prioridade — é isso que faz a coluna de destino abrir
+   *  espaço em tempo real, na posição final de verdade (sem "pulo" ao soltar).
+   *  Reordenar dentro da MESMA coluna não mexe em nada aqui: fica só o
+   *  preview visual do próprio dnd-kit até soltar de vez. */
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || !activeTask) return
+    const activeId = active.id as string
+    const overId = over.id as string
+    if (activeId === overId) return
+
+    setTasks((prev) => {
+      const atual = prev.find((t) => t.id === activeId)
+      if (!atual) return prev
+
+      const overStatus = overId.startsWith('col-')
+        ? (overId.replace('col-', '') as ActionStatus)
+        : prev.find((t) => t.id === overId)?.status
+
+      if (!overStatus || overStatus === atual.status) return prev
+
+      if (!isValidMove(activeTask.status, overStatus)) {
+        movimentoBloqueadoRef.current = overStatus
+        return prev
+      }
+
+      const movedTask = { ...atual, status: overStatus }
+      const outros = prev.filter((t) => t.id !== activeId)
+      const byStatus: Record<ActionStatus, ExtendedActionTask[]> = {
+        PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
+        EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
+        CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
+      }
+      const idx = indiceInsercaoPorPrioridade(byStatus[overStatus], movedTask.prioridade)
+      byStatus[overStatus].splice(idx, 0, movedTask)
+
+      return [
+        ...byStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
+        ...byStatus.EM_ANDAMENTO.map((t, i) => ({ ...t, ordem: i })),
+        ...byStatus.CONCLUIDO.map((t, i) => ({ ...t, ordem: i })),
+      ]
+    })
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
+    const original = activeTask // status ORIGINAL, de antes do drag inteiro
     setActiveTask(null)
 
-    if (!over) return
+    const bloqueado = movimentoBloqueadoRef.current
+    movimentoBloqueadoRef.current = null
+    if (bloqueado) {
+      let reason = 'Movimento inválido.'
+      if (original?.status === 'CONCLUIDO')
+        reason = 'Não é possível retornar tarefas concluídas arrastando. Use o botão "Desfazer".'
+      else if (original?.status === 'PENDENTE' && bloqueado === 'CONCLUIDO')
+        reason = 'Você não pode pular etapas. Mova para "Em Andamento" primeiro.'
+      toast({ title: 'Movimentação Bloqueada', description: reason, variant: 'destructive' })
+    }
+
+    if (!over || !original) return
     const activeId = active.id as string
     const overId = over.id as string
 
-    const activeTaskIndex = tasks.findIndex((t) => t.id === activeId)
-    const activeTask = tasks[activeTaskIndex]
-    if (!activeTask) return
+    // Reflete onde o handleDragOver já deixou o card (se cruzou de coluna)
+    // ou onde ele sempre esteve (se só reordenou dentro da mesma).
+    const atual = tasks.find((t) => t.id === activeId)
+    if (!atual) return
 
-    let newStatus: ActionStatus
-    let overTaskId: string | null = null
-
-    if (overId.startsWith('col-')) {
-      newStatus = overId.replace('col-', '') as ActionStatus
-    } else {
-      const overTask = tasks.find((t) => t.id === overId)
-      if (!overTask) return
-      newStatus = overTask.status
-      overTaskId = overId
-    }
-
-    if (activeTask.status !== newStatus) {
-      if (!isValidMove(activeTask.status, newStatus)) {
-        let reason = 'Movimento inválido.'
-        if (activeTask.status === 'CONCLUIDO')
-          reason = 'Não é possível retornar tarefas concluídas.'
-        else if (newStatus === 'PENDENTE')
-          reason = 'Não é possível retroceder etapas manualmente. Use o botão "Desfazer".'
-        else if (activeTask.status === 'PENDENTE' && newStatus === 'CONCLUIDO')
-          reason = 'Você não pode pular etapas. Mova para "Em Andamento" primeiro.'
-
-        toast({ title: 'Movimentação Bloqueada', description: reason, variant: 'destructive' })
-        return
-      }
-    }
-
-    const oldStatus = activeTask.status
-    const mudouStatus = oldStatus !== newStatus
+    const mudouStatus = original.status !== atual.status
+    const overTaskId = overId.startsWith('col-') ? null : overId
 
     const outros = tasks.filter((t) => t.id !== activeId)
-    const movedTask = { ...activeTask, status: newStatus }
-
     const tasksByStatus: Record<ActionStatus, ExtendedActionTask[]> = {
       PENDENTE: ordenarColuna(outros.filter((t) => t.status === 'PENDENTE')),
       EM_ANDAMENTO: ordenarColuna(outros.filter((t) => t.status === 'EM_ANDAMENTO')),
       CONCLUIDO: ordenarColuna(outros.filter((t) => t.status === 'CONCLUIDO')),
     }
 
-    // Mudou de status: entra no topo do seu nível de prioridade (não importa
-    // sobre qual card específico foi soltado). Só reordenou DENTRO da mesma
-    // coluna: aí sim respeita a posição exata que o usuário soltou.
+    // Mudou de status: já entrou no topo do nível de prioridade lá no
+    // handleDragOver — mantém essa posição, ignora onde exatamente foi
+    // solto. Só reordenou DENTRO da mesma coluna: respeita a posição exata.
     const targetIndex = mudouStatus
-      ? indiceInsercaoPorPrioridade(tasksByStatus[newStatus], movedTask.prioridade)
+      ? indiceInsercaoPorPrioridade(tasksByStatus[atual.status], atual.prioridade)
       : overTaskId
-        ? tasksByStatus[newStatus].findIndex((t) => t.id === overTaskId)
-        : tasksByStatus[newStatus].length
+        ? tasksByStatus[atual.status].findIndex((t) => t.id === overTaskId)
+        : tasksByStatus[atual.status].length
 
-    tasksByStatus[newStatus].splice(targetIndex, 0, movedTask)
+    tasksByStatus[atual.status].splice(Math.max(targetIndex, 0), 0, atual)
 
     const updatedTasks = [
       ...tasksByStatus.PENDENTE.map((t, i) => ({ ...t, ordem: i })),
@@ -429,7 +461,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     setTasks(updatedTasks)
 
     if (mudouStatus) {
-      doMoveStatusApi(activeId, oldStatus, newStatus, activeTask)
+      doMoveStatusApi(activeId, original.status, atual.status, atual)
     }
 
     const changedOrders = updatedTasks
@@ -579,6 +611,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
@@ -590,6 +623,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               id={col.status}
               title={col.title}
               count={colTasks.length}
+              taskIds={colTasks.map((t) => t.id)}
               acaoCabecalho={
                 col.status === 'PENDENTE' ? (
                   <Button
@@ -619,22 +653,21 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               }
             >
               {colTasks.map((task) => (
-                <DroppableTask key={task.id} task={task}>
-                  <TaskCard
-                    task={task}
-                    onClick={() => handleOpenModal(col.status, task)}
-                    canUndo={!!undoableTasks[task.id]}
-                    onUndo={() => handleUndo(task.id)}
-                    onArquivar={
-                      task.status === 'CONCLUIDO' ? () => handleArquivar(task.id) : undefined
-                    }
-                    onProgress={() => {
-                      const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
-                      moveTask(task.id, task.status, next)
-                    }}
-                    onPin={(fixado) => handlePin(task.id, fixado)}
-                  />
-                </DroppableTask>
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onClick={() => handleOpenModal(col.status, task)}
+                  canUndo={!!undoableTasks[task.id]}
+                  onUndo={() => handleUndo(task.id)}
+                  onArquivar={
+                    task.status === 'CONCLUIDO' ? () => handleArquivar(task.id) : undefined
+                  }
+                  onProgress={() => {
+                    const next = task.status === 'PENDENTE' ? 'EM_ANDAMENTO' : 'CONCLUIDO'
+                    moveTask(task.id, task.status, next)
+                  }}
+                  onPin={(fixado) => handlePin(task.id, fixado)}
+                />
               ))}
 
               {/* Estado vazio dentro da coluna PENDENTE, sem substituir o quadro */}
