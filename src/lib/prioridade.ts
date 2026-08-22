@@ -40,12 +40,14 @@ const ESTILOS: Record<Prioridade, EstiloPrioridade> = {
   },
   // "Observação" que é elogio — não existe como prioridade própria no banco
   // (ver `ehElogio()` em InsightCard.tsx), só usada nos cards de insight.
+  // Rótulo PRÓPRIO ("ELOGIO", não "OBSERVAÇÃO") de propósito: duas cores pro
+  // mesmo texto parecia bug — com nomes diferentes, cada cor tem seu rótulo.
   ELOGIO: {
     corTexto: 'text-[#22C55E]',
     corFundo: 'bg-green-100',
     corBorda: 'border-[#22C55E]',
     corSolida: 'bg-[#22C55E] text-white',
-    label: 'OBSERVAÇÃO',
+    label: 'ELOGIO',
   },
 }
 
