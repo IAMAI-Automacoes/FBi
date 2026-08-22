@@ -69,13 +69,10 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${id}` })
   const cor = estiloStatus(id)
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col w-full min-w-0 bg-slate-50/50 rounded-xl border border-border p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
-    >
-      {/* O cabeçalho fica FORA da área rolável, então o botão da coluna
-          continua visível por mais que a lista de cards role. */}
-      <div className="flex items-center gap-2 mb-4">
+    <div className="flex flex-col w-full min-w-0">
+      {/* Cabeçalho fica FORA da caixa dos cards, direto no fundo da página —
+          nome do status e contador soltos, sem borda em volta. */}
+      <div className="flex items-center gap-2 mb-3 px-1">
         <h3 className={cn('font-semibold text-sm tracking-wide', cor.corTexto)}>{title}</h3>
         <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', cor.corFundo, cor.corTexto)}>
           {count}
@@ -83,7 +80,13 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
         <div className="flex-1" />
         {acaoCabecalho}
       </div>
-      <div className="flex flex-col gap-3 flex-1 overflow-y-auto min-h-[150px]">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'flex flex-col gap-3 flex-1 overflow-y-auto min-h-[150px] rounded-xl transition-colors p-1',
+          isOver && 'bg-slate-100/70 ring-2 ring-primary/20',
+        )}
+      >
         {children}
       </div>
     </div>
@@ -470,11 +473,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     return (
       <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="flex flex-col w-full min-w-0 bg-slate-50/50 rounded-xl border border-border p-4"
-          >
-            <div className="flex items-center gap-2 mb-4">
+          <div key={i} className="flex flex-col w-full min-w-0">
+            <div className="flex items-center gap-2 mb-3 px-1">
               <Skeleton className="h-5 w-24" />
               <Skeleton className="h-5 w-6 rounded-full" />
             </div>
