@@ -68,7 +68,7 @@ function DroppableColumn({ id, title, count, children, acaoCabecalho }: any) {
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
+      className={`flex flex-col w-full min-w-0 bg-slate-50/50 rounded-xl border border-border p-4 transition-colors ${isOver ? 'bg-slate-100 border-primary/30' : ''}`}
     >
       {/* O cabeçalho fica FORA da área rolável, então o botão da coluna
           continua visível por mais que a lista de cards role. */}
@@ -465,11 +465,11 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px] overflow-x-auto pb-4">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 h-full min-h-[600px] pb-4">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="flex flex-col w-full md:flex-1 min-w-[320px] bg-slate-50/50 rounded-xl border border-border p-4"
+            className="flex flex-col w-full min-w-0 bg-slate-50/50 rounded-xl border border-border p-4"
           >
             <div className="flex items-center gap-2 mb-4">
               <Skeleton className="h-5 w-24" />
@@ -515,7 +515,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px] overflow-x-auto pb-4">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 h-full min-h-[600px] pb-4">
         {columns.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.status)
           return (
