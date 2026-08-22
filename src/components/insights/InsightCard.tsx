@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Link } from 'react-router-dom'
 import type { Insight } from '@/lib/tipos/insight'
+import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
 
 interface InsightCardProps {
   insight: Insight
@@ -26,25 +27,12 @@ interface InsightCardProps {
   criandoAcao?: boolean
 }
 
-interface EstiloPrioridade {
-  bg: string
-  text: string
-  border: string
-  label: string
-}
-
-const priorityConfig: Record<string, EstiloPrioridade> = {
-  URGENTE: { bg: 'bg-[#FEF2F2]', text: 'text-[#EF4444]', border: 'border-l-[#EF4444]', label: 'URGENTE' },
-  IMPORTANTE: { bg: 'bg-[#FFF7ED]', text: 'text-[#F59E0B]', border: 'border-l-[#F59E0B]', label: 'IMPORTANTE' },
-  OBSERVAÇÃO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', border: 'border-l-[#9CA3AF]', label: 'OBSERVAÇÃO' },
-  OBSERVACAO: { bg: 'bg-[#F3F4F6]', text: 'text-[#6B7280]', border: 'border-l-[#9CA3AF]', label: 'OBSERVAÇÃO' },
-  // "OBSERVAÇÃO" que é elogio (não existe como prioridade própria no banco —
-  // "elogio sem ação imediata" já cai dentro de OBSERVACAO pelo prompt da IA).
-  // Detectado por palavra-chave no título/descrição, ver `ehElogio()` abaixo.
-  ELOGIO: { bg: 'bg-[#F0FDF4]', text: 'text-[#22C55E]', border: 'border-l-[#22C55E]', label: 'OBSERVAÇÃO' },
-}
-
-/** Ver comentário em `ELOGIO` acima — mesma palavra que a IA usa pra gerar esses títulos. */
+/**
+ * "Observação" que é elogio (não existe como prioridade própria no banco —
+ * "elogio sem ação imediata" já cai dentro de OBSERVACAO pelo prompt da IA).
+ * Detectado por palavra-chave no título/descrição — mesma palavra que a IA
+ * usa pra gerar esses títulos.
+ */
 function ehElogio(insight: Insight): boolean {
   const texto = `${insight.titulo ?? ''} ${insight.descricao ?? ''}`.toLowerCase()
   return texto.includes('elogi')
@@ -59,7 +47,7 @@ export function InsightCard({
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
   const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && ehElogio(insight)
-  const config = (ehObservacaoElogio ? priorityConfig['ELOGIO'] : priorityConfig[prio]) || priorityConfig['OBSERVACAO']
+  const config = ehObservacaoElogio ? PRIORIDADES.ELOGIO : estiloPrioridade(prio)
 
   // Insights gerados antes da ligação por IDs têm `feedback_ids` vazio: não há
   // para onde navegar, então o contador vira texto simples em vez de link morto.
@@ -70,7 +58,7 @@ export function InsightCard({
     <Card
       className={cn(
         'bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow duration-200 h-full relative border-l-4',
-        config.border,
+        config.corBorda,
       )}
     >
       <AlertDialog>
@@ -107,8 +95,8 @@ export function InsightCard({
             variant="secondary"
             className={cn(
               'text-[10px] font-bold tracking-wider rounded-full px-2.5 py-0.5',
-              config.bg,
-              config.text,
+              config.corFundo,
+              config.corTexto,
               'hover:bg-opacity-80 border-none',
             )}
           >

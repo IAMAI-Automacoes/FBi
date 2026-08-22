@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { estiloPrioridade } from '@/lib/prioridade'
 
 interface TaskCardProps {
   // Linha de `acoes_operacionais` com apelidos do quadro; tipar por completo
@@ -48,19 +49,6 @@ export function TaskCard({
         }
       : undefined
 
-  const getPriorityStyle = (prioridade: string) => {
-    switch (prioridade?.toUpperCase()) {
-      case 'URGENTE':
-        return 'bg-[#EF4444] text-white'
-      case 'IMPORTANTE':
-        return 'bg-[#F59E0B] text-white'
-      case 'NORMAL':
-        return 'bg-[#F3F4F6] text-[#1F2937]'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
   const isCompleted = task.status === 'CONCLUIDO'
   const isOngoing = task.status === 'EM_ANDAMENTO'
 
@@ -92,7 +80,7 @@ export function TaskCard({
         <span
           className={cn(
             'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
-            isCompleted ? 'bg-green-100 text-green-700' : getPriorityStyle(task.prioridade),
+            isCompleted ? 'bg-green-100 text-green-700' : estiloPrioridade(task.prioridade).corSolida,
           )}
         >
           {isCompleted ? 'CONCLUÍDO' : task.prioridade || 'NORMAL'}

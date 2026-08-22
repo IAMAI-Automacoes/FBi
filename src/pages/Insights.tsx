@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
 import { buscarCategoriasAtivas } from '@/lib/queries/feedbacks'
+import { PRIORIDADES } from '@/lib/prioridade'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
@@ -253,6 +254,8 @@ export default function Insights() {
     topoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [filterPriority, filterCategories])
 
+  // Mesma cor de cada prioridade usada nos cards de insight (ver `@/lib/prioridade`)
+  // — "Todos" é o único que não é uma prioridade real, fica com o azul do app.
   const priorities = [
     {
       label: 'Todos',
@@ -263,20 +266,20 @@ export default function Insights() {
     {
       label: 'Urgente',
       value: 'URGENTE',
-      colors: 'text-[#EF4444]',
-      activeClass: 'border-[#EF4444] bg-red-50/50',
+      colors: PRIORIDADES.URGENTE.corTexto,
+      activeClass: cn(PRIORIDADES.URGENTE.corBorda, PRIORIDADES.URGENTE.corFundo),
     },
     {
       label: 'Importante',
       value: 'IMPORTANTE',
-      colors: 'text-[#F59E0B]',
-      activeClass: 'border-[#F59E0B] bg-orange-50/50',
+      colors: PRIORIDADES.IMPORTANTE.corTexto,
+      activeClass: cn(PRIORIDADES.IMPORTANTE.corBorda, PRIORIDADES.IMPORTANTE.corFundo),
     },
     {
       label: 'Observação',
       value: 'OBSERVAÇÃO',
-      colors: 'text-[#6B7280]',
-      activeClass: 'border-[#6B7280] bg-gray-50',
+      colors: PRIORIDADES.OBSERVACAO.corTexto,
+      activeClass: cn(PRIORIDADES.OBSERVACAO.corBorda, PRIORIDADES.OBSERVACAO.corFundo),
     },
   ]
 
