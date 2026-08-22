@@ -502,7 +502,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const handleSaveTask = async (taskData: any) => {
     try {
       if (editingTask) {
-        await atualizarAcao(parseInt(editingTask.id), {
+        const atualizada = await atualizarAcao(parseInt(editingTask.id), {
           titulo_acao: taskData.title || taskData.titulo_acao,
           prioridade: taskData.priority || taskData.prioridade,
           categoria: taskData.source || taskData.categoria,
@@ -512,13 +512,31 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           responsavel: taskData.responsavel ?? null,
           prazo: taskData.prazo ?? null,
         })
+        // Atualiza só o card em memória — recarregar tudo do banco (`load()`)
+        // troca a tela inteira por esqueleto de carregamento por um instante,
+        // um "pisca" que não faz sentido pra uma edição pontual.
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === editingTask.id
+              ? {
+                  ...t,
+                  titulo_acao: atualizada.titulo_acao,
+                  prioridade: atualizada.prioridade,
+                  categoria: atualizada.categoria,
+                  plano_detalhado: atualizada.plano_detalhado,
+                  responsavel: atualizada.responsavel,
+                  prazo: atualizada.prazo,
+                }
+              : t,
+          ),
+        )
         toast({ title: 'Ação atualizada' })
       } else {
         const currentPendente = tasks.filter((t) => t.status === 'PENDENTE')
         const maxOrdem =
           currentPendente.length > 0 ? Math.max(...currentPendente.map((t) => t.ordem)) : -1
 
-        await criarAcao({
+        const criada = await criarAcao({
           titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Ação',
           prioridade: taskData.priority || taskData.prioridade || 'NORMAL',
           categoria: taskData.source || taskData.categoria || 'Outros',
@@ -529,9 +547,30 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           restaurante_id: usuario?.restaurante_id,
           ordem: maxOrdem + 1,
         })
+        setTasks((prev) => [
+          ...prev,
+          {
+            id: criada.id.toString(),
+            titulo_acao: criada.titulo_acao || 'Sem título',
+            prioridade: criada.prioridade || 'NORMAL',
+            categoria: criada.categoria || 'Outros',
+            plano_detalhado: criada.plano_detalhado || undefined,
+            texto: criada.texto || undefined,
+            feedback_id: criada.feedback_id,
+            restaurante_id: criada.restaurante_id,
+            created_at: criada.created_at,
+            insight_id: criada.insight_id,
+            arquivada_em: criada.arquivada_em,
+            responsavel: criada.responsavel,
+            prazo: criada.prazo,
+            date: new Date(criada.created_at).toLocaleDateString(),
+            status: criada.status as ActionStatus,
+            ordem: criada.ordem || 0,
+            fixado: !!criada.fixado,
+          },
+        ])
         toast({ title: 'Ação criada' })
       }
-      load()
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao salvar ação', variant: 'destructive' })
     }

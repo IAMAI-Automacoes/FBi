@@ -89,6 +89,13 @@ export function TaskCard({
         isOverlay && 'shadow-xl scale-[1.03] cursor-grabbing z-50',
       )}
     >
+      {/* Barrinha marcando o ponto de inserção — sobreposta (não ocupa
+          espaço próprio), pra não mudar a altura do slot que as outras
+          ações abriram e causar um "pulo" quando soltar. */}
+      {isDragging && !isOverlay && (
+        <div className="pointer-events-none absolute inset-x-4 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-[#1D4ED8] z-10" />
+      )}
+
       <div className="flex items-start justify-between mb-3 gap-2">
         <span
           className={cn(
