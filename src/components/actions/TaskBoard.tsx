@@ -465,7 +465,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
   if (loading) {
     return (
-      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 h-full min-h-[600px] pb-4">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
@@ -515,7 +515,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 h-full min-h-[600px] pb-4">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {columns.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.status)
           return (

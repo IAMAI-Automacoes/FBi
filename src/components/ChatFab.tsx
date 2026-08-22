@@ -1099,9 +1099,9 @@ export function ChatFab({
         <SheetTrigger asChild>
           <Button
             size="icon"
-            className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-elevation hover:shadow-lg hover:scale-105 transition-all z-40 bg-[#1D4ED8]"
+            className="fixed bottom-6 right-6 h-11 w-11 rounded-full shadow-elevation hover:shadow-lg hover:scale-105 transition-all z-40 bg-[#1D4ED8]/80 hover:bg-[#1D4ED8]/90"
           >
-            <MessageCircle className="h-6 w-6 text-white" />
+            <MessageCircle className="h-5 w-5 text-white" />
           </Button>
         </SheetTrigger>
 
