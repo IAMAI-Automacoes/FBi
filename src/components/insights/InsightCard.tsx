@@ -128,7 +128,7 @@ export function InsightCard({
           <span className="mt-0.5">{insight.sugestao}</span>
         </div>
       </CardContent>
-      <CardFooter className="px-4 sm:px-5 pb-4 pt-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-gray-300 mt-auto">
+      <CardFooter className="px-4 sm:px-5 pb-4 pt-7 sm:pt-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-gray-300 mt-auto">
         {temFeedbacksLigados ? (
           <Link
             to={`/feedbacks?insight_id=${insight.id}`}
