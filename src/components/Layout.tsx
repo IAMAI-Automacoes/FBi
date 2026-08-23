@@ -41,18 +41,41 @@ function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDiv
       setThumb({ topPct, alturaPct })
     }
 
+    // Throttle por frame: MutationObserver com `subtree: true` pode disparar
+    // muitas vezes seguidas (ex.: um drag-and-drop mexendo em vários nós de
+    // uma vez) — sem isso cada mutação individual recalculava na hora.
+    let frame: number | null = null
+    const atualizarNoProximoFrame = () => {
+      if (frame != null) return
+      frame = requestAnimationFrame(() => {
+        frame = null
+        atualizar()
+      })
+    }
+
     atualizar()
     el.addEventListener('scroll', atualizar, { passive: true })
 
-    // Conteúdo assíncrono (feedbacks/insights carregando) muda a altura
-    // depois do primeiro render — reobserva o container E o próprio filho.
-    const ro = new ResizeObserver(atualizar)
+    // Cobre resize da janela/coluna (o `clientHeight` do próprio container mudando).
+    const ro = new ResizeObserver(atualizarNoProximoFrame)
     ro.observe(el)
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
+
+    // Cobre conteúdo assíncrono mudando a ALTURA TOTAL (`scrollHeight`) —
+    // Ações troca a estrutura inteira de "carregando" pela do quadro de
+    // verdade quando os dados chegam (nó DOM diferente, não o mesmo
+    // redimensionando), então observar só um filho específico (como antes)
+    // perdia essa troca e a barra ficava "presa" no estado de antes até
+    // algum scroll manual recalcular por acidente. Observar o CONTAINER
+    // inteiro com `subtree: true` pega qualquer troca de conteúdo lá dentro,
+    // não um nó fixo.
+    const mo = new MutationObserver(atualizarNoProximoFrame)
+    mo.observe(el, { childList: true, subtree: true })
 
     return () => {
       el.removeEventListener('scroll', atualizar)
       ro.disconnect()
+      mo.disconnect()
+      if (frame != null) cancelAnimationFrame(frame)
     }
   }, [containerRef])
 
