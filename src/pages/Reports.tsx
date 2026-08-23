@@ -4,7 +4,7 @@ import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
   FileText, Download, FileDown, Users, Smile, ThumbsUp, ThumbsDown, Sparkles,
   AlertTriangle, Loader2, PartyPopper, UserCheck, Repeat, CalendarDays, Clock,
-  Heart, MessageCircle, Info, ChevronRight,
+  Heart, MessageCircle, ChevronRight,
   DollarSign, UtensilsCrossed, Leaf, MoreHorizontal, TrendingUp,
 } from 'lucide-react'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
@@ -931,26 +931,6 @@ function LayoutNovo({
         </CardNovo>
       ) : (
         <>
-          {/* Banner verde de resumo */}
-          <div className="flex items-center gap-5 rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-green-100/60 p-6">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
-              <TrendingUp className="h-6 w-6 text-green-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-gray-600">
-                Você recebeu {kpis.totalFeedbacks} avaliaç{kpis.totalFeedbacks === 1 ? 'ão' : 'ões'} nos últimos{' '}
-                {diasDoPeriodo} dias.
-                {kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum' ? (
-                  <>
-                    {' '}O maior ponto de atenção é o processo de <b>{kpis.criticalTheme}</b>.
-                  </>
-                ) : (
-                  ' Nenhum tema está concentrando reclamações — continue assim!'
-                )}
-              </p>
-            </div>
-          </div>
-
           {/* 4 KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCardNovo
@@ -1129,10 +1109,7 @@ function LayoutNovo({
           <div className="grid gap-5 lg:grid-cols-5">
             {stats.porCategoria.length > 0 && (
               <CardNovo className="lg:col-span-3">
-                <h3 className="flex items-center gap-1.5 text-base font-bold text-gray-900">
-                  Satisfação por categoria
-                  <Info className="h-3.5 w-3.5 text-gray-300" />
-                </h3>
+                <h3 className="text-base font-bold text-gray-900">Satisfação por categoria</h3>
                 <div className="mt-4 space-y-3.5">
                   {categoriasOrdenadas.map((c) => {
                     const Icone = iconeCategoria(c.nome)
@@ -1141,7 +1118,14 @@ function LayoutNovo({
                         <Icone className="h-4 w-4 shrink-0 text-gray-400" />
                         <span className="w-32 shrink-0 truncate text-sm text-gray-700">{c.nome}</span>
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                          <div className={cn('h-full rounded-full', corPorValor(c.satisfacao))} style={{ width: `${c.satisfacao}%` }} />
+                          {/* largura com piso mínimo: em 0% a barra some de vista e
+                              parece "sem avaliação nenhuma" — mas a categoria só
+                              aparece aqui quando já tem pelo menos 1 avaliação, só
+                              que todas negativas. O traço mínimo deixa isso visível. */}
+                          <div
+                            className={cn('h-full rounded-full', corPorValor(c.satisfacao))}
+                            style={{ width: `${Math.max(c.satisfacao, 4)}%` }}
+                          />
                         </div>
                         <span className="w-9 shrink-0 text-right text-sm font-bold tabular-nums text-gray-900">
                           {c.satisfacao}%
