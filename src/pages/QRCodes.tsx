@@ -219,12 +219,20 @@ export default function QRCodes() {
   const drawCanvas = async () => {
     const canvas = canvasRef.current
     if (!canvas || !qrData) return
-    await desenharPoster(canvas, {
-      url: landingUrl(qrData.slug),
-      nome: restaurantName,
-      tagline: cfgMensagem,
-      temaId: cfgEstilo,
-    })
+    try {
+      await desenharPoster(canvas, {
+        url: landingUrl(qrData.slug),
+        nome: restaurantName,
+        tagline: cfgMensagem,
+        temaId: cfgEstilo,
+      })
+    } catch (err) {
+      // Antes uma falha aqui deixava o canvas em branco sem avisar nada —
+      // nenhum try/catch, então a promise rejeitada só sumia no console
+      // (ou nem isso). Logar de verdade é o que permite achar a causa real.
+      console.error('Falha ao desenhar o QR impresso:', err)
+      toast.error('Não foi possível gerar a visualização do QR impresso.')
+    }
   }
 
   const downloadPNG = async () => {
