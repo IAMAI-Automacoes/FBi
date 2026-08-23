@@ -288,19 +288,20 @@ export default function QRCodes() {
     <div className="flex-1">
       <Tabs value={aba} onValueChange={setAba} className="w-full">
         <div className="flex items-center justify-between gap-3 mb-6">
-          {/* Cardzinho próprio (fundo branco, borda, sombra) em vez do
-              segmented-control cinza padrão — dá mais destaque às 2 abas. */}
-          <TabsList className="h-auto gap-1 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+          {/* Cardzinho cinza claro e retangular (não pill, não sólido azul) —
+              o destaque vem da PRÓPRIA caixa, e a aba ativa é só um branco
+              suave por cima, sem cor forte. */}
+          <TabsList className="h-auto gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
             <TabsTrigger
               value="config"
-              className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              className="gap-2 rounded-md px-4 py-2 text-sm font-semibold text-gray-600 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
             >
               <Palette className="h-4 w-4" />
               Personalizar
             </TabsTrigger>
             <TabsTrigger
               value="info"
-              className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              className="gap-2 rounded-md px-4 py-2 text-sm font-semibold text-gray-600 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
             >
               <Info className="h-4 w-4" />
               Informações
