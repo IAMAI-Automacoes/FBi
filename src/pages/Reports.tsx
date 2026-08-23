@@ -863,16 +863,13 @@ function LayoutNovo({
   period, setPeriod, semDados, kpis, stats, tendencia, temas,
   gerandoPdf, gerandoCsv, handleExportCSV, handleExportPdf,
 }: LayoutProps) {
-  const [mostrarTodasCategorias, setMostrarTodasCategorias] = useState(false)
-
   const satisfacaoCaindo =
     !!kpis.hasPrevData && !!kpis.prevConfiavel && String(kpis.sentimentTrend).trim().startsWith('-')
 
+  // Sempre mostra todas as categorias que já têm alguma avaliação no
+  // período — sem cortar, sem botão de "ver mais", sem linha inventada
+  // pra categoria sem dado nenhum (decisão explícita do Raver).
   const categoriasOrdenadas = [...(stats.porCategoria || [])].sort((a, b) => a.satisfacao - b.satisfacao)
-  // A referência mostra as 7 categorias padrão sem recolher nada — só limita
-  // (e mostra o botão) quando há mais categorias que isso (nomes que a IA
-  // criou além das 7 fixas).
-  const categoriasExibidas = mostrarTodasCategorias ? categoriasOrdenadas : categoriasOrdenadas.slice(0, 7)
 
   const elogios = temas.filter((t) => t.tipo === 'elogio').slice(0, 6)
   const criticas = temas.filter((t) => t.tipo === 'reclamacao').slice(0, 6)
@@ -888,12 +885,9 @@ function LayoutNovo({
     <div className="flex-1 space-y-5 bg-gray-50 p-6 md:p-8 max-w-7xl mx-auto w-full animate-fade-in-up">
       {/* Barra de topo */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-[26px] font-bold tracking-tight text-gray-900">Relatórios</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Acompanhe o desempenho do seu restaurante em um só lugar
-          </p>
-        </div>
+        {/* Sem título/subtítulo aqui — pedido explícito; o espaço vazio à
+            esquerda mantém os controles na mesma posição de antes. */}
+        <div />
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Select value={period} onValueChange={(v) => setPeriod(v as PeriodInfo)}>
             <SelectTrigger className="w-[170px] rounded-md border-gray-200 bg-white">
@@ -943,11 +937,7 @@ function LayoutNovo({
               <TrendingUp className="h-6 w-6 text-green-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-lg font-semibold text-gray-900 sm:text-xl">
-                Seu restaurante está com <span className="font-bold text-green-600">{kpis.sentiment}%</span> de
-                satisfação
-              </p>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="text-sm text-gray-600">
                 Você recebeu {kpis.totalFeedbacks} avaliaç{kpis.totalFeedbacks === 1 ? 'ão' : 'ões'} nos últimos{' '}
                 {diasDoPeriodo} dias.
                 {kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum' ? (
@@ -973,7 +963,7 @@ function LayoutNovo({
               icon={Heart} iconBg="bg-green-50" iconColor="text-green-600"
               label="Índice de satisfação" valor={`${kpis.sentiment}%`}
               trend={kpis.sentimentTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
-              prevTotal={kpis.prevTotal} destaque atencao={satisfacaoCaindo}
+              prevTotal={kpis.prevTotal} atencao={satisfacaoCaindo}
             />
             <KpiCardNovo
               icon={ThumbsUp} iconBg="bg-green-50" iconColor="text-green-600"
@@ -1025,12 +1015,6 @@ function LayoutNovo({
                 </div>
               </div>
             </div>
-            {kpis.negativePercent >= kpis.positivePercent && kpis.negativePercent >= kpis.neutralPercent && (
-              <div className="mt-4 flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
-                {kpis.negativePercent}% das avaliações recentes foram negativas.
-              </div>
-            )}
           </CardNovo>
 
           {/* Tema crítico */}
@@ -1145,23 +1129,12 @@ function LayoutNovo({
           <div className="grid gap-5 lg:grid-cols-5">
             {stats.porCategoria.length > 0 && (
               <CardNovo className="lg:col-span-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="flex items-center gap-1.5 text-base font-bold text-gray-900">
-                    Satisfação por categoria
-                    <Info className="h-3.5 w-3.5 text-gray-300" />
-                  </h3>
-                  {categoriasOrdenadas.length > 7 && (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-7 rounded-md border-gray-200 bg-white text-xs"
-                      onClick={() => setMostrarTodasCategorias((v) => !v)}
-                    >
-                      {mostrarTodasCategorias ? 'Ver menos' : 'Ver todas as categorias'}
-                    </Button>
-                  )}
-                </div>
+                <h3 className="flex items-center gap-1.5 text-base font-bold text-gray-900">
+                  Satisfação por categoria
+                  <Info className="h-3.5 w-3.5 text-gray-300" />
+                </h3>
                 <div className="mt-4 space-y-3.5">
-                  {categoriasExibidas.map((c) => {
+                  {categoriasOrdenadas.map((c) => {
                     const Icone = iconeCategoria(c.nome)
                     return (
                       <div key={c.nome} className="flex items-center gap-3">
@@ -1240,7 +1213,7 @@ function LayoutNovo({
               <h3 className="mb-3 text-base font-bold text-gray-900">Comportamento das avaliações</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 <KpiCardNovo
-                  icon={Repeat} iconBg="bg-blue-50" iconColor="text-blue-600"
+                  icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-600"
                   label="Média de avaliações por dia"
                   valor={mediaPorDia.toFixed(1).replace('.', ',')}
                   trend={kpis.totalTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
