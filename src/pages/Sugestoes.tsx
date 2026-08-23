@@ -922,19 +922,17 @@ export default function Sugestoes() {
       className="-m-4 sm:-m-6 lg:-m-8 flex flex-col overflow-hidden"
       style={{ height: 'calc(100dvh - 64px)' }}
     >
-      {/* Header — logo do EasyFeed com o nome logo embaixo, sem slogan (o
+      {/* Header — logo do EasyFeed com o nome do lado, sem slogan (o
           cabeçalho fixo do app com a logo grande já fica escondido nesta
           página, ver `ROTAS_SEM_TOPO` em Layout.tsx). */}
       <div
-        className="shrink-0 flex items-center px-4 py-2.5"
+        className="shrink-0 flex items-center gap-3 px-4 py-3"
         style={{ background: WA_TEAL }}
       >
-        <div className="flex flex-col items-center gap-0.5">
-          <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-            <img src={easyFeedIcon} alt="Easy Feed" className="h-7 w-7 object-contain" />
-          </div>
-          <p className="text-[11px] font-semibold text-white leading-none whitespace-nowrap">Suporte EasyFeed</p>
+        <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+          <img src={easyFeedIcon} alt="Easy Feed" className="h-8 w-8 object-contain" />
         </div>
+        <p className="text-lg font-semibold text-white leading-tight">Suporte EasyFeed</p>
       </div>
 
       {/* Mensagens */}
