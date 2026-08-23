@@ -232,15 +232,33 @@ export default function Insights() {
     }
   }
 
+  /** Otimista, com rollback em erro — mesmo padrão de `handlePin` em
+   *  TaskBoard.tsx (fixar ação no topo da coluna). */
+  const handleTogglePin = async (id: string, fixado: boolean) => {
+    setInsights((prev) => prev.map((i) => (i.id === id ? { ...i, fixado } : i)))
+    try {
+      const { error } = await supabase.from('insights').update({ fixado }).eq('id', id)
+      if (error) throw error
+    } catch (e: any) {
+      setInsights((prev) => prev.map((i) => (i.id === id ? { ...i, fixado: !fixado } : i)))
+      toast({ title: 'Erro ao fixar', description: e.message, variant: 'destructive' })
+    }
+  }
+
   const filteredInsights = useMemo(() => {
-    return insights.filter((i) => {
-      const prioMatch =
-        filterPriority === 'Todos' ||
-        i.prioridade === filterPriority ||
-        (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
-      const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
-      return prioMatch && catMatch
-    })
+    return insights
+      .filter((i) => {
+        const prioMatch =
+          filterPriority === 'Todos' ||
+          i.prioridade === filterPriority ||
+          (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
+        const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
+        return prioMatch && catMatch
+      })
+      // Fixados sempre no topo — sort é estável, então dentro de cada grupo
+      // (fixado / não fixado) a ordem por data (`created_at desc`) do fetch
+      // original se mantém.
+      .sort((a, b) => Number(!!b.fixado) - Number(!!a.fixado))
   }, [insights, filterPriority, filterCategories])
 
   // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.
@@ -449,6 +467,7 @@ export default function Insights() {
                 onCreateTask={() => handleCriarAcao(insight)}
                 onAiChat={() => handleAiChat(insight)}
                 onDelete={() => handleDeleteInsight(insight.id)}
+                onPin={(fixado) => handleTogglePin(insight.id, fixado)}
               />
             ))
           ) : (

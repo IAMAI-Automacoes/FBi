@@ -26,5 +26,7 @@ export interface Insight {
   feedback_ids: string[] | null
   gerado_por: string | null
   ativo: boolean | null
+  /** Fixado no topo da lista, por cima da ordenação por data de criação. */
+  fixado: boolean | null
   created_at: string | null
 }

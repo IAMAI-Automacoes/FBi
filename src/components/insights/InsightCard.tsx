@@ -1,4 +1,4 @@
-import { Lightbulb, Trash2, Loader2 } from 'lucide-react'
+import { Lightbulb, Trash2, Loader2, Pin } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,8 @@ interface InsightCardProps {
   onCreateTask: () => void
   onAiChat: () => void
   onDelete: () => void
+  /** Alterna o insight fixado no topo da lista (por cima da ordenação por data). */
+  onPin: (fixado: boolean) => void
   /** Fica `true` enquanto a IA está gerando a ação sugerida deste insight. */
   criandoAcao?: boolean
 }
@@ -43,6 +45,7 @@ export function InsightCard({
   onCreateTask,
   onAiChat,
   onDelete,
+  onPin,
   criandoAcao = false,
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
@@ -76,6 +79,17 @@ export function InsightCard({
           contorno arredondado, sem esse risco. */}
       <div className={cn('absolute inset-y-0 left-0 w-1 z-10', config.corSolida)} />
 
+      <button
+        onClick={() => onPin(!insight.fixado)}
+        title={insight.fixado ? 'Desafixar' : 'Fixar no topo da lista'}
+        className={cn(
+          'absolute top-3 right-11 h-7 w-7 flex items-center justify-center rounded transition-colors z-10',
+          insight.fixado ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100',
+        )}
+      >
+        <Pin className={cn('h-4 w-4', insight.fixado && 'fill-current')} />
+      </button>
+
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
@@ -104,7 +118,7 @@ export function InsightCard({
         </AlertDialogContent>
       </AlertDialog>
 
-      <CardHeader className="px-4 sm:px-5 pt-3 sm:pt-3 pb-1 sm:pb-1 space-y-1 pr-11">
+      <CardHeader className="px-4 sm:px-5 pt-3 sm:pt-3 pb-1 sm:pb-1 space-y-1 pr-20">
         <div>
           <Badge
             variant="secondary"
