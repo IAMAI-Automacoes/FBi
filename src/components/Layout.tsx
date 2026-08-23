@@ -79,10 +79,14 @@ function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDiv
 
   if (!thumb) return null
 
+  // `right-0` (rente à borda de verdade) + `z-20` (menor que o `z-40` da
+  // setinha do chat) — em vez de recuar pra nunca cruzar com a setinha, ela
+  // cruza por baixo: onde as duas se sobrepõem, a setinha (maior z-index)
+  // fica por cima.
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute bottom-2 right-6 top-2 z-20 w-1.5"
+      className="pointer-events-none absolute bottom-2 right-0 top-2 z-20 w-1.5"
     >
       <div
         className="absolute w-full rounded-full bg-slate-300/70"
