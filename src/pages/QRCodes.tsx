@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImagePlus, Check, ArrowRight, ArrowLeft, Palette, MessageSquare } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImagePlus, Check, ArrowRight, ArrowLeft, Palette, MessageSquare, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_TEMAS, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
@@ -288,9 +288,23 @@ export default function QRCodes() {
     <div className="flex-1">
       <Tabs value={aba} onValueChange={setAba} className="w-full">
         <div className="flex items-center justify-between gap-3 mb-6">
-          <TabsList>
-            <TabsTrigger value="config">Personalizar</TabsTrigger>
-            <TabsTrigger value="info">Informações</TabsTrigger>
+          {/* Cardzinho próprio (fundo branco, borda, sombra) em vez do
+              segmented-control cinza padrão — dá mais destaque às 2 abas. */}
+          <TabsList className="h-auto gap-1 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+            <TabsTrigger
+              value="config"
+              className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
+              <Palette className="h-4 w-4" />
+              Personalizar
+            </TabsTrigger>
+            <TabsTrigger
+              value="info"
+              className="gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
+              <Info className="h-4 w-4" />
+              Informações
+            </TabsTrigger>
           </TabsList>
           {aba === 'config' && (
             <DropdownMenu>
