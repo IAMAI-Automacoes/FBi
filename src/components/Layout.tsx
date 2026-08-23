@@ -14,14 +14,31 @@ const LARGURA_CHAT = 380
 // A barra some nessa página: "Sugestões e Dúvidas" pediu ficar de fora.
 const ROTAS_SEM_BARRA_SCROLL = ['/sugestoes']
 
-/** Indicador de rolagem — o app esconde a barra nativa em TODO lugar
- *  (ver `.sem-barra`/regra `*::-webkit-scrollbar` em `main.css`), então isto
- *  substitui visualmente por uma barrinha fina acompanhando `scrollTop`.
- *  Fica DENTRO do wrapper relativo que envolve o container de scroll (ver
- *  abaixo), não do <main>, pra cobrir só a altura do conteúdo — não o
- *  cabeçalho/aviso de assinatura que ficam acima dele. O recuo de 24px da
- *  borda (`right-6`) é pra nunca ficar embaixo da setinha lateral do chat
- *  (fixed right-0, 20px de largura) quando o chat está fechado. */
+/**
+ * Indicador de rolagem — o app esconde a barra nativa em TODO lugar (ver
+ * `.sem-barra`/regra `*::-webkit-scrollbar` em `main.css`), então isto
+ * substitui visualmente por uma barrinha fina acompanhando `scrollTop`.
+ *
+ * Duas versões anteriores tentaram invalidar por EVENTO (scroll/resize) e
+ * depois por MUTATION OBSERVER — as duas tinham um ponto cego: cobriam bem
+ * o caso que motivou cada uma, mas não TODO jeito do conteúdo mudar de
+ * altura (ex.: o observer de mutação só olha `childList`, não `attributes` —
+ * um drag-and-drop que só mexe em `style`/`transform` não dispara nada).
+ * Em vez de continuar caçando mais um caso específico, esta versão faz
+ * polling puro via `requestAnimationFrame`: reconfere `scrollTop`/
+ * `scrollHeight`/`clientHeight` do zero a cada frame, sem tentar adivinhar
+ * QUAL evento causou a mudança — cobre scroll, resize, carregamento
+ * assíncrono, troca de página, drag-and-drop, e qualquer coisa futura, sem
+ * precisar de mais um observer. Ler 3 números por frame é barato; só chama
+ * `setState` quando o valor DERIVADO realmente muda, então não força
+ * re-render 60x/s à toa.
+ *
+ * Fica DENTRO do wrapper relativo que envolve o container de scroll (ver
+ * abaixo), não do <main>, pra cobrir só a altura do conteúdo — não o
+ * cabeçalho/aviso de assinatura que ficam acima dele. O recuo de 24px da
+ * borda (`right-6`) é pra nunca ficar embaixo da setinha lateral do chat
+ * (fixed right-0, 20px de largura) quando o chat está fechado.
+ */
 function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
   const [thumb, setThumb] = useState<{ topPct: number; alturaPct: number } | null>(null)
 
@@ -29,54 +46,35 @@ function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDiv
     const el = containerRef.current
     if (!el) return
 
-    const atualizar = () => {
+    let raf = 0
+    // Assinatura do último valor aplicado — evita `setState` (e o re-render
+    // que ele dispara) quando nada realmente mudou entre um frame e outro.
+    let ultimaChave = ''
+
+    const passo = () => {
       const { scrollTop, scrollHeight, clientHeight } = el
+
       if (scrollHeight <= clientHeight + 1) {
-        setThumb(null)
-        return
+        if (ultimaChave !== 'oculto') {
+          ultimaChave = 'oculto'
+          setThumb(null)
+        }
+      } else {
+        const alturaPct = Math.max((clientHeight / scrollHeight) * 100, 8)
+        const maxScroll = scrollHeight - clientHeight
+        const topPct = maxScroll > 0 ? (scrollTop / maxScroll) * (100 - alturaPct) : 0
+        const chave = `${topPct.toFixed(2)}|${alturaPct.toFixed(2)}`
+        if (chave !== ultimaChave) {
+          ultimaChave = chave
+          setThumb({ topPct, alturaPct })
+        }
       }
-      const alturaPct = Math.max((clientHeight / scrollHeight) * 100, 8)
-      const maxScroll = scrollHeight - clientHeight
-      const topPct = maxScroll > 0 ? (scrollTop / maxScroll) * (100 - alturaPct) : 0
-      setThumb({ topPct, alturaPct })
+
+      raf = requestAnimationFrame(passo)
     }
 
-    // Throttle por frame: MutationObserver com `subtree: true` pode disparar
-    // muitas vezes seguidas (ex.: um drag-and-drop mexendo em vários nós de
-    // uma vez) — sem isso cada mutação individual recalculava na hora.
-    let frame: number | null = null
-    const atualizarNoProximoFrame = () => {
-      if (frame != null) return
-      frame = requestAnimationFrame(() => {
-        frame = null
-        atualizar()
-      })
-    }
-
-    atualizar()
-    el.addEventListener('scroll', atualizar, { passive: true })
-
-    // Cobre resize da janela/coluna (o `clientHeight` do próprio container mudando).
-    const ro = new ResizeObserver(atualizarNoProximoFrame)
-    ro.observe(el)
-
-    // Cobre conteúdo assíncrono mudando a ALTURA TOTAL (`scrollHeight`) —
-    // Ações troca a estrutura inteira de "carregando" pela do quadro de
-    // verdade quando os dados chegam (nó DOM diferente, não o mesmo
-    // redimensionando), então observar só um filho específico (como antes)
-    // perdia essa troca e a barra ficava "presa" no estado de antes até
-    // algum scroll manual recalcular por acidente. Observar o CONTAINER
-    // inteiro com `subtree: true` pega qualquer troca de conteúdo lá dentro,
-    // não um nó fixo.
-    const mo = new MutationObserver(atualizarNoProximoFrame)
-    mo.observe(el, { childList: true, subtree: true })
-
-    return () => {
-      el.removeEventListener('scroll', atualizar)
-      ro.disconnect()
-      mo.disconnect()
-      if (frame != null) cancelAnimationFrame(frame)
-    }
+    raf = requestAnimationFrame(passo)
+    return () => cancelAnimationFrame(raf)
   }, [containerRef])
 
   if (!thumb) return null
