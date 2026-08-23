@@ -807,9 +807,12 @@ function iconeCategoria(nome: string) {
 /** Cor da barra de categoria por faixa de valor (vermelho→âmbar→verde),
  *  igual à referência — não é mais uma cor fixa pra todas. */
 function corPorValor(v: number): string {
+  // Limiares batidos contra a referência: 62% (Comida) é verde lá, então o
+  // corte "âmbar→verde" precisa ficar abaixo de 62, não em 65 como na
+  // primeira tentativa (senão 62% caía errado como âmbar).
   if (v < 45) return 'bg-red-500'
-  if (v < 65) return 'bg-amber-500'
-  return 'bg-emerald-500'
+  if (v < 60) return 'bg-amber-500'
+  return 'bg-green-500'
 }
 
 function KpiCardNovo({
@@ -824,7 +827,7 @@ function KpiCardNovo({
     <div
       className={cn(
         'rounded-xl border bg-white p-5 shadow-sm',
-        destaque ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-gray-200',
+        destaque ? 'border-green-300 ring-1 ring-green-100' : 'border-gray-200',
       )}
     >
       <div className={cn('mb-3 flex h-10 w-10 items-center justify-center rounded-full', iconBg)}>
@@ -866,7 +869,10 @@ function LayoutNovo({
     !!kpis.hasPrevData && !!kpis.prevConfiavel && String(kpis.sentimentTrend).trim().startsWith('-')
 
   const categoriasOrdenadas = [...(stats.porCategoria || [])].sort((a, b) => a.satisfacao - b.satisfacao)
-  const categoriasExibidas = mostrarTodasCategorias ? categoriasOrdenadas : categoriasOrdenadas.slice(0, 5)
+  // A referência mostra as 7 categorias padrão sem recolher nada — só limita
+  // (e mostra o botão) quando há mais categorias que isso (nomes que a IA
+  // criou além das 7 fixas).
+  const categoriasExibidas = mostrarTodasCategorias ? categoriasOrdenadas : categoriasOrdenadas.slice(0, 7)
 
   const elogios = temas.filter((t) => t.tipo === 'elogio').slice(0, 6)
   const criticas = temas.filter((t) => t.tipo === 'reclamacao').slice(0, 6)
@@ -908,7 +914,7 @@ function LayoutNovo({
           </Button>
           <Button
             onClick={handleExportPdf} disabled={semDados || gerandoPdf}
-            className="rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+            className="rounded-md bg-green-600 text-white hover:bg-green-700"
           >
             {gerandoPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
             PDF
@@ -932,13 +938,13 @@ function LayoutNovo({
       ) : (
         <>
           {/* Banner verde de resumo */}
-          <div className="flex items-center gap-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 p-6">
+          <div className="flex items-center gap-5 rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-green-100/60 p-6">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
-              <TrendingUp className="h-6 w-6 text-emerald-600" />
+              <TrendingUp className="h-6 w-6 text-green-600" />
             </div>
             <div className="min-w-0">
               <p className="text-lg font-semibold text-gray-900 sm:text-xl">
-                Seu restaurante está com <span className="font-bold text-emerald-600">{kpis.sentiment}%</span> de
+                Seu restaurante está com <span className="font-bold text-green-600">{kpis.sentiment}%</span> de
                 satisfação
               </p>
               <p className="mt-1 text-sm text-gray-600">
@@ -964,13 +970,13 @@ function LayoutNovo({
               prevTotal={kpis.prevTotal}
             />
             <KpiCardNovo
-              icon={Heart} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+              icon={Heart} iconBg="bg-green-50" iconColor="text-green-600"
               label="Índice de satisfação" valor={`${kpis.sentiment}%`}
               trend={kpis.sentimentTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
               prevTotal={kpis.prevTotal} destaque atencao={satisfacaoCaindo}
             />
             <KpiCardNovo
-              icon={ThumbsUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+              icon={ThumbsUp} iconBg="bg-green-50" iconColor="text-green-600"
               label="Avaliações positivas" valor={`${kpis.positivePercent}%`}
               trend={kpis.positivePercentTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
               prevTotal={kpis.prevTotal}
@@ -992,7 +998,7 @@ function LayoutNovo({
             <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
               <div className="flex shrink-0 gap-6">
                 {[
-                  { valor: kpis.positivePercent, cor: 'text-emerald-600', dot: 'bg-emerald-500', label: 'Positivas' },
+                  { valor: kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
                   { valor: kpis.neutralPercent, cor: 'text-amber-500', dot: 'bg-amber-500', label: 'Neutras' },
                   { valor: kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
                 ].map((s) => (
@@ -1008,7 +1014,7 @@ function LayoutNovo({
               <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
                 <div className="flex h-full w-full">
                   {[
-                    { n: kpis.positivos, cor: 'bg-emerald-500' },
+                    { n: kpis.positivos, cor: 'bg-green-500' },
                     { n: kpis.neutros, cor: 'bg-amber-500' },
                     { n: kpis.negativos, cor: 'bg-red-500' },
                   ].map((s, i) =>
@@ -1063,15 +1069,15 @@ function LayoutNovo({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-6">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                <PartyPopper className="h-6 w-6 text-emerald-600" />
+            <div className="flex items-center gap-4 rounded-xl border border-green-200 bg-green-50 p-6">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100">
+                <PartyPopper className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                <p className="text-xs font-bold uppercase tracking-wide text-green-700">
                   Nenhum tema concentrando reclamações
                 </p>
-                <p className="mt-1 text-sm text-emerald-800">
+                <p className="mt-1 text-sm text-green-800">
                   Nenhuma categoria teve reclamações em destaque neste período. Continue assim!
                 </p>
               </div>
@@ -1144,7 +1150,7 @@ function LayoutNovo({
                     Satisfação por categoria
                     <Info className="h-3.5 w-3.5 text-gray-300" />
                   </h3>
-                  {categoriasOrdenadas.length > 5 && (
+                  {categoriasOrdenadas.length > 7 && (
                     <Button
                       variant="outline" size="sm"
                       className="h-7 rounded-md border-gray-200 bg-white text-xs"
@@ -1160,7 +1166,7 @@ function LayoutNovo({
                     return (
                       <div key={c.nome} className="flex items-center gap-3">
                         <Icone className="h-4 w-4 shrink-0 text-gray-400" />
-                        <span className="w-24 shrink-0 truncate text-sm text-gray-700">{c.nome}</span>
+                        <span className="w-32 shrink-0 truncate text-sm text-gray-700">{c.nome}</span>
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                           <div className={cn('h-full rounded-full', corPorValor(c.satisfacao))} style={{ width: `${c.satisfacao}%` }} />
                         </div>
@@ -1185,14 +1191,14 @@ function LayoutNovo({
                 <div className="mt-4 space-y-4">
                   {elogios.length > 0 && (
                     <div>
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-green-700">
                         <ThumbsUp className="h-4 w-4" /> Principais elogios
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {elogios.map((t) => (
                           <span
                             key={t.id}
-                            className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
+                            className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
                           >
                             {t.rotulo}
                           </span>
@@ -1209,7 +1215,7 @@ function LayoutNovo({
                         {criticas.map((t) => (
                           <span
                             key={t.id}
-                            className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600"
+                            className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-600"
                           >
                             {t.rotulo}
                           </span>
@@ -1256,12 +1262,12 @@ function LayoutNovo({
                 )}
                 {stats.melhorDia && (
                   <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50">
-                      <CalendarDays className="h-5 w-5 text-emerald-600" />
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-50">
+                      <CalendarDays className="h-5 w-5 text-green-600" />
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{stats.melhorDia.nome}</p>
                     <p className="mt-0.5 text-sm text-gray-500">Dia com mais avaliações</p>
-                    <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                    <span className="mt-2 inline-block rounded-full bg-green-50 px-2.5 py-0.5 text-[11px] font-medium text-green-700">
                       {(stats.melhorDia.satisfacao / 10).toFixed(1).replace('.', ',')} de satisfação média
                     </span>
                   </div>
