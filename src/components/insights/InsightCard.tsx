@@ -118,14 +118,18 @@ export function InsightCard({
             {config.label}
           </Badge>
         </div>
-        <CardTitle className="text-lg font-bold text-gray-900 leading-tight">
+        {/* Maiúsculo via CSS (`uppercase`), não no dado — o texto original de
+            `insight.titulo` continua em caixa normal no banco. */}
+        <CardTitle className="text-lg font-bold text-slate-900 uppercase leading-tight">
           {insight.titulo}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 sm:px-5 pb-1 sm:pb-1 flex-1 space-y-1.5">
-        <p className="text-sm text-gray-600 leading-snug line-clamp-2">{insight.descricao}</p>
-        <div className="flex items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1D4ED8] shrink-0">
+        <p className="text-sm text-slate-600 leading-snug line-clamp-2">{insight.descricao}</p>
+        {/* `max-w-[66.6667%]` (2/3 do card) é só nessa caixa — o card em si
+            continua ocupando a linha inteira. */}
+        <div className="flex max-w-[66.6667%] items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/70 p-3 rounded-lg border border-blue-100">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 shrink-0">
             <Lightbulb className="h-3.5 w-3.5 text-white" />
           </span>
           <span className="mt-0.5">{insight.sugestao}</span>
@@ -135,7 +139,7 @@ export function InsightCard({
         {temFeedbacksLigados ? (
           <Link
             to={`/feedbacks?insight_id=${insight.id}`}
-            className="text-sm text-[#1D4ED8] hover:underline font-medium"
+            className="text-sm text-blue-600 hover:underline font-medium"
           >
             {totalFeedbacks} feedbacks relacionados →
           </Link>
@@ -152,7 +156,7 @@ export function InsightCard({
             size="sm"
             onClick={onCreateTask}
             disabled={criandoAcao}
-            className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white h-9"
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
           >
             {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {criandoAcao ? 'Gerando...' : 'Criar Ação'}
@@ -161,7 +165,7 @@ export function InsightCard({
             variant="outline"
             size="sm"
             onClick={onAiChat}
-            className="w-full sm:w-auto text-[#1D4ED8] border-[#1D4ED8] hover:bg-blue-50 h-9 font-semibold"
+            className="w-full sm:w-auto bg-white text-blue-600 border-blue-600 hover:bg-blue-50 h-9 font-semibold"
           >
             Discutir com IA
           </Button>

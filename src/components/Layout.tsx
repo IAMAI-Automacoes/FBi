@@ -41,6 +41,13 @@ const ROTAS_SEM_BARRA_SCROLL = ['/sugestoes']
  */
 function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
   const [thumb, setThumb] = useState<{ topPct: number; alturaPct: number } | null>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  // Espelha `thumb` num ref pra ler a altura atual do thumb durante um
+  // arraste sem precisar recriar os listeners de pointermove a cada frame
+  // (eles são presos uma vez, no pointerdown).
+  const thumbRef = useRef(thumb)
+  thumbRef.current = thumb
+  const arrastandoRef = useRef(false)
 
   useEffect(() => {
     const el = containerRef.current
@@ -77,20 +84,72 @@ function BarraDeScroll({ containerRef }: { containerRef: React.RefObject<HTMLDiv
     return () => cancelAnimationFrame(raf)
   }, [containerRef])
 
+  /** Converte um Y de tela pra `scrollTop`, alinhando o CENTRO do thumb com
+   *  o ponteiro (é o que faz arrastar parecer "grudado" na mão, em vez de
+   *  pular pro topo do thumb a cada movimento). */
+  const scrollarPara = (clientY: number) => {
+    const el = containerRef.current
+    const track = trackRef.current
+    if (!el || !track) return
+    const trackRect = track.getBoundingClientRect()
+    const alturaPct = thumbRef.current?.alturaPct ?? 8
+    const alturaThumbPx = (trackRect.height * alturaPct) / 100
+    const cursoUtil = trackRect.height - alturaThumbPx
+    if (cursoUtil <= 0) return
+    const y = clientY - trackRect.top - alturaThumbPx / 2
+    const fracao = Math.min(Math.max(y / cursoUtil, 0), 1)
+    const maxScroll = el.scrollHeight - el.clientHeight
+    el.scrollTop = fracao * maxScroll
+  }
+
+  // Arrastar o thumb: o `pointermove`/`pointerup` ficam no `window` (não só
+  // no thumb) pra não perder o arraste se o cursor sair da faixa fina de
+  // 6px no meio do gesto.
+  const iniciarArraste = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation() // não deixa isso "vazar" como clique na trilha
+    arrastandoRef.current = true
+    scrollarPara(e.clientY)
+
+    const mover = (ev: PointerEvent) => scrollarPara(ev.clientY)
+    const soltar = () => {
+      arrastandoRef.current = false
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+    }
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
+  }
+
+  // Clicar na trilha (fora do thumb) pula a rolagem pra aquele ponto.
+  const clicarNaTrilha = (e: React.MouseEvent) => {
+    if (arrastandoRef.current) return
+    scrollarPara(e.clientY)
+  }
+
   if (!thumb) return null
 
   // `right-0` (rente à borda de verdade) + `z-20` (menor que o `z-40` da
   // setinha do chat) — em vez de recuar pra nunca cruzar com a setinha, ela
   // cruza por baixo: onde as duas se sobrepõem, a setinha (maior z-index)
-  // fica por cima.
+  // fica por cima. Sem `pointer-events-none`: a barra é clicável/arrastável
+  // de propósito, só fica sem clique bem onde a setinha do chat sobrepõe
+  // (comportamento normal de z-index, não precisa de código extra pra isso).
   return (
     <div
-      aria-hidden
-      className="pointer-events-none absolute bottom-2 right-0 top-2 z-20 w-1.5"
+      ref={trackRef}
+      className="absolute bottom-2 right-0 top-2 z-20 w-2.5 cursor-pointer"
+      onClick={clicarNaTrilha}
     >
       <div
-        className="absolute w-full rounded-full bg-slate-300/70"
+        className="absolute inset-x-0.5 rounded-full bg-slate-300/70 hover:bg-slate-400/80 active:bg-slate-500/80 transition-colors"
         style={{ top: `${thumb.topPct}%`, height: `${thumb.alturaPct}%` }}
+        onPointerDown={iniciarArraste}
+        // `click` é um evento separado de `pointerdown` (o stopPropagation
+        // lá em cima não impede este de borbulhar também) — sem isto, um
+        // clique simples no thumb (sem arrastar) também disparava o clique
+        // da trilha por baixo dele.
+        onClick={(e) => e.stopPropagation()}
       />
     </div>
   )

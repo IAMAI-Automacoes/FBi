@@ -433,13 +433,13 @@ export default function Insights() {
       <div ref={topoRef} />
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 gap-3 md:gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-64 bg-gray-100 animate-pulse rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 gap-3 md:gap-4">
           {filteredInsights.length > 0 ? (
             filteredInsights.map((insight) => (
               <InsightCard
