@@ -888,7 +888,7 @@ function LayoutNovo({
         {/* Sem título/subtítulo aqui — pedido explícito; o espaço vazio à
             esquerda mantém os controles na mesma posição de antes. */}
         <div />
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
           <Select value={period} onValueChange={(v) => setPeriod(v as PeriodInfo)}>
             <SelectTrigger className="w-[170px] rounded-md border-gray-200 bg-white">
               <SelectValue placeholder="Período" />
@@ -1065,8 +1065,8 @@ function LayoutNovo({
                   <AreaChart data={tendencia} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gradSatisfacaoNovo" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                        <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0.05} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
@@ -1085,7 +1085,7 @@ function LayoutNovo({
                     />
                     <ChartTooltip content={<SatisfacaoTooltip />} />
                     <Area
-                      type="linear" dataKey="sentiment" stroke="#10b981" strokeWidth={2.5}
+                      type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-1))" strokeWidth={2.5}
                       fillOpacity={1} fill="url(#gradSatisfacaoNovo)" connectNulls
                       dot={(props: any) => {
                         const { cx, cy, payload, index } = props
@@ -1094,7 +1094,7 @@ function LayoutNovo({
                         return (
                           <circle
                             key={`d-${index}`} cx={cx} cy={cy} r={ultimo ? 5 : 3.5}
-                            fill="#10b981" stroke="white" strokeWidth={2}
+                            fill="hsl(var(--chart-1))" stroke="white" strokeWidth={2}
                           />
                         )
                       }}

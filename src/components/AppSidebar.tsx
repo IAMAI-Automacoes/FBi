@@ -80,8 +80,8 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-4">
-        <SidebarMenu>
+      <SidebarContent className="px-3 py-2">
+        <SidebarMenu className="gap-0.5">
           {navigation
             .filter((item) => podeVer(item.modulo))
             .map((item) => {
@@ -93,8 +93,8 @@ export function AppSidebar() {
                     isActive={isActive}
                     className={
                       isActive
-                        ? 'h-10 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
-                        : 'h-10 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'h-9 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
+                        : 'h-9 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }
                   >
                     <Link to={item.href}>
