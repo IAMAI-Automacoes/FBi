@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
   X, Video, FileText, FileSpreadsheet, Check, Play, MessageSquare, Tag, Users,
-  RotateCcw, Search,
+  RotateCcw, Search, Download,
 } from 'lucide-react'
 import { format, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -318,34 +318,75 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
 }
 
 // ── Modal de mídia (lightbox) ─────────────────────────────────────────────────
+// Foto: pode baixar e dar zoom (clique alterna ajustada/ampliada, com scroll
+// pra navegar quando maior que a tela). Vídeo: só baixar — o player nativo já
+// dá controle suficiente, zoom não se aplica.
 function MediaModal({ url, kind, name, onClose }: {
   url: string; kind: 'image' | 'video'; name: string; onClose: () => void
 }) {
+  const [zoom, setZoom] = useState(false)
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
   }, [onClose])
 
+  const baixar = () => {
+    fetch(url)
+      .then((r) => r.blob())
+      .then((blob) => {
+        const blobUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = blobUrl
+        a.download = name
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+      })
+      .catch(console.error)
+  }
+
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
       onClick={onClose}
     >
-      <button
-        type="button"
-        className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors"
-        onClick={(e) => { e.stopPropagation(); onClose() }}
-      >
-        <X className="h-5 w-5" />
-      </button>
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <button
+          type="button"
+          title="Baixar"
+          className="h-9 w-9 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors"
+          onClick={(e) => { e.stopPropagation(); baixar() }}
+        >
+          <Download className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          title="Fechar"
+          className="h-9 w-9 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors"
+          onClick={(e) => { e.stopPropagation(); onClose() }}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
       {kind === 'image' ? (
-        <img
-          src={url}
-          alt={name}
-          className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+        <div
+          className={cn('h-full w-full flex', zoom ? 'overflow-auto p-8' : 'items-center justify-center')}
           onClick={(e) => e.stopPropagation()}
-        />
+        >
+          <img
+            src={url}
+            alt={name}
+            onClick={() => setZoom((z) => !z)}
+            className={cn(
+              'rounded-lg shadow-2xl m-auto',
+              zoom ? 'max-w-none w-auto h-auto cursor-zoom-out' : 'max-h-[90vh] max-w-[90vw] object-contain cursor-zoom-in',
+            )}
+            style={zoom ? { width: '150%' } : undefined}
+          />
+        </div>
       ) : (
         <video
           src={url}
