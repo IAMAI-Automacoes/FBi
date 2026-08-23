@@ -289,8 +289,8 @@ export default function QRCodes() {
       <Tabs value={aba} onValueChange={setAba} className="w-full">
         <div className="flex items-center justify-between gap-3 mb-6">
           <TabsList>
-            <TabsTrigger value="info">Informações</TabsTrigger>
             <TabsTrigger value="config">Personalizar</TabsTrigger>
+            <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
           {aba === 'config' && (
             <DropdownMenu>
