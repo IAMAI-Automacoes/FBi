@@ -80,7 +80,12 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-2">
+      <SidebarContent className="px-3 py-1">
+        {/* `gap-0.5`/`h-8`: só o espaçamento entre as linhas do menu (e a
+            altura de cada uma) encolhe aqui — o texto continua `text-[15px]`
+            e o ícone `h-5 w-5`, do tamanho de sempre, sem diminuir (pedido
+            explícito do Raver). É o espaço em volta que fica menor, sobrando
+            mais altura pra rodapé/resto da barra lateral. */}
         <SidebarMenu className="gap-0.5">
           {navigation
             .filter((item) => podeVer(item.modulo))
@@ -93,8 +98,8 @@ export function AppSidebar() {
                     isActive={isActive}
                     className={
                       isActive
-                        ? 'h-9 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
-                        : 'h-9 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'h-8 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
+                        : 'h-8 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }
                   >
                     <Link to={item.href}>

@@ -14,6 +14,11 @@ const LARGURA_CHAT = 380
 // A barra some nessa página: "Sugestões e Dúvidas" pediu ficar de fora.
 const ROTAS_SEM_BARRA_SCROLL = ['/sugestoes']
 
+// O cabeçalho fixo (logo central + painel do admin) some aqui: a página já
+// tem seu próprio cabeçalho de chat (com o nome/logo do EasyFeed), então o
+// de cima virava um segundo cabeçalho redundante.
+const ROTAS_SEM_TOPO = ['/sugestoes']
+
 /**
  * Indicador de rolagem — o app esconde a barra nativa em TODO lugar (ver
  * `.sem-barra`/regra `*::-webkit-scrollbar` em `main.css`), então isto
@@ -167,6 +172,7 @@ export default function Layout() {
 
   const { pathname } = useLocation()
   const mostrarBarraScroll = !ROTAS_SEM_BARRA_SCROLL.includes(pathname)
+  const mostrarTopo = !ROTAS_SEM_TOPO.includes(pathname)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Trocar de página muda o conteúdo (e a altura de rolagem) sem disparar
@@ -185,7 +191,7 @@ export default function Layout() {
             className="flex flex-1 flex-col w-full min-w-0 min-h-0 transition-[margin] duration-300 ease-in-out"
             style={{ marginRight: chatDesktop ? LARGURA_CHAT : 0 }}
           >
-            <TopHeader />
+            {mostrarTopo && <TopHeader />}
             <AvisoAssinatura />
             <div className="relative flex-1 min-h-0">
               <div

@@ -6,6 +6,7 @@ import {
   Trash2, Check, Play,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { easyFeedIcon } from '@/assets/brand'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -467,7 +468,7 @@ function Bubble({
       >
         {!isMe && (
           <p className="text-[11px] font-semibold mb-0.5" style={{ color: WA_TEAL }}>
-            Suporte FIB
+            Suporte EasyFeed
           </p>
         )}
 
@@ -879,7 +880,7 @@ export default function Sugestoes() {
     const r = sugestao.respostas.find((x) => x.id === respondeA)
     if (!r) return { autorLabel: '', texto: 'mensagem removida' }
     return {
-      autorLabel: r.autor === 'usuario' ? 'Você' : 'Suporte FIB',
+      autorLabel: r.autor === 'usuario' ? 'Você' : 'Suporte EasyFeed',
       texto: r.texto || (r.arquivos.length > 0 ? '📎 Arquivo' : ''),
     }
   }
@@ -921,17 +922,18 @@ export default function Sugestoes() {
       className="-m-4 sm:-m-6 lg:-m-8 flex flex-col overflow-hidden"
       style={{ height: 'calc(100dvh - 64px)' }}
     >
-      {/* Header */}
+      {/* Header — logo do EasyFeed com o nome logo embaixo, sem slogan (o
+          cabeçalho fixo do app com a logo grande já fica escondido nesta
+          página, ver `ROTAS_SEM_TOPO` em Layout.tsx). */}
       <div
-        className="shrink-0 flex items-center gap-3 px-4 py-3"
+        className="shrink-0 flex items-center px-4 py-2.5"
         style={{ background: WA_TEAL }}
       >
-        <div className="h-10 w-10 rounded-full bg-white/25 flex items-center justify-center text-white text-base font-bold shrink-0">
-          S
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-white leading-tight">Suporte FIB</p>
-          <p className="text-[12px] text-white/70">Dúvidas e sugestões</p>
+        <div className="flex flex-col items-center gap-0.5">
+          <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+            <img src={easyFeedIcon} alt="Easy Feed" className="h-7 w-7 object-contain" />
+          </div>
+          <p className="text-[11px] font-semibold text-white leading-none whitespace-nowrap">Suporte EasyFeed</p>
         </div>
       </div>
 
@@ -944,14 +946,14 @@ export default function Sugestoes() {
         <div className="flex justify-start">
           <div className="max-w-[75%] rounded-2xl rounded-tl-none px-3.5 py-2.5 shadow-sm bg-white">
             <p className="text-[11px] font-semibold mb-0.5" style={{ color: WA_TEAL }}>
-              Suporte FIB
+              Suporte EasyFeed
             </p>
             <p className="text-sm text-gray-800 leading-relaxed">
-              Olá! 👋 Estamos aqui para ajudar com qualquer dúvida ou sugestão sobre o FIB.
+              Olá! 👋 Estamos aqui para ajudar com qualquer dúvida ou sugestão sobre o EasyFeed.
               Escreva sua mensagem abaixo.
             </p>
             <p className="text-[10px] text-gray-400 text-right mt-0.5 select-none">
-              Suporte FIB
+              Suporte EasyFeed
             </p>
           </div>
         </div>
