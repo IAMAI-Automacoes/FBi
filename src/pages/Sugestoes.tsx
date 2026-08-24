@@ -112,13 +112,23 @@ function buildThread(s: Sugestao): ThreadMsg[] {
 }
 
 // ── Modal de mídia (lightbox) ─────────────────────────────────────────────────
-// Foto: pode baixar e dar zoom (clique alterna ajustada/ampliada, com scroll
-// pra navegar quando maior que a tela). Vídeo: só baixar — o player nativo já
-// dá controle suficiente, zoom não se aplica.
+// Foto: pode baixar e dar zoom — clique liga/desliga um zoom de verdade
+// (`transform: scale`, não redimensiona a imagem) que acompanha o mouse: o
+// `transform-origin` segue o cursor, então mover o mouse revela outra parte
+// da foto ampliada, tipo lupa. Vídeo: só baixar — o player nativo já dá
+// controle suficiente, zoom não se aplica.
 function MediaModal({ url, kind, name, onClose }: {
   url: string; kind: 'image' | 'video'; name: string; onClose: () => void
 }) {
   const [zoom, setZoom] = useState(false)
+  const [origem, setOrigem] = useState('center')
+
+  const posDoMouse = (e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    return `${x}% ${y}%`
+  }
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -167,18 +177,23 @@ function MediaModal({ url, kind, name, onClose }: {
       </div>
       {kind === 'image' ? (
         <div
-          className={cn('h-full w-full flex', zoom ? 'overflow-auto p-8' : 'items-center justify-center')}
+          className="h-full w-full flex items-center justify-center overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <img
             src={url}
             alt={name}
-            onClick={() => setZoom((z) => !z)}
+            onClick={(e) => {
+              if (!zoom) setOrigem(posDoMouse(e))
+              else setOrigem('center')
+              setZoom((z) => !z)
+            }}
+            onMouseMove={(e) => { if (zoom) setOrigem(posDoMouse(e)) }}
             className={cn(
-              'rounded-lg shadow-2xl m-auto',
-              zoom ? 'max-w-none w-auto h-auto cursor-zoom-out' : 'max-h-[90vh] max-w-[90vw] object-contain cursor-zoom-in',
+              'max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl transition-transform duration-150',
+              zoom ? 'scale-[2.5] cursor-zoom-out' : 'cursor-zoom-in',
             )}
-            style={zoom ? { width: '150%' } : undefined}
+            style={{ transformOrigin: origem }}
           />
         </div>
       ) : (
