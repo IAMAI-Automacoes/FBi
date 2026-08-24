@@ -77,6 +77,7 @@ import {
   atualizarOrdemAcoes,
   arquivarAcao,
   alternarFixadoAcao,
+  categorizarAcao,
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
@@ -705,10 +706,17 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         const maxOrdem =
           currentPendente.length > 0 ? Math.max(...currentPendente.map((t) => t.ordem)) : -1
 
+        // Categoria/prioridade em branco (o dono não escolheu) vão como
+        // `null` — é o sinal que `categorizar-acao` usa pra saber quais dos
+        // dois campos completar sozinha, sem nunca sobrescrever o que já foi
+        // preenchido manualmente.
+        const categoriaEscolhida = taskData.source || taskData.categoria || null
+        const prioridadeEscolhida = taskData.priority || taskData.prioridade || null
+
         const criada = await criarAcao({
           titulo_acao: taskData.title || taskData.titulo_acao || 'Nova Ação',
-          prioridade: taskData.priority || taskData.prioridade || 'OBSERVACAO',
-          categoria: taskData.source || taskData.categoria || 'Outros',
+          prioridade: prioridadeEscolhida,
+          categoria: categoriaEscolhida,
           plano_detalhado: taskData.plano_detalhado || '',
           responsavel: taskData.responsavel ?? null,
           prazo: taskData.prazo ?? null,
@@ -721,7 +729,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           {
             id: criada.id.toString(),
             titulo_acao: criada.titulo_acao || 'Sem título',
-            prioridade: criada.prioridade || 'NORMAL',
+            // Só efeito visual enquanto a IA ainda não respondeu (abaixo) —
+            // o que fica gravado no banco é o `null` de verdade.
+            prioridade: criada.prioridade || 'OBSERVACAO',
             categoria: criada.categoria || 'Outros',
             plano_detalhado: criada.plano_detalhado || undefined,
             texto: criada.texto || undefined,
@@ -739,6 +749,29 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           },
         ])
         toast({ title: 'Ação criada' })
+
+        // Categoria e/ou prioridade ficaram em branco: a IA decide sozinha
+        // em segundo plano (lê o título+plano pra categoria, conta feedbacks
+        // negativos recentes na categoria pra prioridade) e o card atualiza
+        // quando terminar — não trava a criação esperando isso.
+        if (!categoriaEscolhida || !prioridadeEscolhida) {
+          categorizarAcao(criada.id)
+            .then((res) => {
+              if (res?.status !== 'sucesso') return
+              setTasks((prev) =>
+                prev.map((t) =>
+                  t.id === criada.id.toString()
+                    ? { ...t, categoria: res.categoria, prioridade: res.prioridade }
+                    : t,
+                ),
+              )
+            })
+            .catch(() => {
+              // Falha na IA não é crítica aqui: a ação já existe com os
+              // valores que vieram do insert (o dono ajusta manualmente se
+              // precisar).
+            })
+        }
       }
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao salvar ação', variant: 'destructive' })

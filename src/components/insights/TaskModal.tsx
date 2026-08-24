@@ -37,6 +37,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { PlanoAcao } from '@/components/actions/PlanoAcao'
 import { Separator } from '@/components/ui/separator'
+import { CATEGORIAS_FEEDBACK } from '@/lib/categorias-feedback'
 
 /** Formato que o modal recebe do quadro e devolve ao salvar. Mistura os campos
  *  da linha do banco com os apelidos que o TaskBoard já usava. */
@@ -73,7 +74,11 @@ export function TaskModal({
 }: TaskModalProps) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<string>('OBSERVACAO')
+  // Em branco por padrão (não "OBSERVACAO"): é o sinal de "o dono não
+  // escolheu" que deixa a IA decidir sozinha ao criar (ver `categorizar-acao`
+  // e `handleSaveTask` em TaskBoard.tsx) — só nas ações NOVAS, sem editar as
+  // que a IA (ou o dono) já classificou antes.
+  const [priority, setPriority] = useState<string>('')
   const [responsavel, setResponsavel] = useState('')
   const [prazo, setPrazo] = useState('')
   const [source, setSource] = useState('')
@@ -91,7 +96,7 @@ export function TaskModal({
   // pra saber se algo mudou (e portanto se o "Salvar" deve ficar clicável).
   const valoresIniciaisRef = useRef({
     title: '',
-    priority: 'OBSERVACAO',
+    priority: '',
     responsavel: '',
     prazo: '',
     source: '',
@@ -103,13 +108,13 @@ export function TaskModal({
     const iniciais = task
       ? {
           title: task.title ?? '',
-          priority: task.priority ?? 'OBSERVACAO',
+          priority: task.priority ?? '',
           responsavel: task.responsavel ?? '',
           prazo: task.prazo ?? '',
           source: task.source ?? '',
           plano: task.plano_detalhado ?? '',
         }
-      : { title: '', priority: 'OBSERVACAO', responsavel: '', prazo: '', source: '', plano: '' }
+      : { title: '', priority: '', responsavel: '', prazo: '', source: '', plano: '' }
     valoresIniciaisRef.current = iniciais
     setTitle(iniciais.title)
     setPriority(iniciais.priority)
@@ -126,6 +131,13 @@ export function TaskModal({
     prazo !== valoresIniciaisRef.current.prazo ||
     source !== valoresIniciaisRef.current.source ||
     plano !== valoresIniciaisRef.current.plano
+
+  // Só na CRIAÇÃO (pedido explícito do Raver) — editar uma ação já existente
+  // não passa a travar por causa de campos que ficaram em branco antes desta
+  // regra existir. Prioridade e categoria continuam sempre opcionais (a IA
+  // completa ao criar, ver TaskBoard.tsx).
+  const camposObrigatoriosPreenchidos =
+    !!task || (!!title.trim() && !!responsavel.trim() && !!plano.trim())
 
   const handleSave = () => {
     if (onSave) {
@@ -161,7 +173,7 @@ export function TaskModal({
         <div className="grid gap-5 py-4">
           <div className="grid gap-2">
             <Label htmlFor="title" className="font-semibold">
-              Título da Ação
+              Título da Ação <span className="text-red-500">*</span>
             </Label>
             <Input
               id="title"
@@ -174,10 +186,11 @@ export function TaskModal({
           <div className="grid gap-2">
             <Label htmlFor="priority" className="font-semibold">
               Prioridade
+              {!task && <span className="ml-1 font-normal text-muted-foreground">(opcional — a IA decide se deixar em branco)</span>}
             </Label>
             <Select value={priority} onValueChange={setPriority} disabled={somenteLeitura}>
               <SelectTrigger id="priority">
-                <SelectValue placeholder="Selecione..." />
+                <SelectValue placeholder={task ? 'Selecione...' : 'IA decide automaticamente'} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="OBSERVACAO">Observação</SelectItem>
@@ -189,18 +202,24 @@ export function TaskModal({
           <div className="grid gap-2">
             <Label htmlFor="source" className="font-semibold">
               Categoria
+              {!task && <span className="ml-1 font-normal text-muted-foreground">(opcional — a IA decide se deixar em branco)</span>}
             </Label>
-            <Input
-              id="source"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="Ex: Atendimento"
-              disabled={somenteLeitura}
-            />
+            <Select value={source} onValueChange={setSource} disabled={somenteLeitura}>
+              <SelectTrigger id="source">
+                <SelectValue placeholder={task ? 'Selecione...' : 'IA decide automaticamente'} />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIAS_FEEDBACK.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="assignee" className="font-semibold">
-              Responsável
+              Responsável {!task && <span className="text-red-500">*</span>}
             </Label>
             <Input
               id="assignee"
@@ -252,7 +271,9 @@ export function TaskModal({
               ação manualmente, não só ao editar. */}
           <Separator className="my-2" />
           <div className="grid gap-2">
-            <Label className="font-semibold">Plano de Ação</Label>
+            <Label className="font-semibold">
+              Plano de Ação {!task && <span className="text-red-500">*</span>}
+            </Label>
             <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
               <PlanoAcao
                 acaoId={acaoId}
@@ -319,10 +340,10 @@ export function TaskModal({
             {!somenteLeitura && (
               <Button
                 onClick={handleSave}
-                disabled={!houveAlteracao}
+                disabled={!houveAlteracao || !camposObrigatoriosPreenchidos}
                 className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white"
               >
-                Salvar
+                {task ? 'Salvar' : 'Criar'}
               </Button>
             )}
           </div>

@@ -136,3 +136,18 @@ export async function gerarPlanoAcao(acaoId: number) {
   if (error) throw error
   return data
 }
+
+/**
+ * Preenche categoria e/ou prioridade de uma ação recém-criada manualmente,
+ * só nos campos que ficaram em branco (nunca sobrescreve o que o dono já
+ * escolheu). Categoria vem da IA lendo título+plano; prioridade vem da
+ * contagem de feedbacks negativos recentes naquela categoria — ver
+ * `supabase/functions/categorizar-acao/index.ts`.
+ */
+export async function categorizarAcao(acaoId: number) {
+  const { data, error } = await supabase.functions.invoke('categorizar-acao', {
+    body: { acao_id: acaoId },
+  })
+  if (error) throw error
+  return data
+}
