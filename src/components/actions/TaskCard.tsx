@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
-import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin } from 'lucide-react'
+import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -24,6 +24,8 @@ interface TaskCardProps {
   onDesarquivar?: () => void
   /** Alterna o card fixado no topo da coluna (por cima da ordenação por prioridade). */
   onPin?: (fixado: boolean) => void
+  /** Abre o painel lateral com o plano de ação completo, prazo e responsável. */
+  onVerDetalhes?: () => void
   isOverlay?: boolean
   /** Na página de arquivadas o card não arrasta nem avança de status. */
   somenteLeitura?: boolean
@@ -37,6 +39,7 @@ export function TaskCard({
   onArquivar,
   onDesarquivar,
   onPin,
+  onVerDetalhes,
   isOverlay,
   somenteLeitura = false,
 }: TaskCardProps) {
@@ -147,16 +150,16 @@ export function TaskCard({
       {/* `texto` (não `insight_id`!) é o sinal confiável de "veio da IA": a
           edge function `sugerir-acoes` sempre grava esse texto padrão nela,
           mesmo quando não consegue casar o insight_id que a IA citou (nesse
-          caso ele grava null) — ações criadas manualmente nunca têm `texto`. */}
+          caso ele grava null) — ações criadas manualmente nunca têm `texto`.
+          Só o ícone (sem o texto "Sugerida pela IA" ao lado) — o raio já é
+          intuitivo o bastante, e o `title` cobre quem passar o mouse. */}
       {task.texto && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 mb-2 self-start">
+        <span
+          title="Sugerida pela IA"
+          className="inline-flex items-center justify-center w-5 h-5 text-green-700 bg-green-50 border border-green-200 rounded-full mb-2 self-start"
+        >
           <Zap className="w-3 h-3" />
-          Sugerida pela IA
         </span>
-      )}
-
-      {task.plano_detalhado && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{task.plano_detalhado}</p>
       )}
 
       <p
@@ -179,6 +182,23 @@ export function TaskCard({
           <MessageSquare className="w-3 h-3" />
           Feedbacks relacionados
         </Link>
+      )}
+
+      {/* Plano completo saiu do card (virava um textão) — agora só o botão,
+          que abre o painel lateral (`DetalhesAcaoPanel`) com o plano
+          inteiro, prazo e responsável. */}
+      {task.plano_detalhado && onVerDetalhes && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onVerDetalhes()
+          }}
+          className="text-[11px] text-[#1D4ED8] hover:underline font-medium mb-3 inline-flex items-center gap-1 self-start"
+        >
+          <Eye className="w-3 h-3" />
+          Ver detalhes
+        </button>
       )}
 
       {/* `min-w-0` no grupo da esquerda e no `span` do nome é o que faz o

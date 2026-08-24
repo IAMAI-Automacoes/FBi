@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { ActionStatus } from '@/lib/mock-data'
 import { TaskCard } from './TaskCard'
+import { DetalhesAcaoPanel } from './DetalhesAcaoPanel'
 import { TaskModal } from '@/components/insights/TaskModal'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
@@ -268,6 +269,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ExtendedActionTask | null>(null)
   const [activeColumn, setActiveColumn] = useState<ActionStatus>('PENDENTE')
+  /** Card cujo painel lateral de detalhes (plano completo + prazo +
+   *  responsável) está aberto — só leitura, ver `DetalhesAcaoPanel`. */
+  const [detalhesTask, setDetalhesTask] = useState<ExtendedActionTask | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -908,6 +912,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                       moveTask(task.id, task.status, next)
                     }}
                     onPin={(fixado) => handlePin(task.id, fixado)}
+                    onVerDetalhes={() => setDetalhesTask(task)}
                   />
                 </Fragment>
               ))}
@@ -943,6 +948,18 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             }
             onSave={handleSaveTask}
             onDelete={handleDeleteTask}
+          />
+        )}
+
+        {detalhesTask && (
+          <DetalhesAcaoPanel
+            task={detalhesTask}
+            onClose={() => setDetalhesTask(null)}
+            onEditar={() => {
+              const status = detalhesTask.status
+              setDetalhesTask(null)
+              handleOpenModal(status, detalhesTask)
+            }}
           />
         )}
       </div>
