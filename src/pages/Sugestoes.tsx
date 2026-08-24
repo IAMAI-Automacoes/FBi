@@ -976,7 +976,11 @@ export default function Sugestoes() {
   return (
     <div
       className="-m-4 sm:-m-6 lg:-m-8 flex flex-col overflow-hidden"
-      style={{ height: 'calc(100dvh - 64px)' }}
+      // Antes descontava os 64px do cabeçalho fixo (TopHeader) — agora ele
+      // fica escondido nesta página (ver `ROTAS_SEM_TOPO` em Layout.tsx), e
+      // esse desconto sobrava como uma faixa em branco embaixo, no mesmo
+      // tamanho do cabeçalho que sumiu em cima.
+      style={{ height: '100dvh' }}
     >
       {/* Header — logo do EasyFeed com o nome do lado, sem slogan (o
           cabeçalho fixo do app com a logo grande já fica escondido nesta
