@@ -14,9 +14,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
-import { Link } from 'react-router-dom'
 import type { Insight } from '@/lib/tipos/insight'
 import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
+import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
 
 interface InsightCardProps {
   insight: Insight
@@ -152,12 +152,12 @@ export function InsightCard({
       </CardContent>
       <CardFooter className="px-4 sm:px-5 pb-3 sm:pb-3 pt-1 sm:pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
         {temFeedbacksLigados ? (
-          <Link
-            to={`/feedbacks?insight_id=${insight.id}`}
-            className="text-sm text-blue-600 hover:underline font-medium"
-          >
-            {totalFeedbacks} feedbacks relacionados →
-          </Link>
+          <FeedbacksRelacionadosPopover
+            insightId={insight.id}
+            feedbackIds={insight.feedback_ids ?? []}
+            feedbacksRestauranteIds={insight.feedbacks_restaurante_ids ?? []}
+            totalFeedbacks={totalFeedbacks}
+          />
         ) : (
           <span
             className="text-sm text-gray-400 font-medium cursor-help"
