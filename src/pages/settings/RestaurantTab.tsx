@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { getIniciais } from '@/lib/iniciais'
 import { Upload, Store, Loader2, X } from 'lucide-react'
+import { ImageCropper } from '@/components/ImageCropper'
 
 export interface RestauranteForm {
   nome_restaurante: string
@@ -32,24 +33,33 @@ export function RestaurantTab({
   const { toast } = useToast()
   const [enviando, setEnviando] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const logoMostrada = preview || value.logo_url
 
-  const handleUploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  /** Só escolhe o arquivo — o upload de verdade só acontece depois do
+   *  recorte, em `handleConfirmCrop`. */
+  const handlePickFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !restauranteId) return
+    if (file) setCropFile(file)
+  }
 
-    const objetoUrl = URL.createObjectURL(file)
+  const handleConfirmCrop = async (blob: Blob) => {
+    if (!restauranteId) return
+    setCropFile(null)
+
+    const objetoUrl = URL.createObjectURL(blob)
     setPreview(objetoUrl) // aparece na hora
     setEnviando(true)
     onUploadingChange?.(true)
 
     try {
-      const ext = file.name.split('.').pop()
-      const caminho = `logo-${restauranteId}-${Date.now()}.${ext}`
-      const { error } = await supabase.storage.from('logos').upload(caminho, file, { upsert: true })
+      const caminho = `logo-${restauranteId}-${Date.now()}.jpg`
+      const { error } = await supabase.storage
+        .from('logos')
+        .upload(caminho, blob, { upsert: true, contentType: 'image/jpeg' })
       if (error) throw error
 
       const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(caminho)
@@ -142,7 +152,7 @@ export function RestaurantTab({
                   ref={fileInputRef}
                   className="hidden"
                   accept="image/png, image/jpeg, image/gif, image/webp"
-                  onChange={handleUploadLogo}
+                  onChange={handlePickFile}
                   disabled={enviando}
                 />
               </div>
@@ -169,6 +179,19 @@ export function RestaurantTab({
           </div>
         </section>
       </CardContent>
+
+      {cropFile && (
+        <ImageCropper
+          file={cropFile}
+          salvando={enviando}
+          onConfirm={handleConfirmCrop}
+          onCancel={() => setCropFile(null)}
+          outputWidth={800}
+          outputHeight={800}
+          title="Ajuste o logotipo"
+          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o logotipo mostrado."
+        />
+      )}
     </Card>
   )
 }

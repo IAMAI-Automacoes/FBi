@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
 import { excluirMinhaConta } from '@/lib/queries/conta'
+import { ImageCropper } from '@/components/ImageCropper'
 
 export default function MyAccount() {
   const { usuario, refetchUsuario, logout } = useAuth()
@@ -21,6 +22,7 @@ export default function MyAccount() {
   const [cancelando, setCancelando] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string>('')
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
@@ -64,14 +66,23 @@ export default function MyAccount() {
     formData.username !== salvo.username ||
     formData.perfil_notas !== salvo.perfil_notas
 
-  const handleUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0 || !usuario?.id) return
-    const file = event.target.files[0]
-    const fileExt = file.name.split('.').pop()
-    const filePath = `${usuario.id}-${Math.random()}.${fileExt}`
+  /** Só escolhe o arquivo — o upload de verdade só acontece depois do
+   *  recorte, em `handleConfirmCrop`. */
+  const handlePickFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) setCropFile(file)
+  }
+
+  const handleConfirmCrop = async (blob: Blob) => {
+    if (!usuario?.id) return
+    setCropFile(null)
+    const filePath = `${usuario.id}-${Math.random()}.jpg`
 
     setUploadingAvatar(true)
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, blob, { contentType: 'image/jpeg' })
     if (uploadError) {
       toast({ title: 'Erro', description: 'Falha no upload da imagem', variant: 'destructive' })
       setUploadingAvatar(false)
@@ -280,15 +291,15 @@ export default function MyAccount() {
                     ref={fileInputRef}
                     className="hidden"
                     accept="image/png, image/jpeg, image/gif"
-                    onChange={handleUploadAvatar}
+                    onChange={handlePickFile}
                     disabled={uploadingAvatar}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <h3 className="font-medium text-gray-900 text-base">Foto de Perfil</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
-                    Recomendamos uma imagem quadrada. Formatos suportados: JPG, PNG ou GIF (Máx.
-                    2MB).
+                    Você ajusta o recorte e o zoom antes de enviar. Formatos suportados: JPG, PNG
+                    ou GIF.
                   </p>
                   <div className="flex gap-3 pt-3">
                     <Button
@@ -474,6 +485,20 @@ export default function MyAccount() {
           </div>
         </div>
       </main>
+
+      {cropFile && (
+        <ImageCropper
+          file={cropFile}
+          salvando={uploadingAvatar}
+          onConfirm={handleConfirmCrop}
+          onCancel={() => setCropFile(null)}
+          outputWidth={800}
+          outputHeight={800}
+          shape="circle"
+          title="Ajuste a foto de perfil"
+          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro do círculo é a foto mostrada."
+        />
+      )}
     </div>
   )
 }

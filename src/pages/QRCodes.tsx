@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImagePlus, Check, ArrowRight, ArrowLeft, Palette, MessageSquare, Info } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImageUp, Check, ArrowRight, ArrowLeft, Palette, MessageSquare, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_TEMAS, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
@@ -41,7 +41,10 @@ export default function QRCodes() {
 
   // Config da página que o cliente abre ao escanear
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
-  const [cfgModo, setCfgModo] = useState<'estilo' | 'upload'>('estilo')
+  // 'estilo' (foto do tema como fundo) foi removido das opções — só existe
+  // hoje pra não quebrar quem já tinha essa escolha salva de antes (ver
+  // fallback em `loadData`). Configuração nova sempre nasce em 'upload'.
+  const [cfgModo, setCfgModo] = useState<'estilo' | 'upload'>('upload')
   const [cfgEstilo, setCfgEstilo] = useState('classico')
   const [cfgImagem, setCfgImagem] = useState<string | null>(null)
   const [cfgMensagem, setCfgMensagem] = useState('')
@@ -56,7 +59,7 @@ export default function QRCodes() {
   const [numero, setNumero] = useState<string | null>(null)
   const [editando, setEditando] = useState(false)
   const [passo, setPasso] = useState<1 | 2>(1)
-  const cfgSalvoRef = useRef({ modo: 'estilo', estilo: 'classico', imagem: null as string | null, mensagem: '' })
+  const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'classico', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
     loadData()
@@ -86,7 +89,10 @@ export default function QRCodes() {
         setRestauranteId(config?.id ?? null)
         if (config?.nome_restaurante) setRestaurantName(config.nome_restaurante)
         setNumero(config?.numero_whatsapp ?? null)
-        const modo = config?.qr_bg_modo === 'upload' ? 'upload' : 'estilo'
+        // Só continua em 'estilo' se foi EXPLICITAMENTE salvo assim antes
+        // (restaurante configurado antes da opção sair do ar) — qualquer
+        // outro caso (nunca configurou, ou já era 'upload') cai em 'upload'.
+        const modo = config?.qr_bg_modo === 'estilo' ? 'estilo' : 'upload'
         setCfgModo(modo)
         setCfgEstilo(config?.qr_estilo ?? 'classico')
         setCfgImagem(config?.qr_bg_imagem ?? null)
@@ -454,44 +460,39 @@ export default function QRCodes() {
                       <p className="text-[11px] text-muted-foreground mt-1">{cfgMensagem.length}/120</p>
                     </div>
 
-                    <div>
-                      <p className="text-[13px] font-medium mb-2">Fundo da página do cliente</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => { setCfgModo('estilo'); setPreviewAba('pagina') }}
-                          className={cn('rounded-xl border-2 p-3 text-left transition-all',
-                            cfgModo === 'estilo' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-muted')}
-                        >
-                          <p className="text-[13px] font-semibold">Foto do tema</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Usa a imagem de “{getTema(cfgEstilo).nome}”.</p>
-                        </button>
-                        <button
-                          onClick={() => { setCfgModo('upload'); setPreviewAba('pagina') }}
-                          className={cn('rounded-xl border-2 p-3 text-left transition-all',
-                            cfgModo === 'upload' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-muted')}
-                        >
-                          <p className="text-[13px] font-semibold">Minha imagem</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Suba a sua própria foto de fundo.</p>
-                        </button>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[13px] font-medium">Fundo da página do cliente</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Suba a sua própria foto de fundo.</p>
                       </div>
-                    </div>
+                      <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-[12px] text-blue-800">
+                        Você ajusta o recorte (arrastar e zoom) no formato do celular. A gente só adiciona o botão do WhatsApp por cima.
+                      </div>
 
-                    {cfgModo === 'upload' && (
-                      <div className="space-y-3">
-                        <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-[12px] text-blue-800">
-                          Você ajusta o recorte (arrastar e zoom) no formato do celular. A gente só adiciona o botão do WhatsApp por cima.
-                        </div>
-                        {cfgImagem && (
+                      {cfgImagem ? (
+                        <div className="space-y-2">
                           <img src={cfgImagem} alt="Fundo" className="w-full max-h-56 object-contain rounded-lg border bg-slate-50" />
-                        )}
-                        <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer rounded-lg border px-3 py-2 hover:bg-muted">
-                          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                          {uploading ? 'Enviando…' : (cfgImagem ? 'Trocar imagem' : 'Enviar imagem')}
+                          <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer rounded-lg border px-3 py-2 hover:bg-muted">
+                            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+                            {uploading ? 'Enviando…' : 'Trocar imagem'}
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }} />
+                          </label>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-8 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
+                          {uploading ? (
+                            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                          ) : (
+                            <ImageUp className="h-7 w-7 text-primary" />
+                          )}
+                          <span className="text-sm font-semibold">{uploading ? 'Enviando…' : 'Enviar imagem'}</span>
+                          <span className="text-[11px] text-muted-foreground">PNG, JPG ou WEBP</span>
                           <input type="file" accept="image/*" className="hidden"
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }} />
                         </label>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     <div className="flex items-center justify-between gap-2 pt-1">
                       <Button variant="ghost" onClick={() => { setPasso(1); setPreviewAba('qr') }} className="gap-1.5 text-muted-foreground">
@@ -596,6 +597,8 @@ export default function QRCodes() {
           salvando={uploading}
           onConfirm={enviarImagem}
           onCancel={() => setCropFile(null)}
+          title="Ajuste o fundo da página"
+          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o que aparece na tela do celular."
         />
       )}
     </div>

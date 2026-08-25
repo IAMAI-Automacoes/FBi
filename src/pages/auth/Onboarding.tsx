@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { ImageCropper } from '@/components/ImageCropper'
 import {
   Loader2,
   ArrowRight,
@@ -102,20 +103,29 @@ export default function Onboarding() {
   }, [usuario?.restaurante_id])
 
   const logoMostrada = logoPreview || logoUrl
+  const [cropFile, setCropFile] = useState<File | null>(null)
 
-  const handleUploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  /** Só escolhe o arquivo — o upload de verdade só acontece depois do
+   *  recorte, em `handleConfirmCrop`. */
+  const handlePickFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || !usuario?.restaurante_id) return
+    if (file) setCropFile(file)
+  }
 
-    const objetoUrl = URL.createObjectURL(file)
+  const handleConfirmCrop = async (blob: Blob) => {
+    if (!usuario?.restaurante_id) return
+    setCropFile(null)
+
+    const objetoUrl = URL.createObjectURL(blob)
     setLogoPreview(objetoUrl) // aparece na hora
     setEnviandoLogo(true)
 
     try {
-      const ext = file.name.split('.').pop()
-      const caminho = `logo-${usuario.restaurante_id}-${Date.now()}.${ext}`
-      const { error } = await supabase.storage.from('logos').upload(caminho, file, { upsert: true })
+      const caminho = `logo-${usuario.restaurante_id}-${Date.now()}.jpg`
+      const { error } = await supabase.storage
+        .from('logos')
+        .upload(caminho, blob, { upsert: true, contentType: 'image/jpeg' })
       if (error) throw error
 
       const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(caminho)
@@ -449,7 +459,7 @@ export default function Onboarding() {
                   ref={fileInputRef}
                   className="hidden"
                   accept="image/png, image/jpeg, image/gif, image/webp"
-                  onChange={handleUploadLogo}
+                  onChange={handlePickFile}
                   disabled={enviandoLogo}
                 />
               </div>
@@ -656,6 +666,19 @@ export default function Onboarding() {
           )}
         </CardFooter>
       </Card>
+
+      {cropFile && (
+        <ImageCropper
+          file={cropFile}
+          salvando={enviandoLogo}
+          onConfirm={handleConfirmCrop}
+          onCancel={() => setCropFile(null)}
+          outputWidth={800}
+          outputHeight={800}
+          title="Ajuste o logotipo"
+          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o logotipo mostrado."
+        />
+      )}
     </div>
   )
 }

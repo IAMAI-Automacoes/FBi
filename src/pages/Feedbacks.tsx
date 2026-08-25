@@ -60,12 +60,25 @@ export default function Feedbacks() {
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
-  const [filtros, setFiltros] = useState<FiltrosFeedback>({
-    periodo: '7d',
-    sentimento: 'all',
-    categorias: [],
-    busca: '',
-    ordenacao: 'recent',
+  // Semente inicial dos filtros a partir da URL (ex.: o link "Ver
+  // avaliações" do tema crítico em Relatórios manda
+  // ?periodo=30d&categoria=Reserva&sentimento=negativo) — lida só uma vez,
+  // ao montar; depois disso os filtros vivem normalmente no Select/
+  // FiltroCategorias da tela, sem ficar "preso" ao que veio na URL.
+  const [filtros, setFiltros] = useState<FiltrosFeedback>(() => {
+    const periodoParam = searchParams.get('periodo')
+    const periodosValidos: FiltrosFeedback['periodo'][] = ['7d', '30d', '90d', 'all']
+    const categoriaParam = searchParams.get('categoria')
+    const sentimentoParam = searchParams.get('sentimento')
+    return {
+      periodo: periodosValidos.includes(periodoParam as FiltrosFeedback['periodo'])
+        ? (periodoParam as FiltrosFeedback['periodo'])
+        : '7d',
+      sentimento: sentimentoParam || 'all',
+      categorias: categoriaParam ? [categoriaParam] : [],
+      busca: '',
+      ordenacao: 'recent',
+    }
   })
   const [offset, setOffset] = useState(0)
 
