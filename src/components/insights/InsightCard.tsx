@@ -14,9 +14,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
-import { Link } from 'react-router-dom'
 import type { Insight } from '@/lib/tipos/insight'
 import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
+import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
 
 interface InsightCardProps {
   insight: Insight
@@ -49,7 +49,8 @@ export function InsightCard({
   criandoAcao = false,
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
-  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && ehElogio(insight)
+  const elogio = ehElogio(insight)
+  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && elogio
   const config = ehObservacaoElogio ? PRIORIDADES.ELOGIO : estiloPrioridade(prio)
 
   // Insights gerados antes da ligação por IDs têm `feedback_ids` vazio: não há
@@ -151,12 +152,11 @@ export function InsightCard({
       </CardContent>
       <CardFooter className="px-4 sm:px-5 pb-3 sm:pb-3 pt-1 sm:pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
         {temFeedbacksLigados ? (
-          <Link
-            to={`/feedbacks?insight_id=${insight.id}`}
-            className="text-sm text-blue-600 hover:underline font-medium"
-          >
-            {totalFeedbacks} feedbacks relacionados →
-          </Link>
+          <FeedbacksRelacionadosPopover
+            insightId={insight.id}
+            feedbackIds={insight.feedback_ids ?? []}
+            totalFeedbacks={totalFeedbacks}
+          />
         ) : (
           <span
             className="text-sm text-gray-400 font-medium cursor-help"
@@ -166,15 +166,19 @@ export function InsightCard({
           </span>
         )}
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button
-            size="sm"
-            onClick={onCreateTask}
-            disabled={criandoAcao}
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
-          >
-            {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {criandoAcao ? 'Gerando...' : 'Criar Ação'}
-          </Button>
+          {/* Elogio não vira ação — não há o que "resolver" aqui, é só um
+              ponto positivo. */}
+          {!elogio && (
+            <Button
+              size="sm"
+              onClick={onCreateTask}
+              disabled={criandoAcao}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
+            >
+              {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {criandoAcao ? 'Gerando...' : 'Criar Ação'}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

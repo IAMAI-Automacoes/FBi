@@ -548,15 +548,16 @@ function LayoutNovo({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-4">
-                <div className="hidden h-16 w-16 items-center justify-center rounded-full bg-red-100 sm:flex">
-                  <CalendarDays className="h-7 w-7 text-red-500" />
-                </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto">
+                  {/* Mesmo período selecionado agora em Relatórios + a
+                      categoria deste tema crítico + só negativas — igual ao
+                      que o dono está vendo aqui, sem precisar refiltrar. */}
                   <Button asChild className="bg-red-600 text-white hover:bg-red-700">
-                    <Link to="/feedbacks">Ver avaliações</Link>
-                  </Button>
-                  <Button asChild variant="outline" className="border-gray-300 bg-white text-gray-700">
-                    <Link to="/acoes">Criar plano de ação</Link>
+                    <Link
+                      to={`/feedbacks?periodo=${period}&categoria=${encodeURIComponent(kpis.criticalTheme)}&sentimento=negativo`}
+                    >
+                      Ver avaliações
+                    </Link>
                   </Button>
                 </div>
               </div>

@@ -23,11 +23,11 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor especialista em gestao de re
 2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
 3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
 4. "categoria": uma destas 14 — Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva, Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene ou Outros.
-5. "ref": o NUMERO ("n") do insight que originou esta acao, copiado da lista abaixo. Sempre informe um.
+5. "insight_id": o NUMERO "n" (nao um id) do insight que originou esta acao, copiado da lista abaixo, ex.: 2. Nao invente numero que nao esteja na lista.
 Escreva em portugues do Brasil, direto.
 
 ## Formato (retorne SOMENTE este JSON)
-{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "ref": 1 } ] }
+{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "insight_id": 2 } ] }
 
 ## Insights disponiveis
 {insights}`
@@ -118,6 +118,16 @@ serve(async (req: Request) => {
       return json({ status: 'sem_insights_relevantes', sugestoes_criadas: 0 })
     }
 
+    // Número (1-based, na mesma ordem enviada no prompt) -> insight real.
+    // Mesma razão do gerar-insights: pedir pra IA copiar o uuid do insight de
+    // volta em "insight_id" praticamente nunca funcionava (ela não reproduz
+    // um token opaco de 36 caracteres com fidelidade) — nenhuma das 15 ações
+    // já geradas por IA tinha insight_id preenchido. Um número pequeno ela
+    // copia certo; a tradução pro id real acontece aqui.
+    const insightPorIndice = new Map<number, (typeof insightsValidos)[number]>(
+      insightsValidos.map((i, indice) => [indice + 1, i]),
+    )
+
     // Anotacoes da IA
     const { data: memoria } = await db
       .from('memoria_assistente')
@@ -145,10 +155,6 @@ serve(async (req: Request) => {
       conhecimento: conhecimento
         ? `\n## Boas praticas de referencia (use para montar o plano)\n${conhecimento}`
         : '',
-      // Número curto em vez do uuid, pelo mesmo motivo de `gerar-insights`: o
-      // modelo ativo (`gemini-2.5-flash-lite`) trunca uuid de 36 caracteres em
-      // saída JSON, e um id que não bate vira insight_id nulo — a ação perde a
-      // origem e, com ela, os clientes que devem ser avisados.
       insights: JSON.stringify(
         insightsValidos.map((i, indice) => ({
           n: indice + 1,
@@ -182,33 +188,28 @@ serve(async (req: Request) => {
 
     let criadas = 0
     if (acoesGeradas.length > 0) {
-      // Traduz o número de volta para o uuid do insight. Aceita também o
-      // formato antigo (`insight_id` com uuid), caso um prompt sobrescrito em
-      // `prompts_editaveis` ainda esteja pedindo assim.
-      const idsDeInsight = new Set(insightsValidos.map((i) => String(i.id)))
-      const insightPadrao = insightSolicitado ?? insightsValidos[0]?.id ?? null
+      // Quando insightSolicitado existe (clique manual em "Criar Ação" num
+      // insight específico), esse é o fallback se a IA não citar um número
+      // válido — sempre correto, já que só existe UM insight candidato.
+      const insightPadrao = insightSolicitado ?? null
 
-      // deno-lint-ignore no-explicit-any -- resposta crua do modelo
-      const insightDaAcao = (a: any): string | null => {
-        const porRef = insightsValidos[Number(a.ref) - 1]?.id
-        if (porRef) return String(porRef)
-        if (idsDeInsight.has(String(a.insight_id))) return String(a.insight_id)
-        // Sem referência utilizável, ancora no insight mais relevante do lote
-        // (a lista já vem ordenada por prioridade). Ação órfã não tem como
-        // avisar ninguém — é melhor um vínculo aproximado que nenhum.
-        return insightPadrao ? String(insightPadrao) : null
-      }
-
-      const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => ({
-        titulo_acao: a.titulo_acao || 'Acao sugerida',
-        plano_detalhado: a.plano_detalhado || '',
-        prioridade: a.prioridade || 'IMPORTANTE',
-        categoria: a.categoria || 'Outros',
-        status: 'SUGERIDA',
-        restaurante_id: targetRestauranteId,
-        insight_id: insightDaAcao(a),
-        texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
-      }))
+      const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => {
+        const insightViaIndice = insightPorIndice.get(Number(a.insight_id))
+        const insightIdResolvido = insightViaIndice ? String(insightViaIndice.id) : insightPadrao
+        return {
+          titulo_acao: a.titulo_acao || 'Acao sugerida',
+          plano_detalhado: a.plano_detalhado || '',
+          prioridade: a.prioridade || 'IMPORTANTE',
+          categoria: a.categoria || 'Outros',
+          // Antes 'SUGERIDA' (esperava aprovação numa lista "Sugestões da IA"
+          // que não existe mais em /acoes — foi removida a pedido) — ações
+          // nesse status ficavam presas, invisíveis na interface.
+          status: 'PENDENTE',
+          restaurante_id: targetRestauranteId,
+          insight_id: insightIdResolvido,
+          texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
+        }
+      })
 
       const { data: acoesCriadas, error: insertErr } = await db
         .from('acoes_operacionais')
