@@ -23,11 +23,11 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor especialista em gestao de re
 2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
 3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
 4. "categoria": uma destas 14 — Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva, Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene ou Outros.
-5. "insight_id": o "id" EXATO do insight que originou esta acao, copiado da lista abaixo. Nao invente ID.
+5. "ref": o NUMERO ("n") do insight que originou esta acao, copiado da lista abaixo. Sempre informe um.
 Escreva em portugues do Brasil, direto.
 
 ## Formato (retorne SOMENTE este JSON)
-{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "insight_id": "..." } ] }
+{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "ref": 1 } ] }
 
 ## Insights disponiveis
 {insights}`
@@ -145,9 +145,13 @@ serve(async (req: Request) => {
       conhecimento: conhecimento
         ? `\n## Boas praticas de referencia (use para montar o plano)\n${conhecimento}`
         : '',
+      // Número curto em vez do uuid, pelo mesmo motivo de `gerar-insights`: o
+      // modelo ativo (`gemini-2.5-flash-lite`) trunca uuid de 36 caracteres em
+      // saída JSON, e um id que não bate vira insight_id nulo — a ação perde a
+      // origem e, com ela, os clientes que devem ser avisados.
       insights: JSON.stringify(
-        insightsValidos.map((i) => ({
-          id: i.id,
+        insightsValidos.map((i, indice) => ({
+          n: indice + 1,
           prioridade: i.prioridade,
           categoria: i.categoria,
           titulo: i.titulo,
@@ -178,10 +182,22 @@ serve(async (req: Request) => {
 
     let criadas = 0
     if (acoesGeradas.length > 0) {
-      // Um uuid alucinado violaria o FK e derrubaria o insert do lote inteiro,
-      // entao so passa id que veio na lista enviada ao modelo.
+      // Traduz o número de volta para o uuid do insight. Aceita também o
+      // formato antigo (`insight_id` com uuid), caso um prompt sobrescrito em
+      // `prompts_editaveis` ainda esteja pedindo assim.
       const idsDeInsight = new Set(insightsValidos.map((i) => String(i.id)))
-      const insightPadrao = insightSolicitado ?? null
+      const insightPadrao = insightSolicitado ?? insightsValidos[0]?.id ?? null
+
+      // deno-lint-ignore no-explicit-any -- resposta crua do modelo
+      const insightDaAcao = (a: any): string | null => {
+        const porRef = insightsValidos[Number(a.ref) - 1]?.id
+        if (porRef) return String(porRef)
+        if (idsDeInsight.has(String(a.insight_id))) return String(a.insight_id)
+        // Sem referência utilizável, ancora no insight mais relevante do lote
+        // (a lista já vem ordenada por prioridade). Ação órfã não tem como
+        // avisar ninguém — é melhor um vínculo aproximado que nenhum.
+        return insightPadrao ? String(insightPadrao) : null
+      }
 
       const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => ({
         titulo_acao: a.titulo_acao || 'Acao sugerida',
@@ -190,13 +206,63 @@ serve(async (req: Request) => {
         categoria: a.categoria || 'Outros',
         status: 'SUGERIDA',
         restaurante_id: targetRestauranteId,
-        insight_id: idsDeInsight.has(String(a.insight_id)) ? a.insight_id : insightPadrao,
+        insight_id: insightDaAcao(a),
         texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
       }))
 
-      const { error: insertErr } = await db.from('acoes_operacionais').insert(finalAcoes)
+      const { data: acoesCriadas, error: insertErr } = await db
+        .from('acoes_operacionais')
+        .insert(finalAcoes)
+        .select('id, insight_id')
       if (insertErr) throw insertErr
       criadas = finalAcoes.length
+
+      // Materializa o vínculo ação -> feedbacks que a motivaram.
+      //
+      // Sem isto o elo seria só `acao.insight_id -> insights.feedback_ids[]`, e
+      // ele se rompe: `insight_id` é ON DELETE SET NULL, então apagar o insight
+      // deixa a ação sem saber quem reclamou daquilo. Para o motor de resposta
+      // isso significa não ter destinatário.
+      //
+      // Uma trigger em acoes_operacionais faz o mesmo como rede de segurança
+      // (migration 20260825010000); as duas usam ON CONFLICT DO NOTHING e são
+      // idempotentes entre si.
+      const porInsight = new Map<string, string[]>(
+        insightsValidos.map((i) => [String(i.id), (i.feedback_ids ?? []) as string[]]),
+      )
+
+      const vinculos = (acoesCriadas ?? []).flatMap(
+        (a: { id: number; insight_id: string | null }) =>
+          (porInsight.get(String(a.insight_id)) ?? []).map((fid) => ({
+            feedback_original_id: fid,
+            acao_id: a.id,
+            restaurante_id: targetRestauranteId,
+          })),
+      )
+
+      if (vinculos.length > 0) {
+        // `insights.feedback_ids` é um array solto, sem FK: pode conter id de
+        // feedback já apagado. Um id morto violaria a FK de feedback_acao e
+        // derrubaria o lote inteiro, então só entram os que ainda existem.
+        const ids = [...new Set(vinculos.map((v) => v.feedback_original_id))]
+        const { data: vivos } = await db
+          .from('feedbacks_originais')
+          .select('id')
+          .in('id', ids)
+
+        const idsVivos = new Set((vivos ?? []).map((f: { id: string }) => f.id))
+        const validos = vinculos.filter((v) => idsVivos.has(v.feedback_original_id))
+
+        if (validos.length > 0) {
+          // Falha aqui não derruba a criação da ação: a ação já existe e é útil
+          // ao dono mesmo sem o vínculo, e a trigger de fallback ainda pode
+          // preenchê-lo. Só registra.
+          const { error: vinculoErr } = await db
+            .from('feedback_acao')
+            .upsert(validos, { onConflict: 'feedback_original_id,acao_id', ignoreDuplicates: true })
+          if (vinculoErr) console.error('Falha ao vincular feedbacks às ações:', vinculoErr)
+        }
+      }
     }
 
     return json({ status: 'sucesso', sugestoes_criadas: criadas })

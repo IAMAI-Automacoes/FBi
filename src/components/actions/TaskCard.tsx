@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
-import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin, Eye } from 'lucide-react'
+import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin, Eye, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -29,6 +29,9 @@ interface TaskCardProps {
   isOverlay?: boolean
   /** Na página de arquivadas o card não arrasta nem avança de status. */
   somenteLeitura?: boolean
+  /** Quantos clientes distintos serão avisados quando esta ação avançar de
+   *  etapa. `undefined` enquanto carrega; 0 esconde o selo. */
+  clientesAvisados?: number
 }
 
 export function TaskCard({
@@ -42,6 +45,7 @@ export function TaskCard({
   onVerDetalhes,
   isOverlay,
   somenteLeitura = false,
+  clientesAvisados,
 }: TaskCardProps) {
   // `disabled: isOverlay` é essencial, não cosmético: sem isso a cópia do
   // DragOverlay (que segue o cursor) registra SEU PRÓPRIO droppable — e por
@@ -182,6 +186,22 @@ export function TaskCard({
           <MessageSquare className="w-3 h-3" />
           Feedbacks relacionados
         </Link>
+      )}
+
+      {/* Avisa o dono, ANTES do gesto, que mover este card vai gerar mensagem
+          para cliente real. Até aqui isso acontecia de forma invisível: o
+          disparo saía no drag e ninguém via. Concluído não mostra — dali a
+          ação não avança mais, então não há novo aviso a gerar. */}
+      {!isCompleted && (clientesAvisados ?? 0) > 0 && (
+        <span
+          title={`Ao avançar esta etapa, ${clientesAvisados} cliente${clientesAvisados! > 1 ? 's' : ''} receberá${clientesAvisados! > 1 ? 'ão' : ''} uma mensagem no WhatsApp (respeitando o intervalo mínimo entre mensagens).`}
+          className="text-[11px] font-medium mb-3 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md self-start"
+        >
+          <Send className="w-3 h-3" />
+          {clientesAvisados === 1
+            ? '1 cliente será avisado'
+            : `${clientesAvisados} clientes serão avisados`}
+        </span>
       )}
 
       {/* Plano completo saiu do card (virava um textão) — agora só o botão,

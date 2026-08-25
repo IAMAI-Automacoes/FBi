@@ -77,6 +77,7 @@ import {
   atualizarOrdemAcoes,
   arquivarAcao,
   alternarFixadoAcao,
+  contarContatosPorAcao,
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
@@ -279,6 +280,9 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }),
   )
 
+  /** acao_id -> nº de clientes distintos que serão avisados. */
+  const [contatosPorAcao, setContatosPorAcao] = useState<Map<number, number>>(new Map())
+
   const load = async () => {
     if (!usuario?.restaurante_id) {
       return
@@ -308,6 +312,13 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         }))
         mapped.sort((a, b) => a.ordem - b.ordem)
         setTasks(mapped)
+
+        // Quantos clientes cada ação vai avisar. Numa chamada separada e sem
+        // bloquear o quadro: é informação de apoio, e uma falha aqui não pode
+        // impedir o dono de ver as tarefas.
+        contarContatosPorAcao(data.map((d) => d.id))
+          .then(setContatosPorAcao)
+          .catch((e) => console.error('Falha ao contar clientes por ação:', e))
       }
     } catch (err) {
       console.error(err)
@@ -913,6 +924,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                     }}
                     onPin={(fixado) => handlePin(task.id, fixado)}
                     onVerDetalhes={() => setDetalhesTask(task)}
+                    clientesAvisados={contatosPorAcao.get(Number(task.id))}
                   />
                 </Fragment>
               ))}

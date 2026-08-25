@@ -136,3 +136,41 @@ export async function gerarPlanoAcao(acaoId: number) {
   if (error) throw error
   return data
 }
+
+/**
+ * Quantos CLIENTES DISTINTOS serão avisados quando cada ação mudar de status.
+ *
+ * Existe para o quadro poder mostrar isso no card. Hoje o dono arrasta uma
+ * tarefa e dispara um WhatsApp para pessoas reais sem ter ideia disso — o
+ * número deixa o efeito visível antes do gesto.
+ *
+ * Conta contatos, não feedbacks: uma pessoa que mandou três reclamações sobre a
+ * mesma ação recebe UMA mensagem, então o card diria "3 clientes" quando é um
+ * só (é a mesma regra da invariante I4).
+ */
+export async function contarContatosPorAcao(acaoIds: number[]) {
+  if (acaoIds.length === 0) return new Map<number, number>()
+
+  const { data, error } = await supabase
+    .from('feedback_acao')
+    .select('acao_id, feedbacks_originais!inner(contato_id)')
+    .in('acao_id', acaoIds)
+
+  if (error) throw error
+
+  const contatosPorAcao = new Map<number, Set<string>>()
+  for (const linha of data ?? []) {
+    // O join aninhado do PostgREST não é tipado pelo client; o shape é
+    // { acao_id, feedbacks_originais: { contato_id } }.
+    const fo = (linha as unknown as { feedbacks_originais?: { contato_id: string | null } })
+      .feedbacks_originais
+    if (!fo?.contato_id) continue
+
+    const acaoId = (linha as unknown as { acao_id: number }).acao_id
+    const conjunto = contatosPorAcao.get(acaoId) ?? new Set<string>()
+    conjunto.add(fo.contato_id)
+    contatosPorAcao.set(acaoId, conjunto)
+  }
+
+  return new Map([...contatosPorAcao].map(([acaoId, set]) => [acaoId, set.size]))
+}

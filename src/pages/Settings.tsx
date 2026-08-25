@@ -8,6 +8,7 @@ import { MascotTab, MascoteForm } from './settings/MascotTab'
 import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/PerfilNegocioTab'
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { WhatsAppTab } from './settings/WhatsAppTab'
+import { EXPIRACAO_PADRAO, FeedbacksTab } from './settings/FeedbacksTab'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -44,10 +45,20 @@ export default function Settings() {
   const [restaurante, setRestaurante] = useState<RestauranteForm>(RESTAURANTE_VAZIO)
   const [mascote, setMascote] = useState<MascoteForm>(MASCOTE_VAZIO)
   const [perfil, setPerfil] = useState<PerfilNegocioForm>(PERFIL_VAZIO)
-  const [salvo, setSalvo] = useState({ restaurante: RESTAURANTE_VAZIO, mascote: MASCOTE_VAZIO, perfil: PERFIL_VAZIO })
+  const [expiracaoFeedback, setExpiracaoFeedback] = useState(EXPIRACAO_PADRAO)
+  const [salvo, setSalvo] = useState({
+    restaurante: RESTAURANTE_VAZIO,
+    mascote: MASCOTE_VAZIO,
+    perfil: PERFIL_VAZIO,
+    expiracaoFeedback: EXPIRACAO_PADRAO,
+  })
   // Guarda o mascote_config original para não apagar campos que não estão no
   // formulário (ex: "focos", gravado no onboarding e usado no contexto da IA)
   const mascoteBruto = useRef<Record<string, unknown>>({})
+  // Mesmo motivo, para config_insights: o update substitui a coluna jsonb
+  // inteira, e ali moram também os parâmetros do motor de resposta e a
+  // configuração de análise editada na página de Insights.
+  const configInsightsBruto = useRef<Record<string, unknown>>({})
   const [salvando, setSalvando] = useState(false)
   const [enviandoArquivo, setEnviandoArquivo] = useState(false)
 
@@ -63,13 +74,21 @@ export default function Settings() {
     const carregar = async () => {
       const { data } = await supabase
         .from('restaurantes')
-        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao')
+        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights')
         .eq('id', restauranteId)
         .single()
 
       if (data) {
         const cfg = (data.mascote_config as any) || {}
         mascoteBruto.current = cfg
+        // Guarda o jsonb inteiro: ao salvar só a validade do feedback, as
+        // demais chaves (config do motor, feedbacks_por_analise…) precisam
+        // sobreviver — o update substitui a coluna toda.
+        configInsightsBruto.current = ((data as any).config_insights as any) || {}
+        const expiracao = Number(
+          configInsightsBruto.current?.expiracao_feedback_dias ?? EXPIRACAO_PADRAO,
+        )
+        setExpiracaoFeedback(expiracao)
         const r: RestauranteForm = {
           nome_restaurante: data.nome_restaurante || '',
           logo_url: (data as any).logo_url || '',
@@ -92,7 +111,7 @@ export default function Settings() {
         setRestaurante(r)
         setMascote(m)
         setPerfil(p)
-        setSalvo({ restaurante: r, mascote: m, perfil: p })
+        setSalvo({ restaurante: r, mascote: m, perfil: p, expiracaoFeedback: expiracao })
       }
       setCarregandoDados(false)
     }
@@ -100,7 +119,7 @@ export default function Settings() {
   }, [loading, restauranteId])
 
   const alterado =
-    JSON.stringify({ restaurante, mascote, perfil }) !== JSON.stringify(salvo)
+    JSON.stringify({ restaurante, mascote, perfil, expiracaoFeedback }) !== JSON.stringify(salvo)
 
   const handleSalvar = async () => {
     // Antes isto era um `return` mudo: o botão parecia não fazer nada.
@@ -127,6 +146,10 @@ export default function Settings() {
         tipo_culinaria: perfil.tipo_culinaria || null,
         numero_mesas: perfil.numero_mesas ? Number(perfil.numero_mesas) : null,
         perfil_restaurante: perfilParaJson(perfil),
+        config_insights: {
+          ...configInsightsBruto.current,
+          expiracao_feedback_dias: expiracaoFeedback,
+        },
       } as any)
       .eq('id', restauranteId)
       .select('id')
@@ -145,7 +168,7 @@ export default function Settings() {
       })
       return
     }
-    setSalvo({ restaurante, mascote, perfil })
+    setSalvo({ restaurante, mascote, perfil, expiracaoFeedback })
     // Atualiza os caches persistentes (sem F5): o contexto (sidebar/banner/chat) e
     // os dados do restaurante no useAuth. As telas que buscam do banco já vêm
     // frescas ao navegar por causa do cache: 'no-store'.
@@ -158,6 +181,7 @@ export default function Settings() {
     setRestaurante(salvo.restaurante)
     setMascote(salvo.mascote)
     setPerfil(salvo.perfil)
+    setExpiracaoFeedback(salvo.expiracaoFeedback)
   }
 
   useEffect(() => {
@@ -215,6 +239,7 @@ export default function Settings() {
     { id: 'perfil', label: 'Sobre o restaurante' },
     { id: 'conhecimento', label: 'Base de conhecimento' },
     { id: 'whatsapp', label: 'WhatsApp' },
+    { id: 'feedbacks', label: 'Feedbacks' },
     { id: 'mascote', label: 'Assistente de IA' },
   ]
 
@@ -274,6 +299,9 @@ export default function Settings() {
               </section>
               <section id="whatsapp" className="scroll-mt-28">
                 <WhatsAppTab restauranteId={restauranteId} />
+              </section>
+              <section id="feedbacks" className="scroll-mt-28">
+                <FeedbacksTab value={expiracaoFeedback} onChange={setExpiracaoFeedback} />
               </section>
               <section id="mascote" className="scroll-mt-28">
                 <MascotTab

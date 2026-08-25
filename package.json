@@ -16,8 +16,8 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -b deploy -d dist --dotfiles",
-    "test": "echo \"there are no tests for this project\" && exit 0",
-    "test:watch": "echo \"there are no tests for this project\" && exit 0"
+    "test": "node --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/vinculo-refs.teste.ts",
+    "test:watch": "node --watch --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

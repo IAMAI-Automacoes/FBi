@@ -36,7 +36,9 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
 - Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
 - Agrupe feedbacks do mesmo tema num unico insight, nao repita.
 - Escreva em portugues do Brasil, direto, sem jargao.
-- "feedback_ids": liste os IDs EXATOS dos feedbacks abaixo que sustentam este insight. Use somente IDs que aparecem na lista. Nao invente ID.
+- "refs": liste os NUMEROS dos feedbacks abaixo que sustentam este insight (o campo "n" de cada um).
+  Ex.: [1, 4, 7]. Use somente numeros que aparecem na lista. NUNCA deixe vazio: todo insight nasce
+  de feedbacks concretos, entao sempre cite pelo menos um.
 
 ## Formato OBRIGATORIO (retorne SOMENTE este JSON)
 {
@@ -47,7 +49,7 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedback_ids": ["id-do-feedback-1", "id-do-feedback-2"]
+      "refs": [1, 4]
     }
   ]
 }
@@ -81,10 +83,32 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
 
   const ultimaAnalise = config.ultima_analise_insights ? new Date(config.ultima_analise_insights) : null
 
+  // Só feedback DISPONÍVEL entra na análise.
+  //
+  // Antes o corte era só por janela de tempo, e o mesmo feedback podia entrar em
+  // vários ciclos, gerando insights praticamente idênticos — o dono via a mesma
+  // reclamação virar tarefa duas vezes. Agora, ao entrar num insight (ou numa
+  // ação), o feedback é marcado como usado; se aquele insight/ação for
+  // excluído, ele volta a ficar disponível.
+  //
+  // Vale inclusive no modo `force`: repetir insight a pedido continua sendo
+  // repetir insight.
   let feedbacksQuery = db
     .from('feedbacks_restaurante')
     .select('*', { count: 'exact' })
     .eq('restaurante_id', restauranteId)
+    .is('usado_em', null)
+
+  // Feedback velho demais deixa de ser material para insight: o restaurante
+  // provavelmente já mudou, e agir hoje sobre uma reclamação de dois meses
+  // atrás gera tarefa sem contexto. O prazo é do dono (/configuracoes).
+  const expiracaoDias = Number(
+    (config.config_insights as Record<string, unknown> | null)?.expiracao_feedback_dias ?? 14,
+  )
+  if (Number.isFinite(expiracaoDias) && expiracaoDias > 0) {
+    const limite = new Date(Date.now() - expiracaoDias * 86_400_000)
+    feedbacksQuery = feedbacksQuery.gte('created_at', limite.toISOString())
+  }
 
   if (ultimaAnalise && !force) {
     feedbacksQuery = feedbacksQuery.gte('created_at', ultimaAnalise.toISOString())
@@ -139,12 +163,20 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     conhecimento: conhecimento
       ? `\n## Boas praticas de referencia (use para embasar as sugestoes)\n${conhecimento}`
       : '',
-    // O `id` enviado é o `origem_id` (a MENSAGEM original do cliente), que é o
-    // mesmo espaço de ID da página /feedbacks. Assim o modelo cita IDs já
-    // prontos para navegar, sem tradução no meio do caminho.
+    // O modelo recebe um NÚMERO curto (1, 2, 3...) em vez do uuid do feedback.
+    //
+    // Antes mandávamos o `origem_id` cru e pedíamos que ele o repetisse. Modelos
+    // pequenos — e `gemini-2.5-flash-lite`, o ativo aqui, é um deles — truncam ou
+    // reescrevem uuid de 36 caracteres em saída JSON. Como a validação descarta
+    // todo id que não bate exatamente, o resultado era `feedback_ids: []`: o
+    // insight nascia sem vínculo nenhum, silenciosamente. Aconteceu nos 15
+    // insights existentes.
+    //
+    // Um inteiro de um dígito o modelo copia certo, e a tradução de volta para
+    // uuid acontece aqui no código, onde não há como errar.
     feedbacks: JSON.stringify(
-      (feedbacks || []).map((f: any) => ({
-        id: f.origem_id ?? f.id,
+      (feedbacks || []).map((f: any, indice: number) => ({
+        n: indice + 1,
         texto: f.texto_original,
         sentimento: f.sentimento,
         categoria: f.categoria,
@@ -193,16 +225,54 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
       .filter((i) => i.prioridade === 'OBSERVACAO' || i.prioridade === 'OBSERVAÇÃO')
       .slice(0, max_observacoes)
 
-    // O modelo às vezes inventa ID. Só passam os que realmente vieram na lista,
-    // senão o link "feedbacks relacionados" levaria a um feedback inexistente.
-    const idsValidos = new Set(
-      (feedbacks || []).map((f: any) => String(f.origem_id ?? f.id)),
-    )
+    // Traduz os números que o modelo citou de volta para uuid de feedbacks_originais.
+    // A posição é a mesma que foi enviada no prompt, então a correspondência é exata.
+    const porIndice = (feedbacks || []).map((f: any) => String(f.origem_id ?? f.id))
+
+    /**
+     * Feedbacks que sustentam o insight.
+     *
+     * Aceita `refs` (números, o formato atual) e também `feedback_ids` (uuid, o
+     * formato antigo) — um prompt sobrescrito em `prompts_editaveis` pode ainda
+     * estar pedindo uuid, e nesse caso continuamos entendendo a resposta.
+     */
+    const idsDoInsight = (i: any): string[] => {
+      const porRef = (Array.isArray(i.refs) ? i.refs : [])
+        .map((n: unknown) => porIndice[Number(n) - 1])
+        .filter((id: string | undefined): id is string => !!id)
+      if (porRef.length > 0) return [...new Set<string>(porRef)]
+
+      const validos = new Set(porIndice)
+      const porUuid = (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
+        .map((id: unknown) => String(id))
+        .filter((id: string) => validos.has(id))
+      return [...new Set<string>(porUuid)]
+    }
 
     const finalInsights = [...urgentes, ...importantes, ...observacoes].map((i) => {
-      const ids = (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
-        .map((id: unknown) => String(id))
-        .filter((id: string) => idsValidos.has(id))
+      let ids = idsDoInsight(i)
+
+      // Rede de segurança: se o modelo não citou nada de aproveitável, liga o
+      // insight aos feedbacks da mesma categoria que ele próprio classificou.
+      //
+      // Um insight sem vínculo é pior que um vínculo aproximado: ele quebra o
+      // botão "feedbacks relacionados" e, agora, deixa o motor de resposta sem
+      // destinatário — o cliente que reclamou nunca fica sabendo que agimos.
+      if (ids.length === 0) {
+        const categoria = String(i.categoria || '').toLowerCase()
+        ids = [
+          ...new Set<string>(
+            (feedbacks || [])
+              .filter((f: any) => String(f.categoria || '').toLowerCase() === categoria)
+              .map((f: any) => String(f.origem_id ?? f.id)),
+          ),
+        ].slice(0, 10)
+        if (ids.length > 0) {
+          console.warn(
+            `Insight "${i.titulo}" veio sem refs do modelo; vinculado por categoria (${ids.length} feedbacks).`,
+          )
+        }
+      }
 
       return {
         restaurante_id: restauranteId,
