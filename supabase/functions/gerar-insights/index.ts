@@ -36,19 +36,30 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
 - Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
 - Agrupe feedbacks do mesmo tema num unico insight, nao repita.
 - Escreva em portugues do Brasil, direto, sem jargao.
-- "feedback_ids": liste os NUMEROS "n" (nao um id, nao um texto) dos feedbacks abaixo que sustentam este insight, ex.: [1, 3]. Cada feedback da lista abaixo tem um campo "n" — use exatamente esse numero, nunca invente um numero que nao esteja na lista.
+
+## Como vincular os feedbacks a cada insight (siga esta ordem, nao pule etapa)
+1. Primeiro decida os GRUPOS/temas e de a cada um um numero pequeno comecando em 1 (ex.: grupo 1 = demora no atendimento, grupo 2 = comida fria). Cada insight tera exatamente um "grupo".
+2. Depois, PARA CADA UM dos feedbacks numerados em "Feedbacks a analisar" (todos, do "n":1 ate o ultimo), decida a qual grupo ele pertence e liste em "classificacoes". Nao tente lembrar de cabeca quais numeros formam cada grupo — va feedback por feedback, na ordem, e diga o grupo de CADA UM.
+3. Todo "n" da lista de feedbacks deve aparecer em "classificacoes" exatamente uma vez. Se um feedback nao sustenta nenhum insight (opiniao isolada, generico demais), classifique com "grupo": 0 (nenhum grupo) em vez de forcar ele num grupo errado ou pular ele.
+4. Nao invente numero de "n" que nao esteja na lista de feedbacks, nem numero de "grupo" que nao esteja na lista de insights.
 
 ## Formato OBRIGATORIO (retorne SOMENTE este JSON)
 {
   "insights": [
     {
+      "grupo": 1,
       "prioridade": "URGENTE" | "IMPORTANTE" | "OBSERVACAO",
       "categoria": "Comida" | "Bebidas" | "Atendimento" | "Ambiente" | "Limpeza" | "Preço" | "Tempo de Espera" | "Reserva" | "Estacionamento" | "Acessibilidade" | "Música/Som" | "Cardápio/Variedade" | "Higiene" | "Outros",
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
-      "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedback_ids": [1, 3]
+      "sugestao": "Acao pratica e especifica para a equipe resolver"
     }
+  ],
+  "classificacoes": [
+    { "n": 1, "grupo": 1 },
+    { "n": 2, "grupo": 1 },
+    { "n": 3, "grupo": 2 },
+    { "n": 4, "grupo": 0 }
   ]
 }
 
@@ -204,6 +215,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
   }
 
   let insightsGerados: any[] = []
+  let classificacoes: any[] = []
   try {
     const { result } = await chamarIA(db, {
       messages: [{ role: 'user', content: prompt }],
@@ -214,6 +226,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
       checarCotaAntes: false,
     })
     insightsGerados = Array.isArray(result) ? result : (result?.insights || [])
+    classificacoes = Array.isArray(result?.classificacoes) ? result.classificacoes : []
   } catch (err) {
     console.error(`Falha ao gerar insights (restaurante ${restauranteId}):`, err)
     return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'erro_ia' }
@@ -226,17 +239,31 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
       .filter((i) => i.prioridade === 'OBSERVACAO' || i.prioridade === 'OBSERVAÇÃO')
       .slice(0, max_observacoes)
 
-    const finalInsights = [...urgentes, ...importantes, ...observacoes].map((i) => {
-      // Só passam números que realmente vieram na lista enviada — um número
-      // fora do intervalo (a IA "inventando" um índice) é ignorado em vez de
-      // virar um link quebrado.
-      const ids = [
-        ...new Set(
-          (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
-            .map((n: unknown) => idPorIndice.get(Number(n)))
-            .filter((id: string | undefined): id is string => !!id),
-        ),
-      ]
+    const selecionados = [...urgentes, ...importantes, ...observacoes]
+
+    // Antes pedíamos pra IA listar, dentro de CADA insight, os números dos
+    // feedbacks que o sustentam — ela tinha que lembrar uma lista inteira de
+    // cabeça, e com vários grupos parecidos ela confundia (linkava o número
+    // errado, ou esquecia um). Agora ela classifica CADA feedback individual
+    // (uma decisão pequena por vez, olhando um de cada vez) e só REUTILIZA o
+    // mesmo número de grupo no insight — reaproveitar um rótulo é uma tarefa
+    // muito mais confiável pra um modelo do que recordar uma lista exaustiva.
+    // O vínculo final é montado aqui, cruzando as duas partes.
+    const gruposDeclarados = new Set(
+      selecionados.map((i) => Number(i.grupo)).filter((g) => Number.isFinite(g) && g > 0),
+    )
+    const nsPorGrupo = new Map<number, number[]>()
+    for (const c of classificacoes) {
+      const n = Number(c?.n)
+      const grupo = Number(c?.grupo)
+      if (!idPorIndice.has(n) || !gruposDeclarados.has(grupo)) continue
+      if (!nsPorGrupo.has(grupo)) nsPorGrupo.set(grupo, [])
+      nsPorGrupo.get(grupo)!.push(n)
+    }
+
+    const finalInsights = selecionados.map((i) => {
+      const ns = nsPorGrupo.get(Number(i.grupo)) ?? []
+      const ids = [...new Set(ns.map((n) => idPorIndice.get(n)).filter((id): id is string => !!id))]
 
       return {
         restaurante_id: restauranteId,
