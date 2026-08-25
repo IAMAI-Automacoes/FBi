@@ -49,7 +49,8 @@ export function InsightCard({
   criandoAcao = false,
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
-  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && ehElogio(insight)
+  const elogio = ehElogio(insight)
+  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && elogio
   const config = ehObservacaoElogio ? PRIORIDADES.ELOGIO : estiloPrioridade(prio)
 
   // Insights gerados antes da ligação por IDs têm `feedback_ids` vazio: não há
@@ -166,15 +167,19 @@ export function InsightCard({
           </span>
         )}
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button
-            size="sm"
-            onClick={onCreateTask}
-            disabled={criandoAcao}
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
-          >
-            {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {criandoAcao ? 'Gerando...' : 'Criar Ação'}
-          </Button>
+          {/* Elogio não vira ação — não há o que "resolver" aqui, é só um
+              ponto positivo. */}
+          {!elogio && (
+            <Button
+              size="sm"
+              onClick={onCreateTask}
+              disabled={criandoAcao}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
+            >
+              {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {criandoAcao ? 'Gerando...' : 'Criar Ação'}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

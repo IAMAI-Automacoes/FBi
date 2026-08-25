@@ -318,18 +318,23 @@ function PerfilPanel({ s, onClose }: { s: SugestaoAdmin; onClose: () => void }) 
 }
 
 // ── Modal de mídia (lightbox) ─────────────────────────────────────────────────
-// Foto: pode baixar e dar zoom — clique liga/desliga um zoom de verdade
-// (`transform: scale`, não redimensiona a imagem) que acompanha o mouse: o
-// `transform-origin` segue o cursor, então mover o mouse revela outra parte
-// da foto ampliada, tipo lupa. Vídeo: só baixar — o player nativo já dá
-// controle suficiente, zoom não se aplica.
+// Foto: pode baixar e dar zoom — sem clique nenhum, só passar o mouse por
+// cima já liga um zoom de verdade (`transform: scale`, não redimensiona a
+// imagem) que segue o cursor: o `transform-origin` acompanha a posição, tipo
+// lupa. Tira o mouse (ou levanta o dedo, no touch) e volta ao normal. Vídeo:
+// só baixar — o player nativo já dá controle suficiente, zoom não se aplica.
 function MediaModal({ url, kind, name, onClose }: {
   url: string; kind: 'image' | 'video'; name: string; onClose: () => void
 }) {
   const [zoom, setZoom] = useState(false)
   const [origem, setOrigem] = useState('center')
 
-  const posDoMouse = (e: React.MouseEvent<HTMLImageElement>) => {
+  // Pointer (não mouse) cobre os dois: no mouse, "enter" já é o hover puro
+  // (sem precisar apertar nada); no touch, "enter" dispara junto do toque
+  // (não existe hover de verdade lá), e "move" só anda enquanto o dedo
+  // está apoiado — então arrastar o dedo pela foto move a lupa igual mover
+  // o mouse faria.
+  const posDoPonteiro = (e: React.PointerEvent<HTMLImageElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
@@ -389,15 +394,13 @@ function MediaModal({ url, kind, name, onClose }: {
           <img
             src={url}
             alt={name}
-            onClick={(e) => {
-              if (!zoom) setOrigem(posDoMouse(e))
-              else setOrigem('center')
-              setZoom((z) => !z)
-            }}
-            onMouseMove={(e) => { if (zoom) setOrigem(posDoMouse(e)) }}
+            onPointerEnter={(e) => { setZoom(true); setOrigem(posDoPonteiro(e)) }}
+            onPointerMove={(e) => { if (zoom) setOrigem(posDoPonteiro(e)) }}
+            onPointerLeave={() => { setZoom(false); setOrigem('center') }}
+            onPointerUp={() => { setZoom(false); setOrigem('center') }}
             className={cn(
-              'max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl transition-transform duration-150',
-              zoom ? 'scale-[2.5] cursor-zoom-out' : 'cursor-zoom-in',
+              'max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl transition-transform duration-150 cursor-zoom-in touch-none',
+              zoom && 'scale-[2.5]',
             )}
             style={{ transformOrigin: origem }}
           />
