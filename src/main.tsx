@@ -1,6 +1,7 @@
 /* Main entry point for the application - renders the root React component */
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './main.css'
 
 // Mostra no console quando este código foi gerado. Se a data estiver velha,
@@ -15,7 +16,11 @@ console.info(
   'background:#e2e8f0;color:#0f172a;border-radius:0 3px 3px 0;padding:2px 4px',
 )
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
+)
 
 // Registra o service worker do PWA (instalável + Web Push). Depois do load pra
 // não competir com o primeiro render.

@@ -7,6 +7,7 @@ import { AppSidebar } from './AppSidebar'
 import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
 import { AvisoAssinatura } from './AvisoAssinatura'
+import { ErrorBoundary } from './ErrorBoundary'
 
 // Largura fixa do chat de IA (desktop). O conteúdo recua exatamente isso.
 const LARGURA_CHAT = 380
@@ -203,7 +204,14 @@ export default function Layout() {
                 // que isso, e a barra ficava por cima da borda dos cards.
                 className="h-full overflow-auto sem-barra pl-4 sm:pl-6 lg:pl-8 pr-8 py-4 sm:py-6 lg:py-8 animate-fade-in"
               >
-                <Outlet />
+                {/* `key={pathname}`: se uma página quebrar, o boundary reseta
+                    sozinho ao trocar de rota (senão ficaria travado na tela
+                    de erro mesmo clicando em outro item do menu). O menu
+                    lateral fica FORA daqui de propósito — continua
+                    clicável mesmo com a página atual quebrada. */}
+                <ErrorBoundary key={pathname}>
+                  <Outlet />
+                </ErrorBoundary>
               </div>
               {mostrarBarraScroll && <BarraDeScroll containerRef={scrollRef} />}
             </div>
