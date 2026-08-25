@@ -28,21 +28,23 @@ interface FeedbackSeparadoRow {
 interface FeedbacksRelacionadosPopoverProps {
   insightId: string
   feedbackIds: string[]
-  feedbacksRestauranteIds: number[]
   totalFeedbacks: number
 }
 
 /**
  * "Telinha" com os feedbacks por trás de um insight: as mensagens originais
- * inteiras (`feedback_ids`) e os pontos separados que a IA de fato usou
- * (`feedbacks_restaurante_ids`) — os dois juntos, sem precisar navegar pra
- * /feedbacks só pra ver do que se trata. Busca sob demanda (só ao abrir), não
- * a cada card renderizado na lista.
+ * inteiras (`feedback_ids`) e os pontos separados que a IA de fato usou pra
+ * gerar este insight — os dois juntos, sem precisar navegar pra /feedbacks só
+ * pra ver do que se trata. Os separados não vêm de um array na própria linha
+ * do insight: são achados buscando `feedbacks_restaurante` cujo
+ * `usado_por_insight_id` aponta pra este insight — coluna mantida por trigger
+ * no banco (`trg_insights_marcar_feedbacks`) sempre que o insight nasce com
+ * `feedback_ids` preenchido. Busca sob demanda (só ao abrir), não a cada card
+ * renderizado na lista.
  */
 export function FeedbacksRelacionadosPopover({
   insightId,
   feedbackIds,
-  feedbacksRestauranteIds,
   totalFeedbacks,
 }: FeedbacksRelacionadosPopoverProps) {
   const [open, setOpen] = useState(false)
@@ -65,12 +67,10 @@ export function FeedbacksRelacionadosPopover({
               .in('id', feedbackIds)
               .order('created_at', { ascending: false })
           : Promise.resolve({ data: [] as FeedbackOriginalRow[], error: null }),
-        feedbacksRestauranteIds.length > 0
-          ? supabase
-              .from('feedbacks_restaurante')
-              .select('id, texto_original, resumo, categoria, sentimento')
-              .in('id', feedbacksRestauranteIds)
-          : Promise.resolve({ data: [] as FeedbackSeparadoRow[], error: null }),
+        supabase
+          .from('feedbacks_restaurante')
+          .select('id, texto_original, resumo, categoria, sentimento')
+          .eq('usado_por_insight_id', insightId),
       ])
       if (origRes.error) throw origRes.error
       if (sepRes.error) throw sepRes.error

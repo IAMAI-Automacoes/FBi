@@ -13,9 +13,6 @@ const corsHeaders = {
 }
 
 const MIN_FEEDBACKS_MANUAL = 3
-/** Teto de insights por rodada — pedido explícito: qualidade antes de
- *  quantidade, a IA pode gerar menos se não tiver 5 assuntos de verdade. */
-const MAX_INSIGHTS = 5
 const AGENTE = 'gerador_insights'
 
 /** Padrão do código; o admin sobrescreve pela chave ef_gerar_insights no painel. */
@@ -35,12 +32,11 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
 
 ## Regras de qualidade
 - Baseie-se APENAS nos feedbacks abaixo. Nao invente reclamacao que nao existe.
-- Gere no MAXIMO ${MAX_INSIGHTS} insights, os mais valiosos — nunca mais que isso. Gere MENOS que ${MAX_INSIGHTS} sempre que nao houver assunto de verdade para preencher: nao invente insight so pra bater o numero. Um relato isolado, opiniao pessoal de um unico cliente sem repeticao, ou algo generico demais pra virar acao NAO deve virar insight so pra completar a cota.
 - A sugestao deve ser CONCRETA e executavel neste restaurante, considerando o perfil dele (tamanho, tipo de cozinha, publico). Nada de conselho generico.
 - Quando uma boa pratica de referencia embasar a sugestao, aplique-a ao caso concreto.
-- Agrupe feedbacks do mesmo tema num unico insight, nao repita o mesmo feedback em dois insights.
+- Agrupe feedbacks do mesmo tema num unico insight, nao repita.
 - Escreva em portugues do Brasil, direto, sem jargao.
-- "feedback_ids": liste os IDs EXATOS ("id") dos feedbacks abaixo que sustentam este insight. Use somente IDs que aparecem na lista. Nao invente ID.
+- "feedback_ids": liste os NUMEROS "n" (nao um id, nao um texto) dos feedbacks abaixo que sustentam este insight, ex.: [1, 3]. Cada feedback da lista abaixo tem um campo "n" — use exatamente esse numero, nunca invente um numero que nao esteja na lista.
 
 ## Formato OBRIGATORIO (retorne SOMENTE este JSON)
 {
@@ -51,15 +47,13 @@ const PROMPT_PADRAO = `Voce e o "{nome}", consultor de gestao de restaurantes. A
       "titulo": "Titulo curto e claro",
       "descricao": "O que os feedbacks mostram, com o padrao observado",
       "sugestao": "Acao pratica e especifica para a equipe resolver",
-      "feedback_ids": ["id-do-feedback-1", "id-do-feedback-2"]
+      "feedback_ids": [1, 3]
     }
   ]
 }
 
 ## Feedbacks a analisar
 {feedbacks}`
-
-const PESO_PRIORIDADE: Record<string, number> = { URGENTE: 3, IMPORTANTE: 2, OBSERVACAO: 1 }
 
 async function processarRestaurante(db: any, restauranteId: number, force: boolean, prompts: Prompts) {
   // A configuracao mora na tabela restaurantes (config_restaurantes nao existe)
@@ -81,49 +75,62 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
   const config_insights = (config.config_insights as any) || {}
   const feedbacks_por_analise = config_insights.feedbacks_por_analise || 10
   const horas_entre_analises = config_insights.horas_entre_analises || 24
+  const max_importantes = config_insights.max_importantes || 5
+  const max_observacoes = config_insights.max_observacoes || 3
   const mascoteNome = nomeDoAssistente(config.mascote_config)
 
   const ultimaAnalise = config.ultima_analise_insights ? new Date(config.ultima_analise_insights) : null
 
-  // Feedbacks já "reservados" — citados no feedback_ids/feedbacks_restaurante_ids
-  // de algum insight ATIVO ou de alguma ação NAO arquivada. Nunca reanalisa o
-  // mesmo feedback separado duas vezes enquanto ele seguir vinculado ali (a
-  // correspondência exata "isso realmente já foi tratado" fica por conta da
-  // lógica mais fina que ainda vai entrar — aqui é só não repetir).
-  const [{ data: insightsAtivos }, { data: acoesAtuais }] = await Promise.all([
-    db.from('insights').select('feedbacks_restaurante_ids').eq('restaurante_id', restauranteId).eq('ativo', true),
-    db.from('acoes_operacionais').select('feedbacks_restaurante_ids').eq('restaurante_id', restauranteId).is('arquivada_em', null),
-  ])
-  const idsReservados = new Set<number>()
-  for (const linha of [...(insightsAtivos ?? []), ...(acoesAtuais ?? [])]) {
-    for (const id of (linha.feedbacks_restaurante_ids ?? [])) idsReservados.add(id)
+  // Só feedback DISPONÍVEL entra na análise.
+  //
+  // Antes o corte era só por janela de tempo, e o mesmo feedback podia entrar em
+  // vários ciclos, gerando insights praticamente idênticos — o dono via a mesma
+  // reclamação virar tarefa duas vezes. Agora, ao entrar num insight (ou numa
+  // ação), o feedback é marcado como usado (via trigger em `insights`/
+  // `acoes_operacionais`); se aquele insight/ação for excluído, ele volta a
+  // ficar disponível (outro trigger libera).
+  //
+  // Vale inclusive no modo `force`: repetir insight a pedido continua sendo
+  // repetir insight.
+  let feedbacksQuery = db
+    .from('feedbacks_restaurante')
+    .select('*', { count: 'exact' })
+    .eq('restaurante_id', restauranteId)
+    .is('usado_em', null)
+
+  // Feedback velho demais deixa de ser material para insight: o restaurante
+  // provavelmente já mudou, e agir hoje sobre uma reclamação de dois meses
+  // atrás gera tarefa sem contexto. O prazo é do dono (/configuracoes).
+  const expiracaoDias = Number(
+    (config.config_insights as Record<string, unknown> | null)?.expiracao_feedback_dias ?? 14,
+  )
+  if (Number.isFinite(expiracaoDias) && expiracaoDias > 0) {
+    const limite = new Date(Date.now() - expiracaoDias * 86_400_000)
+    feedbacksQuery = feedbacksQuery.gte('created_at', limite.toISOString())
   }
 
-  const { data: feedbacksBrutos, error: countErr } = await db
-    .from('feedbacks_restaurante')
-    .select('*')
-    .eq('restaurante_id', restauranteId)
+  if (ultimaAnalise && !force) {
+    feedbacksQuery = feedbacksQuery.gte('created_at', ultimaAnalise.toISOString())
+  }
+
+  const { data: feedbacks, count, error: countErr } = await feedbacksQuery
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(100)
 
   if (countErr) return { insights_gerados: 0, feedbacks_analisados: 0, status: 'erro_busca' }
-
-  // Só os que ainda não estão em nenhum insight/ação — é o universo real
-  // disponível pra gerar insight novo.
-  const feedbacks = (feedbacksBrutos ?? []).filter((f: any) => !idsReservados.has(f.id))
-  const totalDisponivel = feedbacks.length
 
   const horasPassadas = ultimaAnalise
     ? (new Date().getTime() - ultimaAnalise.getTime()) / (1000 * 60 * 60)
     : Infinity
 
-  if (!force && totalDisponivel < feedbacks_por_analise && horasPassadas < horas_entre_analises) {
-    return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, status: 'criterios_nao_atingidos' }
+  if (!force && (count || 0) < feedbacks_por_analise && horasPassadas < horas_entre_analises) {
+    return { insights_gerados: 0, feedbacks_analisados: count || 0, status: 'criterios_nao_atingidos' }
   }
 
-  if (totalDisponivel === 0) return { insights_gerados: 0, feedbacks_analisados: 0, status: 'sem_feedbacks' }
-  if (force && totalDisponivel < MIN_FEEDBACKS_MANUAL) {
-    return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, minimo_necessario: MIN_FEEDBACKS_MANUAL, status: 'insuficiente' }
+  const totalFeedbacks = feedbacks?.length || 0
+  if (totalFeedbacks === 0) return { insights_gerados: 0, feedbacks_analisados: 0, status: 'sem_feedbacks' }
+  if (force && totalFeedbacks < MIN_FEEDBACKS_MANUAL) {
+    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, minimo_necessario: MIN_FEEDBACKS_MANUAL, status: 'insuficiente' }
   }
 
   // Anotacoes que a IA fez em conversas
@@ -136,14 +143,27 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
 
   // Recupera boas praticas relevantes aos temas dos feedbacks (foco nos negativos)
   const consultaConhecimento =
-    feedbacks
+    (feedbacks || [])
       .filter((f: any) => (f.sentimento || '').toLowerCase().startsWith('neg'))
       .map((f: any) => `${f.categoria || ''}: ${f.texto_original || f.resumo || ''}`)
       .join('\n')
       .slice(0, 3500) ||
-    feedbacks.map((f: any) => f.texto_original || '').join('\n').slice(0, 3500)
+    (feedbacks || []).map((f: any) => f.texto_original || '').join('\n').slice(0, 3500)
 
   const conhecimento = await buscarConhecimento(db, restauranteId, consultaConhecimento)
+
+  // Mapa número (1-based, na mesma ordem enviada no prompt) -> id real do
+  // feedback original. Antes mandávamos o UUID de verdade como "id" e
+  // pedíamos pra IA reproduzi-lo em "feedback_ids" — na prática ela nunca
+  // conseguia (reproduzir um token opaco de 36 caracteres com fidelidade é
+  // um modo de falha conhecido de LLM, principalmente em modelo barato), e
+  // o filtro "só id que existe" rejeitava tudo: TODOS os insights já
+  // gerados, desde o início do recurso, saíram com feedback_ids vazio. Um
+  // número pequeno é muito mais fácil da IA copiar sem erro; a tradução de
+  // volta pro id real acontece aqui, em código, sem depender dela.
+  const idPorIndice = new Map<number, string>(
+    (feedbacks || []).map((f: any, indice: number) => [indice + 1, String(f.origem_id ?? f.id)]),
+  )
 
   const prompt = montarPrompt(prompts, 'ef_gerar_insights', PROMPT_PADRAO, {
     nome: mascoteNome,
@@ -155,17 +175,9 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     conhecimento: conhecimento
       ? `\n## Boas praticas de referencia (use para embasar as sugestoes)\n${conhecimento}`
       : '',
-    // O "id" enviado agora é o do FEEDBACK SEPARADO (`feedbacks_restaurante.id`),
-    // não mais o da mensagem original — precisa ser o id fino pra marcar
-    // exatamente qual pedaço foi usado (um original pode ter virado dois
-    // feedbacks separados, ex.: elogio + reclamação na mesma mensagem, e só
-    // um dos dois pode ser o que sustenta este insight). O id da mensagem
-    // original (pra navegação em /feedbacks) é derivado depois, em código,
-    // a partir do que a IA citar aqui — sem pedir os dois pra IA, sem risco
-    // de inventar um dos dois.
     feedbacks: JSON.stringify(
-      feedbacks.map((f: any) => ({
-        id: f.id,
+      (feedbacks || []).map((f: any, indice: number) => ({
+        n: indice + 1,
         texto: f.texto_original,
         sentimento: f.sentimento,
         categoria: f.categoria,
@@ -178,7 +190,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     await checarCota(db, restauranteId)
   } catch (e) {
     if (e instanceof ErroCota) {
-      return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, status: 'sem_credito' }
+      return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'sem_credito' }
     }
     throw e
   }
@@ -188,7 +200,7 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     max_tokens: 3000,
   })
   if (!params) {
-    return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, status: 'agente_desativado' }
+    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'agente_desativado' }
   }
 
   let insightsGerados: any[] = []
@@ -204,42 +216,25 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     insightsGerados = Array.isArray(result) ? result : (result?.insights || [])
   } catch (err) {
     console.error(`Falha ao gerar insights (restaurante ${restauranteId}):`, err)
-    return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, status: 'erro_ia' }
+    return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'erro_ia' }
   }
 
   if (insightsGerados.length > 0) {
-    // Mapa id-do-feedback-separado -> origem_id, pra derivar o feedback_ids
-    // (uuid[] de feedbacks_originais, usado pela navegação "Ver feedbacks
-    // relacionados") sem depender da IA citar dois ids por insight.
-    const origemPorId = new Map<number, string>(
-      feedbacks.map((f: any) => [f.id, f.origem_id ?? null]).filter(([, o]: any) => o != null),
-    )
-    const idsValidos = new Set(feedbacks.map((f: any) => String(f.id)))
+    const urgentes = insightsGerados.filter((i) => i.prioridade === 'URGENTE')
+    const importantes = insightsGerados.filter((i) => i.prioridade === 'IMPORTANTE').slice(0, max_importantes)
+    const observacoes = insightsGerados
+      .filter((i) => i.prioridade === 'OBSERVACAO' || i.prioridade === 'OBSERVAÇÃO')
+      .slice(0, max_observacoes)
 
-    // Corta em 5, priorizando URGENTE > IMPORTANTE > OBSERVACAO — não é mais
-    // um teto por categoria (antes: X importantes + Y observações), é um
-    // teto único no total.
-    const ordenados = [...insightsGerados].sort((a, b) => {
-      const pa = PESO_PRIORIDADE[a.prioridade === 'OBSERVAÇÃO' ? 'OBSERVACAO' : a.prioridade] || 0
-      const pb = PESO_PRIORIDADE[b.prioridade === 'OBSERVAÇÃO' ? 'OBSERVACAO' : b.prioridade] || 0
-      return pb - pa
-    })
-    const selecionados = ordenados.slice(0, MAX_INSIGHTS)
-
-    const finalInsights = selecionados.map((i) => {
-      // O modelo às vezes inventa ID. Só passam os que realmente vieram na
-      // lista, senão o link "feedbacks relacionados" levaria a um feedback
-      // inexistente.
-      const feedbacksRestauranteIds = (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
-        .map((id: unknown) => String(id))
-        .filter((id: string) => idsValidos.has(id))
-        .map((id: string) => Number(id))
-
-      const feedbackIdsOriginais = [
+    const finalInsights = [...urgentes, ...importantes, ...observacoes].map((i) => {
+      // Só passam números que realmente vieram na lista enviada — um número
+      // fora do intervalo (a IA "inventando" um índice) é ignorado em vez de
+      // virar um link quebrado.
+      const ids = [
         ...new Set(
-          feedbacksRestauranteIds
-            .map((id: number) => origemPorId.get(id))
-            .filter((o: string | undefined): o is string => !!o),
+          (Array.isArray(i.feedback_ids) ? i.feedback_ids : [])
+            .map((n: unknown) => idPorIndice.get(Number(n)))
+            .filter((id: string | undefined): id is string => !!id),
         ),
       ]
 
@@ -250,20 +245,22 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
         titulo: i.titulo || 'Insight detectado',
         descricao: i.descricao || '',
         sugestao: i.sugestao || '',
-        feedback_ids: feedbackIdsOriginais,
-        feedbacks_restaurante_ids: feedbacksRestauranteIds,
-        // Deriva da lista real (contagem de feedbacks SEPARADOS, mais fina
-        // que a de originais): o número deixa de ser um palpite do modelo.
-        feedbacks_relacionados: feedbacksRestauranteIds.length || 1,
+        feedback_ids: ids,
+        // Deriva da lista real: o número deixa de ser um palpite do modelo.
+        feedbacks_relacionados: ids.length || 1,
         gerado_por: 'ia',
         ativo: true,
       }
     })
 
+    if (ultimaAnalise) {
+      await db.from('insights').update({ ativo: false }).eq('restaurante_id', restauranteId).lt('created_at', ultimaAnalise.toISOString())
+    }
+
     const { error: insertErr } = await db.from('insights').insert(finalInsights)
     if (insertErr) {
       console.error(`Falha ao inserir insights (restaurante ${restauranteId}):`, insertErr)
-      return { insights_gerados: 0, feedbacks_analisados: totalDisponivel, status: 'erro_insert' }
+      return { insights_gerados: 0, feedbacks_analisados: totalFeedbacks, status: 'erro_insert' }
     }
 
     await db.from('restaurantes').update({ ultima_analise_insights: new Date().toISOString() }).eq('id', restauranteId)
@@ -273,18 +270,12 @@ async function processarRestaurante(db: any, restauranteId: number, force: boole
     } catch (e) {
       console.error('Falha ao disparar sugerir-acoes:', e)
     }
-
-    return {
-      insights_gerados: finalInsights.length,
-      feedbacks_analisados: totalDisponivel,
-      status: 'sucesso',
-    }
   }
 
   return {
-    insights_gerados: 0,
-    feedbacks_analisados: totalDisponivel,
-    status: 'sem_novidades',
+    insights_gerados: insightsGerados.length,
+    feedbacks_analisados: totalFeedbacks,
+    status: insightsGerados.length > 0 ? 'sucesso' : 'sem_novidades',
   }
 }
 

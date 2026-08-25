@@ -22,12 +22,12 @@ export interface Insight {
   /** Contagem derivada de `feedback_ids` (antes era um número inventado pela IA). */
   feedbacks_relacionados: number | null
   /** IDs de `feedbacks_originais` que sustentam este insight. Vazio nos insights
-   *  criados antes da migration `20260813010000_insights_feedback_ids`. */
+   *  criados antes da migration `20260813010000_insights_feedback_ids`. Os
+   *  pedaços SEPARADOS (`feedbacks_restaurante`) usados por este insight não
+   *  ficam num array aqui — dá pra achá-los buscando
+   *  `feedbacks_restaurante.usado_por_insight_id = insight.id` (mantido por
+   *  trigger, ver `trg_insights_marcar_feedbacks`). */
   feedback_ids: string[] | null
-  /** IDs de `feedbacks_restaurante` (os separados) que sustentam este insight —
-   *  mais fino que `feedback_ids`: uma mensagem original pode virar mais de um
-   *  feedback separado, e é isto que marca exatamente qual pedaço já foi usado. */
-  feedbacks_restaurante_ids: number[] | null
   gerado_por: string | null
   ativo: boolean | null
   /** Fixado no topo da lista, por cima da ordenação por data de criação. */

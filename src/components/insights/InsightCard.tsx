@@ -155,7 +155,6 @@ export function InsightCard({
           <FeedbacksRelacionadosPopover
             insightId={insight.id}
             feedbackIds={insight.feedback_ids ?? []}
-            feedbacksRestauranteIds={insight.feedbacks_restaurante_ids ?? []}
             totalFeedbacks={totalFeedbacks}
           />
         ) : (
