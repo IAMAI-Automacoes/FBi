@@ -24,6 +24,10 @@ export interface Insight {
   /** IDs de `feedbacks_originais` que sustentam este insight. Vazio nos insights
    *  criados antes da migration `20260813010000_insights_feedback_ids`. */
   feedback_ids: string[] | null
+  /** IDs de `feedbacks_restaurante` (os separados) que sustentam este insight —
+   *  mais fino que `feedback_ids`: uma mensagem original pode virar mais de um
+   *  feedback separado, e é isto que marca exatamente qual pedaço já foi usado. */
+  feedbacks_restaurante_ids: number[] | null
   gerado_por: string | null
   ativo: boolean | null
   /** Fixado no topo da lista, por cima da ordenação por data de criação. */

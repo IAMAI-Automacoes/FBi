@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { RefreshCw, Settings2 } from 'lucide-react'
+import { Sparkles, Loader2, Settings2, Pin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RoletaNumerica } from '@/components/RoletaNumerica'
 import {
@@ -35,6 +35,7 @@ const FEEDBACKS_PADRAO = 10
 export default function Insights() {
   const [filterPriority, setFilterPriority] = useState<string>('Todos')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
+  const [showOnlyPinned, setShowOnlyPinned] = useState(false)
 
   const [insights, setInsights] = useState<Insight[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -146,8 +147,18 @@ export default function Insights() {
   }, [usuario?.restaurante_id])
 
   const handleGerarInsights = async () => {
+    if (!usuario?.restaurante_id) return
     setGenerating(true)
     try {
+      // Limpa os insights atuais NÃO fixados antes de gerar novos — os
+      // fixados sobrevivem à rodada, o resto dá lugar à análise nova.
+      const { error: delError } = await supabase
+        .from('insights')
+        .delete()
+        .eq('restaurante_id', usuario.restaurante_id)
+        .or('fixado.is.null,fixado.eq.false')
+      if (delError) throw delError
+
       const { data, error } = await supabase.functions.invoke('gerar-insights', {
         body: { force: true },
       })
@@ -253,13 +264,14 @@ export default function Insights() {
           i.prioridade === filterPriority ||
           (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
         const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
-        return prioMatch && catMatch
+        const pinMatch = !showOnlyPinned || !!i.fixado
+        return prioMatch && catMatch && pinMatch
       })
       // Fixados sempre no topo — sort é estável, então dentro de cada grupo
       // (fixado / não fixado) a ordem por data (`created_at desc`) do fetch
       // original se mantém.
       .sort((a, b) => Number(!!b.fixado) - Number(!!a.fixado))
-  }, [insights, filterPriority, filterCategories])
+  }, [insights, filterPriority, filterCategories, showOnlyPinned])
 
   // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.
   const topoRef = useRef<HTMLDivElement>(null)
@@ -270,7 +282,7 @@ export default function Insights() {
       return
     }
     topoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [filterPriority, filterCategories])
+  }, [filterPriority, filterCategories, showOnlyPinned])
 
   // Mesma cor de cada prioridade usada nos cards de insight (ver `@/lib/prioridade`)
   // — "Todos" é o único que não é uma prioridade real, fica com o azul do app.
@@ -331,25 +343,48 @@ export default function Insights() {
               selecionadas={filterCategories}
               onChange={setFilterCategories}
             />
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowOnlyPinned((v) => !v)}
+              aria-pressed={showOnlyPinned}
+              title={showOnlyPinned ? 'Mostrando só os fixados' : 'Mostrar só os fixados'}
+              className={cn(
+                'h-10 shrink-0 shadow-sm font-normal gap-1.5',
+                showOnlyPinned
+                  ? 'border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+              )}
+            >
+              <Pin className={cn('h-4 w-4', showOnlyPinned && 'fill-current')} />
+              Fixados
+            </Button>
           </div>
 
           <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
+                  size="sm"
                   disabled={generating}
                   className="w-full lg:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium shadow-sm transition-all"
                 >
-                  <RefreshCw className={cn('w-4 h-4 mr-2', generating && 'animate-spin')} />
-                  {generating ? 'Analisando dados...' : 'Gerar insights agora'}
+                  {generating ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  {generating ? 'Analisando...' : 'Gerar insights agora'}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Gerar insights agora?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    O {mascote.nome} analisará todos os feedbacks recentes e gerará novos insights
-                    operacionais. Os insights anteriores serão substituídos.
+                    O {mascote.nome} vai analisar os feedbacks que ainda não viraram insight ou ação
+                    e gerar novos insights operacionais. Os insights fixados são mantidos; os demais
+                    são substituídos.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -438,6 +473,7 @@ export default function Insights() {
   }, [
     filterPriority,
     filterCategories,
+    showOnlyPinned,
     categories,
     generating,
     configOpen,

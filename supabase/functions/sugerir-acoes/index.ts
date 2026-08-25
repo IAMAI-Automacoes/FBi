@@ -182,21 +182,44 @@ serve(async (req: Request) => {
       // entao so passa id que veio na lista enviada ao modelo.
       const idsDeInsight = new Set(insightsValidos.map((i) => String(i.id)))
       const insightPadrao = insightSolicitado ?? null
+      // `insightsValidos` já veio de um `select('*')`, então já traz
+      // feedback_ids/feedbacks_restaurante_ids — sem consulta extra.
+      const insightPorId = new Map(insightsValidos.map((i: any) => [String(i.id), i]))
 
-      const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => ({
-        titulo_acao: a.titulo_acao || 'Acao sugerida',
-        plano_detalhado: a.plano_detalhado || '',
-        prioridade: a.prioridade || 'IMPORTANTE',
-        categoria: a.categoria || 'Outros',
-        status: 'SUGERIDA',
-        restaurante_id: targetRestauranteId,
-        insight_id: idsDeInsight.has(String(a.insight_id)) ? a.insight_id : insightPadrao,
-        texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
-      }))
+      const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => {
+        const insightIdResolvido = idsDeInsight.has(String(a.insight_id))
+          ? String(a.insight_id)
+          : insightPadrao
+        const insightOrigem = insightIdResolvido ? insightPorId.get(String(insightIdResolvido)) : null
+        return {
+          titulo_acao: a.titulo_acao || 'Acao sugerida',
+          plano_detalhado: a.plano_detalhado || '',
+          prioridade: a.prioridade || 'IMPORTANTE',
+          categoria: a.categoria || 'Outros',
+          // Antes 'SUGERIDA' (esperava aprovação manual numa lista que não
+          // existe mais na interface) — agora entra direto pronta pro quadro.
+          status: 'PENDENTE',
+          restaurante_id: targetRestauranteId,
+          insight_id: insightIdResolvido,
+          // Herda os vínculos do insight de origem: é o que faz o insight
+          // "virar" a ação (mesmos feedbacks, sem perder o rastro) em vez de
+          // nascer do zero, sem vínculo nenhum.
+          feedback_ids: insightOrigem?.feedback_ids ?? [],
+          feedbacks_restaurante_ids: insightOrigem?.feedbacks_restaurante_ids ?? [],
+          texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
+        }
+      })
 
       const { error: insertErr } = await db.from('acoes_operacionais').insert(finalAcoes)
       if (insertErr) throw insertErr
       criadas = finalAcoes.length
+
+      // O insight "virou" ação — some da lista (o rastro dos feedbacks já
+      // migrou pra ação acima, então nada se perde).
+      const idsParaApagar = [...new Set(finalAcoes.map((a) => a.insight_id).filter(Boolean))]
+      if (idsParaApagar.length > 0) {
+        await db.from('insights').delete().in('id', idsParaApagar)
+      }
     }
 
     return json({ status: 'sucesso', sugestoes_criadas: criadas })
