@@ -97,7 +97,62 @@ async function registrarUso(
 }
 
 /** Só os parâmetros que o OpenRouter aceita, sem as chaves vazias. */
-function corpoDaChamada(messages: Mensagem[], params: ParamsAgente, usarCalculadora: boolean) {
+/**
+ * Uma ferramenta que a IA pode chamar durante a conversa.
+ *
+ * Antes só existia a calculadora, despachada por um `if` com o nome fixo. Com
+ * o registro, cada agente injeta as suas — ler um feedback original, contar
+ * pessoas de um assunto, buscar boas práticas — sem tocar neste arquivo.
+ */
+export interface Ferramenta {
+  /** Definição em formato de function-calling (ver `FERRAMENTA_CALCULADORA`). */
+  // deno-lint-ignore no-explicit-any
+  definicao: { type: 'function'; function: { name: string; [chave: string]: any } }
+  /** Recebe os argumentos crus (string JSON vinda da IA) e devolve o resultado. */
+  executar: (argumentos: string) => string | Promise<string>
+  /**
+   * Teto de chamadas desta ferramenta por invocação. Existe porque uma
+   * ferramenta cara (consulta ao banco, embedding) pode ser chamada em loop
+   * por um modelo indeciso e estourar tempo e cota.
+   */
+  maxChamadas?: number
+}
+
+/**
+ * Saída estruturada entregue POR UMA FERRAMENTA, em vez de `response_format`.
+ *
+ * É mais forte que `json_object`, que só garante JSON sintaticamente válido —
+ * nada impede o modelo de devolver um objeto com as chaves erradas. Um schema
+ * de ferramenta descreve o formato inteiro, e de quebra convive com outras
+ * ferramentas na mesma chamada (o que `json_object` não faz, ver abaixo).
+ */
+export interface SaidaEstruturada {
+  nome: string
+  descricao?: string
+  /** JSON Schema do objeto de saída (`type: 'object'`, `properties`, `required`). */
+  // deno-lint-ignore no-explicit-any
+  schema: Record<string, any>
+}
+
+function definicaoDaSaida(saida: SaidaEstruturada) {
+  return {
+    type: 'function' as const,
+    function: {
+      name: saida.nome,
+      description: saida.descricao ??
+        'Registra o resultado final. Chame exatamente uma vez, quando tiver terminado a analise.',
+      parameters: saida.schema,
+    },
+  }
+}
+
+function corpoDaChamada(
+  messages: Mensagem[],
+  params: ParamsAgente,
+  ferramentas: Ferramenta[],
+  saida: SaidaEstruturada | null,
+  forcarSaida: boolean,
+) {
   // deno-lint-ignore no-explicit-any
   const body: Record<string, any> = {
     model: params.model,
@@ -116,16 +171,25 @@ function corpoDaChamada(messages: Mensagem[], params: ParamsAgente, usarCalculad
     if (v != null) body[chave] = v
   }
 
-  if (params.response_format) body.response_format = params.response_format
+  // `saida` e `response_format` são mutuamente exclusivos: quando a resposta
+  // vem por ferramenta, forçar json_object junto reintroduz exatamente a
+  // incompatibilidade que estamos contornando.
+  if (params.response_format && !saida) body.response_format = params.response_format
 
-  // Calculadora: só em respostas de texto livre. Em `json_object` alguns
-  // modelos, ao rotearem por provedores diferentes no OpenRouter, não
-  // combinam bem tool-calling com saída JSON forçada — nesses agentes os
-  // números já chegam prontos no prompt (não pedimos conta à IA), então a
-  // ferramenta não faz falta e preferimos não arriscar a combinação.
-  if (usarCalculadora) {
-    body.tools = [FERRAMENTA_CALCULADORA]
-    body.tool_choice = 'auto'
+  // Em `json_object` alguns modelos, ao rotearem por provedores diferentes no
+  // OpenRouter, não combinam bem tool-calling com saída JSON forçada. Por isso
+  // quem chama com `response_format` recebe a lista de ferramentas VAZIA (a
+  // decisão é tomada em `chamarIA`) e este bloco não anexa nada — comportamento
+  // idêntico ao de antes deste refactor.
+  const tools = ferramentas.map((f) => f.definicao)
+  if (saida) tools.push(definicaoDaSaida(saida))
+  if (tools.length > 0) {
+    body.tools = tools
+    // Forçar a ferramenta de saída é o que garante término: sem isso um modelo
+    // indeciso pode pedir ferramenta até acabar as rodadas e não devolver nada.
+    body.tool_choice = forcarSaida && saida
+      ? { type: 'function', function: { name: saida.nome } }
+      : 'auto'
   }
 
   if (params.web) {
@@ -154,7 +218,23 @@ function corpoDaChamada(messages: Mensagem[], params: ParamsAgente, usarCalculad
  * em código (determinístico) e devolvemos o resultado para ele terminar a
  * resposta; isso é invisível para quem chamou `chamarIA` — o retorno continua
  * sendo só a resposta final. Passe `calculadora: false` para desativar num
- * caso específico (não deveria ser necessário hoje).
+ * caso específico.
+ *
+ * FERRAMENTAS (`opcoes.ferramentas`): qualquer agente pode registrar as suas.
+ * O despacho é por nome, num `Map` — antes havia um `if` com `'calcular'`
+ * escrito no código, e nenhuma outra ferramenta tinha como existir. Uma
+ * ferramenta que lança vira erro PARA A IA (ela segue sem aquele dado), não
+ * exceção que derruba a geração.
+ *
+ * SAÍDA ESTRUTURADA (`opcoes.saida`): a resposta final vem por uma ferramenta
+ * com JSON Schema, e `result` já é o objeto parseado. Existe porque
+ * `response_format: json_object` **desliga tool-calling** — a combinação não é
+ * confiável entre provedores, e por isso um agente que precisasse consultar
+ * dados no meio da análise simplesmente não podia usar ferramenta nenhuma.
+ * Com `saida`, as duas coisas convivem, e de quebra o formato passa a ser
+ * validado pelo schema (o `json_object` só garantia JSON válido, não o formato
+ * certo). Quem continuar usando `response_format` segue no caminho antigo,
+ * sem ferramenta e sem mudança de comportamento.
  */
 export async function chamarIA(
   db: Db,
@@ -166,6 +246,13 @@ export async function chamarIA(
     agenteId?: string | null
     checarCotaAntes?: boolean
     calculadora?: boolean
+    /** Ferramentas extras disponíveis nesta invocação (além da calculadora). */
+    ferramentas?: Ferramenta[]
+    /**
+     * Quando presente, a resposta final vem por esta ferramenta em vez de
+     * `response_format`, e `result` é o objeto já parseado dos argumentos.
+     */
+    saida?: SaidaEstruturada
   },
 ): Promise<RespostaIA> {
   const apiKey = Deno.env.get('OPENROUTER_API_KEY')
@@ -174,8 +261,25 @@ export async function chamarIA(
   const restauranteId = opcoes.restauranteId ?? null
   if (opcoes.checarCotaAntes !== false) await checarCota(db, restauranteId)
 
-  const usarCalculadora =
-    opcoes.calculadora !== false && opcoes.params.response_format?.type !== 'json_object'
+  const saida = opcoes.saida ?? null
+
+  // O modo legado (`response_format: json_object` sem `saida`) continua sem
+  // ferramenta nenhuma, exatamente como antes — é o que mantém as funções que
+  // ainda não migraram rodando com o mesmo comportamento.
+  const modoJsonLegado = !saida && opcoes.params.response_format?.type === 'json_object'
+
+  const ferramentas: Ferramenta[] = []
+  if (!modoJsonLegado) {
+    if (opcoes.calculadora !== false) {
+      ferramentas.push({
+        definicao: FERRAMENTA_CALCULADORA,
+        executar: executarFerramentaCalculadora,
+      })
+    }
+    ferramentas.push(...(opcoes.ferramentas ?? []))
+  }
+  const registro = new Map(ferramentas.map((f) => [f.definicao.function.name, f]))
+  const usosPorFerramenta = new Map<string, number>()
 
   // A IA sempre sabe a data/hora real de "hoje" — sem isso ela não tem como
   // calcular diferença de dias ou julgar "recente" de forma confiável, e
@@ -193,9 +297,18 @@ export async function chamarIA(
   let custoTotal = 0
   const fontes: FonteWeb[] = []
 
-  const MAX_RODADAS = 4
+  // Mais rodadas só quando há de fato uma conversa de ferramentas acontecendo;
+  // o caminho antigo (só calculadora, ou nada) mantém o teto de 4.
+  const MAX_RODADAS = saida || (opcoes.ferramentas?.length ?? 0) > 0 ? 8 : 4
+  const MAX_CHAMADAS_FERRAMENTA = 12
+  let totalChamadasFerramenta = 0
+
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
-    const body = corpoDaChamada(mensagens, opcoes.params, usarCalculadora)
+    // Na última rodada — ou com o orçamento estourado — a saída é forçada,
+    // senão a invocação inteira morre sem devolver nada.
+    const forcarSaida = !!saida &&
+      (rodada === MAX_RODADAS - 1 || totalChamadasFerramenta >= MAX_CHAMADAS_FERRAMENTA)
+    const body = corpoDaChamada(mensagens, opcoes.params, ferramentas, saida, forcarSaida)
 
     const resposta = await fetch(URL_OPENROUTER, {
       method: 'POST',
@@ -237,25 +350,86 @@ export async function chamarIA(
 
     // deno-lint-ignore no-explicit-any
     const toolCalls: any[] = Array.isArray(message.tool_calls) ? message.tool_calls : []
-    if (usarCalculadora && toolCalls.length > 0) {
-      // A IA pediu a calculadora: resolve cada chamada em código e devolve o
-      // resultado para ela terminar a resposta na próxima rodada. Essa
-      // troca fica só dentro desta função — quem chamou `chamarIA` nunca vê
-      // as mensagens intermediárias, só a resposta final.
+
+    // A ferramenta de saída encerra a conversa: é a resposta final.
+    if (saida) {
+      const chamadaFinal = toolCalls.find((tc) => tc?.function?.name === saida.nome)
+      if (chamadaFinal) {
+        try {
+          const result = JSON.parse(chamadaFinal.function?.arguments ?? '{}')
+          return { result, fontes, modelo, custo: custoTotal }
+        } catch {
+          throw new ErroIA(
+            500,
+            `A IA devolveu argumentos invalidos em ${saida.nome}`,
+            String(chamadaFinal.function?.arguments ?? '').slice(0, 500),
+          )
+        }
+      }
+    }
+
+    if (toolCalls.length > 0 && registro.size > 0) {
+      // A IA pediu ferramentas: resolve cada uma em código e devolve o
+      // resultado para ela seguir na próxima rodada. Essa troca fica só dentro
+      // desta função — quem chamou `chamarIA` nunca vê as mensagens
+      // intermediárias, só a resposta final.
       mensagens.push({ role: 'assistant', content: message.content ?? null, tool_calls: message.tool_calls })
+
       for (const tc of toolCalls) {
-        const resultadoFerramenta =
-          tc?.function?.name === 'calcular'
-            ? executarFerramentaCalculadora(tc.function?.arguments ?? '{}')
-            : JSON.stringify({ erro: 'ferramenta desconhecida' })
-        mensagens.push({ role: 'tool', tool_call_id: tc.id, content: resultadoFerramenta })
+        const nome = String(tc?.function?.name ?? '')
+        const ferramenta = registro.get(nome)
+        const jaUsou = usosPorFerramenta.get(nome) ?? 0
+        let saidaFerramenta: string
+
+        if (!ferramenta) {
+          saidaFerramenta = JSON.stringify({ erro: 'ferramenta desconhecida' })
+        } else if (jaUsou >= (ferramenta.maxChamadas ?? Infinity)) {
+          // Devolver o erro (em vez de simplesmente ignorar) é o que faz a IA
+          // parar de insistir e seguir com o que já tem.
+          saidaFerramenta = JSON.stringify({
+            erro: `limite de ${ferramenta.maxChamadas} chamadas de ${nome} atingido nesta analise`,
+          })
+        } else {
+          usosPorFerramenta.set(nome, jaUsou + 1)
+          totalChamadasFerramenta++
+          try {
+            saidaFerramenta = await ferramenta.executar(tc.function?.arguments ?? '{}')
+          } catch (err) {
+            // Ferramenta que quebra vira erro PARA A IA, não exceção que
+            // derruba a geração inteira: ela consegue seguir sem aquele dado.
+            saidaFerramenta = JSON.stringify({
+              erro: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+
+        mensagens.push({ role: 'tool', tool_call_id: tc.id, content: saidaFerramenta })
       }
       continue
     }
 
     const content = message.content ?? ''
+
+    // Esperava-se a ferramenta de saída e veio texto solto: alguns provedores
+    // escorregam e respondem em prosa. Tenta aproveitar o conteúdo como JSON;
+    // não dando, cutuca e tenta de novo — na última rodada o `tool_choice`
+    // forçado já terá impedido este caminho.
+    if (saida) {
+      try {
+        const result = JSON.parse(String(content).replace(/^```(?:json)?|```$/g, '').trim())
+        return { result, fontes, modelo, custo: custoTotal }
+      } catch {
+        mensagens.push({ role: 'assistant', content })
+        mensagens.push({
+          role: 'user',
+          content: `Responda chamando a ferramenta ${saida.nome}, nao em texto.`,
+        })
+        continue
+      }
+    }
+
     let result = content
-    if (opcoes.params.response_format?.type === 'json_object') {
+    if (modoJsonLegado) {
       try {
         result = JSON.parse(String(content).replace(/^```(?:json)?|```$/g, '').trim())
       } catch {
@@ -266,7 +440,12 @@ export async function chamarIA(
     return { result, fontes, modelo, custo: custoTotal }
   }
 
-  throw new ErroIA(500, 'A IA ficou presa chamando a calculadora repetidamente')
+  throw new ErroIA(
+    500,
+    saida
+      ? `A IA nao chamou ${saida.nome} em ${MAX_RODADAS} rodadas`
+      : 'A IA ficou presa chamando ferramentas repetidamente',
+  )
 }
 
 /** Atalho para as funções que só querem o texto da resposta. */
