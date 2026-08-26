@@ -93,7 +93,10 @@ const LEXICO: NivelLexico[] = [
       'mal educada', 'destratou', 'me ignorou completamente', 'falta de respeito',
       'cobrou errado', 'conta errada', 'cobraram a mais', 'cobranca a mais',
       'perderam minha reserva', 'reserva perdida', 'nao honraram a reserva',
-      'esperei mais de uma hora', 'mais de uma hora esperando', 'duas horas esperando',
+      // Espera acima de uma hora, em qualquer construção. A primeira versão só
+      // tinha 'esperei mais de uma hora' e deixava passar o texto real do
+      // banco, "a comida demorou mais de uma hora para chegar", como G2.
+      'mais de uma hora', 'mais de 1 hora', 'duas horas esperando', 'quase duas horas',
     ],
     fracos: ['imundo', 'nojento', 'grosseiro', 'grosseira', 'rude', 'fedor'],
   },
@@ -180,13 +183,7 @@ function ocorrenciaValida(textoNorm: string, termo: string): boolean {
   }
 }
 
-/**
- * Classifica um texto (o ponto separado, normalmente).
- *
- * Varre do nível mais grave para o menos grave e para no primeiro que bater:
- * um texto que fala de cabelo E de demora é tratado como cabelo.
- */
-export function avaliarGravidade(texto: string): ResultadoGravidade {
+function avaliarPorLexico(texto: string): ResultadoGravidade {
   const norm = normalizar(texto)
 
   for (const faixa of LEXICO) {
@@ -206,11 +203,65 @@ export function avaliarGravidade(texto: string): ResultadoGravidade {
   return { G: 0, termos: [], confianca: 'baixa' }
 }
 
+/**
+ * Piso de gravidade dado pelo SENTIMENTO já classificado pelo n8n.
+ *
+ * Esta é a peça que faz o classificador funcionar no mundo real. Rodando o
+ * léxico sozinho contra 56 feedbacks de produção, só 1 de 17 assuntos ficava
+ * elegível — e os que escapavam não eram casos duvidosos, eram problemas
+ * óbvios escritos com palavras que a lista não previa:
+ *
+ *   "o sistema de reserva ficava travando"   (5 pessoas!)  -> G0
+ *   "os garçons pareciam perdidos"           (3 pessoas)   -> G0
+ *   "a mesa estava super bamba e balançava"  (2 pessoas)   -> G0
+ *
+ * Nenhuma lista de expressões cobre as infinitas formas de reclamar. Mas o
+ * feedback já chega com o sentimento classificado por IA no n8n, e "Negativo"
+ * é, por si só, evidência de que há problema — mesmo quando as palavras exatas
+ * não estão no léxico.
+ *
+ * Então o papel de cada parte se inverte: o SENTIMENTO estabelece o piso
+ * (existe uma queixa aqui), e o LÉXICO serve para ELEVAR acima dele (esta
+ * queixa específica é grave). O léxico não precisa mais reconhecer toda
+ * reclamação — só as severas.
+ */
+function pisoPorSentimento(sentimento?: string | null): NivelGravidade {
+  const s = (sentimento || '').toLowerCase()
+  // Cobre 'Negativo' e também o misto 'Positivo e Negativo': se há parte
+  // negativa, há queixa.
+  return s.includes('negativ') ? 2 : 0
+}
+
+/**
+ * Classifica um ponto separado.
+ *
+ * Combina as duas fontes: o léxico varre do nível mais grave para o menos
+ * grave e para no primeiro que bater (um texto que fala de cabelo E de demora
+ * é tratado como cabelo); o sentimento garante que uma queixa não reconhecida
+ * não caia para G0.
+ */
+export function avaliarGravidade(texto: string, sentimento?: string | null): ResultadoGravidade {
+  const doLexico = avaliarPorLexico(texto)
+  const piso = pisoPorSentimento(sentimento)
+
+  if (doLexico.G >= piso) return doLexico
+
+  return {
+    G: piso,
+    termos: ['sentimento negativo (sem expressao especifica no lexico)'],
+    // Confiança baixa de propósito: sabemos que é queixa, não sabemos o quanto
+    // é grave. É exatamente o caso em que vale a IA ler a mensagem original.
+    confianca: 'baixa',
+  }
+}
+
 /** Gravidade de um conjunto de pontos: a do pior deles. */
-export function gravidadeMaxima(textos: string[]): NivelGravidade {
+export function gravidadeMaxima(
+  pontos: { texto: string; sentimento?: string | null }[],
+): NivelGravidade {
   let maior: NivelGravidade = 0
-  for (const t of textos) {
-    const { G } = avaliarGravidade(t)
+  for (const p of pontos) {
+    const { G } = avaliarGravidade(p.texto, p.sentimento)
     if (G > maior) maior = G
   }
   return maior

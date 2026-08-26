@@ -16,18 +16,25 @@ import type { NivelGravidade } from './gravidade.ts'
 /**
  * Quantas PESSOAS distintas precisam relatar um assunto para ele virar insight.
  *
- *     P_min(G) = ceil(BASE / 2^G)   →   G4:1  G3:2  G2:4  G1:8  G0:16
+ *     P_min(G) = ceil(BASE / 2^G)   →   G4:1  G3:2  G2:3  G1:6  G0:12
  *
  * Formato de matriz de risco: a exigência cai pela metade a cada nível de
  * gravidade. Os dois extremos são exatamente a regra de negócio pedida — um
  * único relato de cabelo na comida (G4) já basta, enquanto "comida fria" (G2)
  * precisa de padrão real antes de virar tarefa para a equipe.
  *
+ * A base foi 16 na primeira versão e caiu para 12 depois de rodar contra os
+ * feedbacks reais: exigir 4 pessoas distintas para uma queixa operacional
+ * comum é alto demais no volume de um restaurante pequeno, onde uma semana
+ * inteira rende poucas dezenas de mensagens. Com 12, um assunto ordinário
+ * precisa de 3 relatos — o suficiente para separar padrão de coincidência sem
+ * exigir que o problema já esteja generalizado.
+ *
  * "Pessoas" é sempre contagem de ORIGINAIS DISTINTOS, nunca de pontos: o mesmo
  * cliente que escreve "achei razoável" e "não foi bom nem ruim" na mesma
  * mensagem gera dois pontos, mas continua sendo uma pessoa só.
  */
-const BASE_LIMIAR = 16
+const BASE_LIMIAR = 12
 
 export function pessoasNecessarias(G: NivelGravidade): number {
   return Math.ceil(BASE_LIMIAR / Math.pow(2, G))

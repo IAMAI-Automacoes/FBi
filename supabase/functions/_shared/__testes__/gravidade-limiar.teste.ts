@@ -70,7 +70,7 @@ function ok(nome: string, cond: boolean, extra = '') {
 {
   ok(
     'gravidadeMaxima pega o pior do conjunto',
-    gravidadeMaxima(['tudo ótimo', 'o prato veio frio', 'tinha cabelo na comida']) === 4,
+    gravidadeMaxima([{ texto: 'tudo ótimo' }, { texto: 'o prato veio frio' }, { texto: 'tinha cabelo na comida' }]) === 4,
   )
 }
 
@@ -80,13 +80,13 @@ function ok(nome: string, cond: boolean, extra = '') {
 {
   ok('P_min(G4) = 1 pessoa', pessoasNecessarias(4) === 1)
   ok('P_min(G3) = 2', pessoasNecessarias(3) === 2)
-  ok('P_min(G2) = 4', pessoasNecessarias(2) === 4)
-  ok('P_min(G1) = 8', pessoasNecessarias(1) === 8)
-  ok('P_min(G0) = 16', pessoasNecessarias(0) === 16)
+  ok('P_min(G2) = 3', pessoasNecessarias(2) === 3)
+  ok('P_min(G1) = 6', pessoasNecessarias(1) === 6)
+  ok('P_min(G0) = 12', pessoasNecessarias(0) === 12)
 
   ok('1 relato de cabelo JÁ é elegível', assuntoElegivel(4, 1))
   ok('1 relato de comida fria NÃO é elegível', !assuntoElegivel(2, 1))
-  ok('4 relatos de comida fria são elegíveis', assuntoElegivel(2, 4))
+  ok('3 relatos de comida fria são elegíveis', assuntoElegivel(2, 3))
 }
 
 // ---------------------------------------------------------------------------
