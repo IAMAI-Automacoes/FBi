@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -b deploy -d dist --dotfiles",
-    "test": "node --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/vinculo-refs.teste.ts",
+    "test": "node --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/vinculo-refs.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/gravidade-limiar.teste.ts",
     "test:watch": "node --watch --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts"
   },
   "dependencies": {
