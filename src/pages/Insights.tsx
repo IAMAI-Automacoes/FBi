@@ -60,10 +60,15 @@ export default function Insights() {
     if (!usuario?.restaurante_id) return
     setLoading(true)
     try {
+      // `insight_feedback(count)` é a MESMA fonte que a telinha lista, então o
+      // número do card não tem como divergir do que aparece dentro dela.
+      // `deletado_em` filtra o que o dono excluiu — insight nunca é apagado do
+      // banco, só marcado.
       const { data, error } = await supabase
         .from('insights')
-        .select('*')
+        .select('*, insight_feedback(count)')
         .eq('ativo', true)
+        .is('deletado_em', null)
         .eq('restaurante_id', usuario.restaurante_id)
         .order('created_at', { ascending: false })
 
@@ -150,15 +155,14 @@ export default function Insights() {
     if (!usuario?.restaurante_id) return
     setGenerating(true)
     try {
-      // Limpa os insights atuais NÃO fixados antes de gerar novos — os
-      // fixados sobrevivem à rodada, o resto dá lugar à análise nova.
-      const { error: delError } = await supabase
-        .from('insights')
-        .delete()
-        .eq('restaurante_id', usuario.restaurante_id)
-        .or('fixado.is.null,fixado.eq.false')
-      if (delError) throw delError
-
+      // A limpeza dos não-fixados saiu daqui de propósito. Era um DELETE
+      // disparado pelo NAVEGADOR, o que tinha dois problemas: apagava a origem
+      // de toda ação nascida daqueles insights (FK ON DELETE SET NULL), e
+      // rodava fora da transação da geração — se a IA falhasse em seguida, os
+      // insights antigos já tinham ido embora e a tela ficava vazia.
+      //
+      // Agora `gerar-insights` desativa e libera os pontos como primeiro passo
+      // da própria invocação.
       const { data, error } = await supabase.functions.invoke('gerar-insights', {
         body: { force: true },
       })
@@ -207,19 +211,29 @@ export default function Insights() {
    * partir deste insight. Ela nasce com status SUGERIDA, e o dono confirma ou
    * rejeita em Ações › Sugestões da IA.
    */
+  /**
+   * O insight VIRA a ação: sai da lista e leva os feedbacks junto.
+   *
+   * Antes esta função não recarregava nada — o card continuava na tela com o
+   * botão reativado, então clicar duas vezes criava duas ações do mesmo
+   * insight. Agora some da lista assim que a ação nasce; o `fetchInsights()`
+   * no fim confirma contra o banco (e traz o card de volta se algo falhou).
+   */
   const handleCriarAcao = async (insight: Insight) => {
     if (!usuario?.restaurante_id) return
     setCriandoAcaoId(insight.id)
     try {
       await sugerirAcoesManualmente(usuario.restaurante_id, insight.id)
+      setInsights((prev) => prev.filter((i) => i.id !== insight.id))
       toast({
-        title: 'Ação sugerida pela IA',
-        description: 'Abra Ações › Sugestões da IA para confirmar ou rejeitar.',
+        title: 'Ação criada',
+        description: 'O insight virou ação e os feedbacks dele foram junto. Veja em Ações.',
       })
     } catch (e: any) {
       toast({ title: 'Erro ao gerar ação', description: e.message, variant: 'destructive' })
     } finally {
       setCriandoAcaoId(null)
+      fetchInsights()
     }
   }
 
@@ -232,12 +246,34 @@ export default function Insights() {
     document.dispatchEvent(new CustomEvent('open-ai-chat', { detail: { insight } }))
   }
 
+  /**
+   * Exclusão é MARCAÇÃO, não DELETE.
+   *
+   * O `delete()` que existia aqui causava dano silencioso: `acoes_operacionais
+   * .insight_id` é ON DELETE SET NULL, então apagar um insight apagava também a
+   * origem de toda ação que tinha nascido dele. Medido antes da correção: 33
+   * ações, zero com `insight_id`.
+   *
+   * Marcar dispara o trigger que devolve os pontos ao pool de análise.
+   */
   const handleDeleteInsight = async (id: string) => {
     try {
-      const { error } = await supabase.from('insights').delete().eq('id', id)
+      const agora = new Date().toISOString()
+      const { error } = await supabase
+        .from('insights')
+        .update({
+          deletado_em: agora,
+          desativado_em: agora,
+          ativo: false,
+          motivo_encerramento: 'excluido',
+        })
+        .eq('id', id)
       if (error) throw error
       setInsights((prev) => prev.filter((i) => i.id !== id))
-      toast({ title: 'Insight excluído', description: 'O insight foi removido com sucesso.' })
+      toast({
+        title: 'Insight excluído',
+        description: 'Os feedbacks dele voltaram a ficar disponíveis para análise.',
+      })
     } catch (e: any) {
       toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' })
     }

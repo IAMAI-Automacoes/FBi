@@ -19,18 +19,52 @@ export interface Insight {
   titulo: string | null
   descricao: string | null
   sugestao: string | null
-  /** Contagem derivada de `feedback_ids` (antes era um número inventado pela IA). */
+  /**
+   * @deprecated Contagem legada, derivada de `feedback_ids` (originais). Use
+   * `totalPontos`, que conta os PONTOS SEPARADOS — que é o que a tela lista.
+   * Contar originais aqui e listar pontos na telinha era a origem do número
+   * que não batia.
+   */
   feedbacks_relacionados: number | null
-  /** IDs de `feedbacks_originais` que sustentam este insight. Vazio nos insights
-   *  criados antes da migration `20260813010000_insights_feedback_ids`. Os
-   *  pedaços SEPARADOS (`feedbacks_restaurante`) usados por este insight não
-   *  ficam num array aqui — dá pra achá-los buscando
-   *  `feedbacks_restaurante.usado_por_insight_id = insight.id` (mantido por
-   *  trigger, ver `trg_insights_marcar_feedbacks`). */
+  /**
+   * @deprecated IDs de `feedbacks_originais`. Mantido só para compatibilidade
+   * enquanto código antigo ainda lê. O vínculo autoritativo agora é a tabela
+   * `insight_feedback`, que guarda o PONTO — um original vira vários pontos de
+   * assuntos diferentes, então guardar o original é impreciso por construção.
+   */
   feedback_ids: string[] | null
   gerado_por: string | null
   ativo: boolean | null
   /** Fixado no topo da lista, por cima da ordenação por data de criação. */
   fixado: boolean | null
   created_at: string | null
+
+  // --- ciclo de vida (migration 20260826010000) ---------------------------
+  /** Excluído à mão pelo dono. Insight nunca é apagado do banco. */
+  deletado_em: string | null
+  /** Saiu de cena: substituído por uma rodada nova, ou virou ação. */
+  desativado_em: string | null
+  /** Quando `motivo_encerramento = 'virou_acao'`, a ação que ele virou. */
+  acao_id: number | null
+  motivo_encerramento: 'substituido' | 'excluido' | 'virou_acao' | null
+
+  /**
+   * Contagem de pontos vinda do embed `insight_feedback(count)` do PostgREST,
+   * que devolve `[{ count: N }]`. É a MESMA fonte que a telinha lista, então o
+   * número do card e o da lista não têm como divergir.
+   */
+  insight_feedback?: { count: number }[] | null
+}
+
+/**
+ * Quantos pontos separados sustentam este insight.
+ *
+ * Cai em `feedbacks_relacionados` só para insight antigo, gerado antes de
+ * `insight_feedback` existir — aí o número é o legado mesmo, e a telinha não
+ * terá o que mostrar.
+ */
+export function totalPontos(insight: Insight): number {
+  const doEmbed = insight.insight_feedback?.[0]?.count
+  if (typeof doEmbed === 'number') return doEmbed
+  return insight.feedbacks_relacionados ?? 0
 }

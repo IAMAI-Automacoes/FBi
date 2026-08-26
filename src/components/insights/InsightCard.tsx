@@ -14,7 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
-import type { Insight } from '@/lib/tipos/insight'
+import { totalPontos, type Insight } from '@/lib/tipos/insight'
 import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
 import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
 
@@ -53,10 +53,11 @@ export function InsightCard({
   const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && elogio
   const config = ehObservacaoElogio ? PRIORIDADES.ELOGIO : estiloPrioridade(prio)
 
-  // Insights gerados antes da ligação por IDs têm `feedback_ids` vazio: não há
-  // para onde navegar, então o contador vira texto simples em vez de link morto.
-  const temFeedbacksLigados = (insight.feedback_ids?.length ?? 0) > 0
-  const totalFeedbacks = insight.feedback_ids?.length ?? insight.feedbacks_relacionados ?? 0
+  // Conta PONTOS SEPARADOS, que é exatamente o que a telinha lista — antes
+  // contava mensagens originais e listava pontos, e os números não batiam.
+  // Insight antigo, sem vínculo nenhum, vira texto simples em vez de link morto.
+  const totalFeedbacks = totalPontos(insight)
+  const temFeedbacksLigados = totalFeedbacks > 0 && (insight.insight_feedback?.[0]?.count ?? 0) > 0
 
   return (
     <Card
@@ -152,11 +153,7 @@ export function InsightCard({
       </CardContent>
       <CardFooter className="px-4 sm:px-5 pb-3 sm:pb-3 pt-1 sm:pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
         {temFeedbacksLigados ? (
-          <FeedbacksRelacionadosPopover
-            insightId={insight.id}
-            feedbackIds={insight.feedback_ids ?? []}
-            totalFeedbacks={totalFeedbacks}
-          />
+          <FeedbacksRelacionadosPopover insightId={insight.id} totalFeedbacks={totalFeedbacks} />
         ) : (
           <span
             className="text-sm text-gray-400 font-medium cursor-help"

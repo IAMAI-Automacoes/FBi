@@ -1,81 +1,104 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 import { estiloCategoria } from '@/lib/categorias-feedback'
 import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
-interface FeedbackOriginalRow {
-  id: string
-  texto_original: string | null
-  sentimento: string | null
-  categorias: string[] | null
-  created_at: string | null
-}
-
-interface FeedbackSeparadoRow {
+/**
+ * Um ponto separado ligado ao insight, já com a mensagem original de onde veio.
+ *
+ * O PostgREST devolve o embed aninhado; achatamos para esta forma no carregar
+ * para o JSX não ficar navegando `feedbacks_restaurante.feedbacks_originais`.
+ */
+interface PontoLigado {
   id: number
-  texto_original: string | null
-  resumo: string | null
+  texto: string
   categoria: string | null
   sentimento: string | null
+  criadoEm: string | null
+  /** A mensagem inteira do cliente. Fica escondida atrás do "ver mensagem". */
+  original: { id: string; texto: string; quando: string } | null
 }
 
 interface FeedbacksRelacionadosPopoverProps {
   insightId: string
-  feedbackIds: string[]
+  /** Já calculado no card, a partir do mesmo `insight_feedback(count)`. */
   totalFeedbacks: number
 }
 
 /**
- * "Telinha" com os feedbacks por trás de um insight: as mensagens originais
- * inteiras (`feedback_ids`) e os pontos separados que a IA de fato usou pra
- * gerar este insight — os dois juntos, sem precisar navegar pra /feedbacks só
- * pra ver do que se trata. Os separados não vêm de um array na própria linha
- * do insight: são achados buscando `feedbacks_restaurante` cujo
- * `usado_por_insight_id` aponta pra este insight — coluna mantida por trigger
- * no banco (`trg_insights_marcar_feedbacks`) sempre que o insight nasce com
- * `feedback_ids` preenchido. Busca sob demanda (só ao abrir), não a cada card
- * renderizado na lista.
+ * A telinha dos feedbacks por trás de um insight.
+ *
+ * ## Por que lista PONTOS e não mensagens
+ *
+ * Uma mensagem de WhatsApp costuma tratar de vários assuntos ("demorou 50 min,
+ * o prato veio frio, mas o ambiente é bonito") e o n8n a quebra em pontos, um
+ * por assunto. O insight é sobre UM assunto, então o que ele realmente usou são
+ * os pontos — mostrar a mensagem inteira sugeriria que o insight trata de tudo
+ * que está escrito nela.
+ *
+ * ## Por que o número sempre bate
+ *
+ * A contagem do card e esta lista saem da MESMA tabela (`insight_feedback`).
+ * Antes o card contava mensagens originais e a telinha listava pontos, que são
+ * quantidades diferentes por natureza — daí o número nunca fechar.
+ *
+ * A mensagem original continua acessível, mas dentro do ponto: é contexto de
+ * quem falou, não um item à parte da lista.
  */
 export function FeedbacksRelacionadosPopover({
   insightId,
-  feedbackIds,
   totalFeedbacks,
 }: FeedbacksRelacionadosPopoverProps) {
   const [open, setOpen] = useState(false)
   const [carregado, setCarregado] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [originais, setOriginais] = useState<FeedbackOriginalRow[]>([])
-  const [separados, setSeparados] = useState<FeedbackSeparadoRow[]>([])
+  const [pontos, setPontos] = useState<PontoLigado[]>([])
+  const [expandido, setExpandido] = useState<number | null>(null)
 
   const carregar = async () => {
     if (carregado || carregando) return
     setCarregando(true)
     setErro(null)
     try {
-      const [origRes, sepRes] = await Promise.all([
-        feedbackIds.length > 0
-          ? supabase
-              .from('feedbacks_originais_view')
-              .select('*')
-              .in('id', feedbackIds)
-              .order('created_at', { ascending: false })
-          : Promise.resolve({ data: [] as FeedbackOriginalRow[], error: null }),
-        supabase
-          .from('feedbacks_restaurante')
-          .select('id, texto_original, resumo, categoria, sentimento')
-          .eq('usado_por_insight_id', insightId),
-      ])
-      if (origRes.error) throw origRes.error
-      if (sepRes.error) throw sepRes.error
-      setOriginais((origRes.data as FeedbackOriginalRow[]) ?? [])
-      setSeparados((sepRes.data as FeedbackSeparadoRow[]) ?? [])
+      const { data, error } = await supabase
+        .from('insight_feedback')
+        .select(
+          `feedback_restaurante_id,
+           feedbacks_restaurante!inner(
+             id, texto_original, resumo, categoria, sentimento, created_at,
+             feedbacks_originais(id, texto_original, created_at)
+           )`,
+        )
+        .eq('insight_id', insightId)
+      if (error) throw error
+
+      const lista: PontoLigado[] = (data ?? []).map((linha) => {
+        // deno-lint-ignore no-explicit-any -- shape do embed aninhado do PostgREST
+        const fr = (linha as any).feedbacks_restaurante
+        const fo = fr?.feedbacks_originais
+        return {
+          id: fr?.id,
+          texto: fr?.texto_original || fr?.resumo || '',
+          categoria: fr?.categoria ?? null,
+          sentimento: fr?.sentimento ?? null,
+          criadoEm: fr?.created_at ?? null,
+          original: fo
+            ? {
+                id: fo.id,
+                texto: fo.texto_original ?? '',
+                quando: fo.created_at ? formatarDataFeedback(fo.created_at) : '',
+              }
+            : null,
+        }
+      })
+
+      setPontos(lista)
       setCarregado(true)
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar feedbacks')
@@ -83,6 +106,8 @@ export function FeedbacksRelacionadosPopover({
       setCarregando(false)
     }
   }
+
+  const clientesDistintos = new Set(pontos.map((p) => p.original?.id).filter(Boolean)).size
 
   return (
     <Popover
@@ -94,11 +119,11 @@ export function FeedbacksRelacionadosPopover({
     >
       <PopoverTrigger asChild>
         <button type="button" className="text-sm text-blue-600 hover:underline font-medium text-left">
-          {totalFeedbacks} feedbacks relacionados →
+          {totalFeedbacks} {totalFeedbacks === 1 ? 'feedback relacionado' : 'feedbacks relacionados'} →
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[26rem] max-w-[90vw] max-h-[70vh] overflow-y-auto p-0">
-        <div className="p-4 space-y-5">
+      <PopoverContent align="start" className="w-[27rem] max-w-[92vw] max-h-[70vh] overflow-y-auto p-0">
+        <div className="p-4 space-y-3">
           {carregando && (
             <div className="flex items-center justify-center py-8 text-gray-400">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -109,76 +134,101 @@ export function FeedbacksRelacionadosPopover({
 
           {!carregando && !erro && (
             <>
-              <section className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                  Mensagens originais ({originais.length})
-                </h4>
-                {originais.length === 0 ? (
-                  <p className="text-sm text-gray-400">Nenhuma mensagem original encontrada.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {originais.map((f) => (
-                      <FeedbackOriginalCard
-                        key={f.id}
-                        texto={f.texto_original ?? ''}
-                        sentimento={f.sentimento}
-                        categorias={f.categorias ?? []}
-                        quando={f.created_at ? formatarDataFeedback(f.created_at) : ''}
-                        truncar
-                      />
-                    ))}
-                  </div>
+              <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                {pontos.length} {pontos.length === 1 ? 'ponto' : 'pontos'}
+                {clientesDistintos > 0 && (
+                  <span className="font-medium normal-case tracking-normal">
+                    {' '}
+                    · {clientesDistintos} {clientesDistintos === 1 ? 'cliente' : 'clientes'}
+                  </span>
                 )}
-              </section>
+              </h4>
 
-              <section className="space-y-2 border-t pt-4">
-                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400">
-                  Pontos usados neste insight ({separados.length})
-                </h4>
-                {separados.length === 0 ? (
-                  <p className="text-sm text-gray-400">Nenhum ponto separado encontrado.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {separados.map((f) => {
-                      const estilo = estiloCategoria(f.categoria)
-                      const Icon = estilo.icon
-                      const cor = coresSentimento(f.sentimento)
-                      return (
-                        <div key={f.id} className="rounded-lg border border-gray-100 bg-gray-50/70 p-2.5 space-y-1.5">
-                          <p className="text-sm text-gray-700 leading-snug">
-                            "{f.texto_original || f.resumo}"
-                          </p>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {f.categoria && (
-                              <span
-                                className={cn(
-                                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                                  estilo.corFundo,
-                                  estilo.corTexto,
-                                  estilo.corBorda,
-                                )}
-                              >
-                                <Icon className="h-3 w-3" />
-                                {f.categoria}
-                              </span>
-                            )}
-                            <span className={cn('inline-flex items-center gap-1 text-[11px] font-medium', cor.texto)}>
-                              <span className={cn('h-1.5 w-1.5 rounded-full', cor.dot)} />
-                              {rotuloSentimento(f.sentimento)}
+              {pontos.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  Este insight foi gerado antes do vínculo com os feedbacks de origem. Gere os
+                  insights novamente para poder rastreá-los.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {pontos.map((p) => {
+                    const estilo = estiloCategoria(p.categoria)
+                    const Icon = estilo.icon
+                    const cor = coresSentimento(p.sentimento)
+                    const aberto = expandido === p.id
+                    return (
+                      <div
+                        key={p.id}
+                        className="rounded-lg border border-gray-100 bg-gray-50/70 p-2.5 space-y-1.5"
+                      >
+                        <p className="text-sm text-gray-700 leading-snug">"{p.texto}"</p>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {p.categoria && (
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                                estilo.corFundo,
+                                estilo.corTexto,
+                                estilo.corBorda,
+                              )}
+                            >
+                              <Icon className="h-3 w-3" />
+                              {p.categoria}
                             </span>
-                          </div>
+                          )}
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 text-[11px] font-medium',
+                              cor.texto,
+                            )}
+                          >
+                            <span className={cn('h-1.5 w-1.5 rounded-full', cor.dot)} />
+                            {rotuloSentimento(p.sentimento)}
+                          </span>
+                          {p.criadoEm && (
+                            <span className="text-[11px] text-gray-400">
+                              {formatarDataFeedback(p.criadoEm)}
+                            </span>
+                          )}
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
+
+                        {/* A mensagem completa fica AQUI DENTRO, e não como item
+                            solto da lista: ela é o contexto deste ponto, não um
+                            feedback a mais para contar. */}
+                        {p.original && (
+                          <div className="pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setExpandido(aberto ? null : p.id)}
+                              className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700"
+                            >
+                              <ChevronDown
+                                className={cn('h-3 w-3 transition-transform', aberto && 'rotate-180')}
+                              />
+                              {aberto ? 'ocultar mensagem completa' : 'ver mensagem completa'}
+                            </button>
+                            {aberto && (
+                              <p className="mt-1.5 rounded-md border border-gray-200 bg-white p-2 text-[13px] italic leading-relaxed text-gray-600">
+                                "{p.original.texto}"
+                                <span className="ml-1 not-italic text-[11px] text-gray-400">
+                                  — {p.original.quando}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
 
           <Link
             to={`/feedbacks?insight_id=${insightId}`}
-            className="block text-center text-xs text-blue-600 hover:underline font-medium pt-1"
+            className="block pt-1 text-center text-xs font-medium text-blue-600 hover:underline"
           >
             Ver na página de feedbacks →
           </Link>
