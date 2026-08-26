@@ -22,18 +22,15 @@
  */
 
 import type { Ferramenta } from './openrouter.ts'
+// Reusa o tipo de `assuntos.ts` em vez de declarar um igual aqui: eram duas
+// definições estruturalmente idênticas, e TypeScript aceitaria as duas mesmo
+// se divergissem num campo — o erro só apareceria em produção.
+import type { PontoDoAssunto } from './assuntos.ts'
 
 // deno-lint-ignore no-explicit-any -- client do supabase-js não é tipado aqui
 type Db = any
 
-export interface PontoDoAssunto {
-  id: number
-  texto: string
-  categoria: string | null
-  sentimento: string | null
-  origem_id: string | null
-  created_at: string
-}
+export type { PontoDoAssunto }
 
 /**
  * `ler_original` — devolve a mensagem completa de onde um ponto veio.

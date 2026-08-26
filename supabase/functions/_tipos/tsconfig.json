@@ -1,0 +1,27 @@
+{
+  "//": "Checagem de tipos das edge functions. O tsconfig da raiz só cobre src/ — antes desta configuração, NADA em supabase/functions era verificado, e um erro de tipo só aparecia em produção. Rode com: npm run typecheck:funcoes",
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "paths": {
+      "https://deno.land/std@0.168.0/http/server.ts": ["./stubs/server.ts"],
+      "jsr:@supabase/supabase-js@2": ["./stubs/supabase.ts"]
+    }
+  },
+  "include": [
+    "./deno.d.ts",
+    "../_shared/*.ts",
+    "../gerar-insights/*.ts",
+    "../sugerir-acoes/*.ts",
+    "../categorizar-acao/*.ts",
+    "../motor-retorno-worker/*.ts",
+    "../motor-retorno-callback/*.ts",
+    "../vincular-feedback/*.ts"
+  ]
+}
