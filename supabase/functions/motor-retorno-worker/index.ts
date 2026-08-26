@@ -3,12 +3,17 @@
  *
  * Acordado pelo pg_cron a cada 5 min (o mesmo padrão dos 4 jobs que já existem
  * neste projeto). Para cada contato com fila não-vazia decide se está na hora
- * de falar, monta a mensagem e entrega ao n8n.
+ * de falar, monta a mensagem e GRAVA como 'pronta' — não entrega a ninguém.
+ *
+ * Quem entrega é o n8n, puxando: uma rotina diária dele lê a view
+ * `fila_envio_n8n` (mensagens com status 'pronta'), manda pelo WhatsApp, e
+ * confirma chamando `motor-retorno-callback`. O worker não sabe quando isso
+ * acontece — só compõe e deixa pronto.
  *
  * Por que um tick fixo em vez de agendar um wake-up por contato: a fórmula de
  * disparo é uma CONSULTA, não um agendamento. O tick só pergunta "quem já
- * venceu?". O custo é no máximo 5 min de atraso dentro de uma janela de 30 min
- * a 3 dias — irrelevante — e evita gerenciar N agendamentos que o pg_cron nem
+ * venceu?". O custo é no máximo 5 min de atraso dentro de uma janela de 2h a
+ * 3 dias — irrelevante — e evita gerenciar N agendamentos que o pg_cron nem
  * sabe expressar (ele agenda por expressão cron, não por timestamp único).
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -28,6 +33,14 @@ import {
 } from '../_shared/motor-agrupamento.ts'
 
 const AGENTE = 'redator_retorno'
+
+/** Uma transição de status só vira candidata a mensagem depois de ficar
+ *  "quieta" por este tanto de tempo — dono muda o status errado e corrige em
+ *  minutos não deve gerar mensagem nenhuma. Reverter DEPOIS dessas 2h também
+ *  cancela o aviso (mesma trigger de sempre, sem relação com este prazo) —
+ *  as 2h só atrasam quando o aviso passa a ser considerado, nunca impedem o
+ *  cancelamento. */
+const HORAS_ANTES_DE_VIRAR_CANDIDATO = 2
 
 // deno-lint-ignore no-explicit-any -- o client do supabase-js não é tipado aqui
 type Db = any
@@ -86,20 +99,34 @@ function lerConfig(configInsights: unknown): ConfigMotor {
   }
 }
 
+/** Um item de fila com o rastro de feedbacks que a linha de `aviso_pendente`
+ *  já carrega — usado só para gravar o rastro na mensagem final, não entra
+ *  no agrupamento (que continua puxando o texto por join, como sempre). */
+type AvisoFilaComRastro = AvisoFila & {
+  feedbacksOriginaisIds: string[]
+  feedbacksRestauranteIds: number[]
+}
+
 /**
  * Carrega a fila de um contato, já com os feedbacks de cada ação.
  *
  * Os feedbacks são filtrados pelo próprio contato: uma ação costuma nascer de
  * feedbacks de VÁRIAS pessoas, e citar o comentário de outro cliente para esta
  * pessoa seria vazamento de dado alheio.
+ *
+ * Só entram avisos com pelo menos `HORAS_ANTES_DE_VIRAR_CANDIDATO` de vida —
+ * ver o comentário na constante.
  */
-async function carregarFila(db: Db, contatoId: string, agora: Date): Promise<AvisoFila[]> {
+async function carregarFila(db: Db, contatoId: string, agora: Date): Promise<AvisoFilaComRastro[]> {
+  const limiteQuieto = new Date(agora.getTime() - HORAS_ANTES_DE_VIRAR_CANDIDATO * 3_600_000)
+
   const { data: avisos, error } = await db
     .from('aviso_pendente')
-    .select('id, acao_id, etapa, criado_em, expira_em')
+    .select('id, acao_id, etapa, criado_em, expira_em, feedbacks_originais_ids, feedbacks_restaurante_ids')
     .eq('contato_id', contatoId)
     .eq('status', 'na_fila')
     .gt('expira_em', agora.toISOString())
+    .lte('criado_em', limiteQuieto.toISOString())
     .order('criado_em', { ascending: true })
 
   if (error) throw error
@@ -141,6 +168,8 @@ async function carregarFila(db: Db, contatoId: string, agora: Date): Promise<Avi
     acao_id: number
     etapa: 'em_andamento' | 'concluida'
     criado_em: string
+    feedbacks_originais_ids: string[] | null
+    feedbacks_restaurante_ids: number[] | null
   }) => ({
     id: a.id,
     acao_id: a.acao_id,
@@ -149,6 +178,8 @@ async function carregarFila(db: Db, contatoId: string, agora: Date): Promise<Avi
     acao_titulo: porAcao.get(a.acao_id)?.titulo_acao ?? 'uma melhoria',
     acao_categoria: porAcao.get(a.acao_id)?.categoria ?? null,
     feedbacks: feedbacksPorAcao.get(a.acao_id) ?? [],
+    feedbacksOriginaisIds: a.feedbacks_originais_ids ?? [],
+    feedbacksRestauranteIds: a.feedbacks_restaurante_ids ?? [],
   }))
 }
 
@@ -191,8 +222,8 @@ async function processarContato(
   // sobreponham — não podem virar duas mensagens.
   //
   // Não é advisory lock: cada chamada via PostgREST é a sua própria transação,
-  // e um lock de transação cairia antes de a mensagem ser montada e entregue.
-  // Este é uma linha com dono e prazo (ver migration 20260825050000).
+  // e um lock de transação cairia antes de a mensagem ser montada. Este é uma
+  // linha com dono e prazo (ver migration 20260825050000).
   const { data: token, error: erroLock } = await db.rpc('motor_tomar_lock_contato', {
     p_contato_id: contatoId,
     p_restaurante_id: restauranteId,
@@ -200,23 +231,20 @@ async function processarContato(
   if (erroLock) throw erroLock
   if (!token) return 'lock_ocupado'
 
-  const resultado = await montarEEnviar(db, ctx)
-
-  // Quando a mensagem foi entregue ao n8n, o lock continua com o callback: ele
-  // é quem solta, depois de confirmar. Soltar aqui deixaria o próximo tick
-  // montar uma segunda mensagem enquanto a primeira ainda não foi confirmada.
-  if (!resultado.startsWith('enviando:')) {
+  // Todo o trabalho é síncrono agora — não há mais um webhook em voo esperando
+  // callback de outra função. O lock é tomado e solto na mesma chamada.
+  try {
+    return await montarEEnviar(db, ctx)
+  } finally {
     await db.rpc('motor_soltar_lock_contato', { p_contato_id: contatoId, p_token: token })
   }
-
-  return resultado
 }
 
 /**
- * Decide, monta e entrega. Sempre chamada com o lock do contato já tomado.
+ * Decide e monta. Sempre chamada com o lock do contato já tomado.
  *
- * Devolve uma etiqueta do que aconteceu: `enviando:<id>` significa que a
- * mensagem está em voo e o lock ficou para o callback.
+ * Não entrega a ninguém — grava em `mensagem_enviada` com status 'pronta' e
+ * para por aí. Quem entrega é o n8n (ver cabeçalho do arquivo).
  */
 async function montarEEnviar(
   db: Db,
@@ -231,6 +259,18 @@ async function montarEEnviar(
   },
 ): Promise<string> {
   const { contatoId, restauranteId, config, agora } = ctx
+
+  // Já existe uma mensagem deste contato esperando o n8n ler (pode levar até
+  // um dia inteiro, já que ele lê uma vez por dia agora). Sem esta trava, um
+  // aviso novo que chegasse nesse meio-tempo geraria uma SEGUNDA mensagem
+  // 'pronta' antes da primeira sequer ter saído — duas mensagens no mesmo
+  // dia pro mesmo cliente, violando o cooldown.
+  const { count: emAberto } = await db
+    .from('mensagem_enviada')
+    .select('id', { count: 'exact', head: true })
+    .eq('contato_id', contatoId)
+    .in('status', ['pronta', 'enviando'])
+  if ((emAberto ?? 0) > 0) return 'ja_pronta'
 
   const fila = await carregarFila(db, contatoId, agora)
   if (!fila.length) return 'fila_vazia'
@@ -296,85 +336,39 @@ async function montarEEnviar(
 
   if (!texto) return 'texto_vazio'
 
+  // Rastro: união dos feedbacks (originais e separados) de TODOS os avisos
+  // que entraram nesta mensagem — não só dos que apareceram no texto (o teto
+  // de itens pode ter deixado algum de fora do texto, mas ele continua tendo
+  // motivado esta mensagem, então continua no rastro).
+  const feedbacksOriginaisIds = [...new Set(fila.flatMap((a) => a.feedbacksOriginaisIds))]
+  const feedbacksRestauranteIds = [...new Set(fila.flatMap((a) => a.feedbacksRestauranteIds))]
+
   const { data: mensagem, error: erroMsg } = await db
     .from('mensagem_enviada')
     .insert({
       contato_id: contatoId,
       restaurante_id: restauranteId,
       texto,
-      status: ctx.dryRun ? 'simulado' : 'enviando',
+      status: ctx.dryRun ? 'simulado' : 'pronta',
+      feedbacks_originais_ids: feedbacksOriginaisIds,
+      feedbacks_restaurante_ids: feedbacksRestauranteIds,
     })
     .select('id')
     .single()
   if (erroMsg) throw erroMsg
 
-  const idsDaFila = fila.map((a) => a.id)
-
-  // Dry-run: calcula, agrupa, redige e registra — mas não fala com ninguém.
-  // A fila NÃO é consumida, então dá para observar o motor rodando por dias
-  // sobre dados reais antes de ligar o envio.
+  // Dry-run: calcula, agrupa, redige e registra — mas a fila NÃO é consumida
+  // (fica 'simulado', não 'pronta'), então dá para observar o motor rodando
+  // por dias sobre dados reais antes de expor qualquer coisa ao n8n.
   if (ctx.dryRun) return `simulado:${mensagem.id}`
 
+  const idsDaFila = fila.map((a) => a.id)
   await db
     .from('aviso_pendente')
     .update({ mensagem_id: mensagem.id })
     .in('id', idsDaFila)
 
-  const { data: contato } = await db
-    .from('contatos')
-    .select('telefone')
-    .eq('id', contatoId)
-    .single()
-
-  const { data: rest } = await db
-    .from('restaurantes')
-    .select('whatsapp_token, whatsapp_base_url')
-    .eq('id', restauranteId)
-    .single()
-
-  const webhook = Deno.env.get('MOTOR_RETORNO_WEBHOOK_URL')
-  const segredo = Deno.env.get('MOTOR_RETORNO_SECRET')
-  if (!webhook || !segredo) throw new Error('MOTOR_RETORNO_WEBHOOK_URL/SECRET não configurados')
-
-  const resposta = await fetch(webhook, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-motor-secret': segredo },
-    body: JSON.stringify({
-      envio_id: mensagem.id,
-      restaurante_id: restauranteId,
-      restaurante_nome: ctx.restauranteNome,
-      contato_id: contatoId,
-      telefone: contato?.telefone,
-      texto,
-      whatsapp: {
-        base_url: rest?.whatsapp_base_url,
-        token: rest?.whatsapp_token,
-      },
-      callback_url:
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/motor-retorno-callback`,
-    }),
-  })
-
-  if (!resposta.ok) {
-    // O n8n não aceitou. Marca a falha e deixa a fila como está — o cooldown
-    // NÃO avança, então a próxima rodada tenta de novo com a fila completa (I3).
-    await db
-      .from('mensagem_enviada')
-      .update({
-        status: 'falhou',
-        erro_codigo: `HTTP_${resposta.status}`,
-        erro_mensagem: (await resposta.text()).slice(0, 500),
-      })
-      .eq('id', mensagem.id)
-    await db.from('aviso_pendente').update({ mensagem_id: null }).in('id', idsDaFila)
-    return `falha_webhook:${resposta.status}`
-  }
-
-  // Daqui em diante quem confirma é o callback: ele marca os avisos como
-  // enviados, avança `ultimo_envio_em` e solta o lock. Fazer isso aqui, antes
-  // da confirmação do provedor, silenciaria o contato por 3 dias por uma
-  // mensagem que talvez nunca tenha chegado.
-  return `enviando:${mensagem.id}`
+  return `pronta:${mensagem.id}`
 }
 
 async function processarRestaurante(
@@ -391,13 +385,16 @@ async function processarRestaurante(
   const config = lerConfig(restaurante.config_insights)
   if (!config.ativo && !dryRun) return { restaurante_id: restaurante.id, status: 'desligado' }
 
-  // Contatos com fila viva neste restaurante.
+  const limiteQuieto = new Date(agora.getTime() - HORAS_ANTES_DE_VIRAR_CANDIDATO * 3_600_000)
+
+  // Contatos com fila viva E já fora da janela de 2h neste restaurante.
   const { data: pendentes, error } = await db
     .from('aviso_pendente')
     .select('contato_id')
     .eq('restaurante_id', restaurante.id)
     .eq('status', 'na_fila')
     .gt('expira_em', agora.toISOString())
+    .lte('criado_em', limiteQuieto.toISOString())
   if (error) throw error
 
   const contatos = [...new Set((pendentes ?? []).map((p: { contato_id: string }) => p.contato_id))]

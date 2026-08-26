@@ -211,3 +211,42 @@ Também vale saber: `sugerir-acoes` não gera sugestões automáticas enquanto h
 ação em `SUGERIDA` aguardando aprovação (trava proposital, `index.ts:58-68`).
 Havia 4 na fila do restaurante 11, e é por isso que o ciclo automático não criou
 ações — o caminho manual ("Criar Ação" num insight) ignora a trava e funcionou.
+
+---
+
+# Ajustes pedidos pelo dono do produto (2026-08-26)
+
+Três mudanças no motor, a pedido explícito do Raver (migration
+`20260826000000_motor_ajustes_raver.sql`):
+
+1. **Rastro de feedbacks direto na linha.** `aviso_pendente` e `mensagem_enviada`
+   ganharam `feedbacks_originais_ids uuid[]` e `feedbacks_restaurante_ids
+   bigint[]`, preenchidos na criação (trigger `processar_transicao_acao`,
+   agora com `group by` + `array_agg`) e na composição da mensagem
+   (`motor-retorno-worker`). Antes só existia via join em `feedback_acao`.
+
+2. **Transporte invertido: de empurrar para puxar.** O worker não chama mais
+   nenhum webhook do n8n — ele só grava `mensagem_enviada` com
+   `status='pronta'` e para. Uma view nova, `fila_envio_n8n`, expõe tudo que o
+   n8n precisa (telefone, texto, credenciais do WhatsApp, rastro de
+   feedbacks) sem join nenhum do lado dele. O n8n passa a ler essa view **uma
+   vez por dia** (não mais webhook em tempo real) e confirmar pelo mesmo
+   `motor-retorno-callback` de antes (não mudou). Contrato atualizado em
+   [`03-n8n.md`](03-n8n.md). `MOTOR_RETORNO_WEBHOOK_URL` não é mais
+   necessário.
+
+3. **Debounce de 2 horas.** Uma transição de status só vira candidata a
+   mensagem depois de 2h sem ter sido revertida (filtro `criado_em <= agora -
+   2h` no worker, não uma coluna nova). Reverter depois das 2h continua
+   cancelando o aviso — comportamento que já existia, não mudou.
+
+Efeito colateral: uma mensagem 'pronta' agora pode esperar até ~24h pelo n8n
+em vez de sair na hora — aceito conscientemente (ver `03-n8n.md` §7).
+
+⚠️ **Nota para quem for continuar este trabalho:** `vinculo-refs.teste.ts`
+testa uma réplica de uma lógica de vínculo ("refs" + fallback por categoria)
+que **não é mais a que está em produção** em `gerar-insights`/`sugerir-acoes`
+— aquelas duas funções foram reescritas depois (abordagem
+"classificação por item", `grupo`/`classificacoes`, sem fallback por
+categoria). O teste continua passando porque testa a réplica isolada, não o
+código real — vale describir ou atualizar antes de confiar nele de novo.
