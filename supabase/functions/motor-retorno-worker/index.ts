@@ -34,13 +34,11 @@ import {
 
 const AGENTE = 'redator_retorno'
 
-/** Uma transição de status só vira candidata a mensagem depois de ficar
- *  "quieta" por este tanto de tempo — dono muda o status errado e corrige em
- *  minutos não deve gerar mensagem nenhuma. Reverter DEPOIS dessas 2h também
- *  cancela o aviso (mesma trigger de sempre, sem relação com este prazo) —
- *  as 2h só atrasam quando o aviso passa a ser considerado, nunca impedem o
- *  cancelamento. */
-const HORAS_ANTES_DE_VIRAR_CANDIDATO = 2
+// A espera de 2h saiu daqui. Antes era um FILTRO (`criado_em <= now()-2h`)
+// sobre avisos que já tinham nascido; agora o aviso só é CRIADO depois do
+// prazo, pela função `promover_transicoes_pendentes()` chamada no início do
+// tick. Manter o filtro aqui somaria as duas esperas e a mensagem sairia com
+// 4h de atraso.
 
 // deno-lint-ignore no-explicit-any -- o client do supabase-js não é tipado aqui
 type Db = any
@@ -114,19 +112,16 @@ type AvisoFilaComRastro = AvisoFila & {
  * feedbacks de VÁRIAS pessoas, e citar o comentário de outro cliente para esta
  * pessoa seria vazamento de dado alheio.
  *
- * Só entram avisos com pelo menos `HORAS_ANTES_DE_VIRAR_CANDIDATO` de vida —
- * ver o comentário na constante.
+ * Todo aviso que chega aqui já cumpriu a espera de 2h — ele só existe porque
+ * `promover_transicoes_pendentes()` o criou depois do prazo.
  */
 async function carregarFila(db: Db, contatoId: string, agora: Date): Promise<AvisoFilaComRastro[]> {
-  const limiteQuieto = new Date(agora.getTime() - HORAS_ANTES_DE_VIRAR_CANDIDATO * 3_600_000)
-
   const { data: avisos, error } = await db
     .from('aviso_pendente')
     .select('id, acao_id, etapa, criado_em, expira_em, feedbacks_originais_ids, feedbacks_restaurante_ids')
     .eq('contato_id', contatoId)
     .eq('status', 'na_fila')
     .gt('expira_em', agora.toISOString())
-    .lte('criado_em', limiteQuieto.toISOString())
     .order('criado_em', { ascending: true })
 
   if (error) throw error
@@ -385,16 +380,13 @@ async function processarRestaurante(
   const config = lerConfig(restaurante.config_insights)
   if (!config.ativo && !dryRun) return { restaurante_id: restaurante.id, status: 'desligado' }
 
-  const limiteQuieto = new Date(agora.getTime() - HORAS_ANTES_DE_VIRAR_CANDIDATO * 3_600_000)
-
-  // Contatos com fila viva E já fora da janela de 2h neste restaurante.
+  // Contatos com fila viva neste restaurante.
   const { data: pendentes, error } = await db
     .from('aviso_pendente')
     .select('contato_id')
     .eq('restaurante_id', restaurante.id)
     .eq('status', 'na_fila')
     .gt('expira_em', agora.toISOString())
-    .lte('criado_em', limiteQuieto.toISOString())
   if (error) throw error
 
   const contatos = [...new Set((pendentes ?? []).map((p: { contato_id: string }) => p.contato_id))]
@@ -441,8 +433,20 @@ serve(async (req: Request) => {
     const agora = new Date()
     const db = clienteAdmin()
 
-    // Expira o que passou do prazo antes de calcular qualquer coisa: aviso
-    // velho demais não deve entrar na conta nem sair na mensagem.
+    // 1) Transições que cumpriram a espera de 2h sem serem revertidas viram
+    //    aviso agora. Fica aqui, e não num cron próprio, porque este tick já
+    //    roda a cada 5 min — uma peça móvel a menos. A função decide sozinha o
+    //    que promover e o que cancelar, comparando o status ATUAL da ação com
+    //    o marco registrado no histórico.
+    const { data: promocao, error: erroPromocao } = await db.rpc('promover_transicoes_pendentes')
+    if (erroPromocao) {
+      // Falhar aqui não pode derrubar o tick: a fila que já existe ainda deve
+      // ser processada, e a promoção tenta de novo em 5 minutos.
+      console.error('motor: falha ao promover transicoes:', erroPromocao)
+    }
+
+    // 2) Expira o que passou do prazo antes de calcular qualquer coisa: aviso
+    //    velho demais não deve entrar na conta nem sair na mensagem.
     await db
       .from('aviso_pendente')
       .update({ status: 'expirado' })
@@ -461,7 +465,15 @@ serve(async (req: Request) => {
       saida.push(await processarRestaurante(db, r, dryRun, agora))
     }
 
-    return json({ ok: true, dry_run: dryRun, restaurantes: saida })
+    // `promocao` sai no retorno porque é o único lugar onde dá para ver o
+    // debounce funcionando: quantas transições viraram aviso e quantas foram
+    // canceladas por reversão dentro da janela.
+    return json({
+      ok: true,
+      dry_run: dryRun,
+      debounce: Array.isArray(promocao) ? promocao[0] : promocao,
+      restaurantes: saida,
+    })
   } catch (err) {
     // deno-lint-ignore no-explicit-any -- erro do supabase-js não é tipado
     const e = err as any
