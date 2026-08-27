@@ -46,6 +46,33 @@ export function promptOverride(prompts: Prompts, chave: string): string | null {
  * substitui os placeholders {nome} pelos valores em `vars`. O admin edita o
  * texto ao redor, mas não pode remover os placeholders — a validação está no
  * painel (src/pages/admin/PainelAgentes.tsx).
+ *
+ * ## O bug que esta função teve, e por que ele era invisível
+ *
+ * Até 2026-08-26 o corpo era:
+ *
+ *     const ov = promptOverride(prompts, chave)
+ *     if (ov == null) return padrao            // <-- sem substituir!
+ *     return ov.replace(...)
+ *
+ * A substituição só acontecia no caminho da SOBRESCRITA. Sem sobrescrita — que
+ * é o caso de produção, onde `prompts_editaveis` está vazia — a função devolvia
+ * o template cru, com `{feedbacks}`, `{perfil}` e `{pontos}` como texto
+ * literal. A IA nunca recebia os dados.
+ *
+ * E não dava erro nenhum: o modelo recebia um template plausível pedindo
+ * "analise estes feedbacks: {feedbacks}" e simplesmente INVENTAVA insights
+ * genéricos de restaurante. O resultado parecia legítimo o suficiente para
+ * ninguém desconfiar, e a única pista visível era que os IDs de feedback
+ * citados nunca batiam com nada — o que por muito tempo foi lido como "o
+ * modelo não consegue copiar UUID", quando na verdade não havia feedback
+ * algum no prompt para ele citar.
+ *
+ * Afetava TODA chamada de IA do servidor que passa por aqui: gerar-insights,
+ * sugerir-acoes, categorizar-acao e o redator de mensagem do motor de resposta.
+ *
+ * A regex `\{(\w+)\}` não toca em exemplos de JSON dentro do prompt: `{` seguido
+ * de espaço ou de aspas não casa, e `{}` também não (exige ao menos um \w).
  */
 export function montarPrompt(
   prompts: Prompts,
@@ -53,7 +80,6 @@ export function montarPrompt(
   padrao: string,
   vars: Record<string, string> = {},
 ): string {
-  const ov = promptOverride(prompts, chave)
-  if (ov == null) return padrao
-  return ov.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m))
+  const base = promptOverride(prompts, chave) ?? padrao
+  return base.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m))
 }

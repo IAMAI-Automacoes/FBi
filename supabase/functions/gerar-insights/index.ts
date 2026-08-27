@@ -127,12 +127,22 @@ Verifique cada afirmacao factual do TITULO e da DESCRICAO contra os feedbacks
 acima. Uma afirmacao esta sustentada quando os feedbacks realmente dizem aquilo.
 
 Regras de julgamento:
+- Confira O QUE exatamente cada afirmacao descreve, nao so o tema geral. Trocar
+  o objeto da queixa e erro, mesmo dentro da mesma categoria. Exemplos reais de
+  troca que DEVEM ser reprovados:
+    feedback diz "a comida demorou para chegar"  ->  insight diz "espera para SENTAR"
+    feedback diz "a mesa estava suja"            ->  insight diz "o BANHEIRO estava sujo"
+    feedback diz "o garcom sumiu"                ->  insight diz "faltou EDUCACAO"
+  Espera pela comida e espera por mesa sao problemas diferentes, com causas e
+  solucoes diferentes.
+- Reprove se o insight mencionar problema, elogio, lugar, pessoa ou detalhe que
+  nao esta em nenhum dos feedbacks acima — mesmo que pareca plausivel ou util.
 - A SUGESTAO e uma proposta de acao; ela nao precisa aparecer nos feedbacks.
-  Mas ela nao pode tratar de assunto DIFERENTE do que os feedbacks falam.
-- Reprove se o insight mencionar problema, elogio ou detalhe que nao esta em
-  nenhum dos feedbacks acima — mesmo que pareca plausivel ou util.
-- Nao reprove por estilo, tom ou por a redacao ser mais generica que os
-  feedbacks. So o que for FALSO ou ALHEIO ao assunto reprova.
+  Mas tem que atacar o problema que os feedbacks descrevem, nao outro.
+- Nao reprove por estilo, tom, nem por a redacao ser mais generica que os
+  feedbacks. So o que for FALSO ou ALHEIO reprova.
+- Se reprovar, escreva em "afirmacao" o trecho exato do insight e em "motivo" o
+  que os feedbacks realmente dizem.
 
 Chame registrar_verificacao.`
 
@@ -218,9 +228,15 @@ function listarPontosParaPrompt(assunto: Assunto): string {
 /**
  * Estágio 1 — redigir o insight de UM assunto, isoladamente.
  *
- * `mensagensExtras` carrega a rodada de reparo: quando o detector ou o
- * verificador reprovam, a mesma conversa continua com o problema apontado, em
- * vez de recomeçar do zero (recomeçar perderia o que já estava certo).
+ * `reparo` carrega a segunda tentativa, quando o detector ou o verificador
+ * reprovam. A ESTRUTURA DE TURNOS importa e já causou um bug em produção: na
+ * primeira versão o reparo era só mais uma mensagem `user` depois do prompt,
+ * sem turno do assistente no meio. O modelo via duas mensagens de usuário
+ * seguidas, a última dominava, e ele escrevia um insight SOBRE A CORREÇÃO —
+ * saiu um insight de verdade intitulado "Afirmações sem lastro nos feedbacks".
+ *
+ * Com o rascunho anterior no papel de `assistant`, a conversa fica coerente:
+ * pedido -> tentativa -> crítica -> nova tentativa.
  */
 async function redigirInsight(
   db: Db,
@@ -233,7 +249,7 @@ async function redigirInsight(
     // deno-lint-ignore no-explicit-any
     params: any
   },
-  mensagensExtras: { role: 'user'; content: string }[] = [],
+  reparo?: { rascunhoAnterior: unknown; critica: string },
 ) {
   const { assunto } = ctx
 
@@ -256,8 +272,25 @@ async function redigirInsight(
     pontos: listarPontosParaPrompt(assunto),
   })
 
+  const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
+    { role: 'user', content: prompt },
+  ]
+  if (reparo) {
+    mensagens.push({ role: 'assistant', content: JSON.stringify(reparo.rascunhoAnterior) })
+    mensagens.push({
+      role: 'user',
+      content:
+        `Sua resposta anterior foi REPROVADA na revisao. Motivo: ${reparo.critica}\n\n` +
+        'Reescreva o insight SOBRE O MESMO ASSUNTO descrito no inicio desta conversa, ' +
+        'corrigindo apenas o que foi apontado. Esta mensagem e uma critica ao seu texto, ' +
+        'NAO e um novo assunto: nao escreva sobre revisao, lastro nem sobre o proprio ' +
+        'processo de geracao. Se nao for possivel corrigir mantendo o assunto, devolva ' +
+        'gerar=false.',
+    })
+  }
+
   const { result } = await chamarIA(db, {
-    messages: [{ role: 'user', content: prompt }, ...mensagensExtras],
+    messages: mensagens,
     params: ctx.params,
     origem: 'gerar-insights',
     restauranteId: ctx.restauranteId,
@@ -339,10 +372,10 @@ async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: Assunto) {
     textosIrmaos,
   )
 
-  let extras: { role: 'user'; content: string }[] = []
+  let reparo: { rascunhoAnterior: unknown; critica: string } | undefined
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const rascunho = await redigirInsight(db, { ...ctx, assunto }, extras)
+    const rascunho = await redigirInsight(db, { ...ctx, assunto }, reparo)
 
     if (rascunho?.gerar === false) return null
     if (!rascunho?.titulo) return null
@@ -357,13 +390,12 @@ async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: Assunto) {
         console.warn(`[${assunto.chave}] descartado: vazamento persistente`, vazamento)
         return null
       }
-      extras = [{
-        role: 'user',
-        content:
-          'O texto usou conteudo de OUTRO assunto da mesma mensagem, o que nao e permitido. ' +
-          `Trechos/termos que denunciam isso: ${[...vazamento.trigramas, ...vazamento.tokens].join(', ')}. ` +
-          'Reescreva tratando exclusivamente do assunto em analise.',
-      }]
+      reparo = {
+        rascunhoAnterior: rascunho,
+        critica:
+          'o texto usou conteudo de OUTRO assunto da mesma mensagem do cliente. ' +
+          `Termos que denunciam: ${[...vazamento.trigramas, ...vazamento.tokens].join(', ')}`,
+      }
       continue
     }
 
@@ -374,13 +406,12 @@ async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: Assunto) {
       console.warn(`[${assunto.chave}] descartado: sem lastro`, veredito.problemas)
       return null
     }
-    extras = [{
-      role: 'user',
-      content:
-        'A revisao apontou afirmacoes sem lastro nos feedbacks: ' +
-        (veredito.problemas ?? []).map((p) => `"${p.afirmacao}" (${p.motivo})`).join('; ') +
-        '. Reescreva mantendo apenas o que os feedbacks realmente dizem.',
-    }]
+    reparo = {
+      rascunhoAnterior: rascunho,
+      critica:
+        'afirmacoes que os feedbacks nao sustentam — ' +
+        (veredito.problemas ?? []).map((p) => `"${p.afirmacao}" (${p.motivo})`).join('; '),
+    }
   }
 
   return null
