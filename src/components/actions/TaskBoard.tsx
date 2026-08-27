@@ -291,7 +291,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         const mapped: ExtendedActionTask[] = data.map((d) => ({
           id: d.id.toString(),
           titulo_acao: d.titulo_acao || 'Sem título',
-          prioridade: d.prioridade || 'NORMAL',
+          prioridade: d.prioridade || 'OBSERVACAO',
           categoria: d.categoria || 'Outros',
           plano_detalhado: d.plano_detalhado || undefined,
           texto: d.texto || undefined,
@@ -352,7 +352,6 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     taskId: string,
     oldStatus: ActionStatus,
     newStatus: ActionStatus,
-    taskDetails: any,
   ) => {
     try {
       await atualizarStatusAcao(parseInt(taskId), newStatus)
@@ -361,20 +360,11 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         description: `A tarefa foi movida para ${newStatus === 'EM_ANDAMENTO' ? 'Em Andamento' : newStatus === 'CONCLUIDO' ? 'Concluído' : 'Pendente'}.`,
       })
 
-      if (taskDetails) {
-        supabase.functions
-          .invoke('webhook-n8n', {
-            body: {
-              task_id: taskId,
-              title: taskDetails.titulo_acao,
-              status: newStatus,
-              priority: taskDetails.prioridade,
-              source: taskDetails.categoria,
-              restaurante_id: usuario?.restaurante_id,
-            },
-          })
-          .catch(console.error)
-      }
+      // Quem avisa o cliente é o motor de retorno, não o navegador. A mudança de
+      // status já é registrada em `acao_status_historico` pelo trigger, espera as
+      // 2h de carência e só então vira aviso — e essa rota funciona mesmo quando
+      // o status muda pela API ou por outra aba. O disparo daqui era um segundo
+      // caminho, que mandava a mensagem na hora e não sabia desfazer.
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao atualizar o status.', variant: 'destructive' })
       load() // reload to reset state on error
@@ -382,7 +372,6 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   }
 
   const moveTask = async (taskId: string, oldStatus: ActionStatus, newStatus: ActionStatus) => {
-    const taskDetails = tasks.find((t) => t.id === taskId)
     let updatedTasks: ExtendedActionTask[] = []
 
     setTasks((prev) => {
@@ -408,7 +397,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       return updatedTasks
     })
 
-    await doMoveStatusApi(taskId, oldStatus, newStatus, taskDetails)
+    await doMoveStatusApi(taskId, oldStatus, newStatus)
 
     if (updatedTasks.length > 0) {
       const changedOrders = updatedTasks.map((t) => ({ id: parseInt(t.id), ordem: t.ordem }))

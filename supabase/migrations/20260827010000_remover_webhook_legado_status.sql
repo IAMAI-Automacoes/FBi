@@ -1,0 +1,34 @@
+-- Remove o trigger legado que POSTava toda mudança de ação para o n8n.
+--
+-- Definição exata do que está sendo removido (para poder recriar, se preciso):
+--
+--   CREATE TRIGGER "Status_feedback" AFTER UPDATE ON public.acoes_operacionais
+--   FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://n8n-n8n-main.tikvpg.easypanel.host/webhook-test/status_açoes',
+--     'POST', '{"Content-type":"application/json"}', '{}', '5000');
+--
+-- ## Por que sai
+--
+-- 1. A URL é `/webhook-test/`, não `/webhook/`. Esse é o endpoint de TESTE do
+--    n8n: ele só responde enquanto alguém está com o workflow aberto no editor,
+--    com "listen for test event" ligado. Em produção o POST bate em nada.
+--
+-- 2. Dispara em `AFTER UPDATE` sem cláusula `WHEN`, ou seja, em QUALQUER update
+--    da tabela — mudar prioridade, responsável, prazo, ordem do card no board.
+--    Nada disso é mudança de status.
+--
+-- 3. Manda a mensagem no instante do update. Não conhece a carência de 2h nem
+--    sabe desfazer: arrastar o card por engano e voltar já teria avisado o
+--    cliente. É justamente o comportamento que a `promover_transicoes_pendentes`
+--    existe para impedir.
+--
+-- Com ele fora, sobra um caminho só: trigger -> `acao_status_historico` com
+-- `promover_em = now() + 2h` -> `promover_transicoes_pendentes()` no worker ->
+-- `aviso_pendente` -> n8n lê a tabela. O n8n passa a PUXAR, em vez de receber
+-- push de dentro do banco.
+--
+-- O gêmeo deste trigger no frontend (o `supabase.functions.invoke('webhook-n8n')`
+-- dentro do `doMoveStatusApi`, em src/components/actions/TaskBoard.tsx) sai na
+-- mesma leva.
+
+drop trigger if exists "Status_feedback" on public.acoes_operacionais;

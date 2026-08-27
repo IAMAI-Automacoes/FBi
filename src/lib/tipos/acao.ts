@@ -7,7 +7,19 @@
  * aparecia sempre vazio.
  */
 export type StatusAcao = 'SUGERIDA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
-export type PrioridadeAcao = 'NORMAL' | 'IMPORTANTE' | 'URGENTE'
+
+/**
+ * `OBSERVACAO` é o nível mais baixo, igual ao dos insights — a ação herda a
+ * prioridade do insight que a originou, então os dois vocabulários precisam ser
+ * o mesmo.
+ *
+ * `NORMAL` é legado e só aparece em linhas antigas: este tipo declarava
+ * `'NORMAL' | 'IMPORTANTE' | 'URGENTE'` enquanto o banco, o TaskModal, os
+ * prompts da IA e `src/lib/prioridade.ts` já falavam `OBSERVACAO`. O
+ * `TaskBoard` chegava a usar os dois no mesmo arquivo, um em cada fallback.
+ * Fica aceito na leitura para não quebrar essas linhas; nada novo escreve.
+ */
+export type PrioridadeAcao = 'OBSERVACAO' | 'IMPORTANTE' | 'URGENTE' | 'NORMAL'
 
 export interface Acao {
   id: number // bigint
