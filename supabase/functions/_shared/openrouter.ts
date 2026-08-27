@@ -303,11 +303,18 @@ export async function chamarIA(
   const MAX_CHAMADAS_FERRAMENTA = 12
   let totalChamadasFerramenta = 0
 
+  // Sem nenhuma outra ferramenta, a de saída é a única coisa que o modelo pode
+  // chamar — não há pesquisa a fazer antes de responder. Forçar já na primeira
+  // rodada evita a rodada desperdiçada em que ele responde em texto solto e só
+  // então chama a ferramenta (medido: 2 rodadas cobradas para 1 decisão).
+  const forcarDesdeOInicio = !!saida && ferramentas.length === 0
+
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
     // Na última rodada — ou com o orçamento estourado — a saída é forçada,
     // senão a invocação inteira morre sem devolver nada.
     const forcarSaida = !!saida &&
-      (rodada === MAX_RODADAS - 1 || totalChamadasFerramenta >= MAX_CHAMADAS_FERRAMENTA)
+      (forcarDesdeOInicio || rodada === MAX_RODADAS - 1 ||
+        totalChamadasFerramenta >= MAX_CHAMADAS_FERRAMENTA)
     const body = corpoDaChamada(mensagens, opcoes.params, ferramentas, saida, forcarSaida)
 
     const resposta = await fetch(URL_OPENROUTER, {

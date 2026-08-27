@@ -21,6 +21,31 @@ function json(body: unknown, status = 200) {
   })
 }
 
+// Encadeia a vinculação automática logo depois que o tema é conhecido.
+//
+// Por que aqui e não num trigger próprio no insert: `vincular-feedback` decide
+// pelo `tema_id`, e o trigger de insert dispara ANTES desta função gravar o
+// tema. Dois triggers no mesmo evento correriam, e a vinculação leria tema nulo
+// — perdendo justamente o atalho determinístico que existe pra economizar IA.
+//
+// Nunca propaga erro: classificar o feedback é o trabalho principal, e ele não
+// pode falhar porque a vinculação caiu. Sem vínculo o feedback só fica livre e
+// entra na próxima rodada de geração de insights.
+async function vincular(feedbackId: number | string) {
+  try {
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/vincular-feedback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+      },
+      body: JSON.stringify({ feedback_id: feedbackId }),
+    })
+  } catch (e) {
+    console.error('vinculação automática falhou:', e)
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -40,7 +65,10 @@ serve(async (req: Request) => {
       .eq('id', feedback_id)
       .single()
     if (!fb || !fb.restaurante_id) return json({ error: 'feedback não encontrado' }, 404)
-    if (fb.tema_id) return json({ ok: true, ja_classificado: true })
+    if (fb.tema_id) {
+      await vincular(fb.id)
+      return json({ ok: true, ja_classificado: true })
+    }
 
     const texto = String(fb.resumo || fb.texto_original || '').trim().slice(0, 1000)
     if (!texto) return json({ ok: false, motivo: 'feedback sem texto' })
@@ -153,6 +181,8 @@ ${lista}
       .from('feedback_temas')
       .update({ quantidade: count ?? 0, atualizado_em: new Date().toISOString() })
       .eq('id', temaId)
+
+    await vincular(fb.id)
 
     return json({ ok: true, tema_id: temaId, quantidade: count ?? 0 })
   } catch (e) {
