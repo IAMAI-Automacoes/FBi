@@ -562,6 +562,7 @@ export type Database = {
       feedbacks_restaurante: {
         Row: {
           categoria: string | null
+          contato_id: string | null
           created_at: string
           id: number
           origem_id: string | null
@@ -574,6 +575,7 @@ export type Database = {
         }
         Insert: {
           categoria?: string | null
+          contato_id?: string | null
           created_at?: string
           id?: number
           origem_id?: string | null
@@ -586,6 +588,7 @@ export type Database = {
         }
         Update: {
           categoria?: string | null
+          contato_id?: string | null
           created_at?: string
           id?: number
           origem_id?: string | null
