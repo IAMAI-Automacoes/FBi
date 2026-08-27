@@ -81,7 +81,6 @@ import {
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
-import { supabase } from '@/lib/supabase/client'
 import { estiloStatus } from '@/lib/status-acao'
 import { cn } from '@/lib/utils'
 
