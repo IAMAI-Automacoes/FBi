@@ -194,12 +194,18 @@ function corpoDaChamada(
 
   if (params.web) {
     const max = Math.min(Math.max(Number(params.web_max_results) || 4, 1), 8)
-    body.plugins = [{
+    // deno-lint-ignore no-explicit-any
+    const plugin: any = {
       id: 'web',
       max_results: max,
       search_prompt:
         'Uma busca na web foi feita hoje. Use os resultados abaixo para responder com informacao atual. Escreva apenas a resposta, sem citar links, sem nomear os sites e sem lista de fontes no final.',
-    }]
+    }
+    // Sem `engine`, o OpenRouter decide: busca nativa se o modelo tiver uma,
+    // Exa se não. Só mandamos a chave quando o admin escolheu — mandar um valor
+    // que o modelo não suporta faz a chamada inteira falhar.
+    if (params.web_engine) plugin.engine = params.web_engine
+    body.plugins = [plugin]
   }
 
   return body
@@ -309,13 +315,18 @@ export async function chamarIA(
   // então chama a ferramenta (medido: 2 rodadas cobradas para 1 decisão).
   const forcarDesdeOInicio = !!saida && ferramentas.length === 0
 
+  // Cópia local porque o motor de busca pode ser descartado no meio (ver
+  // abaixo) — `opcoes.params` é do chamador e não deve ser mutado.
+  let params = opcoes.params
+  let motorBuscaJaDescartado = false
+
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
     // Na última rodada — ou com o orçamento estourado — a saída é forçada,
     // senão a invocação inteira morre sem devolver nada.
     const forcarSaida = !!saida &&
       (forcarDesdeOInicio || rodada === MAX_RODADAS - 1 ||
         totalChamadasFerramenta >= MAX_CHAMADAS_FERRAMENTA)
-    const body = corpoDaChamada(mensagens, opcoes.params, ferramentas, saida, forcarSaida)
+    const body = corpoDaChamada(mensagens, params, ferramentas, saida, forcarSaida)
 
     const resposta = await fetch(URL_OPENROUTER, {
       method: 'POST',
@@ -329,6 +340,24 @@ export async function chamarIA(
 
     if (!resposta.ok) {
       const detalhe = await resposta.text()
+
+      // Motor de busca que o modelo não tem derruba a chamada inteira com um 404
+      // opaco (medido: `engine: native` + gemini-2.5-flash-lite). Isso é escolha
+      // de configuração no painel, e configuração errada não pode impedir o
+      // agente de responder — refaz uma vez deixando o OpenRouter escolher o
+      // buscador, que é o comportamento do modo "Automático".
+      if (params.web_engine && !motorBuscaJaDescartado) {
+        console.warn(
+          `Motor de busca "${params.web_engine}" recusado (${resposta.status}) por ${
+            params.model ?? 'modelo padrao'
+          }; refazendo com o buscador automatico.`,
+        )
+        motorBuscaJaDescartado = true
+        params = { ...params, web_engine: undefined }
+        rodada--
+        continue
+      }
+
       throw new ErroIA(resposta.status, `OpenRouter error: ${resposta.status}`, detalhe)
     }
 

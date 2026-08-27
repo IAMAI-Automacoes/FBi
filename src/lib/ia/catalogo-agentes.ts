@@ -28,6 +28,12 @@ export interface ParamsPadrao {
   top_p?: number
   /** Exige resposta em JSON — subir a temperatura aqui arrisca saída inválida. */
   json?: boolean
+  /**
+   * Já nasce com busca na web ligada. O painel mostra o estado certo na caixa e
+   * deixa o admin desligar — sem isto ele veria a caixa desmarcada num agente
+   * que está de fato pesquisando.
+   */
+  web?: boolean
 }
 
 export interface AgenteInfo {
@@ -452,11 +458,11 @@ Escreva em portugues do Brasil, direto.
     id: 'plano_acao',
     arquivo: 'supabase/functions/gerar-plano-acao/index.ts:42',
     camada: 'servidor',
-    params: { max_tokens: 1200, json: true },
+    params: { max_tokens: 1200, json: true, web: true },
     nome: 'Gerador de plano de ação (edge function)',
     papel: 'Gera o passo a passo detalhado de UMA ação, quando o dono pede o plano. Aprofunda o que o Sugeridor já esboçou.',
     memoria: 'SEM memória de conversa. Vê a ação, o perfil do restaurante e os materiais de treinamento.',
-    acessos: ['A ação (título/categoria/prioridade)', 'Insights ativos', 'Perfil do restaurante', 'Materiais de treinamento'],
+    acessos: ['A ação (título/categoria/prioridade)', 'Insights ativos', 'Perfil do restaurante', 'Materiais de treinamento', 'Busca na web'],
     blocos: [{ titulo: 'Prompt', explicacao: 'Especialista em gestão e operação, com o contexto deste restaurante.', dinamico: true, editavel: true, chave: 'ef_plano_acao',
       conteudo: `Você é um especialista em gestão de restaurantes e operações.
 Baseado na ação descrita abaixo, gere um plano detalhado de ação PARA ESTE restaurante.

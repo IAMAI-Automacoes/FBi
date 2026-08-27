@@ -34,9 +34,22 @@ const NUMERICOS = [
   'min_p', 'frequency_penalty', 'presence_penalty', 'seed',
 ] as const
 
+/**
+ * O bloco "avançado", como fica no banco.
+ *
+ * Não é só de números: `web` é booleano e `web_engine` é texto. Enquanto o tipo
+ * era `Record<string, number>`, o painel não conseguia sequer guardar o
+ * liga/desliga da busca na web — ela só existia chumbada no código do agente.
+ *
+ * Quem consome isto no navegador ignora as chaves de web (o `paramsDoAgente`
+ * daqui só repassa as numéricas); quem as usa é a edge function, em
+ * `supabase/functions/_shared/params.ts`.
+ */
+export type ValorAvancado = number | boolean | string
+
 export interface ConfigAgente extends ParamsAgente {
   modelo?: string | null
-  avancado?: Record<string, number>
+  avancado?: Record<string, ValorAvancado>
   ativo?: boolean
 }
 
@@ -62,7 +75,7 @@ export async function carregarParamsAgentes(): Promise<void> {
         temperature: linha.temperature != null ? Number(linha.temperature) : undefined,
         max_tokens: linha.max_tokens ?? undefined,
         top_p: linha.top_p != null ? Number(linha.top_p) : undefined,
-        avancado: (linha.avancado || {}) as Record<string, number>,
+        avancado: (linha.avancado || {}) as Record<string, ValorAvancado>,
         ativo: linha.ativo !== false,
       }
     }

@@ -24,16 +24,33 @@ export interface ParamsAgente {
   response_format?: { type: 'json_object' }
   web?: boolean
   web_max_results?: number
+  /**
+   * Qual buscador o plugin web usa. `native` é a busca do próprio provedor do
+   * modelo (Gemini, OpenAI); `exa` é o buscador independente do OpenRouter.
+   * Em branco, o OpenRouter escolhe: nativo se o modelo tiver, Exa se não.
+   */
+  web_engine?: 'native' | 'exa'
 }
 
-/** Chaves do bloco "avançado" repassadas ao OpenRouter quando preenchidas. */
+/** Chaves numéricas do bloco "avançado", repassadas quando preenchidas. */
 const AVANCADOS = [
   'top_k',
   'min_p',
   'frequency_penalty',
   'presence_penalty',
   'seed',
+  'web_max_results',
 ] as const
+
+/**
+ * Chaves do bloco "avançado" que NÃO são números.
+ *
+ * O loop dos numéricos descarta qualquer coisa que não passe em
+ * `Number.isFinite` — então `web: true` vindo do painel era silenciosamente
+ * jogado fora, e a busca na web só existia chumbada no código do agente. Estas
+ * chaves têm leitura própria, cada uma validada pelo que ela aceita.
+ */
+const MOTORES_BUSCA = ['native', 'exa'] as const
 
 /**
  * Modelo escolhido pelo admin. Cai na env e, por fim, num literal — nunca
@@ -85,6 +102,16 @@ export async function paramsDoAgente(
         if (v != null && v !== '' && Number.isFinite(Number(v))) {
           resolvido[chave] = Number(v)
         }
+      }
+
+      // Busca na web: ligar e desligar tem que valer nos DOIS sentidos, então
+      // aqui `false` é uma resposta, não "não configurado" — é assim que o admin
+      // desliga a busca de um agente que a tem ligada por padrão no código.
+      if (typeof av.web === 'boolean') resolvido.web = av.web
+
+      const motor = String(av.web_engine ?? '')
+      if ((MOTORES_BUSCA as readonly string[]).includes(motor)) {
+        resolvido.web_engine = motor as 'native' | 'exa'
       }
     }
   } catch {

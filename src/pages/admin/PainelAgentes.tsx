@@ -6,7 +6,12 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { CATALOGO_AGENTES, COMO_FUNCIONA, AgenteInfo, BlocoPrompt } from '@/lib/ia/catalogo-agentes'
 import { promptOverride, salvarPromptEditavel, placeholdersDe, dadoAtivo, salvarConfigObj } from '@/lib/ia/prompt-store'
-import { configDoAgente, salvarConfigAgente, restaurarPadraoAgente } from '@/lib/ia/params'
+import {
+  configDoAgente,
+  restaurarPadraoAgente,
+  salvarConfigAgente,
+  type ValorAvancado,
+} from '@/lib/ia/params'
 import { Switch } from '@/components/ui/switch'
 import {
   ModeloIA, listarModelos, adicionarModelo, ativarModelo, removerModelo,
@@ -14,7 +19,7 @@ import {
 import { PainelMemorias } from '@/pages/admin/PainelMemorias'
 import {
   Bot, ChevronRight, ArrowLeft, Database, Brain, Pencil, Save, RotateCcw, Lock, Loader2,
-  Info, Cpu, Plus, Check, Trash2, Sliders, Server, MonitorSmartphone,
+  Info, Cpu, Plus, Check, Trash2, Sliders, Server, MonitorSmartphone, Globe,
 } from 'lucide-react'
 
 // ── Editor de um bloco de prompt ─────────────────────────────────────────────
@@ -173,6 +178,19 @@ const AVANCADOS: { id: string; label: string; dica: string }[] = [
   { id: 'seed', label: 'seed', dica: 'Fixa a aleatoriedade para respostas reproduzíveis.' },
 ]
 
+/**
+ * Buscadores que o plugin web do OpenRouter aceita.
+ *
+ * Vazio é o padrão e quase sempre o certo: o OpenRouter usa a busca nativa do
+ * modelo quando ele tem uma, e cai na Exa quando não tem. Forçar um motor que o
+ * modelo não suporta faz a chamada falhar inteira.
+ */
+const MOTORES_BUSCA = [
+  { id: '', label: 'Automático (recomendado)', dica: 'Usa a busca do próprio modelo quando existe; senão, a Exa.' },
+  { id: 'native', label: 'Nativo do modelo', dica: 'Só funciona em modelos que têm busca própria (Gemini, GPT com browsing).' },
+  { id: 'exa', label: 'Exa', dica: 'Buscador independente. Funciona com qualquer modelo, e é cobrado à parte.' },
+]
+
 function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: ModeloIA[] }) {
   const { toast } = useToast()
   const cfg = configDoAgente(agente.id)
@@ -185,6 +203,13 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
     for (const a of AVANCADOS) o[a.id] = String(cfg?.avancado?.[a.id] ?? '')
     return o
   })
+  // `web` guardado no banco vence o padrão do código, nos dois sentidos — é
+  // assim que dá para DESLIGAR a busca de um agente que a tem ligada por padrão.
+  const [web, setWeb] = useState<boolean>(
+    typeof cfg?.avancado?.web === 'boolean' ? (cfg.avancado.web as boolean) : !!agente.params.web,
+  )
+  const [webMax, setWebMax] = useState<string>(String(cfg?.avancado?.web_max_results ?? ''))
+  const [webEngine, setWebEngine] = useState<string>(String(cfg?.avancado?.web_engine ?? ''))
   const [ativo, setAtivo] = useState(cfg?.ativo !== false)
   const [mostrarAvancado, setMostrarAvancado] = useState(false)
   const [salvando, setSalvando] = useState(false)
@@ -201,10 +226,18 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
   const salvar = async () => {
     setSalvando(true)
     try {
-      const av: Record<string, number> = {}
+      const av: Record<string, ValorAvancado> = {}
       for (const a of AVANCADOS) {
         const n = numero(avancado[a.id])
         if (n !== undefined) av[a.id] = n
+      }
+      // `web` é sempre gravado, inclusive `false`: sem isso não há como desligar
+      // a busca de um agente cujo padrão do código é ligado.
+      av.web = web
+      if (web) {
+        const n = numero(webMax)
+        if (n !== undefined) av.web_max_results = n
+        if (webEngine) av.web_engine = webEngine
       }
       await salvarConfigAgente(agente.id, {
         modelo: modelo || null,
@@ -229,6 +262,7 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
       setTopP(String(agente.params.top_p ?? ''))
       setModelo(''); setAtivo(true)
       setAvancado(Object.fromEntries(AVANCADOS.map((a) => [a.id, ''])))
+      setWeb(!!agente.params.web); setWebMax(''); setWebEngine('')
       toast({ title: 'Padrão do código restaurado' })
     } catch (e: any) {
       toast({ title: 'Não consegui restaurar', description: e.message, variant: 'destructive' })
@@ -290,6 +324,58 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
             <option value="">Usar o modelo global</option>
             {modelos.map((m) => <option key={m.id} value={m.modelo}>{m.nome} — {m.modelo}</option>)}
           </select>
+        </div>
+
+        <div className="rounded-md border border-gray-200 bg-gray-50/60 p-3 space-y-2.5">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox" checked={web} onChange={(e) => setWeb(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <span>
+              <span className="text-[12.5px] font-medium text-gray-700 flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5" /> Busca na web
+              </span>
+              <span className="block text-[11px] text-gray-500 mt-0.5">
+                O agente consulta a internet antes de responder. Vale quando ele precisa de número
+                ou regra que muda com o tempo — norma sanitária, prazo legal. Encarece bastante a
+                chamada: o texto dos resultados entra no prompt.
+                {agente.params.web && (
+                  <span className="block text-gray-400 mt-0.5">
+                    Ligada por padrão neste agente. Desmarcar aqui desliga.
+                  </span>
+                )}
+              </span>
+            </span>
+          </label>
+
+          {web && (
+            <div className="grid sm:grid-cols-2 gap-3 pl-7">
+              <div>
+                <label className="text-[12px] font-medium text-gray-700">Motor de busca</label>
+                <select
+                  value={webEngine} onChange={(e) => setWebEngine(e.target.value)}
+                  className="w-full h-8 mt-1 rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  {MOTORES_BUSCA.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+                <p className="text-[10.5px] text-gray-400 mt-0.5">
+                  {MOTORES_BUSCA.find((m) => m.id === webEngine)?.dica}
+                </p>
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-gray-700">Resultados por busca</label>
+                <Input
+                  type="number" min={1} max={8} value={webMax}
+                  onChange={(e) => setWebMax(e.target.value)}
+                  placeholder="4" className="h-8 mt-1 text-xs"
+                />
+                <p className="text-[10.5px] text-gray-400 mt-0.5">
+                  De 1 a 8. Cada resultado a mais entra inteiro no prompt e conta no crédito.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <button type="button" onClick={() => setMostrarAvancado((v) => !v)}
