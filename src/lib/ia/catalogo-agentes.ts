@@ -486,6 +486,99 @@ Retorne SOMENTE um JSON neste formato, sem markdown:
 }` }],
   },
   {
+    id: 'classificador_feedback',
+    arquivo: 'supabase/functions/classificar-feedback/index.ts:35',
+    camada: 'servidor',
+    params: { max_tokens: 300 },
+    desligavel: true,
+    nome: 'Classificador de tema (edge function)',
+    papel:
+      'Encaixa cada ponto separado num tema do restaurante, ou cria um tema novo. É o agrupamento que decide quais feedbacks viram o mesmo insight.',
+    memoria: 'SEM memória. Vê a lista de temas que já existem e o feedback novo.',
+    acessos: [
+      'O feedback separado (texto, categoria, sentimento)',
+      'Os 120 temas mais usados do restaurante',
+      'Grava em: feedbacks_restaurante.tema_id, feedback_temas',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'O agente mais chamado do sistema: roda uma vez por ponto separado, e uma mensagem de cliente vira ~3 pontos. Desligar aqui não perde o feedback — ele só fica sem tema, e a geração de insights o agrupa pela categoria.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_classificar_feedback',
+      conteudo: `Você agrupa feedbacks de clientes de restaurante em TEMAS específicos.
+
+## Temas que já existem neste restaurante
+{temas}
+
+## Feedback novo a classificar
+"{texto}"
+(categoria informada: {categoria}; sentimento: {sentimento})
+
+## Regra
+- Se este feedback fala do MESMO ponto específico de um tema acima, devolva o id desse tema (mesmo problema/elogio, ainda que com outras palavras).
+- Só crie um tema NOVO se for um ponto genuinamente diferente.
+- Seja ESPECÍFICO: "comida fria" e "comida sem sal" são temas DIFERENTES; "veio frio" e "estava gelado" são o MESMO tema.
+- rotulo: curto, específico, no singular (ex.: "Comida fria", "Demora no atendimento", "Música alta", "Garçom atencioso").
+
+Chame registrar_tema. Deixe tema_id como null se for um tema novo.`,
+    }],
+  },
+  {
+    id: 'vinculador_feedback',
+    arquivo: 'supabase/functions/vincular-feedback/index.ts:39',
+    camada: 'servidor',
+    params: { max_tokens: 400 },
+    desligavel: true,
+    nome: 'Vinculador de feedback novo (edge function)',
+    papel:
+      'Quando chega um ponto separado, decide se ele já está coberto por uma ação em andamento ou por um insight ativo. Só é chamado no caso ambíguo — quando o tema bate, o vínculo é feito sem IA.',
+    memoria: 'SEM memória. Vê o feedback novo e os candidatos da mesma categoria.',
+    acessos: [
+      'O feedback separado (texto, categoria, sentimento)',
+      'Ações PENDENTE/EM_ANDAMENTO não arquivadas',
+      'Insights ativos',
+      'Grava em: insight_feedback, feedback_acao',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'Um vínculo errado faz o cliente receber mensagem dizendo que resolvemos algo que ele nunca relatou — por isso o prompt manda responder "nenhum" na dúvida. Desligar aqui não quebra nada: o feedback fica livre e entra na próxima geração de insights.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_vincular_feedback',
+      conteudo:
+        `Voce decide se um feedback novo de cliente ja esta coberto por algo que a equipe do restaurante esta tratando.
+
+## O feedback que acabou de chegar
+"{texto}"
+Categoria: {categoria} | Sentimento: {sentimento}
+
+## Acoes em andamento (o restaurante ja esta resolvendo)
+{acoes}
+
+## Insights ativos (identificados, ainda nao viraram acao)
+{insights}
+
+## Sua tarefa
+Escolha UMA opcao:
+- "acao" + o id, se uma das acoes acima resolve o problema deste feedback.
+- "insight" + o id, se um dos insights acima e sobre este mesmo problema.
+- "nenhum", se nada acima trata deste problema.
+
+Regras:
+- Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e
+  "a comida veio fria" sao problemas diferentes, mesmo os dois sendo sobre
+  comida. "O banheiro estava sujo" e "a mesa estava suja" tambem.
+- Na duvida, responda "nenhum". Um vinculo errado faz o cliente receber uma
+  mensagem dizendo que resolvemos algo que ele nunca relatou.
+- Elogio quase nunca se liga a uma acao corretiva.
+
+Chame registrar_decisao.`,
+    }],
+  },
+  {
     id: 'perguntas_direcionadas',
     arquivo: 'supabase/functions/gerar-perguntas-direcionadas/index.ts:28',
     camada: 'servidor',

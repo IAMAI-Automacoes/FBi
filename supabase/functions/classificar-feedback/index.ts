@@ -5,20 +5,70 @@
 // Estratégia (precisão): a IA recebe a LISTA de temas que já existem e decide se
 // o feedback encaixa num deles ou é um ponto genuinamente diferente. Classificar
 // um feedback não remexe os antigos → agrupamento estável.
+//
+// ## Por que esta função passou a usar a infra compartilhada
+//
+// Ela falava com o OpenRouter por `fetch` direto, montando o prompt por template
+// string. Funcionava — e era o buraco mais caro do sistema.
+//
+// É o agente MAIS chamado que existe aqui: roda uma vez por ponto separado, e
+// uma mensagem de cliente vira ~3 pontos. Ainda assim não aparecia em `uso_ia`
+// (custo invisível), não chamava `checarCota` (furava o limite do restaurante),
+// não passava por `paramsDoAgente` (o admin não conseguia trocar o modelo nem
+// desligar) e não passava por `montarPrompt` (o prompt não era editável no
+// painel). Auditado em 2026-08-27: 380 chamadas registradas em `uso_ia`, zero
+// desta função.
+//
+// A saída vira ferramenta em vez de `json_object`: o schema garante o FORMATO,
+// não só que é JSON válido. E, sem outra ferramenta disponível, ela é forçada já
+// na primeira rodada — uma chamada por ponto, que é o que o caminho quente
+// aguenta.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { json, preflight } from '../_shared/cors.ts'
+import { clienteAdmin } from '../_shared/auth.ts'
+import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { paramsDoAgente } from '../_shared/params.ts'
+import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const AGENTE = 'classificador_feedback'
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+/**
+ * Prompt padrão. O admin pode sobrescrever pelo painel (chave
+ * `ef_classificar_feedback`); os placeholders são preenchidos aqui e não podem
+ * ser removidos na edição.
+ */
+const PROMPT_PADRAO =
+  `Você agrupa feedbacks de clientes de restaurante em TEMAS específicos.
+
+## Temas que já existem neste restaurante
+{temas}
+
+## Feedback novo a classificar
+"{texto}"
+(categoria informada: {categoria}; sentimento: {sentimento})
+
+## Regra
+- Se este feedback fala do MESMO ponto específico de um tema acima, devolva o id desse tema (mesmo problema/elogio, ainda que com outras palavras).
+- Só crie um tema NOVO se for um ponto genuinamente diferente.
+- Seja ESPECÍFICO: "comida fria" e "comida sem sal" são temas DIFERENTES; "veio frio" e "estava gelado" são o MESMO tema.
+- rotulo: curto, específico, no singular (ex.: "Comida fria", "Demora no atendimento", "Música alta", "Garçom atencioso").
+
+Chame registrar_tema. Deixe tema_id como null se for um tema novo.`
+
+const SCHEMA = {
+  type: 'object',
+  properties: {
+    tema_id: {
+      type: ['string', 'null'],
+      description: 'Id de um tema da lista, ou null se este ponto for novo.',
+    },
+    rotulo: {
+      type: 'string',
+      description: 'Rotulo curto, especifico, no singular. Ex.: "Comida fria".',
+    },
+    tipo: { type: 'string', enum: ['elogio', 'reclamacao', 'neutro'] },
+  },
+  required: ['rotulo', 'tipo'],
 }
 
 // Encadeia a vinculação automática logo depois que o tema é conhecido.
@@ -47,17 +97,15 @@ async function vincular(feedbackId: number | string) {
 }
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const pre = preflight(req)
+  if (pre) return pre
 
   try {
     const { feedback_id } = await req.json().catch(() => ({}))
     if (feedback_id == null) return json({ error: 'feedback_id ausente' }, 400)
 
-    const db = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { persistSession: false } },
-    )
+    // deno-lint-ignore no-explicit-any
+    const db: any = clienteAdmin()
 
     const { data: fb } = await db
       .from('feedbacks_restaurante')
@@ -86,49 +134,41 @@ serve(async (req: Request) => {
       ? existentes.map((t: any) => `- id:${t.id} | ${t.rotulo} (${t.tipo})`).join('\n')
       : '(nenhum tema ainda)'
 
-    const prompt = `Você agrupa feedbacks de clientes de restaurante em TEMAS específicos.
-
-## Temas que já existem neste restaurante
-${lista}
-
-## Feedback novo a classificar
-"${texto}"
-(categoria informada: ${fb.categoria ?? '—'}; sentimento: ${fb.sentimento ?? '—'})
-
-## Regra
-- Se este feedback fala do MESMO ponto específico de um tema acima, devolva o id desse tema (mesmo problema/elogio, ainda que com outras palavras).
-- Só crie um tema NOVO se for um ponto genuinamente diferente.
-- Seja ESPECÍFICO: "comida fria" e "comida sem sal" são temas DIFERENTES; "veio frio" e "estava gelado" são o MESMO tema.
-- rotulo: curto, específico, no singular (ex.: "Comida fria", "Demora no atendimento", "Música alta", "Garçom atencioso").
-
-## Responda SOMENTE este JSON
-{"tema_id": "<id de um tema existente, ou null se for novo>", "rotulo": "<rótulo do tema>", "tipo": "elogio" | "reclamacao" | "neutro"}`
-
-    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
-    if (!apiKey) return json({ error: 'OPENROUTER_API_KEY não configurada' }, 500)
-    const modelo = Deno.env.get('OPENROUTER_MODELO') || 'google/gemini-2.5-flash-lite'
-
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://feedbackinteligente.app',
-      },
-      body: JSON.stringify({
-        model: modelo,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-      }),
+    const prompts = await carregarPrompts(db)
+    const prompt = montarPrompt(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
+      temas: lista,
+      texto,
+      categoria: fb.categoria ?? '—',
+      sentimento: fb.sentimento ?? '—',
     })
-    if (!resp.ok) return json({ error: `IA falhou: ${await resp.text()}` }, 502)
 
-    const data = await resp.json()
+    const params = await paramsDoAgente(db, AGENTE, { max_tokens: 300 })
+    // Agente desligado no painel: o feedback fica sem tema em vez de a função
+    // estourar. Ele ainda entra na geração de insights, só sem o agrupamento.
+    if (!params) return json({ ok: false, motivo: 'agente desativado' })
+
+    // deno-lint-ignore no-explicit-any
     let parsed: any = {}
     try {
-      parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
-    } catch {
-      return json({ error: 'resposta da IA ilegível' }, 502)
+      const { result } = await chamarIA(db, {
+        messages: [{ role: 'user', content: prompt }],
+        params,
+        origem: 'classificar-feedback',
+        restauranteId: fb.restaurante_id,
+        agenteId: AGENTE,
+        calculadora: false,
+        saida: {
+          nome: 'registrar_tema',
+          descricao: 'Registra o tema em que este feedback se encaixa.',
+          schema: SCHEMA,
+        },
+      })
+      parsed = result ?? {}
+    } catch (err) {
+      if (err instanceof ErroCota) {
+        return json({ ok: false, motivo: 'sem crédito de IA' })
+      }
+      throw err
     }
 
     // Decide o tema: id existente (validado contra a lista, pra não aceitar id
