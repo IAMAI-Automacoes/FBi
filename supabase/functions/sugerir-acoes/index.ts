@@ -1,36 +1,450 @@
+/**
+ * Insight vira ação.
+ *
+ * ## O que muda em relação à versão anterior
+ *
+ * - **O insight some da lista, mas não do banco.** Antes ele continuava ativo
+ *   depois de virar ação, então o card ficava na tela e um segundo clique
+ *   criava uma segunda ação do mesmo insight. Agora ele é desativado com
+ *   `motivo_encerramento = 'virou_acao'` e guarda o id da ação que virou.
+ *
+ * - **Os vínculos são transferidos, não recriados.** Todos os pontos do insight
+ *   passam para a ação (sem teto), pelo trigger `vincular_feedbacks_da_acao`.
+ *
+ * - **Re-varredura.** Entre o insight nascer e o dono clicar "criar ação" pode
+ *   ter chegado feedback novo sobre o MESMO assunto. Esses são procurados e
+ *   entram na ação também — senão o cliente que reclamou depois nunca seria
+ *   avisado de que o problema dele foi tratado.
+ *
+ * - **Isolamento por ação.** Uma invocação de IA por insight, com histórico
+ *   zerado, e as mesmas três camadas anti-contaminação do gerador.
+ */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
+import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
+import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
+import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 
 const AGENTE = 'sugeridor_acoes'
+const AGENTE_VERIFICADOR = 'verificador_acoes'
 
-/** Padrão do código; o admin sobrescreve pela chave ef_sugerir_acoes no painel. */
-const PROMPT_PADRAO = `Voce e o "{nome}", consultor especialista em gestao de restaurantes. Com base nos insights abaixo, gere ATE {max} acoes operacionais concretas para o dono resolver os problemas mais valiosos (maior impacto e urgencia).
+const CATEGORIAS = [
+  'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
+  'Tempo de Espera', 'Reserva', 'Estacionamento', 'Acessibilidade',
+  'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
+]
+
+/** Quantos insights o ciclo automático converte de uma vez. */
+const MAX_ACOES_CICLO = 3
+/** Insights convertidos em paralelo (150s de teto na edge function). */
+const CONCORRENCIA = 3
+
+const PROMPT_REDATOR = `Voce e o "{nome}", consultor especialista em gestao de restaurantes.
+Sua tarefa: transformar UM insight em uma acao operacional que a equipe consiga executar.
 
 {tom}
 
 ## Sobre este restaurante
 {perfil}
-{memoria}
 {conhecimento}
 
-## Regras para cada acao
-1. "titulo_acao": titulo curto e claro do que precisa ser feito.
-2. "plano_detalhado": um plano pratico em passos, adaptado a ESTE restaurante (tamanho, equipe, tipo de cozinha). Quando uma boa pratica de referencia se aplicar, incorpore-a de forma concreta. Nada de conselho generico como "melhore o atendimento".
-3. "prioridade": herde do insight principal (URGENTE, IMPORTANTE ou OBSERVACAO).
-4. "categoria": uma destas 14 — Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva, Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene ou Outros.
-5. "insight_id": o NUMERO "n" (nao um id) do insight que originou esta acao, copiado da lista abaixo, ex.: 2. Nao invente numero que nao esteja na lista.
-Escreva em portugues do Brasil, direto.
+## O insight a resolver
+Prioridade: {prioridade}
+Categoria: {categoria}
+Titulo: {titulo}
+Descricao: {descricao}
+Sugestao inicial: {sugestao}
 
-## Formato (retorne SOMENTE este JSON)
-{ "acoes": [ { "titulo_acao": "...", "plano_detalhado": "...", "prioridade": "...", "categoria": "...", "insight_id": 2 } ] }
+## Os feedbacks que originaram este insight — sua UNICA fonte de fatos
+{pontos}
 
-## Insights disponiveis
-{insights}`
+## Regras
+- A acao resolve ESTE problema e mais nada. Se os feedbacks falam de demora, a
+  acao e sobre demora — nao sobre comida, nem sobre ambiente, ainda que voce
+  veja esses assuntos ao ler uma mensagem original.
+- "plano_detalhado": passos praticos e verificaveis, adaptados a ESTE
+  restaurante (porte, equipe, tipo de cozinha, publico do perfil acima). Quem
+  faz, o que faz, e como saber que funcionou. Nada de "melhore o atendimento".
+- Use ler_original quando precisar entender a gravidade ou o contexto real do
+  relato. A mensagem tera outros assuntos: eles NAO entram na acao.
+- Use listar_pontos para reler os feedbacks a qualquer momento.
+- Herde a prioridade do insight, salvo se os feedbacks mostrarem algo mais
+  grave do que o insight registrou.
+- Escreva em portugues do Brasil, direto.
+
+Chame registrar_acao com o resultado.`
+
+const PROMPT_VERIFICADOR = `Voce revisa se uma acao operacional corresponde ao problema que a originou.
+
+## Os feedbacks — a UNICA fonte de fatos
+{pontos}
+
+## O insight
+{titulo} — {descricao}
+
+## A acao redigida
+Titulo: {titulo_acao}
+Plano: {plano}
+
+## Sua tarefa
+Reprove se:
+- A acao ataca um problema DIFERENTE do que os feedbacks e o insight descrevem.
+  Trocar o objeto e erro mesmo dentro da mesma categoria: "espera pela comida" e
+  "espera por mesa" sao problemas distintos, com causas e solucoes distintas.
+- O plano cita fato, numero, lugar ou pessoa que nao esta nos feedbacks.
+- O plano trata de assunto que aparece de raspao numa mensagem do cliente mas
+  nao e o tema do insight.
+
+NAO reprove por:
+- O plano propor medidas que nao estao nos feedbacks — isso e o esperado, o
+  plano e uma proposta de solucao.
+- Estilo, tamanho ou tom.
+
+Chame registrar_verificacao.`
+
+const SCHEMA_ACAO = {
+  type: 'object',
+  properties: {
+    titulo_acao: { type: 'string', description: 'O que precisa ser feito, curto e claro.' },
+    plano_detalhado: { type: 'string', description: 'Passos praticos, com responsavel e criterio de conclusao.' },
+    prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
+    categoria: { type: 'string', enum: CATEGORIAS },
+  },
+  required: ['titulo_acao', 'plano_detalhado'],
+}
+
+const SCHEMA_VERIFICACAO = {
+  type: 'object',
+  properties: {
+    aprovado: { type: 'boolean' },
+    problemas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { afirmacao: { type: 'string' }, motivo: { type: 'string' } },
+      },
+    },
+  },
+  required: ['aprovado'],
+}
+
+// deno-lint-ignore no-explicit-any
+type Db = any
+
+async function emParalelo<T, R>(itens: T[], limite: number, fn: (i: T) => Promise<R>): Promise<R[]> {
+  const saida: R[] = new Array(itens.length)
+  let proximo = 0
+  async function trabalhador() {
+    for (;;) {
+      const i = proximo++
+      if (i >= itens.length) return
+      saida[i] = await fn(itens[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, () => trabalhador()))
+  return saida
+}
+
+/** Os pontos que já estão ligados ao insight, com o texto. */
+async function pontosDoInsight(db: Db, insightId: string): Promise<PontoDoAssunto[]> {
+  const { data } = await db
+    .from('insight_feedback')
+    .select('feedbacks_restaurante(id, texto_original, resumo, categoria, sentimento, origem_id, created_at)')
+    .eq('insight_id', insightId)
+
+  return (data ?? [])
+    // deno-lint-ignore no-explicit-any
+    .map((l: any) => l.feedbacks_restaurante)
+    .filter(Boolean)
+    // deno-lint-ignore no-explicit-any
+    .map((f: any) => ({
+      id: f.id,
+      texto: f.texto_original || f.resumo || '',
+      categoria: f.categoria,
+      sentimento: f.sentimento,
+      origem_id: f.origem_id,
+      created_at: f.created_at,
+    }))
+}
+
+/**
+ * Feedbacks do MESMO assunto que chegaram depois do insight nascer.
+ *
+ * A busca é determinística, sem IA: `assunto_chave` guarda exatamente o
+ * critério de agrupamento que criou o insight (`tema:<uuid>|neg`), então
+ * procurar pontos livres com o mesmo tema e o mesmo balde de sentimento
+ * devolve, por construção, o mesmo assunto. Pedir para a IA julgar isso seria
+ * gastar uma chamada para reproduzir uma decisão que já está tomada.
+ */
+async function pontosNovosDoAssunto(
+  db: Db,
+  restauranteId: number,
+  assuntoChave: string | null,
+  expiracaoDias: number,
+  jaLigados: Set<number>,
+): Promise<PontoDoAssunto[]> {
+  if (!assuntoChave?.startsWith('tema:')) return []
+
+  const [temaParte, balde] = assuntoChave.slice('tema:'.length).split('|')
+  if (!temaParte) return []
+
+  const limite = new Date(Date.now() - expiracaoDias * 86_400_000).toISOString()
+  const { data } = await db
+    .from('feedbacks_livres')
+    .select('id, texto_original, resumo, categoria, sentimento, origem_id, created_at')
+    .eq('restaurante_id', restauranteId)
+    .eq('tema_id', temaParte)
+    .gte('created_at', limite)
+
+  // deno-lint-ignore no-explicit-any
+  return (data ?? [])
+    .filter((f: any) => !jaLigados.has(f.id))
+    .filter((f: any) => {
+      const negativo = (f.sentimento || '').toLowerCase().includes('negativ')
+      return balde === 'neg' ? negativo : !negativo
+    })
+    .map((f: any) => ({
+      id: f.id,
+      texto: f.texto_original || f.resumo || '',
+      categoria: f.categoria,
+      sentimento: f.sentimento,
+      origem_id: f.origem_id,
+      created_at: f.created_at,
+    }))
+    .filter((p: PontoDoAssunto) => p.texto.trim().length > 0)
+}
+
+/** Textos dos pontos irmãos — a matéria-prima do detector de vazamento. */
+async function textosIrmaos(db: Db, pontos: PontoDoAssunto[]): Promise<string[]> {
+  const origens = [...new Set(pontos.map((p) => p.origem_id).filter(Boolean))]
+  if (origens.length === 0) return []
+  const doAssunto = new Set(pontos.map((p) => p.id))
+
+  const { data } = await db
+    .from('feedbacks_restaurante')
+    .select('id, texto_original, resumo')
+    .in('origem_id', origens)
+
+  // deno-lint-ignore no-explicit-any
+  return (data ?? [])
+    .filter((f: any) => !doAssunto.has(f.id))
+    .map((f: any) => f.texto_original || f.resumo || '')
+    .filter(Boolean)
+}
+
+function listarParaPrompt(pontos: PontoDoAssunto[]): string {
+  return pontos.map((p) => `- id ${p.id} [${p.sentimento ?? '?'}]: "${p.texto}"`).join('\n')
+}
+
+/** Estágios 1-3 de UM insight. Devolve a ação aprovada, ou null. */
+async function redigirAcao(
+  db: Db,
+  // deno-lint-ignore no-explicit-any
+  ctx: any,
+  // deno-lint-ignore no-explicit-any
+  insight: any,
+  pontos: PontoDoAssunto[],
+) {
+  const vocabulario = construirVocabularioProibido(
+    pontos.map((p) => p.texto),
+    await textosIrmaos(db, pontos),
+  )
+
+  let reparo: { anterior: unknown; critica: string } | undefined
+
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const prompt = montarPrompt(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
+      nome: nomeDoAssistente(ctx.config?.mascote_config),
+      tom: tomDoAssistente(ctx.config?.mascote_config),
+      perfil: blocoPerfil(ctx.config),
+      conhecimento: ctx.conhecimento ? `\n## Boas praticas de referencia\n${ctx.conhecimento}` : '',
+      prioridade: insight.prioridade ?? 'IMPORTANTE',
+      categoria: insight.categoria ?? 'Outros',
+      titulo: insight.titulo ?? '',
+      descricao: insight.descricao ?? '',
+      sugestao: insight.sugestao ?? '',
+      pontos: listarParaPrompt(pontos),
+    })
+
+    const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: prompt },
+    ]
+    if (reparo) {
+      // Turno de assistente entre as duas mensagens de usuário: sem ele o
+      // modelo trata a crítica como assunto novo (bug já visto no gerador,
+      // que produziu um insight intitulado "Afirmações sem lastro").
+      mensagens.push({ role: 'assistant', content: JSON.stringify(reparo.anterior) })
+      mensagens.push({
+        role: 'user',
+        content:
+          `Sua resposta anterior foi REPROVADA na revisao. Motivo: ${reparo.critica}\n\n` +
+          'Reescreva a acao para o MESMO problema descrito no inicio, corrigindo apenas o ' +
+          'apontado. Esta mensagem e uma critica ao seu texto, nao um assunto novo.',
+      })
+    }
+
+    const { result: rascunho } = await chamarIA(db, {
+      messages: mensagens,
+      params: ctx.params,
+      origem: 'sugerir-acoes',
+      restauranteId: ctx.restauranteId,
+      agenteId: AGENTE,
+      checarCotaAntes: false,
+      ferramentas: [ferramentaLerOriginal(db, pontos), ferramentaListarPontos(pontos)],
+      saida: {
+        nome: 'registrar_acao',
+        descricao: 'Registra a acao operacional que resolve este insight.',
+        schema: SCHEMA_ACAO,
+      },
+    })
+
+    if (!rascunho?.titulo_acao) return null
+
+    const texto = [rascunho.titulo_acao, rascunho.plano_detalhado].filter(Boolean).join(' ')
+    const vazamento = detectarVazamento(texto, vocabulario)
+    if (vazamento.nivel === 'vazou') {
+      if (tentativa === 1) {
+        console.warn(`[acao/${insight.id}] descartada: vazamento persistente`, vazamento)
+        return null
+      }
+      reparo = {
+        anterior: rascunho,
+        critica:
+          'o texto usou conteudo de OUTRO assunto da mesma mensagem do cliente. Termos: ' +
+          [...vazamento.trigramas, ...vazamento.tokens].join(', '),
+      }
+      continue
+    }
+
+    const promptVerif = montarPrompt(ctx.prompts, 'ef_verificar_acao', PROMPT_VERIFICADOR, {
+      pontos: listarParaPrompt(pontos),
+      titulo: insight.titulo ?? '',
+      descricao: insight.descricao ?? '',
+      titulo_acao: rascunho.titulo_acao,
+      plano: rascunho.plano_detalhado ?? '',
+    })
+
+    const { result: veredito } = await chamarIA(db, {
+      messages: [{ role: 'user', content: promptVerif }],
+      params: ctx.paramsVerificador,
+      origem: 'sugerir-acoes-verificador',
+      restauranteId: ctx.restauranteId,
+      agenteId: AGENTE_VERIFICADOR,
+      checarCotaAntes: false,
+      calculadora: false,
+      saida: {
+        nome: 'registrar_verificacao',
+        descricao: 'Registra o resultado da revisao.',
+        schema: SCHEMA_VERIFICACAO,
+      },
+    })
+
+    if (veredito?.aprovado !== false) return rascunho
+
+    if (tentativa === 1) {
+      console.warn(`[acao/${insight.id}] descartada: sem lastro`, veredito.problemas)
+      return null
+    }
+    reparo = {
+      anterior: rascunho,
+      critica:
+        'a acao nao corresponde ao problema — ' +
+        // deno-lint-ignore no-explicit-any
+        (veredito.problemas ?? []).map((p: any) => `"${p.afirmacao}" (${p.motivo})`).join('; '),
+    }
+  }
+
+  return null
+}
+
+/** Converte UM insight em ação, do começo ao fim. */
+// deno-lint-ignore no-explicit-any
+async function converterInsight(db: Db, ctx: any, insight: any) {
+  const ligados = await pontosDoInsight(db, insight.id)
+
+  // Re-varredura: o que chegou depois do insight nascer entra também.
+  const novos = await pontosNovosDoAssunto(
+    db,
+    ctx.restauranteId,
+    insight.assunto_chave,
+    ctx.expiracaoDias,
+    new Set(ligados.map((p) => p.id)),
+  )
+
+  const pontos = [...ligados, ...novos]
+  if (pontos.length === 0) {
+    console.warn(`[acao/${insight.id}] insight sem pontos ligados; convertendo sem vinculo`)
+  }
+
+  const rascunho = await redigirAcao(db, ctx, insight, pontos)
+  if (!rascunho) return { criada: false, novos: 0 }
+
+  // A prioridade do insight já embute a regra de gravidade (G4 vira URGENTE na
+  // geração), então ela é o piso: a IA pode subir, nunca baixar.
+  const peso: Record<string, number> = { URGENTE: 3, IMPORTANTE: 2, OBSERVACAO: 1 }
+  const doInsight = insight.prioridade ?? 'IMPORTANTE'
+  const daIA = rascunho.prioridade
+  const prioridade = daIA && (peso[daIA] ?? 0) > (peso[doInsight] ?? 0) ? daIA : doInsight
+  const categoria = CATEGORIAS.includes(rascunho.categoria)
+    ? rascunho.categoria
+    : (insight.categoria ?? 'Outros')
+
+  // A ação nasce com `insight_id`: é o que faz o trigger
+  // `vincular_feedbacks_da_acao` copiar TODOS os pontos do insight para
+  // `feedback_acao` sozinho, sem teto.
+  const { data: acao, error: erroAcao } = await db
+    .from('acoes_operacionais')
+    .insert({
+      titulo_acao: rascunho.titulo_acao,
+      plano_detalhado: rascunho.plano_detalhado ?? '',
+      prioridade,
+      categoria,
+      status: 'PENDENTE',
+      restaurante_id: ctx.restauranteId,
+      insight_id: insight.id,
+      texto: 'Gerada a partir de um insight, com os feedbacks de origem vinculados.',
+    })
+    .select('id')
+    .single()
+
+  if (erroAcao || !acao) {
+    console.error(`[acao/${insight.id}] falha ao inserir:`, erroAcao)
+    return { criada: false, novos: 0 }
+  }
+
+  // Os pontos NOVOS (da re-varredura) não estão em `insight_feedback`, então o
+  // trigger não os pega — vão direto para o vínculo da ação.
+  if (novos.length > 0) {
+    const { error } = await db.from('feedback_acao').insert(
+      novos.map((p) => ({
+        acao_id: acao.id,
+        feedback_restaurante_id: p.id,
+        feedback_original_id: p.origem_id,
+        restaurante_id: ctx.restauranteId,
+      })),
+    )
+    if (error) console.error(`[acao/${insight.id}] falha ao vincular novos:`, error)
+  }
+
+  // O insight sai de cena guardando o que ele virou. Nunca é apagado.
+  const { error: erroEncerra } = await db
+    .from('insights')
+    .update({
+      ativo: false,
+      desativado_em: new Date().toISOString(),
+      motivo_encerramento: 'virou_acao',
+      acao_id: acao.id,
+    })
+    .eq('id', insight.id)
+  if (erroEncerra) console.error(`[acao/${insight.id}] falha ao encerrar insight:`, erroEncerra)
+
+  return { criada: true, novos: novos.length, acao_id: acao.id }
+}
 
 serve(async (req: Request) => {
   const pre = preflight(req)
@@ -38,235 +452,90 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const targetRestauranteId = body.restaurante_id
-    // Quando vem `insight_id`, é o dono clicando "Criar Ação" naquele insight
-    // específico — e não o ciclo automático varrendo todos os insights.
+    const restauranteId = body.restaurante_id
+    // Com `insight_id`, é o dono clicando "Criar Ação" naquele insight.
     const insightSolicitado: string | undefined = body.insight_id
 
-    // Sem restaurante_id a função pegava o primeiro restaurante ativo do banco
-    // e gerava ações para ele — um restaurante recebia sugestões a partir de
-    // uma chamada que não era sua.
-    if (!targetRestauranteId) {
-      return json({ error: 'restaurante_id é obrigatório' }, 400)
-    }
+    if (!restauranteId) return json({ error: 'restaurante_id é obrigatório' }, 400)
 
     const db = clienteAdmin()
 
-    // Nao gera novas sugestoes enquanto ha sugestoes aguardando aprovacao.
-    // A trava vale so para o ciclo automatico: um clique explicito em "Criar
-    // Acao" e outra intencao e nao pode ser bloqueado por uma sugestao alheia.
-    if (!insightSolicitado) {
-      const { count } = await db
-        .from('acoes_operacionais')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'SUGERIDA')
-        .eq('restaurante_id', targetRestauranteId)
-
-      if (count && count > 0) {
-        return json({ status: 'aguardando_aprovacao', sugestoes_criadas: 0 })
-      }
-    }
-
-    // Configuracao (mora em restaurantes) + perfil para contexto
-    const { data: restauranteData } = await db
+    const { data: config } = await db
       .from('restaurantes')
       .select('nome_restaurante, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante, config_insights, mascote_config')
-      .eq('id', targetRestauranteId)
+      .eq('id', restauranteId)
       .single()
 
-    // deno-lint-ignore no-explicit-any
-    const ci = (restauranteData?.config_insights as any) || {}
-    // No modo por-insight sai exatamente UMA acao para o dono confirmar ou rejeitar.
-    const maxSugestoes = insightSolicitado ? 1 : ci.max_sugestoes_acoes_por_ciclo || 3
+    const configInsights = (config?.config_insights as Record<string, unknown>) || {}
+    const expiracaoDias = Number(configInsights.expiracao_feedback_dias ?? 14)
 
-    // O filtro por restaurante_id tambem barra um insight_id forjado de outro
-    // dono: a busca simplesmente nao acha a linha.
-    let insightsQuery = db
+    let query = db
       .from('insights')
       .select('*')
+      .eq('restaurante_id', restauranteId)
       .eq('ativo', true)
-      .eq('restaurante_id', targetRestauranteId)
+      .is('deletado_em', null)
 
-    if (insightSolicitado) insightsQuery = insightsQuery.eq('id', insightSolicitado)
+    if (insightSolicitado) query = query.eq('id', insightSolicitado)
 
-    const { data: insights, error: insightsErr } = await insightsQuery
-    if (insightsErr) throw insightsErr
-
+    const { data: insights, error: erroInsights } = await query
+    if (erroInsights) throw erroInsights
     if (!insights || insights.length === 0) {
-      return json({ status: 'sem_insights', sugestoes_criadas: 0 })
+      return json({ status: 'sem_insights', acoes_criadas: 0 })
     }
 
-    const prioridadePeso: Record<string, number> = { URGENTE: 3, IMPORTANTE: 2, OBSERVACAO: 1 }
-    const insightsOrdenados = insights.sort((a, b) => {
-      const pA = prioridadePeso[a.prioridade?.toUpperCase()] || 0
-      const pB = prioridadePeso[b.prioridade?.toUpperCase()] || 0
-      if (pA !== pB) return pB - pA
-      return (b.feedbacks_relacionados || 0) - (a.feedbacks_relacionados || 0)
-    })
-
-    // O corte de relevancia so vale para o ciclo automatico. Se o dono pediu
-    // acao PARA ESTE insight, ela sai. O corte caiu de >= 2 para >= 1 porque
-    // `feedbacks_relacionados` agora e a contagem REAL (antes era um numero
-    // inflado inventado pelo modelo, que passava no >= 2 com folga).
-    const insightsValidos = insightSolicitado
-      ? insightsOrdenados
-      : insightsOrdenados
-          .filter((i) => i.prioridade?.toUpperCase() === 'URGENTE' || (i.feedbacks_relacionados || 0) >= 1)
-          .slice(0, 10)
-
-    if (insightsValidos.length === 0) {
-      return json({ status: 'sem_insights_relevantes', sugestoes_criadas: 0 })
+    // Idempotência: um insight que já virou ação não vira de novo. Sem isto,
+    // um duplo clique no botão criava duas ações do mesmo insight.
+    // deno-lint-ignore no-explicit-any
+    const pendentes = insights.filter((i: any) => !i.acao_id)
+    if (pendentes.length === 0) {
+      return json({ status: 'ja_convertido', acoes_criadas: 0 })
     }
 
-    // Número (1-based, na mesma ordem enviada no prompt) -> insight real.
-    // Mesma razão do gerar-insights: pedir pra IA copiar o uuid do insight de
-    // volta em "insight_id" praticamente nunca funcionava (ela não reproduz
-    // um token opaco de 36 caracteres com fidelidade) — nenhuma das 15 ações
-    // já geradas por IA tinha insight_id preenchido. Um número pequeno ela
-    // copia certo; a tradução pro id real acontece aqui.
-    const insightPorIndice = new Map<number, (typeof insightsValidos)[number]>(
-      insightsValidos.map((i, indice) => [indice + 1, i]),
+    const peso: Record<string, number> = { URGENTE: 3, IMPORTANTE: 2, OBSERVACAO: 1 }
+    // deno-lint-ignore no-explicit-any
+    const ordenados = pendentes.sort((a: any, b: any) =>
+      (peso[b.prioridade?.toUpperCase()] || 0) - (peso[a.prioridade?.toUpperCase()] || 0)
     )
+    const alvos = insightSolicitado ? ordenados : ordenados.slice(0, MAX_ACOES_CICLO)
 
-    // Anotacoes da IA
-    const { data: memoria } = await db
-      .from('memoria_assistente')
-      .select('fato')
-      .eq('restaurante_id', targetRestauranteId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    // Boas praticas relevantes aos temas dos insights
-    const consultaConhecimento = insightsValidos
-      .map((i) => `${i.categoria || ''}: ${i.titulo}. ${i.descricao || ''}`)
-      .join('\n')
-      .slice(0, 3500)
-    const conhecimento = await buscarConhecimento(db, targetRestauranteId, consultaConhecimento)
+    const params = await paramsDoAgente(db, AGENTE, { max_tokens: 1600 })
+    if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
+    const paramsVerificador = await paramsDoAgente(db, AGENTE_VERIFICADOR, { max_tokens: 600 })
 
     const prompts = await carregarPrompts(db)
-    const prompt = montarPrompt(prompts, 'ef_sugerir_acoes', PROMPT_PADRAO, {
-      nome: nomeDoAssistente(restauranteData?.mascote_config),
-      tom: tomDoAssistente(restauranteData?.mascote_config),
-      max: String(maxSugestoes),
-      perfil: blocoPerfil(restauranteData),
-      memoria: memoria?.length
-        ? `\n## O que se sabe deste restaurante (anotacoes)\n${memoria.map((m: { fato: string }) => `- ${m.fato}`).join('\n')}`
-        : '',
-      conhecimento: conhecimento
-        ? `\n## Boas praticas de referencia (use para montar o plano)\n${conhecimento}`
-        : '',
-      insights: JSON.stringify(
-        insightsValidos.map((i, indice) => ({
-          n: indice + 1,
-          prioridade: i.prioridade,
-          categoria: i.categoria,
-          titulo: i.titulo,
-          descricao: i.descricao,
-          sugestao: i.sugestao,
-        })),
-      ),
-    })
+    const conhecimento = await buscarConhecimento(
+      db,
+      restauranteId,
+      // deno-lint-ignore no-explicit-any
+      alvos.map((i: any) => `${i.categoria}: ${i.titulo}. ${i.descricao}`).join('\n').slice(0, 3500),
+    )
 
-    const params = await paramsDoAgente(db, AGENTE, {
-      response_format: { type: 'json_object' },
-      max_tokens: 2000,
-    })
-    if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
+    const ctx = { restauranteId, prompts, config, conhecimento, params, paramsVerificador, expiracaoDias }
 
-    const { result } = await chamarIA(db, {
-      messages: [{ role: 'user', content: prompt }],
-      params,
-      origem: 'sugerir-acoes',
-      restauranteId: targetRestauranteId,
-      agenteId: AGENTE,
-    })
-
-    // deno-lint-ignore no-explicit-any
-    const acoesGeradas: any[] = Array.isArray(result)
-      ? result
-      : (result?.acoes || result?.sugestoes || [])
-
-    let criadas = 0
-    if (acoesGeradas.length > 0) {
-      // Quando insightSolicitado existe (clique manual em "Criar Ação" num
-      // insight específico), esse é o fallback se a IA não citar um número
-      // válido — sempre correto, já que só existe UM insight candidato.
-      const insightPadrao = insightSolicitado ?? null
-
-      const finalAcoes = acoesGeradas.slice(0, maxSugestoes).map((a) => {
-        const insightViaIndice = insightPorIndice.get(Number(a.insight_id))
-        const insightIdResolvido = insightViaIndice ? String(insightViaIndice.id) : insightPadrao
-        return {
-          titulo_acao: a.titulo_acao || 'Acao sugerida',
-          plano_detalhado: a.plano_detalhado || '',
-          prioridade: a.prioridade || 'IMPORTANTE',
-          categoria: a.categoria || 'Outros',
-          // Antes 'SUGERIDA' (esperava aprovação numa lista "Sugestões da IA"
-          // que não existe mais em /acoes — foi removida a pedido) — ações
-          // nesse status ficavam presas, invisíveis na interface.
-          status: 'PENDENTE',
-          restaurante_id: targetRestauranteId,
-          insight_id: insightIdResolvido,
-          texto: 'Gerado automaticamente via IA baseando-se em insights ativos, no perfil do restaurante e nas boas praticas.',
-        }
-      })
-
-      const { data: acoesCriadas, error: insertErr } = await db
-        .from('acoes_operacionais')
-        .insert(finalAcoes)
-        .select('id, insight_id')
-      if (insertErr) throw insertErr
-      criadas = finalAcoes.length
-
-      // Materializa o vínculo ação -> feedbacks que a motivaram.
-      //
-      // Sem isto o elo seria só `acao.insight_id -> insights.feedback_ids[]`, e
-      // ele se rompe: `insight_id` é ON DELETE SET NULL, então apagar o insight
-      // deixa a ação sem saber quem reclamou daquilo. Para o motor de resposta
-      // isso significa não ter destinatário.
-      //
-      // Uma trigger em acoes_operacionais faz o mesmo como rede de segurança
-      // (migration 20260825010000); as duas usam ON CONFLICT DO NOTHING e são
-      // idempotentes entre si.
-      const porInsight = new Map<string, string[]>(
-        insightsValidos.map((i) => [String(i.id), (i.feedback_ids ?? []) as string[]]),
-      )
-
-      const vinculos = (acoesCriadas ?? []).flatMap(
-        (a: { id: number; insight_id: string | null }) =>
-          (porInsight.get(String(a.insight_id)) ?? []).map((fid) => ({
-            feedback_original_id: fid,
-            acao_id: a.id,
-            restaurante_id: targetRestauranteId,
-          })),
-      )
-
-      if (vinculos.length > 0) {
-        // `insights.feedback_ids` é um array solto, sem FK: pode conter id de
-        // feedback já apagado. Um id morto violaria a FK de feedback_acao e
-        // derrubaria o lote inteiro, então só entram os que ainda existem.
-        const ids = [...new Set(vinculos.map((v) => v.feedback_original_id))]
-        const { data: vivos } = await db
-          .from('feedbacks_originais')
-          .select('id')
-          .in('id', ids)
-
-        const idsVivos = new Set((vivos ?? []).map((f: { id: string }) => f.id))
-        const validos = vinculos.filter((v) => idsVivos.has(v.feedback_original_id))
-
-        if (validos.length > 0) {
-          // Falha aqui não derruba a criação da ação: a ação já existe e é útil
-          // ao dono mesmo sem o vínculo, e a trigger de fallback ainda pode
-          // preenchê-lo. Só registra.
-          const { error: vinculoErr } = await db
-            .from('feedback_acao')
-            .upsert(validos, { onConflict: 'feedback_original_id,acao_id', ignoreDuplicates: true })
-          if (vinculoErr) console.error('Falha ao vincular feedbacks às ações:', vinculoErr)
-        }
+    const resultados = await emParalelo(alvos, CONCORRENCIA, async (insight) => {
+      try {
+        return await converterInsight(db, ctx, insight)
+      } catch (err) {
+        if (err instanceof ErroCota) throw err
+        // deno-lint-ignore no-explicit-any
+        console.error(`[acao/${(insight as any).id}] falha:`, err)
+        return { criada: false, novos: 0 }
       }
+    })
+
+    const criadas = resultados.filter((r) => r.criada).length
+    const novosVinculados = resultados.reduce((s, r) => s + r.novos, 0)
+
+    if (criadas > 0) {
+      await db.rpc('reconciliar_uso_feedbacks', { p_restaurante_id: restauranteId })
     }
 
-    return json({ status: 'sucesso', sugestoes_criadas: criadas })
+    return json({
+      status: criadas > 0 ? 'sucesso' : 'nenhuma_acao_aprovada',
+      acoes_criadas: criadas,
+      feedbacks_novos_vinculados: novosVinculados,
+    })
   } catch (err) {
     if (err instanceof ErroCota) {
       return json({ error: 'Crédito de IA esgotado neste ciclo', codigo: 'sem_credito' }, 402)
