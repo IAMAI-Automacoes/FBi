@@ -25,7 +25,18 @@ import { Loader2, Send } from 'lucide-react'
  * O que o dono controla (validade do feedback) está em /configuracoes.
  */
 
-/** Espelha os defaults da migration 20260825040000. */
+/**
+ * Espelha os defaults da migration 20260825040000.
+ *
+ * `agregacao_min`, `max_itens_msg`, `quiet_inicio` e `quiet_fim` sao LEGADOS:
+ * eram do `motor-retorno-worker`, que redigia a mensagem aqui dentro. Com a
+ * entrega no n8n, agrupamento e limite de assuntos sao decisao dele, e o
+ * horario de silencio se resolve sozinho pelo horario em que ele roda.
+ *
+ * Continuam sendo lidos e regravados para nao apagar a config existente de quem
+ * ja tinha ajustado, mas sairam da tela — controle que nao faz nada e pior que
+ * controle nenhum.
+ */
 const PADRAO = {
   ativo: false,
   cooldown_dias: 3,
@@ -44,7 +55,6 @@ interface RestauranteLinha {
   config_insights: Record<string, unknown> | null
 }
 
-const HORAS = Array.from({ length: 24 }, (_, i) => i)
 
 export function PainelMotorResposta() {
   const { toast } = useToast()
@@ -220,36 +230,6 @@ export function PainelMotorResposta() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agregacao">Janela de agrupamento (minutos)</Label>
-            <Input
-              id="agregacao"
-              type="number"
-              min={1}
-              max={720}
-              value={config.agregacao_min}
-              onChange={(e) => setConfig((c) => ({ ...c, agregacao_min: Number(e.target.value) }))}
-            />
-            <p className="text-xs text-muted-foreground">
-              Padrão: 30 min. Espera o dono terminar de mover os cards antes de enviar.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="max-itens">Máximo de assuntos por mensagem</Label>
-            <Input
-              id="max-itens"
-              type="number"
-              min={1}
-              max={10}
-              value={config.max_itens_msg}
-              onChange={(e) => setConfig((c) => ({ ...c, max_itens_msg: Number(e.target.value) }))}
-            />
-            <p className="text-xs text-muted-foreground">
-              Padrão: 4. O excedente vira "e mais N pontos".
-            </p>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="expira">Validade do aviso (dias)</Label>
             <Input
               id="expira"
@@ -266,38 +246,6 @@ export function PainelMotorResposta() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Horário de silêncio (Brasília)</Label>
-          <div className="flex items-center gap-2">
-            <Select
-              value={String(config.quiet_inicio)}
-              onValueChange={(v) => setConfig((c) => ({ ...c, quiet_inicio: Number(v) }))}
-            >
-              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {HORAS.map((h) => (
-                  <SelectItem key={h} value={String(h)}>{String(h).padStart(2, '0')}h</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground">às</span>
-            <Select
-              value={String(config.quiet_fim)}
-              onValueChange={(v) => setConfig((c) => ({ ...c, quiet_fim: Number(v) }))}
-            >
-              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {HORAS.map((h) => (
-                  <SelectItem key={h} value={String(h)}>{String(h).padStart(2, '0')}h</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Padrão: 22h às 9h. Dentro da faixa o envio é adiado para o próximo horário útil — nunca
-            cancelado.
-          </p>
-        </div>
 
         <div className="flex justify-end">
           <Button onClick={salvar} disabled={salvando || !selecionado}>
