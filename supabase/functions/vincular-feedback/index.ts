@@ -82,6 +82,43 @@ const SCHEMA = {
 // deno-lint-ignore no-explicit-any
 type Db = any
 
+/**
+ * O feedback terminou livre. Ja ha acumulo suficiente para uma rodada?
+ *
+ * Este e o unico lugar do sistema onde a resposta pode ser dada com seguranca.
+ * O feedback nasce livre, mas so depois desta funcao rodar se sabe se ele
+ * REALMENTE ficou livre ou grudou em algo — contar na chegada dispararia
+ * rodadas cheias de feedbacks que sao vinculados segundos depois.
+ *
+ * Dispara e nao espera: a geracao leva dezenas de segundos e nao pode segurar o
+ * trigger de insert. Se falhar, o cron horario pega na proxima passada.
+ */
+async function talvezGerarInsights(db: Db, restauranteId: number) {
+  try {
+    const { data } = await db.rpc('deve_gerar_insights', { p_restaurante_id: restauranteId })
+    const g = Array.isArray(data) ? data[0] : data
+    if (!g?.deve) return
+
+    console.log(
+      `[r${restauranteId}] ${g.livres_novos} feedbacks livres acumulados ` +
+        `(limite ${g.necessarios}) — disparando a analise`,
+    )
+
+    // Sem await no corpo da resposta: dispara e segue.
+    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/gerar-insights`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+        'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
+      },
+      body: JSON.stringify({ restaurante_id: restauranteId, force: false }),
+    }).catch((e) => console.error('falha ao disparar gerar-insights:', e))
+  } catch (e) {
+    console.error('falha ao checar o gatilho de insights:', e)
+  }
+}
+
 serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
@@ -179,13 +216,17 @@ serve(async (req: Request) => {
     const insightsCat = (insights ?? []).filter((i: any) => i.categoria === fb.categoria)
 
     if (acoesCat.length === 0 && insightsCat.length === 0) {
+      await talvezGerarInsights(db, fb.restaurante_id)
       return json({ status: 'livre', motivo: 'nenhum candidato na categoria' })
     }
 
     // ---- 3. Ambíguo: uma chamada de IA ----
     const prompts = await carregarPrompts(db)
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 400 })
-    if (!params) return json({ status: 'livre', motivo: 'agente desativado' })
+    if (!params) {
+      await talvezGerarInsights(db, fb.restaurante_id)
+      return json({ status: 'livre', motivo: 'agente desativado' })
+    }
 
     const prompt = montarPrompt(prompts, 'ef_vincular_feedback', PROMPT, {
       texto,
@@ -224,8 +265,12 @@ serve(async (req: Request) => {
       })
       decisao = result ?? {}
     } catch (err) {
-      if (err instanceof ErroCota) return json({ status: 'livre', motivo: 'sem credito' })
+      if (err instanceof ErroCota) {
+        await talvezGerarInsights(db, fb.restaurante_id)
+        return json({ status: 'livre', motivo: 'sem credito' })
+      }
       console.error('Falha ao decidir vinculo:', err)
+      await talvezGerarInsights(db, fb.restaurante_id)
       return json({ status: 'livre', motivo: 'erro na IA' })
     }
 
@@ -247,6 +292,7 @@ serve(async (req: Request) => {
       }
     }
 
+    await talvezGerarInsights(db, fb.restaurante_id)
     return json({ status: 'livre', motivo: decisao.motivo ?? 'nenhum candidato serve' })
   } catch (err) {
     // deno-lint-ignore no-explicit-any

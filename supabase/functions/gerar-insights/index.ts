@@ -631,20 +631,46 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
   if (config.excluida_em) return { insights_gerados: 0, status: 'conta_encerrada' }
 
   const configInsights = (config.config_insights as Record<string, unknown>) || {}
-  const horasEntreAnalises = Number(configInsights.horas_entre_analises) || 24
-  const ultimaAnalise = config.ultima_analise_insights
-    ? new Date(config.ultima_analise_insights)
-    : null
 
-  // O intervalo agora é FREIO DE CRON, não portão de geração. O botão manual
-  // (`force`) ignora — o dono pediu para gerar, gera. Sem esta distinção, o
-  // cron gastaria IA a cada 5 minutos.
-  if (!force && ultimaAnalise) {
-    const horas = (Date.now() - ultimaAnalise.getTime()) / 3_600_000
-    if (horas < horasEntreAnalises) {
-      return { insights_gerados: 0, status: 'aguardando_intervalo' }
+  // ---- O PORTÃO: quantos feedbacks livres se acumularam ----
+  //
+  // Não é mais por tempo. A tela de Insights tem um slider que diz ao dono "a
+  // análise automática será disparada a cada N novos feedbacks", grava em
+  // `config_insights.feedbacks_por_analise` — e nenhuma edge function lia essa
+  // chave. O disparo real era `horas_entre_analises`, e o slider não fazia nada.
+  //
+  // `force` (o botão "Gerar insights") pula o portão, e só ele: a regra de o
+  // que vira insight é exatamente a mesma nos dois caminhos.
+  if (!force) {
+    const { data: gatilho } = await db.rpc('deve_gerar_insights', {
+      p_restaurante_id: restauranteId,
+    })
+    const g = Array.isArray(gatilho) ? gatilho[0] : gatilho
+    if (!g?.deve) {
+      return {
+        insights_gerados: 0,
+        status: 'aguardando_feedbacks',
+        livres_novos: g?.livres_novos ?? 0,
+        necessarios: g?.necessarios ?? 0,
+      }
     }
   }
+
+  // O marco avanca AQUI, assim que a rodada comeca de verdade — nao no fim.
+  //
+  // Ele e a linha de corte que `deve_gerar_insights` usa para contar "livres
+  // novos". Avancando so quando ha insight gravado, uma rodada que nao produz
+  // nada deixaria os mesmos N feedbacks contando para sempre, e cada feedback
+  // seguinte dispararia a analise inteira de novo — IA queimada em loop sobre o
+  // mesmo material.
+  //
+  // Avancar no inicio entrega o comportamento pedido: "se tinha 5 e nao gerou
+  // nenhum insight, espera chegar mais 5". E, de quebra, serve de trava contra
+  // duas rodadas simultaneas do mesmo restaurante.
+  await db
+    .from('restaurantes')
+    .update({ ultima_analise_insights: new Date().toISOString() })
+    .eq('id', restauranteId)
 
   // NADA é alterado até haver insight pronto para gravar.
   //
@@ -917,11 +943,6 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       p_restaurante_id: restauranteId,
     })
     if (erroReconciliar) console.error('Falha ao reconciliar uso:', erroReconciliar)
-
-    await db
-      .from('restaurantes')
-      .update({ ultima_analise_insights: new Date().toISOString() })
-      .eq('id', restauranteId)
 
     // O insight NAO vira acao sozinho.
     //
