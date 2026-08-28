@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       acoes_operacionais: {
         Row: {
+          originais_ids: string[]
+          pontos_ids: number[]
           arquivada_em: string | null
           categoria: string | null
           created_at: string
@@ -33,6 +35,8 @@ export type Database = {
           titulo_acao: string | null
         }
         Insert: {
+          originais_ids?: string[]
+          pontos_ids?: number[]
           arquivada_em?: string | null
           categoria?: string | null
           created_at?: string
@@ -50,6 +54,8 @@ export type Database = {
           titulo_acao?: string | null
         }
         Update: {
+          originais_ids?: string[]
+          pontos_ids?: number[]
           arquivada_em?: string | null
           categoria?: string | null
           created_at?: string
@@ -739,6 +745,7 @@ export type Database = {
       }
       insights: {
         Row: {
+          pontos_ids: number[]
           ativo: boolean | null
           categoria: string | null
           created_at: string | null
@@ -753,6 +760,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          pontos_ids?: number[]
           ativo?: boolean | null
           categoria?: string | null
           created_at?: string | null
@@ -767,6 +775,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          pontos_ids?: number[]
           ativo?: boolean | null
           categoria?: string | null
           created_at?: string | null
