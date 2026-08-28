@@ -102,3 +102,40 @@ export async function buscarConhecimento(
     return ''
   }
 }
+
+/**
+ * As anotações que o assistente foi acumulando sobre este restaurante.
+ *
+ * Auditado em 2026-08-27: `memoria_assistente` tinha 27 fatos gravados e
+ * NENHUMA edge function a lia — grep no diretório inteiro, zero ocorrências.
+ * Tudo que a IA aprendeu conversando com o dono existia só no navegador, e as
+ * decisões do servidor eram tomadas sem esse contexto.
+ *
+ * Importa porque é aqui que mora o que o dono valoriza, e coisas do tipo "o
+ * restaurante tem um problema recorrente com comida servida fria" — que muda
+ * como um assunto novo sobre comida fria deve ser pesado.
+ *
+ * Nunca lança: sem memória, o agente segue com o que tem.
+ */
+export async function buscarMemorias(
+  // deno-lint-ignore no-explicit-any -- client do supabase-js nao e tipado aqui
+  db: any,
+  restauranteId: number,
+  limite = 20,
+): Promise<string> {
+  try {
+    const { data } = await db
+      .from('memoria_assistente')
+      .select('fato, categoria')
+      .eq('restaurante_id', restauranteId)
+      .order('created_at', { ascending: false })
+      .limit(limite)
+
+    if (!data?.length) return ''
+    // deno-lint-ignore no-explicit-any
+    return data.map((m: any) => `- (${m.categoria ?? 'geral'}) ${m.fato}`).join('\n')
+  } catch (e) {
+    console.error('Falha ao buscar memorias:', e)
+    return ''
+  }
+}

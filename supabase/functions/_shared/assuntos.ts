@@ -61,6 +61,12 @@ export interface Assunto {
   confianca: 'alta' | 'baixa'
   /** Originais distintos. É a contagem de PESSOAS, não de pontos. */
   pessoas: number
+  /**
+   * Pontos POSITIVOS do mesmo tema. O assunto de queixa e o de elogio sao
+   * grupos separados (o balde entra na chave), mas o avaliador precisa dos
+   * dois lados para julgar se a queixa e padrao ou caso isolado.
+   */
+  positivosDoTema: number
   pessoasNecessarias: number
   elegivel: boolean
   diasDesdeMaisRecente: number
@@ -114,6 +120,15 @@ export function agruparEmAssuntos(
     else grupos.set(chave, [p])
   }
 
+  // Quantos elogios existem em cada tema, para o lado da queixa poder
+  // consultar. Contado uma vez, antes do loop, em vez de uma busca por
+  // assunto.
+  const positivosPorTema = new Map<string, number>()
+  for (const [chave, brutos] of grupos) {
+    if (!chave.endsWith('|pos')) continue
+    positivosPorTema.set(chave.slice(0, -4), brutos.length)
+  }
+
   const assuntos: Assunto[] = []
 
   for (const [chave, brutos] of grupos) {
@@ -160,6 +175,7 @@ export function agruparEmAssuntos(
       termosGravidade,
       confianca,
       pessoas,
+      positivosDoTema: positivosPorTema.get(chave.replace(/\|(neg|pos)$/, '')) ?? 0,
       pessoasNecessarias: pessoasNecessarias(gravidade),
       elegivel: assuntoElegivel(gravidade, pessoas),
       diasDesdeMaisRecente,
@@ -189,4 +205,20 @@ export function agruparEmAssuntos(
  */
 export function selecionarCandidatos(assuntos: Assunto[], maxCandidatos: number): Assunto[] {
   return assuntos.filter((a) => a.elegivel).slice(0, maxCandidatos)
+}
+
+/**
+ * Os assuntos que chegam a ser AVALIADOS pela IA.
+ *
+ * Diferente de `selecionarCandidatos`, este corte NAO filtra por elegibilidade:
+ * a elegibilidade agora depende da nota que a IA ainda vai dar, e cortar antes
+ * pelo lexico descartaria justamente o assunto que o lexico nao soube ler — que
+ * e a razao de existir o avaliador.
+ *
+ * O que sobrevive e so o teto de custo. Os assuntos ja vem ordenados pela
+ * pontuacao bruta do lexico, que serve bem como pre-ordenacao: ela erra o peso
+ * relativo, mas raramente coloca um elogio na frente de uma queixa grave.
+ */
+export function selecionarParaAvaliar(assuntos: Assunto[], maxAvaliacoes: number): Assunto[] {
+  return assuntos.slice(0, maxAvaliacoes)
 }

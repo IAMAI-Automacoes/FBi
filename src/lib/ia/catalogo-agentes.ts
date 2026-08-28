@@ -374,6 +374,77 @@ NÃO GUARDE: números que mudam sozinhos, perguntas, saudações, ou o que já e
 Máximo de 3 fatos por conversa.` }],
   },
   {
+    id: 'avaliador_assunto',
+    arquivo: 'supabase/functions/gerar-insights/index.ts:322',
+    camada: 'servidor',
+    params: { max_tokens: 400, json: true },
+    desligavel: true,
+    nome: 'Avaliador de importância (edge function)',
+    papel:
+      'Dá a nota de 0 a 10 de cada assunto antes de qualquer insight ser escrito. É essa nota que decide quantas pessoas precisam ter relatado para o assunto virar insight, e a ordem entre eles.',
+    memoria: 'SEM memória de conversa. Vê o perfil, as anotações da IA e os documentos de treinamento.',
+    acessos: [
+      'Os feedbacks do assunto',
+      'Perfil do restaurante',
+      'Anotações da IA (memoria_assistente)',
+      'Materiais de treinamento',
+      'Contagem de elogios do mesmo tema',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'A nota é da IA, mas o código impõe um piso: se as palavras do relato denunciam corpo estranho, intoxicação ou agressão, a nota mínima é 10 mesmo que este prompt diga o contrário. Risco sanitário não pode depender do humor do modelo numa rodada. Desligar este agente faz a importância voltar a sair só do léxico.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_avaliar_assunto',
+      conteudo: `Voce avalia o quao importante e um assunto para o DONO deste restaurante.
+
+{tom}
+
+## Sobre este restaurante
+{perfil}
+
+## O que ja sabemos sobre ele
+{memorias}
+
+{conhecimento}
+
+## O assunto
+Categoria: {categoria}
+Pessoas diferentes que relataram: {pessoas}
+Comentarios POSITIVOS sobre o mesmo tema no periodo: {positivos}
+
+## Os feedbacks
+{pontos}
+
+## A escala — use estas ancoras
+- 10: risco sanitario ou de seguranca. Corpo estranho na comida (cabelo, inseto,
+  vidro), intoxicacao, alguem passou mal, alimento estragado, agressao, assedio,
+  ferimento, fraude. Um relato so ja basta para agir.
+- 7 a 9: falha grave de higiene, conduta ou operacao. Banheiro imundo, praga no
+  salao, grosseria de funcionario, erro de cobranca, espera acima de uma hora.
+- 4 a 6: problema operacional comum. Comida fria, ponto errado, pedido trocado,
+  demora moderada, garcom sumido, item em falta.
+- 2 a 3: preferencia ou sugestao. Musica alta, gosto pessoal, "poderia ter".
+- 0 a 1: elogio, comentario neutro, ou nada acionavel.
+
+## Como usar o contexto do restaurante
+- Se as anotacoes ou o perfil mostram que o dono ja se preocupa com este assunto,
+  ou que ele e recorrente, isso SOBE a nota.
+- Se o restaurante e pequeno e o assunto exige investimento alto para pouca
+  gente, isso DESCE a nota.
+- Muitos comentarios positivos sobre o mesmo tema sugerem que o problema e
+  pontual, e nao um padrao — considere isso. NAO vale para risco sanitario:
+  ali um relato basta, tenha o restaurante os elogios que tiver.
+- Nunca invente contexto que nao esta acima.
+
+## Sua tarefa
+De a nota do assunto e explique em uma frase. Liste em "sinais" as expressoes
+dos feedbacks que sustentam a nota.
+
+Chame registrar_avaliacao.` }],
+  },
+  {
     id: 'gerador_insights',
     arquivo: 'supabase/functions/gerar-insights/index.ts:57',
     camada: 'servidor',

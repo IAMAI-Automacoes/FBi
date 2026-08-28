@@ -35,8 +35,15 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
-import { blocoPerfil, buscarConhecimento, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
-import { agruparEmAssuntos, selecionarCandidatos, type Assunto, type PontoBruto } from '../_shared/assuntos.ts'
+import { blocoPerfil, buscarConhecimento, buscarMemorias, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
+import { agruparEmAssuntos, selecionarParaAvaliar, type Assunto, type PontoBruto } from '../_shared/assuntos.ts'
+import {
+  assuntoElegivelPorNota,
+  consolidarNota,
+  pessoasNecessariasPorNota,
+  pontuarPorNota,
+  type CamposAvaliacao,
+} from '../_shared/avaliacao.ts'
 import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
 import { ferramentaHistoricoDoAssunto, ferramentaLerOriginal } from '../_shared/ferramentas-feedback.ts'
 
@@ -49,6 +56,7 @@ const corsHeaders = {
 
 const AGENTE = 'gerador_insights'
 const AGENTE_VERIFICADOR = 'verificador_insights'
+const AGENTE_AVALIADOR = 'avaliador_assunto'
 
 /** Teto de insights por rodada — pedido explícito do dono. */
 const MAX_INSIGHTS = 5
@@ -59,6 +67,13 @@ const MAX_INSIGHTS = 5
  * livres virariam ~40 assuntos e ~80 chamadas de modelo.
  */
 const MAX_CANDIDATOS = 8
+/**
+ * Assuntos que chegam a ser avaliados pela IA. Maior que MAX_CANDIDATOS de
+ * propósito: a avaliação é barata (400 tokens, sem ferramenta) e é ela que
+ * decide quem é elegível — cortar cedo demais devolveria o problema que o
+ * avaliador existe para resolver.
+ */
+const MAX_AVALIACOES = 14
 
 const CATEGORIAS = [
   'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
@@ -85,9 +100,10 @@ const PROMPT_REDATOR = `Voce e o "{nome}", consultor de gestao de restaurantes.
 
 ## O UNICO assunto em analise
 Categoria: {categoria}
-Gravidade calculada pelo sistema: {gravidade} de 4 — {explicacao_gravidade}
+Nota de importancia: {nota} de 10 — {justificativa_nota}
 {termos_gravidade}
-Pessoas diferentes que relataram: {pessoas} (o minimo para esta gravidade e {mininimo})
+Pessoas diferentes que relataram: {pessoas} (o minimo para esta nota e {mininimo})
+Comentarios positivos sobre o mesmo tema: {positivos}
 Confianca da classificacao automatica: {confianca}
 
 ## Os feedbacks deste assunto — sua UNICA fonte
@@ -146,6 +162,85 @@ Regras de julgamento:
 
 Chame registrar_verificacao.`
 
+/**
+ * Rubrica de importancia. Editavel no painel pela chave ef_avaliar_assunto.
+ *
+ * As ancoras sao concretas de proposito: "de 0 a 10, o quao importante e isso"
+ * sem referencia produz notas que variam de rodada para rodada. Com exemplos
+ * ancorados, dois assuntos parecidos recebem notas parecidas.
+ */
+const PROMPT_AVALIADOR = `Voce avalia o quao importante e um assunto para o DONO deste restaurante.
+
+{tom}
+
+## Sobre este restaurante
+{perfil}
+
+## O que ja sabemos sobre ele
+{memorias}
+
+{conhecimento}
+
+## O assunto
+Tipo: {tipo}
+Categoria: {categoria}
+Pessoas diferentes que relataram: {pessoas}
+Comentarios POSITIVOS sobre o mesmo tema no periodo: {positivos}
+
+## Os feedbacks
+{pontos}
+
+## A escala — use estas ancoras
+- 10: risco sanitario ou de seguranca. Corpo estranho na comida (cabelo, inseto,
+  vidro), intoxicacao, alguem passou mal, alimento estragado, agressao, assedio,
+  ferimento, fraude. Um relato so ja basta para agir.
+- 7 a 9: falha grave de higiene, conduta ou operacao. Banheiro imundo, praga no
+  salao, grosseria de funcionario, erro de cobranca, espera acima de uma hora.
+- 4 a 6: problema operacional comum. Comida fria, ponto errado, pedido trocado,
+  demora moderada, garcom sumido, item em falta.
+- 2 a 3: preferencia ou sugestao. Musica alta, gosto pessoal, "poderia ter".
+- 0 a 1: elogio, comentario neutro, ou nada acionavel.
+
+REGRA DURA sobre o tipo: se o Tipo acima for ELOGIO ou NEUTRO, a nota e no
+maximo 1. Elogio nao e problema a resolver — por melhor que seja e por mais
+gente que tenha dito, ele nao compete por atencao com uma queixa. A unica
+excecao e um texto marcado como elogio que na verdade RELATA um problema grave
+(acontece: o cliente elogia o garcom e menciona de passagem que achou um inseto).
+Nesse caso, avalie pelo problema.
+
+## Como usar o contexto do restaurante
+- Se as anotacoes ou o perfil mostram que o dono ja se preocupa com este assunto,
+  ou que ele e recorrente, isso SOBE a nota.
+- Se o restaurante e pequeno e o assunto exige investimento alto para pouca
+  gente, isso DESCE a nota.
+- Muitos comentarios positivos sobre o mesmo tema sugerem que o problema e
+  pontual, e nao um padrao — considere isso. NAO vale para risco sanitario:
+  ali um relato basta, tenha o restaurante os elogios que tiver.
+- Nunca invente contexto que nao esta acima.
+
+## Sua tarefa
+De a nota do assunto e explique em uma frase. Liste em "sinais" as expressoes
+dos feedbacks que sustentam a nota.
+
+Chame registrar_avaliacao.`
+
+const SCHEMA_AVALIACAO = {
+  type: 'object',
+  properties: {
+    nota: {
+      type: 'number',
+      description: 'De 0 a 10, seguindo as ancoras da escala. Pode ter meio ponto.',
+    },
+    justificativa: { type: 'string', description: 'Uma frase curta.' },
+    sinais: {
+      type: 'array',
+      description: 'Trechos dos feedbacks que sustentam a nota.',
+      items: { type: 'string' },
+    },
+  },
+  required: ['nota'],
+}
+
 const SCHEMA_INSIGHT = {
   type: 'object',
   properties: {
@@ -183,6 +278,9 @@ const SCHEMA_VERIFICACAO = {
 
 // deno-lint-ignore no-explicit-any
 type Db = any
+
+/** Assunto depois do estagio de avaliacao. E o que circula dali para a frente. */
+type AssuntoAvaliado = Assunto & CamposAvaliacao
 
 /**
  * Quantos assuntos são redigidos ao mesmo tempo.
@@ -226,6 +324,81 @@ function listarPontosParaPrompt(assunto: Assunto): string {
 }
 
 /**
+ * Estagio 0b — a IA da a nota de importancia do assunto.
+ *
+ * Roda por assunto, isolada, ANTES de decidir se ele vira insight. E aqui que o
+ * que o dono valoriza entra na conta: `blocoPerfil`, as anotacoes do assistente
+ * (`memoria_assistente`) e os documentos de treinamento (RAG) chegam ao mesmo
+ * tempo que os feedbacks.
+ *
+ * O codigo nao aceita a nota crua. `consolidarNota` aplica o piso do lexico: se
+ * as palavras do relato denunciam corpo estranho ou intoxicacao, a nota minima e
+ * 10 mesmo que o modelo tenha dito 2. Risco sanitario nao pode depender do humor
+ * do modelo numa rodada.
+ *
+ * Falhar aqui NAO derruba o assunto: cai no piso do lexico, que e exatamente o
+ * comportamento antigo. Nunca deixa de avaliar por erro de rede.
+ */
+async function avaliarImportancia(
+  db: Db,
+  // deno-lint-ignore no-explicit-any
+  ctx: any,
+  assunto: Assunto,
+): Promise<{ nota: number; justificativa: string; notaIA: number; pisoAplicado: boolean }> {
+  const prompt = montarPrompt(ctx.prompts, 'ef_avaliar_assunto', PROMPT_AVALIADOR, {
+    tom: tomDoAssistente(ctx.config.mascote_config),
+    perfil: blocoPerfil(ctx.config),
+    memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
+    conhecimento: ctx.conhecimento ? `## Boas praticas de referencia
+${ctx.conhecimento}` : '',
+    tipo: assunto.chave.endsWith('|neg') ? 'QUEIXA' : 'ELOGIO ou NEUTRO',
+    categoria: assunto.categoria ?? 'Outros',
+    pessoas: String(assunto.pessoas),
+    positivos: String(assunto.positivosDoTema ?? 0),
+    pontos: listarPontosParaPrompt(assunto),
+  })
+
+  let notaIA = -1
+  let justificativa = ''
+  try {
+    const { result } = await chamarIA(db, {
+      messages: [{ role: 'user', content: prompt }],
+      params: ctx.paramsAvaliador,
+      origem: 'gerar-insights-avaliador',
+      restauranteId: ctx.restauranteId,
+      agenteId: AGENTE_AVALIADOR,
+      checarCotaAntes: false,
+      // Sem ferramenta: a nota sai do que esta no prompt. Deixar a IA buscar
+      // mais contexto aqui so aumentaria a variacao entre rodadas.
+      calculadora: false,
+      saida: {
+        nome: 'registrar_avaliacao',
+        descricao: 'Registra a nota de importancia do assunto.',
+        schema: SCHEMA_AVALIACAO,
+      },
+    })
+    notaIA = Number(result?.nota)
+    justificativa = String(result?.justificativa ?? '')
+  } catch (err) {
+    console.error(`[${assunto.chave}] falha ao avaliar; usando so o piso do lexico:`, err)
+  }
+
+  // Sem resposta da IA, o piso vira a nota: e o comportamento de antes desta
+  // mudanca, quando o lexico decidia sozinho.
+  const base = Number.isFinite(notaIA) && notaIA >= 0 ? notaIA : assunto.gravidade * 2.5
+  const r = consolidarNota(base, assunto.gravidade)
+
+  if (r.pisoAplicado) {
+    console.warn(
+      `[${assunto.chave}] IA deu ${r.notaIA} mas o lexico reconheceu gravidade ` +
+        `${assunto.gravidade}; nota elevada para ${r.nota}`,
+    )
+  }
+
+  return { nota: r.nota, justificativa, notaIA: r.notaIA, pisoAplicado: r.pisoAplicado }
+}
+
+/**
  * Estágio 1 — redigir o insight de UM assunto, isoladamente.
  *
  * `reparo` carrega a segunda tentativa, quando o detector ou o verificador
@@ -242,7 +415,7 @@ async function redigirInsight(
   db: Db,
   ctx: {
     restauranteId: number
-    assunto: Assunto
+    assunto: AssuntoAvaliado
     prompts: Prompts
     config: Record<string, unknown>
     conhecimento: string
@@ -261,8 +434,9 @@ async function redigirInsight(
       ? `\n## Boas praticas de referencia\n${ctx.conhecimento}`
       : '',
     categoria: assunto.categoria ?? 'Outros',
-    gravidade: String(assunto.gravidade),
-    explicacao_gravidade: EXPLICACAO_GRAVIDADE[assunto.gravidade] ?? '',
+    nota: String(assunto.nota ?? assunto.gravidade * 2.5),
+    justificativa_nota: assunto.justificativaNota || (EXPLICACAO_GRAVIDADE[assunto.gravidade] ?? ''),
+    positivos: String(assunto.positivosDoTema ?? 0),
     termos_gravidade: assunto.termosGravidade.length
       ? `Sinais que levaram a essa gravidade: ${assunto.termosGravidade.join(', ')}`
       : '',
@@ -322,7 +496,7 @@ async function verificarLastro(
   db: Db,
   ctx: {
     restauranteId: number
-    assunto: Assunto
+    assunto: AssuntoAvaliado
     prompts: Prompts
     // deno-lint-ignore no-explicit-any
     paramsVerificador: any
@@ -365,7 +539,7 @@ async function verificarLastro(
  * se o problema persistir depois de apontado, o assunto é descartado. Insistir
  * mais que isso gasta cota para, na prática, obter o mesmo texto de novo.
  */
-async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: Assunto) {
+async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: AssuntoAvaliado) {
   const textosIrmaos = await buscarTextosIrmaos(db, assunto)
   const vocabulario = construirVocabularioProibido(
     assunto.pontos.map((p) => p.texto),
@@ -377,8 +551,14 @@ async function gerarInsightDoAssunto(db: Db, ctx: any, assunto: Assunto) {
   for (let tentativa = 0; tentativa < 2; tentativa++) {
     const rascunho = await redigirInsight(db, { ...ctx, assunto }, reparo)
 
-    if (rascunho?.gerar === false) return null
-    if (!rascunho?.titulo) return null
+    if (rascunho?.gerar === false) {
+      console.log(`[${assunto.chave}] o redator julgou que nao justifica insight`)
+      return null
+    }
+    if (!rascunho?.titulo) {
+      console.log(`[${assunto.chave}] rascunho sem titulo, descartado`)
+      return null
+    }
 
     const textoCompleto = [rascunho.titulo, rascunho.descricao, rascunho.sugestao]
       .filter(Boolean)
@@ -504,15 +684,19 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
     )
 
     const assuntos = agruparEmAssuntos(livres as PontoBruto[], { reincidentes })
-    const candidatos = selecionarCandidatos(assuntos, MAX_CANDIDATOS)
 
-    if (candidatos.length === 0) {
+    // Quem chega a ser AVALIADO. Este corte NÃO filtra elegibilidade: ela
+    // depende da nota que a IA ainda vai dar, e cortar antes pelo léxico
+    // descartaria justamente o assunto que o léxico não soube ler — que é a
+    // razão de o avaliador existir.
+    const paraAvaliar = selecionarParaAvaliar(assuntos, MAX_AVALIACOES)
+
+    if (paraAvaliar.length === 0) {
       return {
         insights_gerados: 0,
         feedbacks_analisados: livres.length,
-        assuntos_encontrados: assuntos.length,
-        // Não é um portão: nenhum assunto atingiu o próprio limiar de pessoas.
-        status: 'nenhum_assunto_relevante',
+        assuntos_encontrados: 0,
+        status: 'sem_assuntos',
       }
     }
 
@@ -528,16 +712,93 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       return { insights_gerados: 0, status: 'agente_desativado' }
     }
     const paramsVerificador = await paramsDoAgente(db, AGENTE_VERIFICADOR, { max_tokens: 600 })
+    const paramsAvaliador = await paramsDoAgente(db, AGENTE_AVALIADOR, { max_tokens: 400 })
 
-    // Conhecimento (RAG) é buscado UMA vez para a rodada: é caro (embedding) e
-    // o material de referência não muda de assunto para assunto.
-    const consulta = candidatos
+    // Conhecimento (RAG) e memórias são buscados UMA vez por rodada: o embedding
+    // é caro e o material não muda de assunto para assunto.
+    const consulta = paraAvaliar
       .map((a) => `${a.categoria}: ${a.pontos.map((p) => p.texto).join(' ')}`)
       .join('\n')
       .slice(0, 3500)
-    const conhecimento = await buscarConhecimento(db, restauranteId, consulta)
+    const [conhecimento, memorias] = await Promise.all([
+      buscarConhecimento(db, restauranteId, consulta),
+      buscarMemorias(db, restauranteId),
+    ])
 
-    const ctx = { restauranteId, prompts, config, conhecimento, params, paramsVerificador }
+    const ctx = {
+      restauranteId,
+      prompts,
+      config,
+      conhecimento,
+      memorias,
+      params,
+      paramsVerificador,
+      paramsAvaliador,
+    }
+
+    // ---- ESTÁGIO 0b: a IA dá a nota de cada assunto ----
+    // Barato (400 tokens, sem ferramenta) e paralelo. É o que traz o perfil, as
+    // anotações e os documentos do dono para dentro da DECISÃO — antes disto a
+    // importância saía de um dicionário de palavras que não sabia nada sobre
+    // este restaurante em particular.
+    const avaliados = await emParalelo(paraAvaliar, CONCORRENCIA, async (assunto) => {
+      const av = await avaliarImportancia(db, ctx, assunto)
+      return {
+        ...assunto,
+        nota: av.nota,
+        notaIA: av.notaIA,
+        justificativaNota: av.justificativa,
+        pisoAplicado: av.pisoAplicado,
+        pessoasNecessarias: pessoasNecessariasPorNota(av.nota),
+        elegivel: assuntoElegivelPorNota(av.nota, assunto.pessoas),
+        score: pontuarPorNota({
+          nota: av.nota,
+          pessoas: assunto.pessoas,
+          positivos: assunto.positivosDoTema,
+          diasDesdeMaisRecente: assunto.diasDesdeMaisRecente,
+          reincidente: reincidentes.has(assunto.chave),
+        }),
+      }
+    })
+
+    // Log de diagnóstico. Sem isto, "por que este assunto não virou insight?"
+    // não tem resposta: a nota vive só na memória da invocação.
+    console.log(
+      `[r${restauranteId}] avaliados:\n` +
+        avaliados
+          .sort((a, b) => b.score - a.score)
+          .map((a) =>
+            `  ${a.elegivel ? 'OK ' : '-- '} nota ${String(a.nota).padStart(4)} ` +
+            `pessoas ${a.pessoas}/${a.pessoasNecessarias} ` +
+            `score ${a.score.toFixed(2)} ${a.chave}`
+          )
+          .join('\n'),
+    )
+
+    // Agora sim: só os que atingiram o limiar que a PRÓPRIA nota deles exige,
+    // reordenados por ela.
+    const candidatos = avaliados
+      .filter((a) => a.elegivel)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_CANDIDATOS)
+
+    if (candidatos.length === 0) {
+      return {
+        insights_gerados: 0,
+        feedbacks_analisados: livres.length,
+        assuntos_encontrados: assuntos.length,
+        assuntos_avaliados: avaliados.length,
+        // Não é portão de contagem: nenhum assunto reuniu o número de pessoas
+        // que a nota dele exige.
+        status: 'nenhum_assunto_relevante',
+        detalhe: avaliados.slice(0, 5).map((a) => ({
+          assunto: a.chave,
+          nota: a.nota,
+          pessoas: a.pessoas,
+          precisa: a.pessoasNecessarias,
+        })),
+      }
+    }
 
     // ---- ESTÁGIOS 1-3, vários assuntos ao mesmo tempo ----
     // Sequencial estourava os 150s da edge function. Como cada assunto tem a
@@ -555,7 +816,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
     // Os candidatos já vêm ordenados por nota, então cortar em MAX_INSIGHTS
     // aqui mantém os assuntos mais relevantes.
     const aprovados = resultados
-      .filter((r): r is { assunto: Assunto; insight: any } => !!r.insight)
+      .filter((r): r is typeof r & { insight: NonNullable<typeof r.insight> } => !!r.insight)
       .slice(0, MAX_INSIGHTS)
     const descartados = resultados.length - aprovados.length
 
@@ -592,11 +853,12 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
 
     let gravados = 0
     for (const { assunto, insight } of aprovados) {
-      // Gravidade 4 é sempre urgente, doa a quem doer: é a regra que não pode
-      // ficar a critério do modelo.
-      const prioridade = assunto.gravidade >= 4
+      // Nota 10 é sempre urgente, doa a quem doer: é a regra que não pode ficar
+      // a critério do modelo. A nota já passou pelo piso do léxico, então um
+      // relato sanitário chega aqui com 10 mesmo que a IA tenha subestimado.
+      const prioridade = assunto.nota >= 10
         ? 'URGENTE'
-        : (insight.prioridade || (assunto.gravidade >= 3 ? 'IMPORTANTE' : 'OBSERVACAO'))
+        : (insight.prioridade || (assunto.nota >= 7.5 ? 'IMPORTANTE' : 'OBSERVACAO'))
 
       const categoria = CATEGORIAS.includes(insight.categoria)
         ? insight.categoria
@@ -661,11 +923,18 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       .update({ ultima_analise_insights: new Date().toISOString() })
       .eq('id', restauranteId)
 
-    try {
-      await db.functions.invoke('sugerir-acoes', { body: { restaurante_id: restauranteId } })
-    } catch (e) {
-      console.error('Falha ao disparar sugerir-acoes:', e)
-    }
+    // O insight NAO vira acao sozinho.
+    //
+    // Aqui existia um `invoke('sugerir-acoes')` sem filtro de insight, e o
+    // efeito era que todo insight recem-criado virava acao em segundos: o
+    // `sugerir-acoes` converte TODOS os insights ativos do restaurante quando
+    // chamado sem `insight_id`. Na pratica o dono nunca via um insight na tela
+    // — ele nascia e era encerrado com motivo 'virou_acao' antes do primeiro
+    // refresh. Medido em 2026-08-28: dois insights criados as 22:08:44 e
+    // encerrados as 22:08:53 e 22:08:56.
+    //
+    // Quem decide que um insight vira acao e o dono, clicando em "Criar Acao"
+    // — e ai o `sugerir-acoes` e chamado com o `insight_id` daquele card.
 
     return {
       insights_gerados: gravados,
@@ -704,16 +973,21 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const { data: restaurantes, error: restErr } = await db
-        .from('restaurantes')
-        .select('id')
-        .is('excluida_em', null)
+      // `restaurante_id` no corpo restringe a rodada a um só. É o que o disparo
+      // em cadeia usa (o feedback que acabou de ficar livre sabe de quem é), e
+      // o que permite testar sem processar a base inteira dentro dos 150s.
+      let consulta = db.from('restaurantes').select('id').is('excluida_em', null)
+      if (body?.restaurante_id) consulta = consulta.eq('id', body.restaurante_id)
+      const { data: restaurantes, error: restErr } = await consulta
       if (restErr) throw restErr
 
       let total = 0
       let processados = 0
       for (const r of restaurantes ?? []) {
-        const res = await processarRestaurante(db, r.id, false, prompts)
+        // Respeita o `force` do corpo. O cron de verdade manda false, entao
+        // para ele nada muda; e o que permite forcar uma rodada de teste sem
+        // esperar o intervalo.
+        const res = await processarRestaurante(db, r.id, force, prompts)
         total += res.insights_gerados ?? 0
         processados += 1
       }
