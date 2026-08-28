@@ -599,6 +599,21 @@ Retorne SOMENTE um JSON neste formato, sem markdown:
 - Seja ESPECÍFICO: "comida fria" e "comida sem sal" são temas DIFERENTES; "veio frio" e "estava gelado" são o MESMO tema.
 - rotulo: curto, específico, no singular (ex.: "Comida fria", "Demora no atendimento", "Música alta", "Garçom atencioso").
 
+## O erro mais comum: tema largo demais
+Um tema tem que ser UM ponto, não uma área do restaurante. Estes são temas
+DIFERENTES e não podem cair no mesmo id:
+- o sabor do prato / o tamanho da porção / a sobremesa
+- a simpatia do garçom / a demora dele para atender / o conhecimento do cardápio
+- a decoração / a iluminação / o volume da música / a temperatura do salão
+
+Teste antes de reusar um tema: as duas frases pedem a MESMA providência do
+restaurante? "A comida estava saborosa" e "a porção serve duas pessoas" elogiam
+coisas distintas — cozinha e porcionamento — então são temas distintos, mesmo os
+dois sendo elogios sobre comida.
+
+Rótulos como "Comida boa", "Atendimento ruim" ou "Opinião geral" são largos
+demais. Prefira "Massa no ponto certo", "Garçom não conhecia o cardápio".
+
 Chame registrar_tema. Deixe tema_id como null se for um tema novo.`,
     }],
   },
