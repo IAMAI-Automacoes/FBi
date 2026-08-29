@@ -66,7 +66,13 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
   }
 
   if (filtros.busca) {
-    query = query.ilike('texto_original', `%${filtros.busca}%`)
+    // Busca em `texto_exibicao`, nao em `texto_original`.
+    //
+    // A coluna computada da view ja cobre o caso de a mensagem inteira nao
+    // ter sido gravada — ali ela devolve os pontos separados costurados.
+    // Buscando so no original, esses feedbacks eram invisiveis para a busca
+    // mesmo tendo o conteudo no banco (medido: "garcons" achava 5 de 7).
+    query = query.ilike('texto_exibicao', `%${filtros.busca}%`)
   }
 
   if (filtros.ordenacao === 'oldest') {

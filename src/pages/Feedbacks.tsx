@@ -433,7 +433,11 @@ export default function Feedbacks() {
               className="p-[20px] border border-[#E5E7EB] rounded-[12px] bg-white shadow-subtle hover:shadow-elevation transition-all duration-200"
             >
               <FeedbackOriginalCard
-                texto={fb.texto_destacado || fb.texto_original}
+                // `texto_exibicao` ja resolve a precedencia na view: destacado, senao
+                // original, senao os pontos separados costurados. Antes era
+                // `destacado || original` aqui, e quando os dois eram nulos (2 dos 71
+                // feedbacks) o card recebia null e a pagina inteira caia.
+                texto={fb.texto_exibicao}
                 sentimento={fb.sentimento}
                 categorias={fb.categorias ?? []}
                 quando={formatarDataFeedback(fb.created_at)}

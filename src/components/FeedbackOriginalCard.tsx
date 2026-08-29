@@ -5,8 +5,17 @@ import { estiloCategoria } from '@/lib/categorias-feedback'
 
 /** Troca **trechos** (marcados pela IA em `texto_destacado`) por <strong>. Texto
  *  sem nenhum marcador (feedback ainda não processado, ou "apenas avaliação")
- *  passa direto, sem nenhum negrito. */
-function renderComDestaque(texto: string) {
+ *  passa direto, sem nenhum negrito.
+ *
+ *  Aceita nulo porque o dado nem sempre existe: 2 dos 71 feedbacks originais em
+ *  produção têm `texto_original` E `texto_destacado` nulos — o n8n gravou os
+ *  pontos separados mas perdeu a mensagem inteira. Sem esta guarda, o
+ *  `.split()` estourava e a PÁGINA TODA caía com "Cannot read properties of
+ *  null", em vez de um card a menos. Eles estão nas posições 30 e 31 da lista,
+ *  então só apareciam depois do terceiro "Carregar mais" — o que fazia o erro
+ *  parecer coisa da paginação. */
+function renderComDestaque(texto: string | null | undefined) {
+  if (!texto) return null
   return texto.split(/(\*\*.+?\*\*)/g).map((parte, i) => {
     const match = parte.match(/^\*\*(.+)\*\*$/)
     return match ? (
@@ -20,7 +29,9 @@ function renderComDestaque(texto: string) {
 }
 
 interface FeedbackOriginalCardProps {
-  texto: string
+  /** A mensagem inteira do cliente. Nulo quando o n8n gravou os pontos
+   *  separados mas perdeu o texto original — acontece, e nao pode quebrar a tela. */
+  texto: string | null
   sentimento?: string | null
   /** Categorias dos feedbacks SEPARADOS ligados a essa mensagem original (não a mensagem em si). */
   categorias: string[]
@@ -75,7 +86,13 @@ export function FeedbackOriginalCard({
             onClick={truncar ? () => setExpandido((v) => !v) : undefined}
             title={truncar ? (cortado ? 'Clique para ver o feedback inteiro' : 'Clique para recolher') : undefined}
           >
-            "{renderComDestaque(texto)}"
+            {texto
+              ? <>"{renderComDestaque(texto)}"</>
+              : (
+                <span className="italic text-muted-foreground">
+                  Mensagem original não registrada — veja os assuntos abaixo.
+                </span>
+              )}
           </p>
           <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
             {quando}
