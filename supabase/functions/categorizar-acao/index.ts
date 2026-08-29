@@ -36,7 +36,7 @@ import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, nomeDoAssistente } from '../_shared/perfil.ts'
-import { avaliarGravidade, type NivelGravidade } from '../_shared/gravidade.ts'
+import { avaliarGravidade, normalizar, type NivelGravidade } from '../_shared/gravidade.ts'
 import { prioridadeAcaoManual } from '../_shared/limiar.ts'
 
 const AGENTE = 'categorizador_acao'
@@ -71,46 +71,46 @@ Se nada se encaixar bem, use "Outros" em vez de forcar uma categoria proxima.
 
 Chame registrar_categoria.`
 
-const PROMPT_VINCULO = `Voce liga uma acao operacional aos feedbacks de clientes que ela resolve.
+const PROMPT_VINCULO = `Voce liga uma acao operacional aos ASSUNTOS de reclamacao que ela resolve.
 
 ## A acao
 Titulo: {titulo}
 Categoria: {categoria}
 Plano: {plano}
 
-## Feedbacks disponiveis
+## Assuntos com reclamacoes em aberto
+Cada item traz o rotulo do assunto e exemplos reais. Confie nos EXEMPLOS: ha
+rotulos antigos que nao descrevem bem o que esta dentro.
+
 {candidatos}
 
 ## Sua tarefa
-Selecione os "id" dos feedbacks cujo problema esta acao resolve.
+Devolva os NUMEROS dos assuntos que esta acao resolve.
 
-A pergunta e uma so: se esta acao for concluida, o cliente que escreveu isto
-teria motivo para ficar satisfeito? Se sim, inclua.
+Quase sempre e UM assunto. Raramente dois. Nunca mais de tres — uma acao
+operacional conserta uma coisa, nao a experiencia inteira do restaurante. Se
+voce esta querendo marcar cinco, esta incluindo o que nao devia.
 
-Os dois erros custam caro, e em direcoes opostas:
+O teste e um so: executar este plano muda alguma coisa para quem reclamou
+daquele assunto? Se sim, inclua. Se nao, deixe de fora.
+
+Os dois erros custam caro, em direcoes opostas:
 - Incluir errado faz o cliente receber "resolvemos o seu problema" sobre algo
   que ele nunca relatou.
-- DEIXAR DE FORA faz quem reclamou nunca saber que foi atendido. Um feedback
-  que ninguem ligou a nada e um cliente que reclamou e levou silencio.
-
-Entao nao seja timido nem generoso: seja exato.
+- Deixar de fora faz quem reclamou nunca saber que foi atendido.
 
 Regras:
-- IGNORE a categoria. Ela e so uma etiqueta e erra com frequencia: "a musica
-  estava alta demais" costuma ser catalogado em Ambiente, e resolve com uma acao
-  de Musica/Som. Compare o PROBLEMA com o PLANO, nao os rotulos.
-- Palavras diferentes, mesmo problema, ENTRA: "o som estava altissimo", "nao
-  dava pra conversar de tao alto" e "a musica atrapalhava" sao todos a mesma
-  queixa de volume.
-- Assunto proximo mas problema diferente NAO entra: "demorou para sentar" e
-  "demorou para a comida chegar" tem causas e solucoes distintas.
-- Feedback GENERICO nao entra. "O ambiente era ruim", "nao gostei", "foi mal"
-  nao dizem QUAL e o problema — voce nao tem como saber se esta acao resolve
-  aquilo, e a chance de estar adivinhando e alta. Exija que o feedback descreva
-  o mesmo problema concreto que o plano ataca.
-- Todos os feedbacks abaixo sao QUEIXAS (o filtro ja tirou os elogios).
-- Lista vazia e uma resposta legitima quando nenhum feedback se encaixa. Nao
-  force.
+- IGNORE a categoria da acao. Ela e so uma etiqueta e erra: "musica alta" costuma
+  ser catalogado em Ambiente e se resolve com uma acao de Musica/Som. Compare o
+  ASSUNTO com o PLANO.
+- Palavras diferentes, mesmo problema, ENTRA: "som altissimo" e "musica
+  atrapalhava a conversa" sao a mesma queixa de volume.
+- Assunto proximo mas diferente NAO entra. Baixar o volume da musica nao
+  conserta mesa bamba, nao esquenta comida fria e nao arruma o estacionamento.
+- Assunto GENERICO nao entra. "Ambiente ruim", "Atendimento ruim", "Opiniao
+  negativa geral" nao dizem qual e o problema — voce nao tem como saber se este
+  plano resolve, e incluir e adivinhar.
+- Lista vazia e resposta legitima. Nao force.
 
 Chame registrar_vinculos.`
 
@@ -126,13 +126,14 @@ const SCHEMA_CATEGORIA = {
 const SCHEMA_VINCULOS = {
   type: 'object',
   properties: {
-    ids: {
+    assuntos: {
       type: 'array',
-      description: 'Ids dos feedbacks que esta acao resolve. Vazio se nenhum.',
+      description:
+        'Os NUMEROS dos assuntos que esta acao resolve, da lista. No maximo 3. Vazio se nenhum.',
       items: { type: 'integer' },
     },
   },
-  required: ['ids'],
+  required: ['assuntos'],
 }
 
 // deno-lint-ignore no-explicit-any
@@ -346,13 +347,32 @@ Deno.serve(async (req: Request) => {
 })
 
 /**
- * Liga a ação aos feedbacks livres que ela resolve.
+ * Liga a ação aos feedbacks livres que ela resolve — decidindo por TEMA.
  *
- * Os candidatos vêm filtrados por categoria e validade ANTES de chegar à IA:
- * mandar tudo faria a chamada cara e aumentaria a chance de um vínculo errado —
- * e vínculo errado aqui tem custo real, porque o motor de resposta usa
- * `feedback_acao` para decidir a quem mandar mensagem. Um cliente receberia um
- * "resolvemos o seu problema" sobre algo que ele nunca relatou.
+ * ## Por que por tema, e não feedback a feedback
+ *
+ * A primeira versão mandava até 25 feedbacks em texto corrido e pedia à IA que
+ * escolhesse. Falhou de três jeitos, todos medidos em produção em 2026-08-29:
+ *
+ *   - Ligou "O ambiente era ruim e o cliente não gostou" a uma ação sobre volume
+ *     da música. O texto é vago demais para sustentar vínculo nenhum.
+ *   - Ligou "A mesa estava super bamba" e "A comida chegou fria" à mesma ação.
+ *   - Cada chamada escolhia coisas diferentes, e o botão de reprocessar ia
+ *     EMPILHANDO vínculos errados a cada clique.
+ *
+ * O problema não era o prompt (endurecer não resolveu): é que julgar 25 textos
+ * corridos contra um plano é tarefa grande demais para uma chamada.
+ *
+ * O sistema já tem uma classificação semântica confiável — o `tema_id`, que o
+ * `classificar-feedback` atribui um a um, com contexto pequeno. Agrupando por
+ * ele, a pergunta vira "quais destes 13 assuntos esta ação resolve?", com
+ * rótulos curtos ("Mesa instável", "Comida fria", "Música alta") em vez de
+ * parágrafos. É a mesma decisão que o `vincular-feedback` já usa para casar
+ * feedback novo com ação existente.
+ *
+ * Ganhos: a escolha fica estável entre chamadas (os temas não mudam), o
+ * genérico se autodenuncia pelo rótulo ("Opinião negativa geral"), e todos os
+ * feedbacks de um tema entram juntos — que é o que o dono espera ver.
  */
 async function vincularFeedbacks(
   db: Db,
@@ -370,83 +390,72 @@ async function vincularFeedbacks(
   },
 ): Promise<number> {
   const limite = new Date(Date.now() - ctx.expiracaoDias * 86_400_000).toISOString()
-  const campos = 'id, texto_original, resumo, sentimento, origem_id, categoria'
 
-  // Duas passadas, e não um filtro só por categoria.
+  // Só QUEIXAS entram.
   //
-  // O problema que uma ação resolve nem sempre está catalogado na categoria em
-  // que ela caiu: "revisar o fluxo de saída dos pratos" foi classificada como
-  // Tempo de Espera, mas os relatos que ela resolve ("a comida chegou fria")
-  // vivem em Comida. Filtrando só pela categoria da ação, a busca voltava
-  // vazia e a ação nascia sem vínculo — ou seja, muda de status e não avisa
-  // ninguém, porque o motor acha o destinatário justamente por `feedback_acao`.
+  // Era regra de prompt e a IA violou: ligou dois "a música do Coldplay estava
+  // ótima" a uma ação de REDUZIR o volume. Quem elogiou receberia um
+  // "resolvemos o seu problema" sobre um elogio. Vira filtro de código porque a
+  // regra é absoluta — ação operacional conserta problema.
   //
-  // Então: primeiro os da própria categoria (mais provável), depois preenche o
-  // resto do orçamento com queixas de outras categorias. Quem decide o que
-  // entra continua sendo a IA lendo o plano.
-  // Só QUEIXAS entram na lista, nas duas passadas.
-  //
-  // Isto era regra de prompt ("elogio nao entra, salvo se a acao for sobre
-  // manter aquilo") e a IA violou na primeira rodada real: ligou dois "a musica
-  // do Coldplay estava otima" a uma acao de REDUZIR o volume. Quem elogiou
-  // receberia um "resolvemos o seu problema" sobre um elogio.
-  //
-  // Vira filtro de codigo porque a regra e absoluta e barata de aplicar: uma
-  // acao operacional conserta problema. O caso de "acao para manter algo bom"
-  // existe, mas e raro o bastante para nao valer a classe inteira de erro — e
-  // nele o dono liga o feedback pela tela, nao pela IA.
-  //
-  // `%negativ%` cobre "Negativo" e o misto "Positivo e Negativo": se ha parte
-  // negativa, ha queixa.
-  const { data: daCategoria } = await db
+  // `%negativ%` cobre "Negativo" e o misto "Positivo e Negativo".
+  const { data: livres } = await db
     .from('feedbacks_livres')
-    .select(campos)
+    .select('id, texto_original, resumo, sentimento, origem_id, categoria, tema_id')
     .eq('restaurante_id', ctx.restauranteId)
-    .eq('categoria', ctx.categoria)
     .ilike('sentimento', '%negativ%')
     .gte('created_at', limite)
-    .limit(MAX_CANDIDATOS_VINCULO)
+    .not('tema_id', 'is', null)
 
+  if (!livres?.length) return 0
+
+  // Agrupa por tema e busca os rótulos.
   // deno-lint-ignore no-explicit-any
-  const lista: any[] = [...(daCategoria ?? [])]
-  const vistos = new Set(lista.map((f) => f.id))
-
-  if (lista.length < MAX_CANDIDATOS_VINCULO) {
-    const { data: outras } = await db
-      .from('feedbacks_livres')
-      .select(campos)
-      .eq('restaurante_id', ctx.restauranteId)
-      .neq('categoria', ctx.categoria)
-      .ilike('sentimento', '%negativ%')
-      .gte('created_at', limite)
-      .order('created_at', { ascending: false })
-      .limit(MAX_CANDIDATOS_VINCULO - lista.length)
-
-    // deno-lint-ignore no-explicit-any
-    for (const f of (outras ?? []) as any[]) {
-      if (!vistos.has(f.id)) {
-        lista.push(f)
-        vistos.add(f.id)
-      }
-    }
+  const porTema = new Map<string, any[]>()
+  // deno-lint-ignore no-explicit-any
+  for (const f of livres as any[]) {
+    const atual = porTema.get(f.tema_id)
+    if (atual) atual.push(f)
+    else porTema.set(f.tema_id, [f])
   }
 
-  if (lista.length === 0) return 0
+  const { data: temas } = await db
+    .from('feedback_temas')
+    .select('id, rotulo')
+    .in('id', [...porTema.keys()])
 
-  const validos = lista.filter((f) => (f.texto_original || f.resumo || '').trim())
-  if (validos.length === 0) return 0
+  if (!temas?.length) return 0
+
+  // Numerados de 1 a N, e nao pelo uuid do tema.
+  //
+  // Com uuid, o modelo devolveu os 13 ids da lista inteira — e a acao sobre
+  // volume da musica acabou ligada a "Comida fria", "Estacionamento dificil" e
+  // tudo mais. Copiar identificador longo e tarefa ruim para modelo pequeno: na
+  // duvida ele ecoa a lista. Numero curto ele acerta, e o codigo mapeia de volta.
+  //
+  // Os exemplos importam MAIS que o rotulo, e por isso vao ate tres.
+  //
+  // Ha temas antigos mal formados, de quando o prompt de classificacao aceitava
+  // assunto largo: "Ambiente agradavel" tem 18 feedbacks e mistura "ambiente
+  // magnifico" com "o ambiente era ruim" e "a luz estava fraca". O rotulo mente
+  // sobre o conteudo, e a IA decide por ele se so ele estiver a vista.
+  const ordenados = temas as { id: string; rotulo: string }[]
+  const lista = ordenados
+    .map((t, i) => {
+      const fs = porTema.get(t.id) ?? []
+      const exemplos = fs
+        .slice(0, 3)
+        .map((f) => `      - "${(f.texto_original || f.resumo || '').slice(0, 100)}"`)
+        .join('\n')
+      return `${i + 1}. ${t.rotulo} (${fs.length} feedback${fs.length > 1 ? 's' : ''})\n${exemplos}`
+    })
+    .join('\n\n')
 
   const prompt = montarPrompt(ctx.prompts, 'ef_vincular_acao', PROMPT_VINCULO, {
     titulo: ctx.titulo,
     categoria: ctx.categoria,
     plano: ctx.plano,
-    candidatos: validos
-      .map(
-        (f) =>
-          `- id ${f.id} [${f.categoria ?? '?'} / ${f.sentimento ?? '?'}]: ` +
-          `"${f.texto_original || f.resumo}"`,
-      )
-      .join('\n'),
+    candidatos: lista,
   })
 
   let escolhidos: number[] = []
@@ -460,69 +469,67 @@ async function vincularFeedbacks(
       calculadora: false,
       saida: {
         nome: 'registrar_vinculos',
-        descricao: 'Registra os feedbacks que esta acao resolve.',
+        descricao: 'Registra os assuntos que esta acao resolve.',
         schema: SCHEMA_VINCULOS,
       },
     })
-    escolhidos = Array.isArray(result?.ids) ? result.ids.map(Number) : []
-    // Diagnostico: sem isto, "por que a acao ficou sem feedback?" nao tem
-    // resposta — nao da para saber se faltou candidato ou se a IA recusou.
-    console.log(
-      `[acao ${ctx.acaoId}] ${validos.length} candidatos -> IA escolheu ${escolhidos.length}` +
-        ` | candidatos: ${validos.map((f) => f.id).join(',')}`,
-    )
+    escolhidos = Array.isArray(result?.assuntos) ? result.assuntos.map(Number) : []
   } catch (err) {
     if (err instanceof ErroCota) throw err
     console.error('Falha ao vincular feedbacks:', err)
     return 0
   }
 
-  // A IA pode devolver id que não estava na lista. Só passa o que ela viu.
-  const permitidos = new Map(validos.map((f) => [Number(f.id), f]))
-  let paraLigar = [...new Set(escolhidos)].filter((id) => permitidos.has(id))
-  if (paraLigar.length === 0) return 0
+  // Número fora da lista é descartado, e o teto de 3 é aplicado aqui também: o
+  // schema pede, mas quem garante é o código.
+  const validos = [...new Set(escolhidos)]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= ordenados.length)
+    .slice(0, 3)
+    .map((n) => ordenados[n - 1])
 
-  // Tira os que já estão ligados a esta ação.
+  console.log(
+    `[acao ${ctx.acaoId}] ${ordenados.length} assuntos -> escolhidos ${validos.length}: ` +
+      validos.map((t) => t.rotulo).join(', '),
+  )
+
+  if (validos.length === 0) return 0
+
+  // Todos os feedbacks dos temas escolhidos.
+  const linhas = validos.flatMap((t) =>
+    (porTema.get(t.id) ?? []).map((f) => ({
+      acao_id: ctx.acaoId,
+      feedback_restaurante_id: Number(f.id),
+      feedback_original_id: f.origem_id,
+      restaurante_id: ctx.restauranteId,
+    }))
+  )
+  if (linhas.length === 0) return 0
+
+  // Tira os já ligados a esta ação.
   //
-  // Não dá para usar `upsert` com `onConflict` aqui: o índice único
+  // Não dá para usar `upsert` com `onConflict`: o índice único
   // `feedback_acao_por_ponto` é PARCIAL (`where feedback_restaurante_id is not
-  // null`), e o PostgREST não tem como mandar o predicado junto — o Postgres
-  // recusa com 42P10, "no unique or exclusion constraint matching the ON
-  // CONFLICT specification". Tentei e o insert inteiro falhou em silêncio: a IA
-  // escolhia os feedbacks certos e nenhum era gravado.
-  //
-  // Filtrar antes resolve o caso real (duas chamadas em sequência) sem depender
-  // de ON CONFLICT. A janela de corrida que sobra é de milissegundos, e o
-  // fallback abaixo cobre.
+  // null`) e o PostgREST não tem como mandar o predicado — o Postgres recusa com
+  // 42P10 e o insert inteiro falha em silêncio.
   const { data: jaLigados } = await db
     .from('feedback_acao')
     .select('feedback_restaurante_id')
     .eq('acao_id', ctx.acaoId)
-    .in('feedback_restaurante_id', paraLigar)
+    .in('feedback_restaurante_id', linhas.map((l) => l.feedback_restaurante_id))
 
-  if (jaLigados?.length) {
-    // deno-lint-ignore no-explicit-any
-    const existentes = new Set((jaLigados as any[]).map((l) => Number(l.feedback_restaurante_id)))
-    paraLigar = paraLigar.filter((id) => !existentes.has(id))
-    if (paraLigar.length === 0) return 0
-  }
+  // deno-lint-ignore no-explicit-any
+  const existentes = new Set((jaLigados as any[] ?? []).map((l) => Number(l.feedback_restaurante_id)))
+  const novas = linhas.filter((l) => !existentes.has(l.feedback_restaurante_id))
+  if (novas.length === 0) return 0
 
-  const linhas = paraLigar.map((id) => ({
-    acao_id: ctx.acaoId,
-    feedback_restaurante_id: id,
-    feedback_original_id: permitidos.get(id)!.origem_id,
-    restaurante_id: ctx.restauranteId,
-  }))
+  const { error } = await db.from('feedback_acao').insert(novas)
+  if (!error) return novas.length
 
-  const { error } = await db.from('feedback_acao').insert(linhas)
-  if (!error) return paraLigar.length
-
-  // 23505 = chave duplicada. Só acontece se outra chamada gravou entre o filtro
-  // acima e este insert. Um lote inteiro não pode ser perdido por causa de uma
-  // linha repetida, então reinsere uma a uma e conta o que passou.
+  // 23505 = duplicada. Só acontece se outra chamada gravou entre o filtro acima
+  // e este insert. Um lote não pode ser perdido por causa de uma linha.
   if (error.code === '23505') {
     let gravados = 0
-    for (const linha of linhas) {
+    for (const linha of novas) {
       const { error: e } = await db.from('feedback_acao').insert(linha)
       if (!e) gravados++
       else if (e.code !== '23505') console.error('Falha ao inserir vínculo:', e)
