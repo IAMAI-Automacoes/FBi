@@ -25,7 +25,13 @@ import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
-import { blocoPerfil, buscarConhecimento, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
+import {
+  blocoPerfil,
+  buscarConhecimento,
+  buscarMemorias,
+  nomeDoAssistente,
+  tomDoAssistente,
+} from '../_shared/perfil.ts'
 import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
 import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
@@ -51,6 +57,9 @@ Sua tarefa: transformar UM insight em uma acao operacional que a equipe consiga 
 
 ## Sobre este restaurante
 {perfil}
+
+## O que ja sabemos sobre este restaurante
+{memorias}
 {conhecimento}
 
 ## O insight a resolver
@@ -262,6 +271,7 @@ async function redigirAcao(
       nome: nomeDoAssistente(ctx.config?.mascote_config),
       tom: tomDoAssistente(ctx.config?.mascote_config),
       perfil: blocoPerfil(ctx.config),
+      memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
       conhecimento: ctx.conhecimento ? `\n## Boas praticas de referencia\n${ctx.conhecimento}` : '',
       prioridade: insight.prioridade ?? 'IMPORTANTE',
       categoria: insight.categoria ?? 'Outros',
@@ -499,19 +509,44 @@ serve(async (req: Request) => {
     )
     const alvos = insightSolicitado ? ordenados : ordenados.slice(0, MAX_ACOES_CICLO)
 
-    const params = await paramsDoAgente(db, AGENTE, { max_tokens: 1600 })
+    // Busca na web ligada, como no `gerar-plano-acao`: esta funcao escreve o
+    // plano que a equipe vai EXECUTAR, e quando o assunto tem norma estabelecida
+    // (temperatura segura, prazo de validade, exigencia sanitaria) o numero
+    // precisa ser o real. O admin desliga no painel se o custo nao compensar.
+    const params = await paramsDoAgente(db, AGENTE, {
+      max_tokens: 1600,
+      web: true,
+      web_max_results: 3,
+    })
     if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
     const paramsVerificador = await paramsDoAgente(db, AGENTE_VERIFICADOR, { max_tokens: 600 })
 
     const prompts = await carregarPrompts(db)
-    const conhecimento = await buscarConhecimento(
-      db,
-      restauranteId,
-      // deno-lint-ignore no-explicit-any
-      alvos.map((i: any) => `${i.categoria}: ${i.titulo}. ${i.descricao}`).join('\n').slice(0, 3500),
-    )
 
-    const ctx = { restauranteId, prompts, config, conhecimento, params, paramsVerificador, expiracaoDias }
+    // Perfil, documentos de treinamento E as anotações do assistente. As
+    // memórias entram porque é nelas que fica o que o dono já tentou, o que ele
+    // valoriza e o que não funciona neste restaurante — escrever um plano de
+    // ação sem isso produz conselho genérico.
+    const [conhecimento, memorias] = await Promise.all([
+      buscarConhecimento(
+        db,
+        restauranteId,
+        // deno-lint-ignore no-explicit-any
+        alvos.map((i: any) => `${i.categoria}: ${i.titulo}. ${i.descricao}`).join('\n').slice(0, 3500),
+      ),
+      buscarMemorias(db, restauranteId),
+    ])
+
+    const ctx = {
+      restauranteId,
+      prompts,
+      config,
+      conhecimento,
+      memorias,
+      params,
+      paramsVerificador,
+      expiracaoDias,
+    }
 
     const resultados = await emParalelo(alvos, CONCORRENCIA, async (insight) => {
       try {

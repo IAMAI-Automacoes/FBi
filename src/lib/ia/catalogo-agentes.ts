@@ -501,7 +501,7 @@ Chame registrar_avaliacao.` }],
     nome: 'Sugeridor de ações (edge function)',
     papel: 'A partir dos insights, sugere ações operacionais com plano — nunca a partir de um feedback único.',
     memoria: 'SEM memória de conversa. Vê os insights ativos e a configuração.',
-    acessos: ['Insights ativos', 'Perfil do restaurante', 'Anotações da IA', 'Materiais de treinamento', 'Grava em: acoes_operacionais'],
+    acessos: ['Insights ativos', 'Perfil do restaurante', 'Anotações da IA (memoria_assistente)', 'Materiais de treinamento', 'Busca na web', 'Grava em: acoes_operacionais'],
     blocos: [{ titulo: 'Prompt', explicacao: 'Sempre inclui um plano norteador; nunca age por feedback único.', dinamico: true, editavel: true, chave: 'ef_sugerir_acoes',
       conteudo: `Voce e o "{nome}", consultor especialista em gestao de restaurantes. Com base nos insights abaixo, gere ATE {max} acoes operacionais concretas para o dono resolver os problemas mais valiosos (maior impacto e urgencia).
 
@@ -660,6 +660,9 @@ Escolha UMA opcao:
 - "nenhum", se nada acima trata deste problema.
 
 Regras:
+- ACAO TEM PREFERENCIA. Se uma acao e um insight tratam do mesmo problema,
+  escolha a ACAO: ela e o estado mais avancado, e e o vinculo com ela que faz o
+  cliente ser avisado quando a equipe concluir.
 - Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e
   "a comida veio fria" sao problemas diferentes, mesmo os dois sendo sobre
   comida. "O banheiro estava sujo" e "a mesa estava suja" tambem.

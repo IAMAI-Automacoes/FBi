@@ -60,6 +60,9 @@ Escolha UMA opcao:
 - "nenhum", se nada acima trata deste problema.
 
 Regras:
+- ACAO TEM PREFERENCIA. Se uma acao e um insight tratam do mesmo problema,
+  escolha a ACAO: ela e o estado mais avancado, e e o vinculo com ela que faz o
+  cliente ser avisado quando a equipe concluir.
 - Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e
   "a comida veio fria" sao problemas diferentes, mesmo os dois sendo sobre
   comida. "O banheiro estava sujo" e "a mesa estava suja" tambem.
@@ -157,16 +160,25 @@ serve(async (req: Request) => {
     ])
 
     // ---- 1. Atalho determinístico: mesmo tema ----
-    // O `tema_id` foi atribuído pelo classificar-feedback com o mesmo critério
-    // que agrupou os assuntos na geração. Se bate, é o mesmo assunto — não há
-    // o que uma IA acrescentar aqui.
     //
-    // A ação vem por consulta separada, e não por embed: existem DUAS FKs entre
-    // `acoes_operacionais` e `insights` (`acoes.insight_id` e `insights.acao_id`),
-    // então `insights!inner(...)` é ambíguo e o PostgREST devolve PGRST201. E os
-    // dois sentidos precisam ser olhados de qualquer jeito — ações antigas
-    // perderam o `insight_id` num `on delete set null`, e é o insight que passou
-    // a guardar o `acao_id` quando virou ação.
+    // A ORDEM É AÇÃO PRIMEIRO, DEPOIS INSIGHT, e isso importa.
+    //
+    // A ação é o estado mais avançado do mesmo assunto: alguém já decidiu
+    // resolver aquilo e está tocando. Se um feedback novo fosse para o insight
+    // quando existe uma ação sobre o mesmo tema, o cliente que reclamou hoje
+    // não seria avisado quando a equipe concluísse — porque quem gera o aviso
+    // é o vínculo com a AÇÃO, não com o insight.
+    //
+    // O `tema_id` vem do `classificar-feedback`, com o mesmo critério que
+    // agrupou os assuntos na geração. Se bate, é o mesmo assunto — não há o que
+    // uma IA acrescentar aqui.
+    //
+    // A ação é procurada por consulta separada, e não por embed: existem DUAS
+    // FKs entre `acoes_operacionais` e `insights` (`acoes.insight_id` e
+    // `insights.acao_id`), então `insights!inner(...)` é ambíguo e o PostgREST
+    // devolve PGRST201. E os dois sentidos precisam ser olhados de qualquer
+    // jeito — ações antigas perderam o `insight_id` num `on delete set null`, e
+    // é o insight que passou a guardar o `acao_id` ao virar ação.
     if (fb.tema_id) {
       const negativo = (fb.sentimento || '').toLowerCase().includes('negativ')
       const chaveEsperada = `tema:${fb.tema_id}|${negativo ? 'neg' : 'pos'}`
@@ -177,13 +189,7 @@ serve(async (req: Request) => {
         .eq('restaurante_id', fb.restaurante_id)
         .eq('assunto_chave', chaveEsperada)
 
-      // deno-lint-ignore no-explicit-any
-      const vivo = (doTema ?? []).find((i: any) => i.ativo && !i.deletado_em)
-      if (vivo) {
-        await ligarAoInsight(db, fb, vivo.id)
-        return json({ status: 'ligado', destino: 'insight', id: vivo.id, via: 'tema' })
-      }
-
+      // 1a. Existe AÇÃO ABERTA sobre este assunto?
       if (doTema && doTema.length > 0) {
         // deno-lint-ignore no-explicit-any
         const acaoIds = doTema.map((i: any) => i.acao_id).filter(Boolean)
@@ -207,8 +213,15 @@ serve(async (req: Request) => {
           return json({ status: 'ligado', destino: 'acao', id: acaoDoTema[0].id, via: 'tema' })
         }
       }
-    }
 
+      // 1b. Não há ação. E insight ativo sobre o mesmo assunto?
+      // deno-lint-ignore no-explicit-any
+      const vivo = (doTema ?? []).find((i: any) => i.ativo && !i.deletado_em)
+      if (vivo) {
+        await ligarAoInsight(db, fb, vivo.id)
+        return json({ status: 'ligado', destino: 'insight', id: vivo.id, via: 'tema' })
+      }
+    }
     // ---- 2. Sem candidato da mesma categoria: fica livre, sem gastar IA ----
     // deno-lint-ignore no-explicit-any
     const acoesCat = (acoes ?? []).filter((a: any) => a.categoria === fb.categoria)
