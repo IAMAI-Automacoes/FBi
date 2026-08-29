@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
 import { paramsDoAgente, type ParamsAgente } from '../_shared/params.ts'
@@ -18,7 +17,7 @@ import { avaliarEscopo, ultimaMensagemDoUsuario } from '../_shared/escopo.ts'
 /** Teto de segurança: nem o admin consegue configurar um agente acima disto. */
 const MAX_TOKENS_TETO = 4000
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 

@@ -30,7 +30,6 @@
  * justamente por `feedback_acao`. Aqui a IA lê o plano e escolhe, entre os
  * feedbacks livres da categoria, quais aquela ação realmente resolve.
  */
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
@@ -83,16 +82,35 @@ Plano: {plano}
 {candidatos}
 
 ## Sua tarefa
-Selecione os "id" dos feedbacks que esta acao RESOLVE. Um feedback so entra se
-o problema dele for tratado pelo plano acima.
+Selecione os "id" dos feedbacks cujo problema esta acao resolve.
+
+A pergunta e uma so: se esta acao for concluida, o cliente que escreveu isto
+teria motivo para ficar satisfeito? Se sim, inclua.
+
+Os dois erros custam caro, e em direcoes opostas:
+- Incluir errado faz o cliente receber "resolvemos o seu problema" sobre algo
+  que ele nunca relatou.
+- DEIXAR DE FORA faz quem reclamou nunca saber que foi atendido. Um feedback
+  que ninguem ligou a nada e um cliente que reclamou e levou silencio.
+
+Entao nao seja timido nem generoso: seja exato.
 
 Regras:
-- Na duvida, NAO inclua. Vincular um feedback errado faz o cliente receber uma
-  mensagem dizendo que resolvemos algo que ele nunca reclamou.
-- Elogio nao entra, salvo se a acao for justamente sobre manter aquilo.
-- Feedback de assunto proximo mas diferente NAO entra: "demorou para sentar" e
-  "demorou para a comida chegar" sao problemas distintos.
-- Pode devolver lista vazia se nenhum se encaixar.
+- IGNORE a categoria. Ela e so uma etiqueta e erra com frequencia: "a musica
+  estava alta demais" costuma ser catalogado em Ambiente, e resolve com uma acao
+  de Musica/Som. Compare o PROBLEMA com o PLANO, nao os rotulos.
+- Palavras diferentes, mesmo problema, ENTRA: "o som estava altissimo", "nao
+  dava pra conversar de tao alto" e "a musica atrapalhava" sao todos a mesma
+  queixa de volume.
+- Assunto proximo mas problema diferente NAO entra: "demorou para sentar" e
+  "demorou para a comida chegar" tem causas e solucoes distintas.
+- Feedback GENERICO nao entra. "O ambiente era ruim", "nao gostei", "foi mal"
+  nao dizem QUAL e o problema — voce nao tem como saber se esta acao resolve
+  aquilo, e a chance de estar adivinhando e alta. Exija que o feedback descreva
+  o mesmo problema concreto que o plano ataca.
+- Todos os feedbacks abaixo sao QUEIXAS (o filtro ja tirou os elogios).
+- Lista vazia e uma resposta legitima quando nenhum feedback se encaixa. Nao
+  force.
 
 Chame registrar_vinculos.`
 
@@ -120,26 +138,36 @@ const SCHEMA_VINCULOS = {
 // deno-lint-ignore no-explicit-any
 type Db = any
 
-serve(async (req: Request) => {
+// `Deno.serve` nativo, sem o import de `deno.land/std`.
+//
+// O import externo era resolvido pelo bundler da Supabase A CADA DEPLOY, e em
+// 2026-08-29 o deno.land ficou fora do ar: todo deploy passou a falhar com
+// "Fetch ... timed out after 10s". Uma indisponibilidade de terceiro nao pode
+// impedir de publicar correcao.
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 
   try {
-    const { acao_id: acaoId } = await req.json().catch(() => ({}))
+    const corpo = await req.json().catch(() => ({}))
+    const acaoId = corpo?.acao_id
+    // `apenas_vinculo` é o botão "Buscar feedbacks relacionados": o dono já
+    // decidiu categoria e prioridade e não quer que a IA mexa neles.
+    const apenasVinculo = corpo?.apenas_vinculo === true
     if (!acaoId) return json({ error: 'acao_id é obrigatório' }, 400)
 
     const db: Db = clienteAdmin()
 
     const { data: acao, error: erroAcao } = await db
       .from('acoes_operacionais')
-      .select('id, titulo_acao, plano_detalhado, categoria, prioridade, restaurante_id, insight_id')
+      .select('id, titulo_acao, plano_detalhado, categoria, prioridade, restaurante_id, insight_id, status, arquivada_em')
       .eq('id', acaoId)
       .single()
 
     if (erroAcao || !acao) return json({ error: 'Ação não encontrada' }, 404)
 
-    const precisaCategoria = !acao.categoria
-    const precisaPrioridade = !acao.prioridade
+    const precisaCategoria = !apenasVinculo && !acao.categoria
+    const precisaPrioridade = !apenasVinculo && !acao.prioridade
 
     const { data: config } = await db
       .from('restaurantes')
@@ -195,8 +223,19 @@ serve(async (req: Request) => {
     //
     // Só para ação criada à mão: a que veio de insight já herdou os vínculos
     // pelo trigger, e re-vincular aqui traria feedback de outro assunto.
+    //
+    // Ação arquivada não recebe vínculo novo: ela está fora do quadro, e ligar
+    // um feedback nela prenderia o ponto (ação existente segura sempre, mesmo
+    // arquivada) sem que ninguém nunca fosse avisado — o motor de retorno só
+    // olha transição de status, e uma ação arquivada não vai mais mudar.
     let vinculados = 0
-    if (!acao.insight_id) {
+    let motivoSemVinculo: string | null = null
+
+    if (acao.insight_id) {
+      motivoSemVinculo = 'a acao veio de um insight e ja herdou os vinculos dele'
+    } else if (acao.arquivada_em) {
+      motivoSemVinculo = 'acao arquivada nao recebe vinculo novo'
+    } else {
       vinculados = await vincularFeedbacks(db, {
         acaoId,
         restauranteId: acao.restaurante_id,
@@ -294,6 +333,7 @@ serve(async (req: Request) => {
       prioridade: prioridadeFinal,
       calculo_prioridade: detalhePrioridade,
       feedbacks_vinculados: vinculados,
+      motivo_sem_vinculo: motivoSemVinculo,
     })
   } catch (err) {
     if (err instanceof ErroCota) {
@@ -344,11 +384,26 @@ async function vincularFeedbacks(
   // Então: primeiro os da própria categoria (mais provável), depois preenche o
   // resto do orçamento com queixas de outras categorias. Quem decide o que
   // entra continua sendo a IA lendo o plano.
+  // Só QUEIXAS entram na lista, nas duas passadas.
+  //
+  // Isto era regra de prompt ("elogio nao entra, salvo se a acao for sobre
+  // manter aquilo") e a IA violou na primeira rodada real: ligou dois "a musica
+  // do Coldplay estava otima" a uma acao de REDUZIR o volume. Quem elogiou
+  // receberia um "resolvemos o seu problema" sobre um elogio.
+  //
+  // Vira filtro de codigo porque a regra e absoluta e barata de aplicar: uma
+  // acao operacional conserta problema. O caso de "acao para manter algo bom"
+  // existe, mas e raro o bastante para nao valer a classe inteira de erro — e
+  // nele o dono liga o feedback pela tela, nao pela IA.
+  //
+  // `%negativ%` cobre "Negativo" e o misto "Positivo e Negativo": se ha parte
+  // negativa, ha queixa.
   const { data: daCategoria } = await db
     .from('feedbacks_livres')
     .select(campos)
     .eq('restaurante_id', ctx.restauranteId)
     .eq('categoria', ctx.categoria)
+    .ilike('sentimento', '%negativ%')
     .gte('created_at', limite)
     .limit(MAX_CANDIDATOS_VINCULO)
 
@@ -410,6 +465,12 @@ async function vincularFeedbacks(
       },
     })
     escolhidos = Array.isArray(result?.ids) ? result.ids.map(Number) : []
+    // Diagnostico: sem isto, "por que a acao ficou sem feedback?" nao tem
+    // resposta — nao da para saber se faltou candidato ou se a IA recusou.
+    console.log(
+      `[acao ${ctx.acaoId}] ${validos.length} candidatos -> IA escolheu ${escolhidos.length}` +
+        ` | candidatos: ${validos.map((f) => f.id).join(',')}`,
+    )
   } catch (err) {
     if (err instanceof ErroCota) throw err
     console.error('Falha ao vincular feedbacks:', err)
@@ -418,21 +479,57 @@ async function vincularFeedbacks(
 
   // A IA pode devolver id que não estava na lista. Só passa o que ela viu.
   const permitidos = new Map(validos.map((f) => [Number(f.id), f]))
-  const paraLigar = [...new Set(escolhidos)].filter((id) => permitidos.has(id))
+  let paraLigar = [...new Set(escolhidos)].filter((id) => permitidos.has(id))
   if (paraLigar.length === 0) return 0
 
-  const { error } = await db.from('feedback_acao').insert(
-    paraLigar.map((id) => ({
-      acao_id: ctx.acaoId,
-      feedback_restaurante_id: id,
-      feedback_original_id: permitidos.get(id)!.origem_id,
-      restaurante_id: ctx.restauranteId,
-    })),
-  )
-  if (error) {
-    console.error('Falha ao inserir vínculos:', error)
-    return 0
+  // Tira os que já estão ligados a esta ação.
+  //
+  // Não dá para usar `upsert` com `onConflict` aqui: o índice único
+  // `feedback_acao_por_ponto` é PARCIAL (`where feedback_restaurante_id is not
+  // null`), e o PostgREST não tem como mandar o predicado junto — o Postgres
+  // recusa com 42P10, "no unique or exclusion constraint matching the ON
+  // CONFLICT specification". Tentei e o insert inteiro falhou em silêncio: a IA
+  // escolhia os feedbacks certos e nenhum era gravado.
+  //
+  // Filtrar antes resolve o caso real (duas chamadas em sequência) sem depender
+  // de ON CONFLICT. A janela de corrida que sobra é de milissegundos, e o
+  // fallback abaixo cobre.
+  const { data: jaLigados } = await db
+    .from('feedback_acao')
+    .select('feedback_restaurante_id')
+    .eq('acao_id', ctx.acaoId)
+    .in('feedback_restaurante_id', paraLigar)
+
+  if (jaLigados?.length) {
+    // deno-lint-ignore no-explicit-any
+    const existentes = new Set((jaLigados as any[]).map((l) => Number(l.feedback_restaurante_id)))
+    paraLigar = paraLigar.filter((id) => !existentes.has(id))
+    if (paraLigar.length === 0) return 0
   }
 
-  return paraLigar.length
+  const linhas = paraLigar.map((id) => ({
+    acao_id: ctx.acaoId,
+    feedback_restaurante_id: id,
+    feedback_original_id: permitidos.get(id)!.origem_id,
+    restaurante_id: ctx.restauranteId,
+  }))
+
+  const { error } = await db.from('feedback_acao').insert(linhas)
+  if (!error) return paraLigar.length
+
+  // 23505 = chave duplicada. Só acontece se outra chamada gravou entre o filtro
+  // acima e este insert. Um lote inteiro não pode ser perdido por causa de uma
+  // linha repetida, então reinsere uma a uma e conta o que passou.
+  if (error.code === '23505') {
+    let gravados = 0
+    for (const linha of linhas) {
+      const { error: e } = await db.from('feedback_acao').insert(linha)
+      if (!e) gravados++
+      else if (e.code !== '23505') console.error('Falha ao inserir vínculo:', e)
+    }
+    return gravados
+  }
+
+  console.error('Falha ao inserir vínculos:', error)
+  return 0
 }

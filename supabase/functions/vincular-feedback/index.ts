@@ -29,7 +29,6 @@
  *
  * Contaminação não é risco aqui: a saída é uma decisão de vínculo, não prosa.
  */
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
@@ -122,7 +121,7 @@ async function talvezGerarInsights(db: Db, restauranteId: number) {
   }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 

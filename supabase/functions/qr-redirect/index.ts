@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 /* Quem vê esta página é o CLIENTE do restaurante, com o celular na mão, depois
@@ -32,7 +31,7 @@ const PAGINA_NAO_ENCONTRADO = `<!doctype html>
 </body>
 </html>`
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url)
     const slug = url.searchParams.get('slug')

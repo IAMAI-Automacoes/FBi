@@ -144,10 +144,24 @@ export async function gerarPlanoAcao(acaoId: number) {
  * contagem de feedbacks negativos recentes naquela categoria — ver
  * `supabase/functions/categorizar-acao/index.ts`.
  */
-export async function categorizarAcao(acaoId: number) {
+/**
+ * Completa uma ação criada à mão: categoria, prioridade e vínculo com os
+ * feedbacks livres que ela resolve.
+ *
+ * `apenasVinculo` é o botão "Buscar feedbacks relacionados": o dono já decidiu
+ * categoria e prioridade, e a IA não deve mexer nelas — só procurar os
+ * feedbacks que aquela ação resolve.
+ */
+export async function categorizarAcao(acaoId: number, apenasVinculo = false) {
   const { data, error } = await supabase.functions.invoke('categorizar-acao', {
-    body: { acao_id: acaoId },
+    body: { acao_id: acaoId, apenas_vinculo: apenasVinculo },
   })
   if (error) throw error
-  return data
+  return data as {
+    status?: string
+    categoria?: string
+    prioridade?: string
+    feedbacks_vinculados?: number
+    motivo_sem_vinculo?: string | null
+  }
 }

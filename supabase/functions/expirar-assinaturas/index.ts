@@ -8,7 +8,6 @@
 //
 // Protegida por segredo (x-cron-secret == integracao_config.PUSH_TRIGGER_SECRET),
 // então só o cron do banco consegue disparar. verify_jwt=false.
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -42,7 +41,7 @@ async function apagarInstancia(
   } catch { /* best-effort */ }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {

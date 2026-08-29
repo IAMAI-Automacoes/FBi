@@ -30,7 +30,6 @@
  *   3. verificar lastro             (IA, isolada, só vê os pontos + o rascunho)
  *   4. gravar insight + vínculos
  */
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
@@ -968,7 +967,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
   }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {

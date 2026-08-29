@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { CAMPOS_CONFIG, campoValido, atualizarCampoConfig } from '@/lib/queries/config-update'
+import { categorizarAcao } from '@/lib/queries/acoes'
 
 /**
  * Motor de ações do assistente.
@@ -157,6 +158,20 @@ export async function executarAcao(
       }
       const { data, error } = await db.from('acoes_operacionais').insert(linha).select().single()
       if (error) throw error
+
+      // Liga a ação aos feedbacks livres que ela resolve.
+      //
+      // O assistente sempre preenche categoria e prioridade, então antes desta
+      // chamada nenhuma ação criada pelo chat recebia vínculo — e ação sem
+      // vínculo avança de status sem avisar cliente nenhum, porque o motor de
+      // retorno acha o destinatário por `feedback_acao`.
+      //
+      // `true` = só vincular: os campos vieram do pedido do dono e a IA não
+      // deve sobrescrevê-los. Sem await: o chat responde na hora.
+      categorizarAcao(Number(data.id), true).catch(() => {
+        // Falha aqui não invalida a ação criada; o dono pode reprocessar pelo
+        // botão "Buscar feedbacks relacionados" no modal da ação.
+      })
       return registrar(restauranteId, acao, modo, { tabela: 'acoes_operacionais', id: String(data.id) }, null, data)
     }
 

@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
@@ -29,7 +28,7 @@ Feedbacks a analisar:
 
 const TEXTO_PADRAO = 'Continue coletando feedbacks para receber insights do Chef Pepê.'
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 

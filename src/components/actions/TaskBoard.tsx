@@ -738,28 +738,45 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         ])
         toast({ title: 'Ação criada' })
 
-        // Categoria e/ou prioridade ficaram em branco: a IA decide sozinha
-        // em segundo plano (lê o título+plano pra categoria, conta feedbacks
-        // negativos recentes na categoria pra prioridade) e o card atualiza
-        // quando terminar — não trava a criação esperando isso.
-        if (!categoriaEscolhida || !prioridadeEscolhida) {
-          categorizarAcao(criada.id)
-            .then((res) => {
-              if (res?.status !== 'sucesso') return
-              setTasks((prev) =>
-                prev.map((t) =>
-                  t.id === criada.id.toString()
-                    ? { ...t, categoria: res.categoria, prioridade: res.prioridade }
-                    : t,
-                ),
-              )
-            })
-            .catch(() => {
-              // Falha na IA não é crítica aqui: a ação já existe com os
-              // valores que vieram do insert (o dono ajusta manualmente se
-              // precisar).
-            })
-        }
+        // SEMPRE, e não só quando falta categoria ou prioridade.
+        //
+        // Antes isto rodava só quando um dos dois campos vinha em branco — e o
+        // efeito era que preencher os dois fazia a ação nascer SEM NENHUM
+        // feedback vinculado. Uma ação sem vínculo muda de status e não avisa
+        // ninguém, porque o motor de retorno acha o destinatário justamente por
+        // `feedback_acao`. Quem preenchia tudo direitinho era quem perdia o
+        // retorno ao cliente.
+        //
+        // `apenasVinculo` quando o dono já decidiu os dois: aí a IA não mexe
+        // neles, só procura os feedbacks livres que esta ação resolve.
+        const jaDecidiu = !!categoriaEscolhida && !!prioridadeEscolhida
+        categorizarAcao(criada.id, jaDecidiu)
+          .then((res) => {
+            if (res?.status !== 'sucesso') return
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === criada.id.toString()
+                  ? {
+                      ...t,
+                      categoria: res.categoria ?? t.categoria,
+                      prioridade: res.prioridade ?? t.prioridade,
+                    }
+                  : t,
+              ),
+            )
+            if (res.feedbacks_vinculados) {
+              toast({
+                title: `${res.feedbacks_vinculados} feedback${res.feedbacks_vinculados > 1 ? 's' : ''} ligado${res.feedbacks_vinculados > 1 ? 's' : ''}`,
+                description:
+                  'Quem escreveu vai ser avisado quando esta ação avançar de status.',
+              })
+            }
+          })
+          .catch(() => {
+            // Falha na IA não é crítica: a ação já existe com os valores do
+            // insert, e o dono pode usar "Buscar feedbacks relacionados" no
+            // modal para tentar de novo.
+          })
       }
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao salvar ação', variant: 'destructive' })

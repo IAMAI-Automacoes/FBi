@@ -23,7 +23,6 @@
 // não só que é JSON válido. E, sem outra ferramenta disponível, ela é forçada já
 // na primeira rodada — uma chamada por ponto, que é o que o caminho quente
 // aguenta.
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
@@ -111,7 +110,7 @@ async function vincular(feedbackId: number | string) {
   }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 

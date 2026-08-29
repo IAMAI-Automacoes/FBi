@@ -19,7 +19,6 @@
  * - **Isolamento por ação.** Uma invocação de IA por insight, com histórico
  *   zerado, e as mesmas três camadas anti-contaminação do gerador.
  */
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
@@ -456,7 +455,7 @@ async function converterInsight(db: Db, ctx: any, insight: any) {
   return { criada: true, novos: novos.length, acao_id: acao.id }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const pre = preflight(req)
   if (pre) return pre
 

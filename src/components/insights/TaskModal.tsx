@@ -22,7 +22,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { DataSegmentada } from '@/components/DataSegmentada'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Link2, Loader2 } from 'lucide-react'
+import { categorizarAcao } from '@/lib/queries/acoes'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -159,6 +160,49 @@ export function TaskModal({
   }
 
   const acaoId = task?.id ? Number(task.id) : undefined
+
+  /**
+   * "Buscar feedbacks relacionados".
+   *
+   * Existe porque uma acao pode terminar sem vinculo nenhum: o titulo estava
+   * vago demais quando ela nasceu, ou a IA nao achou nada livre naquele
+   * momento. Sem vinculo, a acao avanca de status e NINGUEM e avisado — o
+   * motor de retorno acha o destinatario justamente por `feedback_acao`.
+   *
+   * Passa `apenasVinculo`: categoria e prioridade ja estao decididas e a IA
+   * nao deve mexer nelas.
+   */
+  const [buscandoFeedbacks, setBuscandoFeedbacks] = useState(false)
+
+  const buscarFeedbacksRelacionados = async () => {
+    if (!acaoId) return
+    setBuscandoFeedbacks(true)
+    try {
+      const res = await categorizarAcao(acaoId, true)
+      const n = res?.feedbacks_vinculados ?? 0
+      if (n > 0) {
+        toast({
+          title: `${n} feedback${n > 1 ? "s" : ""} ligado${n > 1 ? "s" : ""}`,
+          description: "Quem escreveu vai ser avisado quando esta ação avançar de status.",
+        })
+      } else {
+        toast({
+          title: "Nenhum feedback novo",
+          description:
+            res?.motivo_sem_vinculo ??
+            "Não há feedback livre que esta ação resolva. Detalhar o plano ajuda a IA a reconhecê-los.",
+        })
+      }
+    } catch {
+      toast({
+        title: "Não consegui buscar agora",
+        description: "Tente de novo em instantes.",
+        variant: "destructive",
+      })
+    } finally {
+      setBuscandoFeedbacks(false)
+    }
+  }
   // Arquivada também não se edita, então o plano trava junto.
   const isConcluido = task?.status === 'CONCLUIDO' || somenteLeitura
 
@@ -289,14 +333,34 @@ export function TaskModal({
             </div>
           </div>
 
-          {task?.insight_id && (
-            <Link
-              to={`/feedbacks?insight_id=${task.insight_id}`}
-              className="text-sm text-[#1D4ED8] hover:underline font-medium"
-            >
-              Ver feedbacks relacionados
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {task?.insight_id && (
+              <Link
+                to={`/feedbacks?insight_id=${task.insight_id}`}
+                className="text-sm text-[#1D4ED8] hover:underline font-medium"
+              >
+                Ver feedbacks relacionados
+              </Link>
+            )}
+
+            {/* Só faz sentido em ação existente e que NÃO veio de insight: essa
+                já herdou os vínculos do insight de origem. */}
+            {acaoId && !task?.insight_id && !isConcluido && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={buscarFeedbacksRelacionados}
+                disabled={buscandoFeedbacks}
+              >
+                {buscandoFeedbacks
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Link2 className="h-3.5 w-3.5" />}
+                {buscandoFeedbacks ? 'Buscando…' : 'Buscar feedbacks relacionados'}
+              </Button>
+            )}
+          </div>
         </div>
         <DialogFooter className="sm:justify-between w-full flex-col-reverse sm:flex-row gap-2 sm:gap-0">
           {task && onDelete ? (
