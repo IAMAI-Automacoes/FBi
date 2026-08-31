@@ -18,7 +18,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarDays, Search, Folder, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { buscarFeedbacks, buscarCategoriasAtivas, FiltrosFeedback } from '@/lib/queries/feedbacks'
+import {
+  buscarFeedbacks,
+  contarFeedbacksPorCategoria,
+  FiltrosFeedback,
+} from '@/lib/queries/feedbacks'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 import { DataSegmentada } from '@/components/DataSegmentada'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
@@ -55,7 +59,7 @@ export default function Feedbacks() {
   const [feedbacks, setFeedbacks] = useState<any[]>([])
   const [totalFeedbacks, setTotalFeedbacks] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<string[]>([])
+  const [contagemCategorias, setContagemCategorias] = useState<Record<string, number>>({})
   const [periodoAberto, setPeriodoAberto] = useState(false)
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
@@ -147,11 +151,13 @@ export default function Feedbacks() {
     setSearchParams({})
   }
 
+  // A contagem acompanha o periodo e o sentimento (mas nao a categoria — ver
+  // `contarFeedbacksPorCategoria`), entao recalcula quando o filtro muda.
   useEffect(() => {
-    buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined)
-      .then(setCategoriasDisponiveis)
+    contarFeedbacksPorCategoria(filtros, usuario?.restaurante_id ?? undefined)
+      .then(setContagemCategorias)
       .catch(console.error)
-  }, [usuario?.restaurante_id])
+  }, [filtros, usuario?.restaurante_id])
 
   // Recarrega do zero — dispara sempre que os filtros mudam. NÃO depende de
   // `offset`: se dependesse, "Carregar mais" (que muda o offset) faria este
@@ -353,7 +359,8 @@ export default function Feedbacks() {
           </Select>
 
           <FiltroCategorias
-            disponiveis={categoriasDisponiveis}
+            contagens={contagemCategorias}
+            rotuloItens="feedbacks"
             selecionadas={filtros.categorias}
             onChange={(categorias) => setFiltros((prev) => ({ ...prev, categorias }))}
           />
@@ -379,7 +386,7 @@ export default function Feedbacks() {
     setExtra(barraFiltros)
     return () => setExtra(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros, periodoAberto, categoriasDisponiveis])
+  }, [filtros, periodoAberto, contagemCategorias])
 
   return (
     <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">

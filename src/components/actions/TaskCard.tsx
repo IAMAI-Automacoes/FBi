@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
+import { estiloCategoria } from '@/lib/categorias-feedback'
 
 interface TaskCardProps {
   // Linha de `acoes_operacionais` com apelidos do quadro; tipar por completo
@@ -166,14 +167,27 @@ export function TaskCard({
         </span>
       )}
 
-      <p
-        className={cn(
-          'text-[11px] font-medium mb-2 inline-flex px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md self-start',
-          isCompleted && 'bg-slate-100 text-slate-500',
-        )}
-      >
-        {task.categoria}
-      </p>
+      {/* Categoria com a cor e o ícone oficiais da paleta (mesma fonte que
+          /feedbacks e /insights usam). Antes era uma pílula azul fixa com o
+          nome escrito, igual para as 14 categorias — o dono não conseguia
+          bater o olho no quadro e saber do que cada ação tratava. */}
+      {task.categoria && (() => {
+        const estiloCat = estiloCategoria(task.categoria)
+        const IconeCat = estiloCat.icon
+        return (
+          <p
+            className={cn(
+              'text-[11px] font-medium mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md self-start border',
+              isCompleted
+                ? 'bg-slate-100 text-slate-500 border-slate-200'
+                : cn(estiloCat.corFundo, estiloCat.corTexto, estiloCat.corBorda),
+            )}
+          >
+            <IconeCat className="h-3 w-3 shrink-0" />
+            {task.categoria}
+          </p>
+        )
+      })()}
 
       {/* Mesmo destino do link nos Insights: os feedbacks que geraram o insight
           de onde esta ação nasceu. */}

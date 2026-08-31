@@ -38,7 +38,8 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { PlanoAcao } from '@/components/actions/PlanoAcao'
 import { Separator } from '@/components/ui/separator'
-import { CATEGORIAS_FEEDBACK } from '@/lib/categorias-feedback'
+import { CATEGORIAS_FEEDBACK, estiloCategoria } from '@/lib/categorias-feedback'
+import { cn } from '@/lib/utils'
 
 /** Formato que o modal recebe do quadro e devolve ao salvar. Mistura os campos
  *  da linha do banco com os apelidos que o TaskBoard já usava. */
@@ -253,11 +254,28 @@ export function TaskModal({
                 <SelectValue placeholder={task ? 'Selecione...' : 'IA decide automaticamente'} />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIAS_FEEDBACK.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
+                {/* Ícone + cor da paleta em cada opção: o dono reconhece a
+                    categoria pelo símbolo antes de ler, e é o mesmo visual que
+                    ele já vê no card e nos filtros. */}
+                {CATEGORIAS_FEEDBACK.map((cat) => {
+                  const estiloCat = estiloCategoria(cat)
+                  const IconeCat = estiloCat.icon
+                  return (
+                    <SelectItem key={cat} value={cat}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'flex h-4 w-4 items-center justify-center rounded-full text-white shrink-0',
+                            estiloCat.corSolida,
+                          )}
+                        >
+                          <IconeCat className="h-2.5 w-2.5" />
+                        </span>
+                        {cat}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>

@@ -111,3 +111,51 @@ export async function buscarCategoriasAtivas(restauranteId?: number) {
   if (error) throw error
   return [...new Set(data?.map((d) => d.categoria).filter(Boolean) as string[])].sort()
 }
+
+/**
+ * Quantos feedbacks cada categoria tem, respeitando o período/busca ativos.
+ *
+ * Alimenta o número que aparece à direita de cada categoria no filtro. Conta
+ * PONTOS SEPARADOS (`feedbacks_restaurante`), não mensagens originais: é o
+ * ponto que carrega a categoria, e uma mensagem que fala de comida e de
+ * ambiente deve somar 1 em cada uma — somar na mensagem inteira daria o número
+ * errado nas duas.
+ *
+ * Ignora de propósito o filtro de CATEGORIA: os números precisam continuar
+ * visíveis depois de o dono selecionar uma, senão o filtro mostraria "48" na
+ * escolhida e "0" em todas as outras assim que fosse usado.
+ */
+export async function contarFeedbacksPorCategoria(
+  filtros: FiltrosFeedback,
+  restauranteId?: number,
+): Promise<Record<string, number>> {
+  let query = supabase
+    .from('feedbacks_restaurante')
+    .select('categoria')
+    .not('categoria', 'is', null)
+
+  if (restauranteId) query = query.eq('restaurante_id', restauranteId)
+
+  if (filtros.datas) {
+    const ini = startOfDay(filtros.datas.from)
+    const fim = addDays(startOfDay(filtros.datas.to ?? filtros.datas.from), 1)
+    query = query.gte('created_at', ini.toISOString()).lt('created_at', fim.toISOString())
+  } else if (filtros.periodo !== 'all') {
+    const days = filtros.periodo === '7d' ? 7 : filtros.periodo === '30d' ? 30 : 90
+    query = query.gte('created_at', startOfDay(subDays(new Date(), days)).toISOString())
+  }
+
+  if (filtros.sentimento && filtros.sentimento !== 'all') {
+    query = query.ilike('sentimento', `%${filtros.sentimento}%`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+
+  const contagem: Record<string, number> = {}
+  for (const linha of data ?? []) {
+    const c = (linha as { categoria: string | null }).categoria
+    if (c) contagem[c] = (contagem[c] ?? 0) + 1
+  }
+  return contagem
+}

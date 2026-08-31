@@ -18,7 +18,6 @@ import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
-import { buscarCategoriasAtivas } from '@/lib/queries/feedbacks'
 import { PRIORIDADES } from '@/lib/prioridade'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
@@ -38,7 +37,6 @@ export default function Insights() {
   const [showOnlyPinned, setShowOnlyPinned] = useState(false)
 
   const [insights, setInsights] = useState<Insight[]>([])
-  const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
 
@@ -142,14 +140,24 @@ export default function Insights() {
     }
   }, [usuario])
 
-  // Mesma fonte de categorias que a página de Feedbacks (todas que o
-  // restaurante já usou, sem filtro de período) — pra o filtro ser
-  // literalmente idêntico nas duas telas, não só parecido visualmente.
-  useEffect(() => {
-    buscarCategoriasAtivas(usuario?.restaurante_id ?? undefined)
-      .then(setCategories)
-      .catch(console.error)
-  }, [usuario?.restaurante_id])
+  // A contagem por categoria sai dos insights que ja estao em memoria — nao ha
+  // consulta a fazer. Conta sobre a lista aplicando os OUTROS filtros
+  // (prioridade, fixados) mas nao o de categoria: senao, ao escolher uma, todas
+  // as demais mostrariam zero e o filtro deixaria de informar.
+  const contagemCategorias = useMemo(() => {
+    const conta: Record<string, number> = {}
+    for (const i of insights) {
+      const prioMatch =
+        filterPriority === 'Todos' ||
+        i.prioridade === filterPriority ||
+        (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
+      const pinMatch = !showOnlyPinned || !!i.fixado
+      if (!prioMatch || !pinMatch) continue
+      const c = i.categoria
+      if (c) conta[c] = (conta[c] ?? 0) + 1
+    }
+    return conta
+  }, [insights, filterPriority, showOnlyPinned])
 
   const handleGerarInsights = async () => {
     if (!usuario?.restaurante_id) return
@@ -375,7 +383,8 @@ export default function Insights() {
             </div>
 
             <FiltroCategorias
-              disponiveis={categories}
+              contagens={contagemCategorias}
+              rotuloItens="insights"
               selecionadas={filterCategories}
               onChange={setFilterCategories}
             />
@@ -510,7 +519,6 @@ export default function Insights() {
     filterPriority,
     filterCategories,
     showOnlyPinned,
-    categories,
     generating,
     configOpen,
     feedbacksPorAnalise,
