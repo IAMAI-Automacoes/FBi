@@ -138,7 +138,7 @@ export function TaskCard({
               <TooltipTrigger asChild>
                 <span
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center w-5 h-5 shrink-0 text-green-700 bg-green-50 border border-green-200 rounded-full cursor-help"
+                  className="inline-flex items-center justify-center w-5 h-5 shrink-0 text-green-700 bg-green-50 border border-green-200 rounded-full cursor-default"
                 >
                   <Zap className="w-3 h-3" />
                 </span>

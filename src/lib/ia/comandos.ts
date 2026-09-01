@@ -7,20 +7,26 @@
  * daquele tipo (cada um com seu prompt focado e só as memórias necessárias),
  * executa, e então devolve um RELATÓRIO para a IA narrar o que foi feito.
  *
+ * ## O que o assistente NÃO faz
+ *
+ * Criar, editar e excluir ação e insight saíram do protocolo. Esses itens são
+ * o registro do que o restaurante decidiu fazer sobre o que os clientes
+ * disseram — quem decide isso é o dono, no quadro, onde ele vê o que já
+ * existe antes de mexer. Um item nascido no meio de uma conversa entra sem
+ * essa vista, e o chat vira uma segunda porta de escrita para os mesmos
+ * dados, com regras próprias.
+ *
+ * O que sobrou são as alterações sobre o próprio assistente e o perfil do
+ * restaurante (`mudar_config`, `anotar`) e as buscas de material. Sobre ação e
+ * insight o assistente lê e conversa — e só.
+ *
  * Módulo puro de propósito: sem imports, para o parser ser testável isolado.
  */
 
 export type TipoComando =
   // alterações — um especialista para cada
-  | 'criar_acao'
-  | 'editar_acao'
-  | 'excluir_acao'
-  | 'criar_insight'
-  | 'editar_insight'
-  | 'excluir_insight'
   | 'mudar_config'
   | 'anotar'
-  | 'formulario'
   // buscas de material — um especialista para cada
   | 'pesquisar'
   | 'abrir'
@@ -32,9 +38,7 @@ export interface Comando {
 }
 
 const TIPOS: TipoComando[] = [
-  'criar_acao', 'editar_acao', 'excluir_acao',
-  'criar_insight', 'editar_insight', 'excluir_insight',
-  'mudar_config', 'anotar', 'formulario',
+  'mudar_config', 'anotar',
   'pesquisar', 'abrir', 'conhecimento',
 ]
 
@@ -45,7 +49,7 @@ export function ehComandoMaterial(t: TipoComando): boolean {
 
 /** Comandos que alteram o sistema (especialista monta, dono confirma/desfaz). */
 export function ehComandoOperacao(t: TipoComando): boolean {
-  return !ehComandoMaterial(t) && t !== 'formulario'
+  return !ehComandoMaterial(t)
 }
 
 /**

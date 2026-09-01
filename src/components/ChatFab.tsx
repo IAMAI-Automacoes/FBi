@@ -53,12 +53,10 @@ import { cn } from '@/lib/utils'
 import { FormattedMessage, parseInline, LINK_ESCURO } from '@/lib/chat-utils'
 import { useChat, AnexoMensagem } from '@/hooks/use-chat'
 import {
-  AcaoAgente, FormularioIA as TipoFormulario, RegistroAcao,
+  AcaoAgente, RegistroAcao,
   ACOES_DESTRUTIVAS, executarAcao, reverterAcao,
 } from '@/lib/queries/agente-ia'
 import { ConfirmacaoAcao } from '@/components/chat/ConfirmacaoAcao'
-import { FormularioInline } from '@/components/chat/FormularioInline'
-import { montarAcao, montarInsight } from '@/lib/ia/agentes'
 import { VisualizadorAnexo, AnexoVisivel } from '@/components/chat/VisualizadorAnexo'
 import { extrairTextoDePdf } from '@/lib/queries/conhecimento'
 import { buscarMemoria, FatoMemoria } from '@/lib/queries/memoria-assistente'
@@ -100,12 +98,6 @@ const SUGGESTIONS = [
 
 /** Texto do botão que abre a confirmação, por tipo de alteração. */
 const ROTULO_ACAO: Record<string, string> = {
-  criar_acao: 'Criar esta ação',
-  editar_acao: 'Editar a ação',
-  excluir_acao: 'Excluir a ação',
-  criar_insight: 'Criar este insight',
-  editar_insight: 'Editar o insight',
-  excluir_insight: 'Arquivar o insight',
   atualizar_config: 'Alterar a configuração',
   criar_anotacao: 'Guardar esta anotação',
   excluir_anotacao: 'Apagar a anotação',
@@ -201,7 +193,7 @@ export function ChatFab({
     messages, loading, buscandoWeb, sessaoId, enviar, adicionarMensagemUsuario,
     removerUltimaMensagem, excluirMensagem, rebobinarPara, anexarProposta,
     marcarPropostaAplicada, desmarcarPropostaPorRegistro, anexarRegistro, removerRegistro,
-    registrarTroca, setLoading, carregarHistorico, novaConversa, mudarSessao,
+    carregarHistorico, novaConversa, mudarSessao,
     uso, creditoEsgotado,
   } = useChat('global')
 
@@ -250,11 +242,10 @@ export function ChatFab({
   // Fluxo do agente
   // Proposta aberta no popup: guarda a ação e de qual mensagem ela veio
   const [popup, setPopup] = useState<{ acao: AcaoAgente; uid: string } | null>(null)
-  const [formularioPendente, setFormularioPendente] = useState<(TipoFormulario & { acao_pretendida?: string }) | null>(null)
   // Ações já aplicadas nesta conversa: ficam marcadas abaixo do chat
   const [registrosFeitos, setRegistrosFeitos] = useState<RegistroAcao[]>([])
   // Enquanto um popup está aberto, o Sheet do chat não pode fechar
-  const temPopupAberto = !!popup || !!formularioPendente
+  const temPopupAberto = !!popup
   const [modoAcao, setModoAcao] = useState<'perguntar' | 'automatico'>('perguntar')
   // ref espelha o modo: handleSend captura o state pelo closure e leria o valor
   // antigo na primeira mensagem depois que o modo é carregado do banco
@@ -906,9 +897,7 @@ export function ChatFab({
       return
     }
 
-    if (result?.formulario) {
-      setFormularioPendente(result.formulario)
-    } else if (result?.acao) {
+    if (result?.acao) {
       // Em qualquer modo a proposta fica PRESA à resposta — o botão nunca some.
       // Excluir nunca roda sozinho, nem no modo automático.
       const destrutiva = ACOES_DESTRUTIVAS.includes(result.acao.tipo)
@@ -1021,56 +1010,6 @@ export function ChatFab({
     })
   }
 
-  /** Respostas do formulário voltam como mensagem, para a IA agir com os dados. */
-  /**
-   * Responder o formulário NÃO passa pelo redator: os agentes já têm tudo para
-   * montar a ação. Antes, reenviávamos um texto de "pergunta: resposta" pelo chat
-   * — virava mensagem feia, reprocessava tudo e às vezes dava erro e sumia.
-   * Agora monta a ação direto e mostra a proposta, com mensagens limpas.
-   */
-  const responderFormulario = async (respostas: Record<string, string>) => {
-    const form = formularioPendente
-    setFormularioPendente(null)
-    if (!form) return
-
-    const preenchidos = form.campos.filter((c) => (respostas[c.nome] || '').trim())
-    if (!preenchidos.length) return
-
-    // Mensagem do usuário: curta e legível, só os valores respondidos
-    const textoUsuario = preenchidos.map((c) => respostas[c.nome].trim()).join(' · ')
-    // Pedido para o agente: junta pergunta + resposta para ele extrair os campos
-    const pedido = preenchidos.map((c) => `${c.label}: ${respostas[c.nome].trim()}`).join('. ')
-    const ehInsight = form.acao_pretendida === 'criar_insight'
-
-    setLoading(true)
-    try {
-      const acao = ehInsight ? await montarInsight(pedido) : await montarAcao(pedido)
-      if (!acao) {
-        await registrarTroca(
-          textoUsuario,
-          'Consegui anotar, mas não montei a proposta. Pode me dar um pouco mais de detalhe?',
-        )
-        return
-      }
-      const destrutiva = ACOES_DESTRUTIVAS.includes(acao.tipo)
-      if (modoAcaoRef.current === 'automatico' && !destrutiva) {
-        await registrarTroca(textoUsuario, `Pronto! ${acao.descricao}.`)
-        const puid = anexarProposta(acao) // botão fica preso e vira verde ao aplicar
-        await aplicarAcao(acao, 'automatico', undefined, puid || undefined)
-      } else {
-        await registrarTroca(
-          textoUsuario,
-          ehInsight ? 'Preparei o insight. Confira e confirme:' : 'Preparei a ação. Confira e confirme:',
-        )
-        const puid = anexarProposta(acao)
-        if (puid) setPopup({ acao, uid: puid })
-      }
-    } catch {
-      await registrarTroca(textoUsuario, 'Desculpe, tive um problema ao montar. Pode tentar de novo?')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (ocultar) return null
 
@@ -1749,14 +1688,6 @@ export function ChatFab({
                   </div>
                 )}
 
-                {formularioPendente ? (
-                  <FormularioInline
-                    formulario={formularioPendente}
-                    onEnviar={responderFormulario}
-                    onCancelar={() => setFormularioPendente(null)}
-                  />
-                ) : (
-                <>
                 {/* Crédito do ciclo: só aparece quando já passou da metade, para
                     não poluir a conversa de quem mal usou. */}
                 {uso && uso.limite > 0 && uso.gasto / uso.limite >= 0.5 && (
@@ -1852,8 +1783,6 @@ export function ChatFab({
                     </Button>
                   </div>
                 </div>
-                </>
-                )}
               </div>
             </>
           )}

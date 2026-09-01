@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { CAMPOS_CONFIG, campoValido, atualizarCampoConfig } from '@/lib/queries/config-update'
-import { vincularFeedbacksDaAcao } from '@/lib/queries/acoes'
 
 /**
  * Motor de ações do assistente.
@@ -19,21 +18,21 @@ import { vincularFeedbacksDaAcao } from '@/lib/queries/acoes'
  * Regra de segurança: feedbacks de clientes são registro histórico e NUNCA
  * podem ser criados, editados ou apagados pela IA. Se pudessem, todos os
  * números do sistema perderiam credibilidade.
+ *
+ * Ação e insight saíram daqui pelo mesmo motivo, um passo adiante: são o
+ * registro do que o restaurante DECIDIU fazer sobre esses números. Quem
+ * decide é o dono, no quadro, olhando o que já existe — não uma frase
+ * solta no meio de uma conversa. Sobrou o que é do próprio assistente
+ * (anotações) e do perfil do restaurante (configuração).
  */
 
 export type TipoAcao =
-  | 'criar_acao'
-  | 'editar_acao'
-  | 'excluir_acao'
-  | 'criar_insight'
-  | 'editar_insight'
-  | 'excluir_insight'
   | 'atualizar_config'
   | 'criar_anotacao'
   | 'excluir_anotacao'
 
 /** Ações destrutivas nunca rodam sozinhas, mesmo no modo automático. */
-export const ACOES_DESTRUTIVAS: TipoAcao[] = ['excluir_acao', 'excluir_insight', 'excluir_anotacao']
+export const ACOES_DESTRUTIVAS: TipoAcao[] = ['excluir_anotacao']
 
 export interface AcaoAgente {
   tipo: TipoAcao
@@ -53,31 +52,6 @@ export interface RegistroAcao {
   created_at: string
   alvo_tabela: string | null
   alvo_id: string | null
-}
-
-export interface CampoFormulario {
-  nome: string
-  label: string
-  tipo: 'escolha' | 'multipla' | 'texto' | 'numero' | 'data'
-  opcoes?: string[]
-  obrigatorio?: boolean
-}
-
-export interface FormularioIA {
-  titulo: string
-  campos: CampoFormulario[]
-}
-
-const PRIORIDADES = ['URGENTE', 'IMPORTANTE', 'OBSERVACAO']
-const STATUS_ACAO = ['SUGERIDA', 'PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDO']
-
-function normalizarPrioridade(v: any): string {
-  const p = String(v ?? '').toUpperCase().replace('Ç', 'C').replace('Ã', 'A')
-  return PRIORIDADES.includes(p) ? p : 'IMPORTANTE'
-}
-function normalizarStatus(v: any): string {
-  const s = String(v ?? '').toUpperCase()
-  return STATUS_ACAO.includes(s) ? s : 'PENDENTE'
 }
 
 async function registrar(
@@ -109,16 +83,6 @@ async function registrar(
 export function validarAcao(acao: AcaoAgente): string | null {
   const d = acao.dados || {}
   switch (acao.tipo) {
-    case 'criar_acao':
-      if (!String(d.titulo_acao || '').trim()) return 'A ação precisa de um título.'
-      return null
-    case 'criar_insight':
-      if (!String(d.titulo || '').trim()) return 'O insight precisa de um título.'
-      return null
-    case 'editar_acao':
-    case 'excluir_acao':
-    case 'editar_insight':
-    case 'excluir_insight':
     case 'excluir_anotacao':
       if (!d.id) return 'Não identifiquei qual item alterar.'
       return null
@@ -146,106 +110,6 @@ export async function executarAcao(
   const d = acao.dados || {}
 
   switch (acao.tipo) {
-    case 'criar_acao': {
-      const linha = {
-        restaurante_id: restauranteId,
-        titulo_acao: String(d.titulo_acao).trim(),
-        plano_detalhado: String(d.plano_detalhado ?? '').trim(),
-        prioridade: normalizarPrioridade(d.prioridade),
-        categoria: String(d.categoria ?? 'Outros'),
-        status: normalizarStatus(d.status ?? 'PENDENTE'),
-        texto: 'Criada pelo assistente de IA a pedido do dono.',
-      }
-      const { data, error } = await db.from('acoes_operacionais').insert(linha).select().single()
-      if (error) throw error
-
-      // Liga a ação aos feedbacks livres que ela resolve.
-      //
-      // O assistente sempre preenche categoria e prioridade, então antes desta
-      // chamada nenhuma ação criada pelo chat recebia vínculo — e ação sem
-      // vínculo avança de status sem avisar cliente nenhum, porque o motor de
-      // retorno acha o destinatário por `feedback_acao`.
-      //
-      // Sem await: o chat responde na hora.
-      vincularFeedbacksDaAcao(Number(data.id)).catch(() => {
-        // Falha aqui não invalida a ação criada; o dono pode reprocessar pelo
-        // botão "Procurar mais feedbacks" nos detalhes da ação.
-      })
-      return registrar(restauranteId, acao, modo, { tabela: 'acoes_operacionais', id: String(data.id) }, null, data)
-    }
-
-    case 'editar_acao': {
-      const { data: antes, error: e1 } = await supabase
-        .from('acoes_operacionais').select('*').eq('id', d.id).single()
-      if (e1) throw e1
-      const campos: Record<string, any> = {}
-      if (d.titulo_acao !== undefined) campos.titulo_acao = String(d.titulo_acao)
-      if (d.plano_detalhado !== undefined) campos.plano_detalhado = String(d.plano_detalhado)
-      if (d.prioridade !== undefined) campos.prioridade = normalizarPrioridade(d.prioridade)
-      if (d.categoria !== undefined) campos.categoria = String(d.categoria)
-      if (d.status !== undefined) campos.status = normalizarStatus(d.status)
-      if (!Object.keys(campos).length) throw new Error('Nada para alterar nessa ação.')
-
-      const { data: depois, error } = await db
-        .from('acoes_operacionais').update(campos).eq('id', d.id).select().single()
-      if (error) throw error
-      return registrar(restauranteId, acao, modo, { tabela: 'acoes_operacionais', id: String(d.id) }, antes, depois)
-    }
-
-    case 'excluir_acao': {
-      const { data: antes, error: e1 } = await supabase
-        .from('acoes_operacionais').select('*').eq('id', d.id).single()
-      if (e1) throw e1
-      const { error } = await supabase.from('acoes_operacionais').delete().eq('id', d.id)
-      if (error) throw error
-      return registrar(restauranteId, acao, modo, { tabela: 'acoes_operacionais', id: String(d.id) }, antes, null)
-    }
-
-    case 'criar_insight': {
-      const linha = {
-        restaurante_id: restauranteId,
-        titulo: String(d.titulo).trim(),
-        descricao: String(d.descricao ?? '').trim(),
-        sugestao: String(d.sugestao ?? '').trim(),
-        prioridade: normalizarPrioridade(d.prioridade),
-        categoria: String(d.categoria ?? 'Outros'),
-        gerado_por: 'ia', // CHECK aceita apenas 'ia' ou 'manual'
-        ativo: true,
-      }
-      const { data, error } = await db.from('insights').insert(linha).select().single()
-      if (error) throw error
-      return registrar(restauranteId, acao, modo, { tabela: 'insights', id: String(data.id) }, null, data)
-    }
-
-    case 'editar_insight': {
-      const { data: antes, error: e1 } = await supabase
-        .from('insights').select('*').eq('id', d.id).single()
-      if (e1) throw e1
-      const campos: Record<string, any> = {}
-      if (d.titulo !== undefined) campos.titulo = String(d.titulo)
-      if (d.descricao !== undefined) campos.descricao = String(d.descricao)
-      if (d.sugestao !== undefined) campos.sugestao = String(d.sugestao)
-      if (d.prioridade !== undefined) campos.prioridade = normalizarPrioridade(d.prioridade)
-      if (d.categoria !== undefined) campos.categoria = String(d.categoria)
-      if (!Object.keys(campos).length) throw new Error('Nada para alterar nesse insight.')
-
-      const { data: depois, error } = await db
-        .from('insights').update(campos).eq('id', d.id).select().single()
-      if (error) throw error
-      return registrar(restauranteId, acao, modo, { tabela: 'insights', id: String(d.id) }, antes, depois)
-    }
-
-    case 'excluir_insight': {
-      // Insight não é apagado, é desativado: preserva o histórico de análise
-      const { data: antes, error: e1 } = await supabase
-        .from('insights').select('*').eq('id', d.id).single()
-      if (e1) throw e1
-      const { data: depois, error } = await supabase
-        .from('insights').update({ ativo: false }).eq('id', d.id).select().single()
-      if (error) throw error
-      return registrar(restauranteId, acao, modo, { tabela: 'insights', id: String(d.id) }, antes, depois)
-    }
-
     case 'atualizar_config': {
       const campo = String(d.campo)
       const { data: r } = await supabase

@@ -1,6 +1,6 @@
 import { enviarMensagem, enviarMensagemComFontes } from '@/lib/openrouter'
 import { CAMPOS_CONFIG, anexarTextoLivre } from '@/lib/queries/config-update'
-import { AcaoAgente, FormularioIA, validarAcao } from '@/lib/queries/agente-ia'
+import { AcaoAgente, validarAcao } from '@/lib/queries/agente-ia'
 import { Comando } from './comandos'
 import { montarPrompt } from './prompt-store'
 import { paramsDoAgente } from './params'
@@ -247,221 +247,6 @@ Se nenhum servir, devolva { "uteis": [] }.`,
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 6. AGENTES ESCRITORES — sem memória de conversa
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Monta os campos de uma ação nova a partir do pedido. */
-export async function montarAcao(pedido: string): Promise<AcaoAgente | null> {
-  try {
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: montarPrompt('ag_montar_acao', `Você monta os campos de UMA ação operacional de restaurante. Só isso.
-Assunto da ação: "${pedido}"
-
-JSON: { "titulo_acao": "curto, direto ao ponto do assunto",
-"plano_detalhado": "passos práticos para resolver ESSE assunto",
-"prioridade": "URGENTE|IMPORTANTE|OBSERVACAO", "categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros",
-"status": "PENDENTE" }
-
-Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
-Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`, { pedido }),
-        },
-        { role: 'user', content: 'Monte no formato JSON pedido.' },
-      ],
-      paramsDoAgente('montar_acao_insight', { ...JSON_OPTS, max_tokens: 500 }),
-      'montar_acao_insight',
-    )
-    const d = parse(res)
-    if (!d?.titulo_acao) return null
-    const a: AcaoAgente = {
-      tipo: 'criar_acao',
-      dados: d,
-      descricao: `Criar a ação "${d.titulo_acao}"`,
-    }
-    return validarAcao(a) ? null : a
-  } catch {
-    return null
-  }
-}
-
-/**
- * Agente de UMA tarefa: existe um assunto concreto no pedido de criar?
- * Separado da montagem para não inventar assunto quando não há (era o que
- * fazia a IA criar "ação sobre formulários" a partir de um pedido meta).
- */
-export async function extrairAssunto(
-  tipo: 'acao' | 'insight',
-  pedido: string,
-): Promise<{ temAssunto: boolean; assunto: string }> {
-  try {
-    const alvo = tipo === 'acao' ? 'uma AÇÃO operacional' : 'um INSIGHT'
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: montarPrompt('ag_extrair_assunto', `O dono pediu para criar ${alvo}. Sua única tarefa: dizer se o pedido já
-contém um ASSUNTO CONCRETO — um problema, tarefa ou tema real do restaurante.
-
-Pedido: "${pedido}"
-
-Responda APENAS com este JSON:
-{ "temAssunto": true|false, "assunto": "o tema, em poucas palavras" }
-
-temAssunto = false quando o pedido:
-- é genérico ("crie uma ação", "cria um insight", "faz uma tarefa");
-- é meta ou sobre o próprio sistema ("faça aparecer o formulário", "me mostra um exemplo");
-- não descreve nada concreto do restaurante.
-
-NUNCA invente um assunto. Se não houver um assunto real e específico no pedido,
-temAssunto é false e "assunto" fica vazio.`, { alvo, pedido }),
-        },
-        { role: 'user', content: 'Responda no formato JSON pedido.' },
-      ],
-      paramsDoAgente('extrair_assunto', { ...JSON_OPTS, max_tokens: 120 }),
-      'extrair_assunto',
-    )
-    const d = parse(res)
-    const assunto = String(d?.assunto || '').trim()
-    return { temAssunto: !!d?.temAssunto && assunto.length > 2, assunto }
-  } catch {
-    return { temAssunto: false, assunto: '' }
-  }
-}
-
-/**
- * Formulários de criação são FIXOS — sem IA. Perguntar sempre a mesma coisa é
- * mais confiável e não custa chamada. Campo aberto para o assunto; alternativas
- * quando o valor é de um conjunto conhecido (prioridade).
- */
-export const FORM_CRIAR_ACAO: FormularioIA & { acao_pretendida: string } = {
-  titulo: 'Vamos criar a ação. Me conta:',
-  acao_pretendida: 'criar_acao',
-  campos: [
-    { nome: 'assunto', label: 'O que precisa ser feito?', tipo: 'texto', obrigatorio: true },
-    {
-      nome: 'prioridade',
-      label: 'Qual a prioridade?',
-      tipo: 'escolha',
-      opcoes: ['Urgente', 'Importante', 'Observação'],
-      obrigatorio: false,
-    },
-  ],
-}
-
-export const FORM_CRIAR_INSIGHT: FormularioIA & { acao_pretendida: string } = {
-  titulo: 'Vamos criar o insight. Me conta:',
-  acao_pretendida: 'criar_insight',
-  campos: [{ nome: 'assunto', label: 'Sobre o que é o insight?', tipo: 'texto', obrigatorio: true }],
-}
-
-/**
- * Agente de UMA tarefa: montar as PERGUNTAS PRECISAS que ainda faltam para
- * completar o pedido. Diferente dos formulários fixos, ele lê o que o dono já
- * disse e pergunta só o que falta (se a prioridade já veio, não pergunta de novo).
- * Se falhar, o coordenador cai no formulário fixo — nunca fica sem formulário.
- */
-export async function montarPerguntas(
-  dominio: 'acao' | 'insight',
-  pedido: string,
-): Promise<(FormularioIA & { acao_pretendida: string }) | null> {
-  const alvo = dominio === 'acao' ? 'uma AÇÃO operacional' : 'um INSIGHT'
-  const acao_pretendida = dominio === 'acao' ? 'criar_acao' : 'criar_insight'
-  try {
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: `O dono quer criar ${alvo}, mas o pedido está incompleto. Sua única
-tarefa: montar as PERGUNTAS que ainda faltam para completar — nada além disso.
-
-Pedido dele: "${pedido}"
-
-Regras:
-- Pergunte só o que FALTA. Se algo já foi dito no pedido, NÃO pergunte de novo.
-- No máximo 3 perguntas. Uma pergunta por campo.
-- Se a resposta é de um conjunto fixo, use "tipo":"escolha" com "opcoes". Se é
-  texto livre (descrição, o que fazer), use "tipo":"texto" sem opções.
-- A primeira pergunta deve capturar o ASSUNTO principal ("o que precisa ser feito?"
-  para ação; "sobre o que é?" para insight), a menos que já esteja claro no pedido.
-- Para prioridade, use opcoes: ["Urgente","Importante","Observação"].
-- Perguntas curtas e diretas, em português do Brasil. Não fale do sistema/chat.
-
-Responda APENAS com este JSON:
-{ "titulo": "frase curta de abertura",
-  "campos": [ { "nome": "chave_curta", "label": "a pergunta", "tipo": "texto|escolha",
-                "opcoes": ["A","B"], "obrigatorio": true|false } ] }`,
-        },
-        { role: 'user', content: 'Monte as perguntas no formato JSON pedido.' },
-      ],
-      paramsDoAgente('montar_perguntas', { ...JSON_OPTS, max_tokens: 500 }),
-      'montar_perguntas',
-    )
-    const d = parse(res)
-    if (!d || !Array.isArray(d.campos) || d.campos.length === 0) return null
-    const campos = d.campos
-      .slice(0, 3)
-      .map((c: any, i: number) => {
-        const temOpcoes = Array.isArray(c.opcoes) && c.opcoes.length > 0
-        return {
-          nome: String(c.nome || `campo${i}`).trim() || `campo${i}`,
-          label: String(c.label || '').trim(),
-          tipo: temOpcoes ? ('escolha' as const) : ('texto' as const),
-          opcoes: temOpcoes ? c.opcoes.map(String).slice(0, 6) : undefined,
-          obrigatorio: c.obrigatorio !== false,
-        }
-      })
-      .filter((c: any) => c.label.length > 1)
-    if (!campos.length) return null
-    // Garante que o primeiro campo é sempre obrigatório (o assunto)
-    campos[0].obrigatorio = true
-    return {
-      titulo: String(d.titulo || (dominio === 'acao' ? 'Vamos criar a ação. Me conta:' : 'Vamos criar o insight. Me conta:')),
-      acao_pretendida,
-      campos,
-    }
-  } catch {
-    return null
-  }
-}
-
-/** Monta os campos de um insight novo. */
-export async function montarInsight(pedido: string): Promise<AcaoAgente | null> {
-  try {
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: montarPrompt('ag_montar_insight', `Você monta os campos de UM insight de restaurante. Só isso.
-Assunto do insight: "${pedido}"
-
-JSON: { "titulo": "curto, sobre ESSE assunto", "descricao": "o que foi observado",
-"sugestao": "o que fazer", "prioridade": "URGENTE|IMPORTANTE|OBSERVACAO",
-"categoria": "Comida|Bebidas|Atendimento|Ambiente|Limpeza|Preço|Tempo de Espera|Reserva|Estacionamento|Acessibilidade|Música/Som|Cardápio/Variedade|Higiene|Outros" }
-
-Fique estritamente no assunto acima — não invente outro tema nem fale do sistema/chat.
-Sem prioridade dita, use IMPORTANTE. Português do Brasil. Nunca deixe campo vazio.`, { pedido }),
-        },
-        { role: 'user', content: 'Monte no formato JSON pedido.' },
-      ],
-      paramsDoAgente('montar_acao_insight', { ...JSON_OPTS, max_tokens: 500 }),
-      'montar_acao_insight',
-    )
-    const d = parse(res)
-    if (!d?.titulo) return null
-    const a: AcaoAgente = {
-      tipo: 'criar_insight',
-      dados: d,
-      descricao: `Criar o insight "${d.titulo}"`,
-    }
-    return validarAcao(a) ? null : a
-  } catch {
-    return null
-  }
-}
-
 /** Decide campo + valor de uma mudança no perfil. */
 export async function montarConfig(
   pedido: string,
@@ -510,134 +295,17 @@ Devolva null se for pergunta, ou se o valor for igual ao atual, ou se nada corre
   }
 }
 
-/**
- * Agente de UMA tarefa: qual item da lista o dono quer? Recebe só id + título
- * (não os campos todos), para focar em casar o pedido com o item certo.
- */
-export async function identificarItem(
-  pedido: string,
-  itens: Array<Record<string, any>>,
-): Promise<string | null> {
-  if (!itens.length) return null
-  try {
-    const lista = itens.map((i) => ({ id: i.id, titulo: i.titulo_acao || i.titulo }))
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: montarPrompt('ag_identificar_item', `Qual item da lista o dono está mencionando? Só isso.
-
-Lista: ${JSON.stringify(lista)}
-Pedido dele: "${pedido}"
-
-Responda APENAS com este JSON: { "id": "<id exato da lista, ou null>" }
-Use o id EXATO de um item. Se nenhum corresponder claramente ao pedido, devolva null.
-Não invente id.`, { lista: JSON.stringify(lista), pedido }),
-        },
-        { role: 'user', content: 'Responda no formato JSON pedido.' },
-      ],
-      paramsDoAgente('identificar_item', { ...JSON_OPTS, max_tokens: 60 }),
-      'identificar_item',
-    )
-    const d = parse(res)
-    const id = d?.id ? String(d.id) : null
-    return id && itens.some((i) => String(i.id) === id) ? id : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Agente de UMA tarefa: dado o item já identificado, quais campos mudam?
- * Recebe o item concreto, não a lista inteira — sem chance de trocar de alvo.
- */
-async function montarMudanca(
-  pedido: string,
-  alvo: 'acao' | 'insight',
-  item: Record<string, any>,
-): Promise<Record<string, any> | null> {
-  try {
-    const campos =
-      alvo === 'acao'
-        ? '"titulo_acao", "plano_detalhado", "prioridade" (URGENTE|IMPORTANTE|OBSERVACAO), "categoria", "status" (SUGERIDA|PENDENTE|EM_ANDAMENTO|CONCLUIDO)'
-        : '"titulo", "descricao", "sugestao", "prioridade" (URGENTE|IMPORTANTE|OBSERVACAO), "categoria"'
-    const res = await enviarMensagem(
-      [
-        {
-          role: 'system',
-          content: montarPrompt('ag_montar_mudanca', `O dono quer alterar ESTE ${alvo === 'acao' ? 'ação' : 'insight'}:
-${JSON.stringify(item)}
-
-Pedido dele: "${pedido}"
-
-Responda APENAS com este JSON: { "campos": { ...só os campos que mudam } }
-Campos possíveis: ${campos}
-Inclua SOMENTE o que o dono pediu para mudar, com o valor novo. Não repita o que já está
-igual. Se não der para entender o que muda, devolva { "campos": {} }.`, {
-            alvo: alvo === 'acao' ? 'ação' : 'insight',
-            item: JSON.stringify(item),
-            pedido,
-            campos,
-          }),
-        },
-        { role: 'user', content: 'Responda no formato JSON pedido.' },
-      ],
-      paramsDoAgente('montar_mudanca', { ...JSON_OPTS, max_tokens: 300 }),
-      'montar_mudanca',
-    )
-    const d = parse(res)
-    return d?.campos && typeof d.campos === 'object' && Object.keys(d.campos).length ? d.campos : null
-  } catch {
-    return null
-  }
-}
-
-/** Coordena identificação + mudança para editar/excluir um item existente. */
-export async function montarEdicao(
-  pedido: string,
-  alvo: 'acao' | 'insight',
-  operacao: 'editar' | 'excluir',
-  itens: Array<Record<string, any>>,
-): Promise<AcaoAgente | null> {
-  const id = await identificarItem(pedido, itens)
-  if (!id) return null
-  const item = itens.find((i) => String(i.id) === id)!
-  const rotulo = item.titulo_acao || item.titulo || 'item'
-
-  if (operacao === 'excluir') {
-    const a: AcaoAgente = {
-      tipo: alvo === 'acao' ? 'excluir_acao' : 'excluir_insight',
-      dados: { id },
-      descricao: `${alvo === 'acao' ? 'Excluir a ação' : 'Arquivar o insight'} "${rotulo}"`,
-    }
-    return validarAcao(a) ? null : a
-  }
-
-  const campos = await montarMudanca(pedido, alvo, item)
-  if (!campos) return null
-  const a: AcaoAgente = {
-    tipo: alvo === 'acao' ? 'editar_acao' : 'editar_insight',
-    dados: { id, ...campos },
-    descricao: `Alterar ${alvo === 'acao' ? 'a ação' : 'o insight'} "${rotulo}"`,
-  }
-  return validarAcao(a) ? null : a
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. DESPACHANTE — recebe o comando da IA principal e chama o especialista certo
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ContextoComando {
   configAtual: Record<string, unknown>
-  acoes: Array<Record<string, any>>
-  insights: Array<Record<string, any>>
 }
 
 export interface ResultadoComando {
   /** Alteração montada pelo especialista, pronta para confirmar ou aplicar. */
   acao: AcaoAgente | null
-  /** Formulário quando falta informação (ex.: criar sem assunto concreto). */
-  formulario: (FormularioIA & { acao_pretendida?: string }) | null
 }
 
 /**
@@ -649,32 +317,8 @@ export async function despacharOperacao(
   cmd: Comando,
   ctx: ContextoComando,
 ): Promise<ResultadoComando> {
-  const so = (acao: AcaoAgente | null): ResultadoComando => ({ acao, formulario: null })
+  const so = (acao: AcaoAgente | null): ResultadoComando => ({ acao })
   switch (cmd.tipo) {
-    case 'criar_acao': {
-      const { temAssunto, assunto } = await extrairAssunto('acao', cmd.arg)
-      if (!temAssunto) return { acao: null, formulario: (await montarPerguntas('acao', cmd.arg)) ?? FORM_CRIAR_ACAO }
-      const pedido = assunto || cmd.arg
-      // Retry uma vez: o modelo grátis falha de forma transitória. Se ainda assim
-      // não montar, cai no formulário — criar com assunto nunca vira "falhou".
-      const acao = (await montarAcao(pedido)) ?? (await montarAcao(pedido))
-      return acao ? so(acao) : { acao: null, formulario: FORM_CRIAR_ACAO }
-    }
-    case 'criar_insight': {
-      const { temAssunto, assunto } = await extrairAssunto('insight', cmd.arg)
-      if (!temAssunto) return { acao: null, formulario: (await montarPerguntas('insight', cmd.arg)) ?? FORM_CRIAR_INSIGHT }
-      const pedido = assunto || cmd.arg
-      const acao = (await montarInsight(pedido)) ?? (await montarInsight(pedido))
-      return acao ? so(acao) : { acao: null, formulario: FORM_CRIAR_INSIGHT }
-    }
-    case 'editar_acao':
-      return so(await montarEdicao(cmd.arg, 'acao', 'editar', ctx.acoes))
-    case 'excluir_acao':
-      return so(await montarEdicao(cmd.arg, 'acao', 'excluir', ctx.acoes))
-    case 'editar_insight':
-      return so(await montarEdicao(cmd.arg, 'insight', 'editar', ctx.insights))
-    case 'excluir_insight':
-      return so(await montarEdicao(cmd.arg, 'insight', 'excluir', ctx.insights))
     case 'mudar_config':
       return so(await montarConfig(cmd.arg, ctx.configAtual))
     case 'anotar':
@@ -683,13 +327,6 @@ export async function despacharOperacao(
         dados: { fato: cmd.arg.slice(0, 300), categoria: 'geral' },
         descricao: 'Guardar esta informação',
       })
-    case 'formulario': {
-      const tipo = /insight/i.test(cmd.arg) ? 'insight' : 'acao'
-      return {
-        acao: null,
-        formulario: (await montarPerguntas(tipo, cmd.arg)) ?? (tipo === 'acao' ? FORM_CRIAR_ACAO : FORM_CRIAR_INSIGHT),
-      }
-    }
     default:
       return so(null)
   }

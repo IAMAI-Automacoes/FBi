@@ -11,37 +11,22 @@ import { AcaoAgente, ACOES_DESTRUTIVAS, CAMPOS_CONFIG } from '@/lib/queries/agen
 import { cn } from '@/lib/utils'
 
 const ROTULO_TIPO: Record<string, string> = {
-  criar_acao: 'Criar ação',
-  editar_acao: 'Editar ação',
-  excluir_acao: 'Excluir ação',
-  criar_insight: 'Criar insight',
-  editar_insight: 'Editar insight',
-  excluir_insight: 'Arquivar insight',
   atualizar_config: 'Alterar configuração',
   criar_anotacao: 'Guardar anotação',
   excluir_anotacao: 'Apagar anotação',
 }
 
+// Só os campos das alterações que sobraram: anotação e perfil do restaurante.
+// Os de ação e insight saíram junto com a capacidade de criá-las pelo chat.
 const ROTULO_CAMPO: Record<string, string> = {
-  titulo_acao: 'Título',
-  plano_detalhado: 'Plano',
-  prioridade: 'Prioridade',
-  categoria: 'Categoria',
-  status: 'Situação',
-  titulo: 'Título',
-  descricao: 'Descrição',
-  sugestao: 'Sugestão',
   fato: 'O que guardar',
   valor: 'Novo valor',
 }
 
-const OPCOES: Record<string, string[]> = {
-  prioridade: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'],
-  status: ['SUGERIDA', 'PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDO'],
-}
+const OPCOES: Record<string, string[]> = {}
 
 /** Campos longos ganham textarea. */
-const LONGOS = new Set(['plano_detalhado', 'descricao', 'sugestao', 'fato'])
+const LONGOS = new Set(['fato'])
 
 export function ConfirmacaoAcao({
   acao,

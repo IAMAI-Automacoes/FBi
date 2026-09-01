@@ -6,7 +6,7 @@ import { buscarUsoCiclo, UsoCiclo } from '@/lib/queries/uso-ia'
 import { construirSystemPromptChef } from '@/lib/prompts-sistema'
 import { memorizarDaConversa, FatoMemoria } from '@/lib/queries/memoria-assistente'
 import { buscarConhecimento, extrairTextoDeUrl as lerPagina } from '@/lib/queries/conhecimento'
-import { AcaoAgente, FormularioIA, ACOES_DESTRUTIVAS } from '@/lib/queries/agente-ia'
+import { AcaoAgente, ACOES_DESTRUTIVAS } from '@/lib/queries/agente-ia'
 import {
   despacharOperacao, narrarOperacao, relatorioDaAcao,
   analisarDocumentos, blocoDeAnalises, AnaliseArquivo,
@@ -59,7 +59,6 @@ export interface ResultadoEnvio {
   /** Alteração que o agente quer executar (ou já executou, no modo automático) */
   acao?: AcaoAgente | null
   /** Perguntas que a IA quer fazer antes de agir */
-  formulario?: (FormularioIA & { acao_pretendida?: string }) | null
 }
 
 export function useChat(contextoPagina: string, contextoDadosIniciais: any = {}) {
@@ -320,19 +319,8 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
       // ── Comando de OPERAÇÃO/FORMULÁRIO: chama o especialista e narra ──
       const resultado = await despacharOperacao(cmd, {
         configAtual: contextoFinal.configAtual || {},
-        acoes: contextoFinal.acoes || [],
-        insights: contextoFinal.insights || [],
       })
 
-      // Falta o assunto (ex.: "crie uma ação" sem dizer do quê) → formulário
-      if (resultado.formulario) {
-        const neutra =
-          resultado.formulario.acao_pretendida === 'criar_insight'
-            ? 'Boa! Vou montar esse insight com você. É só responder aqui embaixo 👇'
-            : 'Boa! Vou criar isso com você. É só responder aqui embaixo 👇'
-        await mostrarEPersistir(neutra)
-        return { formulario: resultado.formulario }
-      }
 
       // Especialista não conseguiu montar (ex.: item não encontrado)
       if (!resultado.acao) {
