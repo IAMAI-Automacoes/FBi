@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any
 import { CAMPOS_CONFIG, campoValido, atualizarCampoConfig } from '@/lib/queries/config-update'
-import { categorizarAcao } from '@/lib/queries/acoes'
+import { vincularFeedbacksDaAcao } from '@/lib/queries/acoes'
 
 /**
  * Motor de ações do assistente.
@@ -166,11 +166,10 @@ export async function executarAcao(
       // vínculo avança de status sem avisar cliente nenhum, porque o motor de
       // retorno acha o destinatário por `feedback_acao`.
       //
-      // `true` = só vincular: os campos vieram do pedido do dono e a IA não
-      // deve sobrescrevê-los. Sem await: o chat responde na hora.
-      categorizarAcao(Number(data.id), true).catch(() => {
+      // Sem await: o chat responde na hora.
+      vincularFeedbacksDaAcao(Number(data.id)).catch(() => {
         // Falha aqui não invalida a ação criada; o dono pode reprocessar pelo
-        // botão "Buscar feedbacks relacionados" no modal da ação.
+        // botão "Procurar mais feedbacks" nos detalhes da ação.
       })
       return registrar(restauranteId, acao, modo, { tabela: 'acoes_operacionais', id: String(data.id) }, null, data)
     }

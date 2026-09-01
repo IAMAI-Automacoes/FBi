@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FeedbacksRelacionadosPopover } from '@/components/insights/FeedbacksRelacionadosPopover'
-import { categorizarAcao } from '@/lib/queries/acoes'
+import { vincularFeedbacksDaAcao } from '@/lib/queries/acoes'
 import { useToast } from '@/hooks/use-toast'
 
 interface DetalhesAcaoPanelProps {
@@ -83,7 +83,7 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
   const buscarFeedbacks = async () => {
     setBuscando(true)
     try {
-      const res = await categorizarAcao(acaoId, true)
+      const res = await vincularFeedbacksDaAcao(acaoId)
       const n = res?.feedbacks_vinculados ?? 0
       toast(
         n > 0
@@ -120,13 +120,33 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
+        {/* Editar mora no CABEÇALHO, ao lado do X, e não mais no rodapé.
+            É uma ação sobre o item inteiro — o mesmo lugar onde o olho já
+            procura os controles da janela — e assim ela fica na diagonal
+            oposta à de excluir, que é a distância máxima entre a ação que se
+            usa toda hora e a que não tem volta. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={onEditar}
+              variant="ghost"
+              size="icon"
+              aria-label="Editar ação"
+              className="absolute right-11 top-2.5 z-10 h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
+              <Pencil className="h-[18px] w-[18px]" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Editar ação</TooltipContent>
+        </Tooltip>
+
         <SheetHeader className="p-5 border-b bg-white shrink-0 space-y-2.5 text-left">
           {/* Prioridade e categoria na MESMA linha: são os dois rótulos que
               respondem "o quanto urge" e "do que trata", lidos de relance
               antes do título. A categoria usa a pílula da paleta, idêntica à
               do card e à do feedback — `pr-3` no fim reserva espaço para o X
               de fechar do Sheet, que fica no canto superior direito. */}
-          <div className="flex flex-wrap items-center gap-2 pr-8">
+          <div className="flex flex-wrap items-center gap-2 pr-20">
             <span
               className={cn(
                 'inline-flex w-fit text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
@@ -248,26 +268,11 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             </div>
           </div>
         </div>
-        {/* Editar é a ação esperada aqui, então leva o peso visual — mas em
-            `outline`, não no azul cheio: o painel é de leitura, e um botão
-            primário sólido no rodapé faz a tela inteira parecer um formulário.
-
-            Excluir vira ícone, sem texto e sem vermelho parado. Vermelho em
-            repouso grita numa tela que a pessoa abre para consultar, e dois
-            botões grandes lado a lado disputando a mesma faixa é justamente o
-            desenho que faz um painel parecer template. A cor só aparece no
-            hover, quando a intenção já é essa. */}
-        <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row items-center justify-between gap-2 sm:justify-between">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={onEditar} variant="outline" size="icon" aria-label="Editar ação">
-                <Pencil className="w-[18px] h-[18px]" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Editar ação</TooltipContent>
-          </Tooltip>
-
-          {onExcluir && (
+        {/* Sobra só excluir no rodapé, sozinha e no canto oposto ao lápis.
+            Ação sem volta não divide faixa com nenhuma outra: não existe
+            clique vizinho para errar. */}
+        {onExcluir && (
+          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row items-center justify-start sm:justify-start sm:space-x-0">
             <AlertDialog>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -276,9 +281,9 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                       variant="ghost"
                       size="icon"
                       aria-label="Excluir ação"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="h-11 w-11 text-red-600 hover:bg-red-50 hover:text-red-700"
                     >
-                      <Trash2 className="w-[18px] h-[18px]" />
+                      <Trash2 className="h-[27px] w-[27px]" />
                     </Button>
                   </AlertDialogTrigger>
                 </TooltipTrigger>
@@ -304,8 +309,8 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
-        </SheetFooter>
+          </SheetFooter>
+        )}
       </SheetContent>
     </Sheet>
   )

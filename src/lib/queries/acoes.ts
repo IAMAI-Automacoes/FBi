@@ -138,29 +138,26 @@ export async function gerarPlanoAcao(acaoId: number) {
 }
 
 /**
- * Preenche categoria e/ou prioridade de uma ação recém-criada manualmente,
- * só nos campos que ficaram em branco (nunca sobrescreve o que o dono já
- * escolheu). Categoria vem da IA lendo título+plano; prioridade vem da
- * contagem de feedbacks negativos recentes naquela categoria — ver
- * `supabase/functions/categorizar-acao/index.ts`.
- */
-/**
- * Completa uma ação criada à mão: categoria, prioridade e vínculo com os
- * feedbacks livres que ela resolve.
+ * Liga uma ação aos feedbacks livres que ela resolve — e só isso.
  *
- * `apenasVinculo` é o botão "Buscar feedbacks relacionados": o dono já decidiu
- * categoria e prioridade, e a IA não deve mexer nelas — só procurar os
- * feedbacks que aquela ação resolve.
+ * `apenas_vinculo: true` é fixo agora. A função também sabia preencher
+ * categoria e prioridade quando ficavam em branco, mas os dois campos passaram
+ * a ser obrigatórios no formulário: não existe mais branco para completar, e um
+ * palpite da IA sobre o que o dono acabou de escolher só criaria divergência.
+ *
+ * O vínculo continua sendo trabalho de IA porque é o que ela faz bem aqui —
+ * ler o título e o plano e reconhecer quais queixas aquilo resolve. E é o
+ * vínculo que faz o retorno ao cliente existir: o motor acha o destinatário
+ * por `feedback_acao`, então ação sem vínculo avança de status sem avisar
+ * ninguém.
  */
-export async function categorizarAcao(acaoId: number, apenasVinculo = false) {
+export async function vincularFeedbacksDaAcao(acaoId: number) {
   const { data, error } = await supabase.functions.invoke('categorizar-acao', {
-    body: { acao_id: acaoId, apenas_vinculo: apenasVinculo },
+    body: { acao_id: acaoId, apenas_vinculo: true },
   })
   if (error) throw error
   return data as {
     status?: string
-    categoria?: string
-    prioridade?: string
     feedbacks_vinculados?: number
     motivo_sem_vinculo?: string | null
   }

@@ -77,7 +77,7 @@ import {
   atualizarOrdemAcoes,
   arquivarAcao,
   alternarFixadoAcao,
-  categorizarAcao,
+  vincularFeedbacksDaAcao,
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
@@ -717,8 +717,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           {
             id: criada.id.toString(),
             titulo_acao: criada.titulo_acao || 'Sem título',
-            // Só efeito visual enquanto a IA ainda não respondeu (abaixo) —
-            // o que fica gravado no banco é o `null` de verdade.
+            // Rede de segurança para ações antigas, criadas quando os dois
+            // campos eram opcionais; no formulário de hoje os dois são exigidos.
             prioridade: criada.prioridade || 'OBSERVACAO',
             categoria: criada.categoria || 'Outros',
             plano_detalhado: criada.plano_detalhado || undefined,
@@ -738,39 +738,25 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         ])
         toast({ title: 'Ação criada' })
 
-        // SEMPRE, e não só quando falta categoria ou prioridade.
+        // A ação nasce com todos os campos preenchidos pelo dono — o
+        // formulário passou a exigir os seis. O que a IA faz aqui é só
+        // procurar os feedbacks livres que esta ação resolve.
         //
-        // Antes isto rodava só quando um dos dois campos vinha em branco — e o
-        // efeito era que preencher os dois fazia a ação nascer SEM NENHUM
-        // feedback vinculado. Uma ação sem vínculo muda de status e não avisa
-        // ninguém, porque o motor de retorno acha o destinatário justamente por
-        // `feedback_acao`. Quem preenchia tudo direitinho era quem perdia o
-        // retorno ao cliente.
-        //
-        // `apenasVinculo` quando o dono já decidiu os dois: aí a IA não mexe
-        // neles, só procura os feedbacks livres que esta ação resolve.
-        const jaDecidiu = !!categoriaEscolhida && !!prioridadeEscolhida
-        categorizarAcao(criada.id, jaDecidiu)
+        // Não é opcional: ação sem vínculo avança de status e NINGUÉM é
+        // avisado, porque o motor de retorno acha o destinatário justamente
+        // por `feedback_acao`.
+        vincularFeedbacksDaAcao(criada.id)
           .then((res) => {
-            if (res?.status !== 'sucesso') return
-            setTasks((prev) =>
-              prev.map((t) =>
-                t.id === criada.id.toString()
-                  ? {
-                      ...t,
-                      categoria: res.categoria ?? t.categoria,
-                      prioridade: res.prioridade ?? t.prioridade,
-                    }
-                  : t,
-              ),
-            )
-            if (res.feedbacks_vinculados) {
-              toast({
-                title: `${res.feedbacks_vinculados} feedback${res.feedbacks_vinculados > 1 ? 's' : ''} ligado${res.feedbacks_vinculados > 1 ? 's' : ''}`,
-                description:
-                  'Quem escreveu vai ser avisado quando esta ação avançar de status.',
-              })
-            }
+            if (res?.status !== 'sucesso' || !res.feedbacks_vinculados) return
+            const n = res.feedbacks_vinculados
+            toast({
+              title: `${n} feedback${n > 1 ? 's' : ''} ligado${n > 1 ? 's' : ''}`,
+              description: 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
+            })
+          })
+          .catch(() => {
+            // Falha na IA não é crítica: a ação já existe com o que o dono
+            // escreveu, e "Procurar mais feedbacks" nos detalhes tenta de novo.
           })
           .catch(() => {
             // Falha na IA não é crítica: a ação já existe com os valores do
@@ -989,6 +975,24 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             onSave={handleSaveTask}
           />
         )}
+
+        {/* Véu ÚNICO para os dois painéis da direita (detalhes e edição).
+            Cada Sheet trazia o seu, mas aí trocar um pelo outro apagava e
+            reacendia o fundo no meio da transição. Este fica de pé enquanto
+            qualquer um dos dois estiver aberto: como fechar o detalhes e abrir
+            a edição acontece no mesmo render, o elemento nunca desmonta e o
+            escurecido não pisca.
+
+            `pointer-events-none` é o que deixa o quadro utilizável com o
+            painel aberto — o véu só escurece, não intercepta clique nenhum.
+            Fica em z-40, abaixo dos Sheets (z-50). */}
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none fixed inset-0 z-40 bg-black/20 transition-opacity duration-300',
+            detalhesTask || (modalOpen && editingTask) ? 'opacity-100' : 'opacity-0',
+          )}
+        />
 
         {detalhesTask && (
           <DetalhesAcaoPanel

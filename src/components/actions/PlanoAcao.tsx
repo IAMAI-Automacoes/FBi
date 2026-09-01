@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Sparkles, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { gerarPlanoAcao } from '@/lib/queries/acoes'
+import { useAlturaAutomatica } from '@/hooks/use-altura-automatica'
 
 interface PlanoAcaoProps {
   /** Ausente enquanto a ação ainda não existe no banco (modo criação): o texto
@@ -33,6 +34,11 @@ export function PlanoAcao({
     setPlano(planoInicial)
     planoOriginalRef.current = planoInicial
   }, [planoInicial])
+
+  // O campo cresce com o texto: o plano é o conteúdo mais longo da tela e
+  // rolar dentro de uma caixa de 120px enquanto o painel também rola põe dois
+  // eixos de rolagem no mesmo gesto.
+  const refTexto = useAlturaAutomatica<HTMLTextAreaElement>(plano)
 
   const sujo = plano !== planoOriginalRef.current
 
@@ -105,14 +111,17 @@ export function PlanoAcao({
         </div>
       )}
 
+      {/* `overflow-hidden`: sem ele a barra de rolagem pisca no instante entre
+          o texto crescer e o efeito remedir a altura. */}
       <Textarea
+        ref={refTexto}
         value={plano}
         onChange={(e) => {
           setPlano(e.target.value)
           onPlanoUpdate?.(e.target.value)
         }}
         placeholder="Digite o plano de ação..."
-        className="min-h-[120px] text-sm resize-none"
+        className="min-h-[120px] text-sm resize-none overflow-hidden leading-relaxed"
         disabled={isConcluido}
       />
 

@@ -3,6 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -22,6 +23,7 @@ import { PlanoAcao } from '@/components/actions/PlanoAcao'
 import { CATEGORIAS_FEEDBACK, estiloCategoria } from '@/lib/categorias-feedback'
 import { estiloPrioridade } from '@/lib/prioridade'
 import { cn } from '@/lib/utils'
+import { useAlturaAutomatica } from '@/hooks/use-altura-automatica'
 
 /** Formato que o modal recebe do quadro e devolve ao salvar. Mistura os campos
  *  da linha do banco com os apelidos que o TaskBoard já usava. */
@@ -79,6 +81,11 @@ function RotuloCampo({
  * e trocar um painel encostado na direita por uma caixa no centro da tela move
  * o olho à toa e faz parecer outra tela, não o mesmo item em outro modo.
  *
+ * O painel de edição é NÃO MODAL (`modal={false}` + `semOverlay`): o quadro
+ * atrás continua clicável, e o escurecido de fundo é um véu único que o
+ * TaskBoard mantém de pé para os dois painéis — assim ir de "ver detalhes"
+ * para "editar" não apaga e reacende o fundo no meio do caminho.
+ *
  * Criar abre no centro, porque não vem de lugar nenhum — não há contexto atrás
  * a preservar. Mas com o fundo bem mais claro que o padrão (`bg-black/80` do
  * shadcn apaga o quadro inteiro): o dono escreve a ação olhando as que já
@@ -87,10 +94,11 @@ function RotuloCampo({
  * ## Todos os campos obrigatórios ao criar
  *
  * Prioridade e categoria eram opcionais e a IA preenchia o que ficasse em
- * branco. Agora são exigidas: quem cria a ação à mão sabe do que ela trata, e
- * um palpite de máquina sobre isso só gera card com categoria errada para
- * corrigir depois. A IA continua entrando no que ela faz melhor — achar os
- * feedbacks que a ação resolve.
+ * branco. Agora são exigidas, e o preenchimento automático foi retirado por
+ * inteiro (ver `vincularFeedbacksDaAcao`): quem cria a ação à mão sabe do que
+ * ela trata, e um palpite de máquina sobre isso só gera card com categoria
+ * errada para corrigir depois. A IA continua entrando no que ela faz melhor —
+ * achar os feedbacks que a ação resolve.
  */
 export function TaskModal({
   open,
@@ -112,6 +120,11 @@ export function TaskModal({
 
   // `prazo` fica como string "yyyy-MM-dd" (mesmo formato que já ia pro banco) —
   // só converte pra Date na hora de alimentar o calendário/campo segmentado.
+  // O título é um textarea de uma linha, não um Input: um título comprido
+  // rolava na horizontal dentro do campo e escondia o começo do que a pessoa
+  // escreveu. Aqui ele quebra e a caixa cresce.
+  const refTitulo = useAlturaAutomatica<HTMLTextAreaElement>(title)
+
   const prazoData = prazo ? parseISO(prazo) : undefined
   const definirPrazo = (data: Date | undefined) => {
     setPrazo(data ? format(data, 'yyyy-MM-dd') : '')
@@ -202,13 +215,25 @@ export function TaskModal({
     <div className="space-y-5">
       <div className="space-y-2">
         <RotuloCampo icone={Type} htmlFor="title">Título</RotuloCampo>
-        <Input
+        <Textarea
           id="title"
+          ref={refTitulo}
+          rows={1}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter num título quase sempre é engano — a quebra automática já
+            // cuida do texto comprido.
+            if (e.key === 'Enter') e.preventDefault()
+          }}
+          // split/join e não regex: texto colado de outro lugar pode vir com
+          // quebras, e elas viram espaço em vez de deformar o campo.
+          onChange={(e) => setTitle(e.target.value.split('\n').join(' '))}
           placeholder="Ex: Revisar o fluxo de saída dos pratos"
           disabled={somenteLeitura}
-          className={cn('h-10', erro('title') && 'border-red-400 focus-visible:ring-red-400')}
+          className={cn(
+            'min-h-0 resize-none overflow-hidden py-2 leading-relaxed',
+            erro('title') && 'border-red-400 focus-visible:ring-red-400',
+          )}
         />
       </div>
 
@@ -363,13 +388,28 @@ export function TaskModal({
     </div>
   )
 
+  /* Os dois botões têm a MESMA altura e o mesmo peso de fonte; o que separa
+     o primário do secundário é só o preenchimento. Antes eram tamanhos
+     diferentes com um azul saturado ao lado de um botão fantasma — o par
+     desequilibrado é o que fazia o rodapé parecer template.
+
+     "Cancelar" não leva borda: uma borda dá a ele o mesmo peso visual de um
+     botão de ação, e desfazer não é uma ação que se ofereça com destaque. */
   const botoes = (
     <>
-      <Button variant="ghost" onClick={() => onOpenChange(false)}>
+      <Button
+        variant="ghost"
+        onClick={() => onOpenChange(false)}
+        className="h-10 px-4 font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+      >
         {somenteLeitura ? 'Fechar' : 'Cancelar'}
       </Button>
       {!somenteLeitura && (
-        <Button onClick={handleSave} disabled={!!task && !houveAlteracao}>
+        <Button
+          onClick={handleSave}
+          disabled={!!task && !houveAlteracao}
+          className="h-10 px-5 font-medium bg-[#1D4ED8] text-white shadow-sm hover:bg-[#1A43BC] disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+        >
           {task ? 'Salvar alterações' : 'Criar ação'}
         </Button>
       )}
@@ -379,9 +419,12 @@ export function TaskModal({
   // ---- EDITAR: painel lateral, no lugar de onde veio ----
   if (task) {
     return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
         <SheetContent
+          semOverlay
           className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
         >
           <SheetHeader className="p-5 border-b bg-white shrink-0 text-left space-y-1">
             <SheetTitle className="text-lg font-bold leading-snug">{titulo}</SheetTitle>
@@ -394,7 +437,7 @@ export function TaskModal({
 
           <div className="flex-1 overflow-y-auto p-5">{formulario}</div>
 
-          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row justify-end gap-2">
+          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row justify-end gap-1 sm:space-x-0">
             {botoes}
           </SheetFooter>
         </SheetContent>
@@ -419,7 +462,7 @@ export function TaskModal({
 
         <div className="p-5">{formulario}</div>
 
-        <DialogFooter className="p-4 border-t gap-2 sm:justify-end">{botoes}</DialogFooter>
+        <DialogFooter className="p-4 border-t bg-gray-50/70 gap-1 sm:justify-end sm:space-x-0">{botoes}</DialogFooter>
       </DialogContent>
     </Dialog>
   )
