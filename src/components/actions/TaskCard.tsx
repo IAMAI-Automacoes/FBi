@@ -1,11 +1,10 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
-import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, MessageSquare, Zap, Pin, Eye, Send } from 'lucide-react'
+import { CheckCircle2, ArrowRight, ArrowLeft, RotateCcw, Archive, ArchiveRestore, Zap, Pin, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
-import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
@@ -25,8 +24,6 @@ interface TaskCardProps {
   onDesarquivar?: () => void
   /** Alterna o card fixado no topo da coluna (por cima da ordenação por prioridade). */
   onPin?: (fixado: boolean) => void
-  /** Abre o painel lateral com o plano de ação completo, prazo e responsável. */
-  onVerDetalhes?: () => void
   isOverlay?: boolean
   /** Na página de arquivadas o card não arrasta nem avança de status. */
   somenteLeitura?: boolean
@@ -43,7 +40,6 @@ export function TaskCard({
   onArquivar,
   onDesarquivar,
   onPin,
-  onVerDetalhes,
   isOverlay,
   somenteLeitura = false,
   clientesAvisados,
@@ -115,14 +111,31 @@ export function TaskCard({
       <div className={cn('absolute inset-y-0 left-0 w-1', estiloPrioridade(task.prioridade).corSolida)} />
 
       <div className="flex items-start justify-between mb-3 gap-2">
-        <span
-          className={cn(
-            'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
-            isCompleted ? 'bg-green-100 text-green-700' : estiloPrioridade(task.prioridade).corSolida,
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={cn(
+              'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
+              isCompleted ? 'bg-green-100 text-green-700' : estiloPrioridade(task.prioridade).corSolida,
+            )}
+          >
+            {isCompleted ? 'CONCLUÍDO' : estiloPrioridade(task.prioridade).label}
+          </span>
+
+          {/* `texto` (não `insight_id`!) é o sinal confiável de "veio da IA": a
+              edge function `sugerir-acoes` sempre grava esse texto padrão nela,
+              mesmo quando não consegue casar o insight_id que a IA citou (nesse
+              caso grava null) — ação criada à mão nunca tem `texto`.
+              Fica ao lado da prioridade porque as duas respondem à mesma
+              pergunta de relance: o que é isto e de onde veio. */}
+          {task.texto && (
+            <span
+              title="Sugerida pela IA"
+              className="inline-flex items-center justify-center w-5 h-5 shrink-0 text-green-700 bg-green-50 border border-green-200 rounded-full"
+            >
+              <Zap className="w-3 h-3" />
+            </span>
           )}
-        >
-          {isCompleted ? 'CONCLUÍDO' : estiloPrioridade(task.prioridade).label}
-        </span>
+        </div>
         <div className="flex items-center gap-1 shrink-0">
           {isCompleted && <CheckCircle2 className="w-5 h-5 text-green-500" />}
           {!isOverlay && !somenteLeitura && onPin && (
@@ -152,55 +165,33 @@ export function TaskCard({
         {task.titulo_acao}
       </h4>
 
-      {/* `texto` (não `insight_id`!) é o sinal confiável de "veio da IA": a
-          edge function `sugerir-acoes` sempre grava esse texto padrão nela,
-          mesmo quando não consegue casar o insight_id que a IA citou (nesse
-          caso ele grava null) — ações criadas manualmente nunca têm `texto`.
-          Só o ícone (sem o texto "Sugerida pela IA" ao lado) — o raio já é
-          intuitivo o bastante, e o `title` cobre quem passar o mouse. */}
-      {task.texto && (
-        <span
-          title="Sugerida pela IA"
-          className="inline-flex items-center justify-center w-5 h-5 text-green-700 bg-green-50 border border-green-200 rounded-full mb-2 self-start"
-        >
-          <Zap className="w-3 h-3" />
-        </span>
-      )}
 
-      {/* Categoria com a cor e o ícone oficiais da paleta (mesma fonte que
-          /feedbacks e /insights usam). Antes era uma pílula azul fixa com o
-          nome escrito, igual para as 14 categorias — o dono não conseguia
-          bater o olho no quadro e saber do que cada ação tratava. */}
+      {/* Categoria no MESMO formato do card de feedback (pílula arredondada,
+          `text-[11px]`, ícone de 12px, cores da paleta) — é o mesmo assunto
+          visto em telas diferentes, e ler dois desenhos distintos para a mesma
+          coisa custa atenção do dono à toa. */}
       {task.categoria && (() => {
         const estiloCat = estiloCategoria(task.categoria)
         const IconeCat = estiloCat.icon
         return (
-          <p
+          <span
             className={cn(
-              'text-[11px] font-medium mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md self-start border',
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium mb-3 self-start',
               isCompleted
                 ? 'bg-slate-100 text-slate-500 border-slate-200'
                 : cn(estiloCat.corFundo, estiloCat.corTexto, estiloCat.corBorda),
             )}
           >
-            <IconeCat className="h-3 w-3 shrink-0" />
+            <IconeCat className="h-3 w-3" />
             {task.categoria}
-          </p>
+          </span>
         )
       })()}
 
-      {/* Mesmo destino do link nos Insights: os feedbacks que geraram o insight
-          de onde esta ação nasceu. */}
-      {task.insight_id && (
-        <Link
-          to={`/feedbacks?insight_id=${task.insight_id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="text-[11px] text-[#1D4ED8] hover:underline font-medium mb-3 inline-flex items-center gap-1 self-start"
-        >
-          <MessageSquare className="w-3 h-3" />
-          Feedbacks relacionados
-        </Link>
-      )}
+      {/* O link para os feedbacks relacionados saiu daqui: o card e para bater
+          o olho, e cada link a mais nele e uma chance de o clique de conferir
+          virar navegacao sem querer. Agora vive no painel de detalhes, junto do
+          resto do contexto da acao. */}
 
       {/* Avisa o dono, ANTES do gesto, que mover este card vai gerar mensagem
           para cliente real. Até aqui isso acontecia de forma invisível: o
@@ -218,22 +209,8 @@ export function TaskCard({
         </span>
       )}
 
-      {/* Plano completo saiu do card (virava um textão) — agora só o botão,
-          que abre o painel lateral (`DetalhesAcaoPanel`) com o plano
-          inteiro, prazo e responsável. */}
-      {task.plano_detalhado && onVerDetalhes && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onVerDetalhes()
-          }}
-          className="text-[11px] text-[#1D4ED8] hover:underline font-medium mb-3 inline-flex items-center gap-1 self-start"
-        >
-          <Eye className="w-3 h-3" />
-          Ver detalhes
-        </button>
-      )}
+      {/* O botao "Ver detalhes" saiu: o CARD INTEIRO abre o painel agora, entao
+          um botao dentro dele so repetia o mesmo gesto num alvo menor. */}
 
       {/* `min-w-0` no grupo da esquerda e no `span` do nome é o que faz o
           `truncate` valer de verdade dentro de um flex — sem isso o item

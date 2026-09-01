@@ -1,7 +1,8 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { Button } from '@/components/ui/button'
-import { Pencil, CalendarDays } from 'lucide-react'
+import { Pencil, CalendarDays, MessageSquare } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
@@ -91,6 +92,25 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar }: DetalhesAcaoPanel
               <p className="text-sm text-gray-400 italic">Nenhum plano detalhado ainda.</p>
             )}
           </div>
+
+          {/* Feedbacks relacionados: saiu do card e vive aqui.
+              No card era mais um link competindo com o clique de abrir; aqui
+              está junto do resto do contexto, que é onde o dono vai quando
+              quer entender a ação em vez de só olhá-la. */}
+          {task.insight_id && (
+            <div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">
+                Feedbacks relacionados
+              </p>
+              <Link
+                to={`/feedbacks?insight_id=${task.insight_id}`}
+                className="inline-flex items-center gap-1.5 text-sm text-[#1D4ED8] hover:underline font-medium"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Ver os feedbacks que originaram esta ação
+              </Link>
+            </div>
+          )}
         </div>
 
         <SheetFooter className="p-4 border-t bg-white shrink-0 sm:justify-start">

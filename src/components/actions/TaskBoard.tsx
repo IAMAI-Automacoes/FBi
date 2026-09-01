@@ -938,7 +938,10 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   {idAntesDaBarra === task.id && <DropIndicatorBar />}
                   <TaskCard
                     task={task}
-                    onClick={() => handleOpenModal(col.status, task)}
+                    // Clicar no card abre os DETALHES, nao o formulario de edicao.
+                    // Editar e um passo a mais, de dentro do painel — assim um clique
+                    // para conferir a acao nao coloca o dono direto num formulario.
+                    onClick={() => setDetalhesTask(task)}
                     onVoltar={
                       task.status !== 'PENDENTE' ? () => handleVoltar(task.id, task.status) : undefined
                     }
@@ -950,7 +953,6 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                       moveTask(task.id, task.status, next)
                     }}
                     onPin={(fixado) => handlePin(task.id, fixado)}
-                    onVerDetalhes={() => setDetalhesTask(task)}
                   />
                 </Fragment>
               ))}

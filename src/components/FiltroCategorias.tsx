@@ -135,6 +135,13 @@ export function FiltroCategorias({
             )
           })}
         </div>
+        {visiveis.length < CATEGORIAS_FEEDBACK.length && (
+          <p className="border-t px-3 py-2 text-[11px] leading-snug text-gray-400">
+            Mais {CATEGORIAS_FEEDBACK.length - visiveis.length} categoria
+            {CATEGORIAS_FEEDBACK.length - visiveis.length > 1 ? 's' : ''} indisponí
+            {CATEGORIAS_FEEDBACK.length - visiveis.length > 1 ? 'veis' : 'vel'} no momento.
+          </p>
+        )}
         {selecionadas.length > 0 && (
           <div className="border-t p-2 flex justify-end">
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onChange([])}>
