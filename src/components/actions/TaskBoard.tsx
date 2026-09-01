@@ -1000,6 +1000,11 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               setDetalhesTask(null)
               handleOpenModal(status, detalhesTask)
             }}
+            onExcluir={() => {
+              const id = detalhesTask.id
+              setDetalhesTask(null)
+              handleDeleteTask(id)
+            }}
           />
         )}
       </div>

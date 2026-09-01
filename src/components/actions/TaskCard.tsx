@@ -9,6 +9,7 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
 import { estiloCategoria } from '@/lib/categorias-feedback'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface TaskCardProps {
   // Linha de `acoes_operacionais` com apelidos do quadro; tipar por completo
@@ -126,14 +127,24 @@ export function TaskCard({
               mesmo quando não consegue casar o insight_id que a IA citou (nesse
               caso grava null) — ação criada à mão nunca tem `texto`.
               Fica ao lado da prioridade porque as duas respondem à mesma
-              pergunta de relance: o que é isto e de onde veio. */}
+              pergunta de relance: o que é isto e de onde veio.
+
+              Tooltip do Radix, e não o `title` do HTML: o nativo demora ~1s
+              para aparecer, some sozinho e não é estilizável — num ícone de
+              20px que o dono vai consultar de passagem, esse atraso é a
+              diferença entre a explicação existir ou não. */}
           {task.texto && (
-            <span
-              title="Sugerida pela IA"
-              className="inline-flex items-center justify-center w-5 h-5 shrink-0 text-green-700 bg-green-50 border border-green-200 rounded-full"
-            >
-              <Zap className="w-3 h-3" />
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center justify-center w-5 h-5 shrink-0 text-green-700 bg-green-50 border border-green-200 rounded-full cursor-help"
+                >
+                  <Zap className="w-3 h-3" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">Sugerida pela IA</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
