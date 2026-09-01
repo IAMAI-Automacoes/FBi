@@ -30,10 +30,18 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * Classe extra para o fundo escurecido. O padrão do shadcn é `bg-black/80`,
+     * que apaga a tela inteira — bom para um alerta destrutivo, pesado demais
+     * para um formulário onde a pessoa quer continuar vendo o quadro atrás.
+     * Ex.: `classNameOverlay="bg-black/30 backdrop-blur-[2px]"`.
+     */
+    classNameOverlay?: string
+  }
+>(({ className, children, classNameOverlay, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={classNameOverlay} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

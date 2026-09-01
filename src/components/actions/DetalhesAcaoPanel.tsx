@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { Button } from '@/components/ui/button'
-import { Pencil, CalendarDays, Trash2 } from 'lucide-react'
+import { Pencil, CalendarDays, Trash2, Link2, Loader2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
@@ -23,6 +24,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FeedbacksRelacionadosPopover } from '@/components/insights/FeedbacksRelacionadosPopover'
+import { categorizarAcao } from '@/lib/queries/acoes'
+import { useToast } from '@/hooks/use-toast'
 
 interface DetalhesAcaoPanelProps {
   // Mesma linha de `acoes_operacionais` que o TaskCard recebe.
@@ -58,6 +61,53 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
     ? format(parseISO(task.prazo), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
     : null
   const isCompleted = task.status === 'CONCLUIDO'
+  const acaoId = Number(task.id)
+
+  /**
+   * "Buscar feedbacks relacionados".
+   *
+   * Uma ação pode terminar sem vínculo nenhum: o título estava vago quando ela
+   * nasceu, ou não havia feedback livre naquele momento. Sem vínculo, a ação
+   * avança de status e NINGUÉM é avisado — o motor de retorno acha o
+   * destinatário justamente por `feedback_acao`.
+   *
+   * Mora aqui, e não mais no popup de edição, porque é aqui que a falta
+   * aparece: a pessoa abre os detalhes, vê a lista de feedbacks vazia, e o
+   * botão de resolver isso está na mesma linha do problema.
+   *
+   * `apenasVinculo`: categoria e prioridade já estão decididas: a IA não mexe.
+   */
+  const [buscando, setBuscando] = useState(false)
+  const { toast } = useToast()
+
+  const buscarFeedbacks = async () => {
+    setBuscando(true)
+    try {
+      const res = await categorizarAcao(acaoId, true)
+      const n = res?.feedbacks_vinculados ?? 0
+      toast(
+        n > 0
+          ? {
+              title: `${n} feedback${n > 1 ? 's' : ''} ligado${n > 1 ? 's' : ''}`,
+              description: 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
+            }
+          : {
+              title: 'Nenhum feedback novo',
+              description:
+                res?.motivo_sem_vinculo ??
+                'Não há feedback livre que esta ação resolva. Detalhar o plano ajuda a IA a reconhecê-los.',
+            },
+      )
+    } catch {
+      toast({
+        title: 'Não consegui buscar agora',
+        description: 'Tente de novo em instantes.',
+        variant: 'destructive',
+      })
+    } finally {
+      setBuscando(false)
+    }
+  }
 
   const estiloCat = estiloCategoria(task.categoria)
   const IconeCat = estiloCat.icon
@@ -169,10 +219,33 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
               Feedbacks relacionados
             </p>
-            <FeedbacksRelacionadosPopover
-              origem={{ tipo: 'acao', id: Number(task.id) }}
-              rotulo="Ver os feedbacks desta ação"
-            />
+            <div className="space-y-2">
+              <FeedbacksRelacionadosPopover
+                origem={{ tipo: 'acao', id: acaoId }}
+                rotulo="Ver os feedbacks desta ação"
+              />
+
+              {/* Só em ação que NÃO veio de insight: essa já herdou os vínculos
+                  do insight de origem, e concluída não precisa mais avisar
+                  ninguém. */}
+              {!task.insight_id && !isCompleted && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={buscarFeedbacks}
+                  disabled={buscando}
+                  className="h-8 gap-1.5 px-2 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  {buscando ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Link2 className="h-3.5 w-3.5" />
+                  )}
+                  {buscando ? 'Procurando…' : 'Procurar mais feedbacks'}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         {/* Editar é a ação esperada aqui, então leva o peso visual — mas em
@@ -185,14 +258,14 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             desenho que faz um painel parecer template. A cor só aparece no
             hover, quando a intenção já é essa. */}
         <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row items-center justify-between gap-2 sm:justify-between">
-          <Button
-            onClick={onEditar}
-            variant="outline"
-            className="flex items-center gap-2 font-medium"
-          >
-            <Pencil className="w-4 h-4" />
-            Editar ação
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={onEditar} variant="outline" size="icon" aria-label="Editar ação">
+                <Pencil className="w-[18px] h-[18px]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Editar ação</TooltipContent>
+          </Tooltip>
 
           {onExcluir && (
             <AlertDialog>
@@ -203,9 +276,9 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                       variant="ghost"
                       size="icon"
                       aria-label="Excluir ação"
-                      className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-[18px] h-[18px]" />
                     </Button>
                   </AlertDialogTrigger>
                 </TooltipTrigger>

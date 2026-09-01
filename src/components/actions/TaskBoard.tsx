@@ -986,8 +986,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   }
                 : null
             }
-            onSave={handleSaveTask}
-            onDelete={handleDeleteTask}
+            onSave={handleSaveTask}
           />
         )}
 

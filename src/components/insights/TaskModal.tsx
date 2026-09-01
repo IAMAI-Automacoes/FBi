@@ -1,44 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { DataSegmentada } from '@/components/DataSegmentada'
-import { CalendarDays, Link2, Loader2 } from 'lucide-react'
-import { categorizarAcao } from '@/lib/queries/acoes'
+import { CalendarDays, Check, Flag, Tag, Type, User } from 'lucide-react'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
+} from '@/components/ui/sheet'
 import { useToast } from '@/hooks/use-toast'
 import { PlanoAcao } from '@/components/actions/PlanoAcao'
-import { Separator } from '@/components/ui/separator'
 import { CATEGORIAS_FEEDBACK, estiloCategoria } from '@/lib/categorias-feedback'
+import { estiloPrioridade } from '@/lib/prioridade'
 import { cn } from '@/lib/utils'
 
 /** Formato que o modal recebe do quadro e devolve ao salvar. Mistura os campos
@@ -60,32 +42,73 @@ interface TaskModalProps {
   onOpenChange: (open: boolean) => void
   task?: DadosTarefaModal | null
   onSave?: (task: DadosTarefaModal) => void
-  onDelete?: (taskId: string) => void
-  /** Ação arquivada: os campos ficam visíveis mas travados, e o rodapé mostra
-   *  só "Excluir" e "Fechar" — nada é editável. */
+  /** Ação arquivada: os campos ficam visíveis mas travados. */
   somenteLeitura?: boolean
 }
 
+const PRIORIDADES = ['OBSERVACAO', 'IMPORTANTE', 'URGENTE'] as const
+
+/** Rótulo de campo: caixa alta pequena, igual ao painel de detalhes. */
+function RotuloCampo({
+  children,
+  icone: Icone,
+  htmlFor,
+}: {
+  children: React.ReactNode
+  icone: React.ElementType
+  htmlFor?: string
+}) {
+  return (
+    <Label
+      htmlFor={htmlFor}
+      className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500"
+    >
+      <Icone className="h-3.5 w-3.5 text-gray-400" />
+      {children}
+    </Label>
+  )
+}
+
+/**
+ * Formulário de ação — criar e editar.
+ *
+ * ## Dois invólucros, um formulário
+ *
+ * Editar abre no PAINEL LATERAL direito, no mesmo lugar e com o mesmo desenho
+ * do `DetalhesAcaoPanel`: quem clica em "editar" acabou de ler os detalhes ali,
+ * e trocar um painel encostado na direita por uma caixa no centro da tela move
+ * o olho à toa e faz parecer outra tela, não o mesmo item em outro modo.
+ *
+ * Criar abre no centro, porque não vem de lugar nenhum — não há contexto atrás
+ * a preservar. Mas com o fundo bem mais claro que o padrão (`bg-black/80` do
+ * shadcn apaga o quadro inteiro): o dono escreve a ação olhando as que já
+ * existem, e escurecer tudo tira justamente essa referência.
+ *
+ * ## Todos os campos obrigatórios ao criar
+ *
+ * Prioridade e categoria eram opcionais e a IA preenchia o que ficasse em
+ * branco. Agora são exigidas: quem cria a ação à mão sabe do que ela trata, e
+ * um palpite de máquina sobre isso só gera card com categoria errada para
+ * corrigir depois. A IA continua entrando no que ela faz melhor — achar os
+ * feedbacks que a ação resolve.
+ */
 export function TaskModal({
   open,
   onOpenChange,
   task,
   onSave,
-  onDelete,
   somenteLeitura = false,
 }: TaskModalProps) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
-  // Em branco por padrão (não "OBSERVACAO"): é o sinal de "o dono não
-  // escolheu" que deixa a IA decidir sozinha ao criar (ver `categorizar-acao`
-  // e `handleSaveTask` em TaskBoard.tsx) — só nas ações NOVAS, sem editar as
-  // que a IA (ou o dono) já classificou antes.
   const [priority, setPriority] = useState<string>('')
   const [responsavel, setResponsavel] = useState('')
   const [prazo, setPrazo] = useState('')
   const [source, setSource] = useState('')
   const [plano, setPlano] = useState('')
   const [prazoAberto, setPrazoAberto] = useState(false)
+  /** Só marca os campos vazios depois da primeira tentativa de salvar. */
+  const [tentouSalvar, setTentouSalvar] = useState(false)
 
   // `prazo` fica como string "yyyy-MM-dd" (mesmo formato que já ia pro banco) —
   // só converte pra Date na hora de alimentar o calendário/campo segmentado.
@@ -97,12 +120,7 @@ export function TaskModal({
   // Snapshot dos valores com que o modal abriu — é contra isto que comparamos
   // pra saber se algo mudou (e portanto se o "Salvar" deve ficar clicável).
   const valoresIniciaisRef = useRef({
-    title: '',
-    priority: '',
-    responsavel: '',
-    prazo: '',
-    source: '',
-    plano: '',
+    title: '', priority: '', responsavel: '', prazo: '', source: '', plano: '',
   })
 
   useEffect(() => {
@@ -124,6 +142,7 @@ export function TaskModal({
     setPrazo(iniciais.prazo)
     setSource(iniciais.source)
     setPlano(iniciais.plano)
+    setTentouSalvar(false)
   }, [task, open])
 
   const houveAlteracao =
@@ -134,14 +153,23 @@ export function TaskModal({
     source !== valoresIniciaisRef.current.source ||
     plano !== valoresIniciaisRef.current.plano
 
-  // Só na CRIAÇÃO (pedido explícito do Raver) — editar uma ação já existente
-  // não passa a travar por causa de campos que ficaram em branco antes desta
-  // regra existir. Prioridade e categoria continuam sempre opcionais (a IA
-  // completa ao criar, ver TaskBoard.tsx).
-  const camposObrigatoriosPreenchidos =
-    !!task || (!!title.trim() && !!responsavel.trim() && !!plano.trim())
+  // Ao CRIAR, tudo é obrigatório. Ao EDITAR, não: ações antigas nasceram antes
+  // desta regra e travar o salvar nelas impediria de corrigir o título por
+  // causa de um prazo que nunca existiu.
+  const faltando = {
+    title: !title.trim(),
+    priority: !priority,
+    source: !source,
+    responsavel: !responsavel.trim(),
+    prazo: !prazo,
+    plano: !plano.trim(),
+  }
+  const podeSalvar = !!task || !Object.values(faltando).some(Boolean)
 
   const handleSave = () => {
+    setTentouSalvar(true)
+    if (!podeSalvar) return
+
     if (onSave) {
       onSave({
         title,
@@ -161,275 +189,237 @@ export function TaskModal({
   }
 
   const acaoId = task?.id ? Number(task.id) : undefined
-
-  /**
-   * "Buscar feedbacks relacionados".
-   *
-   * Existe porque uma acao pode terminar sem vinculo nenhum: o titulo estava
-   * vago demais quando ela nasceu, ou a IA nao achou nada livre naquele
-   * momento. Sem vinculo, a acao avanca de status e NINGUEM e avisado — o
-   * motor de retorno acha o destinatario justamente por `feedback_acao`.
-   *
-   * Passa `apenasVinculo`: categoria e prioridade ja estao decididas e a IA
-   * nao deve mexer nelas.
-   */
-  const [buscandoFeedbacks, setBuscandoFeedbacks] = useState(false)
-
-  const buscarFeedbacksRelacionados = async () => {
-    if (!acaoId) return
-    setBuscandoFeedbacks(true)
-    try {
-      const res = await categorizarAcao(acaoId, true)
-      const n = res?.feedbacks_vinculados ?? 0
-      if (n > 0) {
-        toast({
-          title: `${n} feedback${n > 1 ? "s" : ""} ligado${n > 1 ? "s" : ""}`,
-          description: "Quem escreveu vai ser avisado quando esta ação avançar de status.",
-        })
-      } else {
-        toast({
-          title: "Nenhum feedback novo",
-          description:
-            res?.motivo_sem_vinculo ??
-            "Não há feedback livre que esta ação resolva. Detalhar o plano ajuda a IA a reconhecê-los.",
-        })
-      }
-    } catch {
-      toast({
-        title: "Não consegui buscar agora",
-        description: "Tente de novo em instantes.",
-        variant: "destructive",
-      })
-    } finally {
-      setBuscandoFeedbacks(false)
-    }
-  }
   // Arquivada também não se edita, então o plano trava junto.
   const isConcluido = task?.status === 'CONCLUIDO' || somenteLeitura
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            {somenteLeitura ? 'Ação Arquivada' : task ? 'Editar Ação' : 'Criar Nova Ação'}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-5 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="title" className="font-semibold">
-              Título da Ação <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Digite o título da ação..."
-              disabled={somenteLeitura}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="priority" className="font-semibold">
-              Prioridade
-              {!task && <span className="ml-1 font-normal text-muted-foreground">(opcional — a IA decide se deixar em branco)</span>}
-            </Label>
-            <Select value={priority} onValueChange={setPriority} disabled={somenteLeitura}>
-              <SelectTrigger id="priority">
-                <SelectValue placeholder={task ? 'Selecione...' : 'IA decide automaticamente'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="OBSERVACAO">Observação</SelectItem>
-                <SelectItem value="IMPORTANTE">Importante</SelectItem>
-                <SelectItem value="URGENTE">Urgente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="source" className="font-semibold">
-              Categoria
-              {!task && <span className="ml-1 font-normal text-muted-foreground">(opcional — a IA decide se deixar em branco)</span>}
-            </Label>
-            <Select value={source} onValueChange={setSource} disabled={somenteLeitura}>
-              <SelectTrigger id="source">
-                <SelectValue placeholder={task ? 'Selecione...' : 'IA decide automaticamente'} />
-              </SelectTrigger>
-              <SelectContent>
-                {/* Ícone + cor da paleta em cada opção: o dono reconhece a
-                    categoria pelo símbolo antes de ler, e é o mesmo visual que
-                    ele já vê no card e nos filtros. */}
-                {CATEGORIAS_FEEDBACK.map((cat) => {
-                  const estiloCat = estiloCategoria(cat)
-                  const IconeCat = estiloCat.icon
-                  return (
-                    <SelectItem key={cat} value={cat}>
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'flex h-4 w-4 items-center justify-center rounded-full text-white shrink-0',
-                            estiloCat.corSolida,
-                          )}
-                        >
-                          <IconeCat className="h-2.5 w-2.5" />
-                        </span>
-                        {cat}
+  /** Borda vermelha só depois de tentar salvar — avisar antes de a pessoa
+   *  terminar de preencher é ruído, não ajuda. */
+  const erro = (campo: keyof typeof faltando) => tentouSalvar && !task && faltando[campo]
+
+  const titulo = somenteLeitura ? 'Ação arquivada' : task ? 'Editar ação' : 'Nova ação'
+
+  const formulario = (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <RotuloCampo icone={Type} htmlFor="title">Título</RotuloCampo>
+        <Input
+          id="title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Ex: Revisar o fluxo de saída dos pratos"
+          disabled={somenteLeitura}
+          className={cn('h-10', erro('title') && 'border-red-400 focus-visible:ring-red-400')}
+        />
+      </div>
+
+      {/* Prioridade e categoria dividem a linha: são os dois rótulos que o card
+          mostra lado a lado, então preenchê-los juntos espelha o resultado. */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2 min-w-0">
+          <RotuloCampo icone={Flag} htmlFor="priority">Prioridade</RotuloCampo>
+          <Select value={priority} onValueChange={setPriority} disabled={somenteLeitura}>
+            <SelectTrigger
+              id="priority"
+              className={cn('h-10', erro('priority') && 'border-red-400 focus:ring-red-400')}
+            >
+              <SelectValue placeholder="Selecionar" />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORIDADES.map((p) => (
+                <SelectItem key={p} value={p}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn('h-2 w-2 rounded-full shrink-0', estiloPrioridade(p).corSolida)}
+                    />
+                    {estiloPrioridade(p).label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2 min-w-0">
+          <RotuloCampo icone={Tag} htmlFor="source">Categoria</RotuloCampo>
+          <Select value={source} onValueChange={setSource} disabled={somenteLeitura}>
+            <SelectTrigger
+              id="source"
+              className={cn('h-10', erro('source') && 'border-red-400 focus:ring-red-400')}
+            >
+              <SelectValue placeholder="Selecionar" />
+            </SelectTrigger>
+            <SelectContent>
+              {/* Ícone + cor da paleta em cada opção: o dono reconhece a
+                  categoria pelo símbolo antes de ler, e é o mesmo visual que
+                  ele já vê no card e nos filtros. */}
+              {CATEGORIAS_FEEDBACK.map((cat) => {
+                const estiloCat = estiloCategoria(cat)
+                const IconeCat = estiloCat.icon
+                return (
+                  <SelectItem key={cat} value={cat}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'flex h-4 w-4 items-center justify-center rounded-full text-white shrink-0',
+                          estiloCat.corSolida,
+                        )}
+                      >
+                        <IconeCat className="h-2.5 w-2.5" />
                       </span>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="assignee" className="font-semibold">
-              Responsável {!task && <span className="text-red-500">*</span>}
-            </Label>
-            <Input
-              id="assignee"
-              value={responsavel}
-              onChange={(e) => setResponsavel(e.target.value)}
-              placeholder="Ex: Chef Pepê"
-              disabled={somenteLeitura}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="deadline" className="font-semibold">
-              Prazo
-            </Label>
-            <Popover open={prazoAberto} onOpenChange={setPrazoAberto}>
-              <PopoverTrigger asChild>
-                <Button
-                  id="deadline"
-                  type="button"
-                  variant="outline"
-                  disabled={somenteLeitura}
-                  className="w-full justify-start font-normal bg-white shadow-sm border-gray-200 h-10"
-                >
-                  <CalendarDays className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
-                  {prazoData
-                    ? format(prazoData, "d 'de' MMM 'de' yyyy", { locale: ptBR })
-                    : 'Selecionar prazo'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={prazoData}
-                  onSelect={(d) => {
-                    definirPrazo(d)
-                    setPrazoAberto(false)
-                  }}
-                  locale={ptBR}
-                  disabled={{ before: new Date() }}
-                />
-                <div className="border-t p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Data selecionada</p>
-                  <DataSegmentada value={prazoData} onChange={definirPrazo} />
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+                      {cat}
+                    </span>
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-          {/* Fora de qualquer condicional: o plano também aparece ao criar uma
-              ação manualmente, não só ao editar. */}
-          <Separator className="my-2" />
-          <div className="grid gap-2">
-            <Label className="font-semibold">
-              Plano de Ação {!task && <span className="text-red-500">*</span>}
-            </Label>
-            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-              <PlanoAcao
-                acaoId={acaoId}
-                // O SNAPSHOT fixo (não `plano` ao vivo) — senão, como
-                // `onPlanoUpdate` alimenta `plano` a cada tecla, o baseline
-                // interno do PlanoAcao (usado pra decidir se mostra
-                // "Desfazer") ficaria perseguindo o que o próprio usuário
-                // acabou de digitar e nunca detectaria alteração nenhuma.
-                planoInicial={valoresIniciaisRef.current.plano}
-                isConcluido={isConcluido}
-                onPlanoUpdate={setPlano}
-              />
-            </div>
-          </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2 min-w-0">
+          <RotuloCampo icone={User} htmlFor="assignee">Responsável</RotuloCampo>
+          <Input
+            id="assignee"
+            value={responsavel}
+            onChange={(e) => setResponsavel(e.target.value)}
+            placeholder="Ex: Chef Pepê"
+            disabled={somenteLeitura}
+            className={cn('h-10', erro('responsavel') && 'border-red-400 focus-visible:ring-red-400')}
+          />
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {task?.insight_id && (
-              <Link
-                to={`/feedbacks?insight_id=${task.insight_id}`}
-                className="text-sm text-[#1D4ED8] hover:underline font-medium"
-              >
-                Ver feedbacks relacionados
-              </Link>
-            )}
-
-            {/* Só faz sentido em ação existente e que NÃO veio de insight: essa
-                já herdou os vínculos do insight de origem. */}
-            {acaoId && !task?.insight_id && !isConcluido && (
+        <div className="space-y-2 min-w-0">
+          <RotuloCampo icone={CalendarDays} htmlFor="deadline">Prazo</RotuloCampo>
+          <Popover open={prazoAberto} onOpenChange={setPrazoAberto}>
+            <PopoverTrigger asChild>
               <Button
+                id="deadline"
                 type="button"
                 variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={buscarFeedbacksRelacionados}
-                disabled={buscandoFeedbacks}
+                disabled={somenteLeitura}
+                className={cn(
+                  'w-full justify-start font-normal bg-white shadow-sm border-gray-200 h-10',
+                  !prazoData && 'text-muted-foreground',
+                  erro('prazo') && 'border-red-400',
+                )}
               >
-                {buscandoFeedbacks
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Link2 className="h-3.5 w-3.5" />}
-                {buscandoFeedbacks ? 'Buscando…' : 'Buscar feedbacks relacionados'}
+                <CalendarDays className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
+                <span className="truncate">
+                  {prazoData
+                    ? format(prazoData, "d 'de' MMM 'de' yyyy", { locale: ptBR })
+                    : 'Selecionar'}
+                </span>
               </Button>
-            )}
-          </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={prazoData}
+                onSelect={(d) => {
+                  definirPrazo(d)
+                  setPrazoAberto(false)
+                }}
+                locale={ptBR}
+                disabled={{ before: new Date() }}
+              />
+              <div className="border-t p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Data selecionada</p>
+                <DataSegmentada value={prazoData} onChange={definirPrazo} />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-        <DialogFooter className="sm:justify-between w-full flex-col-reverse sm:flex-row gap-2 sm:gap-0">
-          {task && onDelete ? (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full sm:w-auto">
-                  Excluir
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Isso excluirá permanentemente a ação e os
-                    dados associados a ela.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => task.id && onDelete(task.id)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : (
-            <div className="hidden sm:block" />
+      </div>
+
+      <div className="space-y-2">
+        <RotuloCampo icone={Check}>Plano de ação</RotuloCampo>
+        <div
+          className={cn(
+            'rounded-lg border bg-slate-50/70 p-3 transition-colors',
+            erro('plano') ? 'border-red-400' : 'border-slate-200',
           )}
-          <div className="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="w-full sm:w-auto mt-2 sm:mt-0"
-            >
-              {somenteLeitura ? 'Fechar' : 'Cancelar'}
-            </Button>
-            {/* Nada é editável numa ação arquivada, então não há o que salvar. */}
-            {!somenteLeitura && (
-              <Button
-                onClick={handleSave}
-                disabled={!houveAlteracao || !camposObrigatoriosPreenchidos}
-                className="w-full sm:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white"
-              >
-                {task ? 'Salvar' : 'Criar'}
-              </Button>
-            )}
-          </div>
-        </DialogFooter>
+        >
+          <PlanoAcao
+            acaoId={acaoId}
+            // O SNAPSHOT fixo (não `plano` ao vivo) — senão, como
+            // `onPlanoUpdate` alimenta `plano` a cada tecla, o baseline
+            // interno do PlanoAcao (usado pra decidir se mostra "Desfazer")
+            // ficaria perseguindo o que o próprio usuário acabou de digitar e
+            // nunca detectaria alteração nenhuma.
+            planoInicial={valoresIniciaisRef.current.plano}
+            isConcluido={isConcluido}
+            onPlanoUpdate={setPlano}
+          />
+        </div>
+      </div>
+
+      {/* Uma linha só, e só depois de tentar salvar: marcar cada campo com um
+          asterisco vermelho desde a abertura enche a tela de alerta antes de a
+          pessoa ter errado qualquer coisa. */}
+      {tentouSalvar && !podeSalvar && (
+        <p className="text-sm text-red-600">Preencha todos os campos para criar a ação.</p>
+      )}
+    </div>
+  )
+
+  const botoes = (
+    <>
+      <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        {somenteLeitura ? 'Fechar' : 'Cancelar'}
+      </Button>
+      {!somenteLeitura && (
+        <Button onClick={handleSave} disabled={!!task && !houveAlteracao}>
+          {task ? 'Salvar alterações' : 'Criar ação'}
+        </Button>
+      )}
+    </>
+  )
+
+  // ---- EDITAR: painel lateral, no lugar de onde veio ----
+  if (task) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
+        >
+          <SheetHeader className="p-5 border-b bg-white shrink-0 text-left space-y-1">
+            <SheetTitle className="text-lg font-bold leading-snug">{titulo}</SheetTitle>
+            <SheetDescription className="text-xs text-gray-500">
+              {somenteLeitura
+                ? 'Esta ação está arquivada e não pode ser alterada.'
+                : 'As alterações valem assim que você salvar.'}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto p-5">{formulario}</div>
+
+          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row justify-end gap-2">
+            {botoes}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    )
+  }
+
+  // ---- CRIAR: no centro, com o quadro ainda visível atrás ----
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        classNameOverlay="bg-black/25 backdrop-blur-[1px]"
+        className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto p-0 gap-0"
+      >
+        <DialogHeader className="p-5 border-b text-left space-y-1">
+          <DialogTitle className="text-lg font-bold leading-snug">{titulo}</DialogTitle>
+          <DialogDescription className="text-xs text-gray-500">
+            Descreva o que precisa ser feito. Ao salvar, procuramos os feedbacks que esta ação
+            resolve e ligamos a ela.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="p-5">{formulario}</div>
+
+        <DialogFooter className="p-4 border-t gap-2 sm:justify-end">{botoes}</DialogFooter>
       </DialogContent>
     </Dialog>
   )
