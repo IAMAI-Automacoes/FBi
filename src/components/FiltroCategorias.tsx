@@ -20,23 +20,15 @@ interface FiltroCategoriasProps {
 
 /**
  * Filtro de categorias em popover (não em pílulas soltas nem em `<select>`
- * nativo) — escala pras 14 categorias sem virar bagunça, e mostra ícone + cor
- * de cada uma (via `estiloCategoria`). Usado idêntico em /feedbacks e /insights.
+ * nativo) — escala sem virar bagunça, e mostra ícone + cor de cada categoria
+ * (via `estiloCategoria`). Usado idêntico em /feedbacks e /insights.
  *
- * ## Mostra as 14 SEMPRE, não só as que têm dado
+ * Só aparecem as categorias que TÊM item no período/filtro ativo. Oferecer uma
+ * categoria vazia é oferecer um clique que só devolve lista vazia; e a lista
+ * encolher quando o dono aperta o período é a resposta certa — ela descreve o
+ * que existe ali, não o catálogo inteiro de 14.
  *
- * Antes a lista vinha de `buscarCategoriasAtivas`, que só devolvia as
- * categorias já vistas em algum feedback — 10 das 14 neste restaurante. As
- * outras quatro simplesmente não existiam na tela, e não havia como saber se
- * era porque ninguém reclamou de Higiene ou porque o filtro estava quebrado.
- *
- * Com a contagem ao lado, a ausência vira informação: "Higiene 0" diz que a
- * categoria existe e está zerada. As zeradas ficam esmaecidas e não clicáveis —
- * filtrar por elas só devolveria lista vazia.
- *
- * A ordem coloca as que têm dado primeiro (preservando a ordem oficial entre
- * elas) e as zeradas no fim. Assim o que importa fica no topo sem que a posição
- * de uma categoria dance a cada mudança de filtro.
+ * O número à direita é a contagem daquela categoria no mesmo recorte.
  */
 export function FiltroCategorias({
   contagens,
@@ -55,9 +47,12 @@ export function FiltroCategorias({
     )
   }
 
-  const comDado = CATEGORIAS_FEEDBACK.filter((c) => (contagens[c] ?? 0) > 0)
-  const zeradas = CATEGORIAS_FEEDBACK.filter((c) => (contagens[c] ?? 0) === 0)
-  const ordenadas = [...comDado, ...zeradas]
+  // Ordem oficial da paleta, mantendo só o que tem item. Ordenar por contagem
+  // faria a posição de cada categoria dançar a cada troca de período.
+  const visiveis = CATEGORIAS_FEEDBACK.filter((c) => (contagens[c] ?? 0) > 0)
+
+  // Sem nenhuma categoria no recorte, o filtro não tem o que oferecer.
+  if (visiveis.length === 0) return null
 
   return (
     <Popover open={aberto} onOpenChange={setAberto}>
@@ -106,22 +101,18 @@ export function FiltroCategorias({
           <span className="float-right normal-case tracking-normal">{rotuloItens}</span>
         </div>
         <div className="max-h-80 overflow-y-auto p-1 pt-0">
-          {ordenadas.map((cat) => {
+          {visiveis.map((cat) => {
             const estilo = estiloCategoria(cat)
             const Icon = estilo.icon
             const ativo = selecionadas.includes(cat)
             const total = contagens[cat] ?? 0
-            const vazia = total === 0
 
             return (
               <button
                 key={cat}
-                onClick={() => !vazia && toggle(cat)}
-                disabled={vazia}
-                title={vazia ? `Nenhum ${rotuloItens.replace(/s$/, '')} nesta categoria` : undefined}
+                onClick={() => toggle(cat)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left transition-colors',
-                  vazia ? 'opacity-45 cursor-default' : 'hover:bg-gray-100',
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-left transition-colors hover:bg-gray-100',
                   ativo && 'bg-gray-50',
                 )}
               >
@@ -137,12 +128,7 @@ export function FiltroCategorias({
                 {ativo && <Check className="h-4 w-4 text-[#1D4ED8] shrink-0" />}
                 {/* `tabular-nums` alinha os números na vertical mesmo com
                     larguras diferentes (1 vs 48). */}
-                <span
-                  className={cn(
-                    'shrink-0 w-7 text-right text-xs tabular-nums',
-                    vazia ? 'text-gray-400' : 'font-medium text-gray-500',
-                  )}
-                >
+                <span className="shrink-0 w-7 text-right text-xs font-semibold tabular-nums text-gray-900">
                   {total}
                 </span>
               </button>

@@ -885,9 +885,29 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
         ? 'URGENTE'
         : (insight.prioridade || (assunto.nota >= 7.5 ? 'IMPORTANTE' : 'OBSERVACAO'))
 
-      const categoria = CATEGORIAS.includes(insight.categoria)
-        ? insight.categoria
-        : (assunto.categoria ?? 'Outros')
+      // A categoria sai dos FEEDBACKS, não da opinião da IA.
+      //
+      // É a categoria mais frequente entre os pontos ligados ao insight —
+      // quase sempre todos têm a mesma, e quando divergem a maioria decide.
+      // Antes valia o que a IA escrevesse, e ela às vezes classificava o
+      // insight numa categoria que nenhum dos feedbacks dele tinha; o número
+      // do filtro (que conta feedback) então não batia com o insight listado.
+      //
+      // Empate resolve pela ordem oficial da paleta, para dar sempre o mesmo
+      // resultado com o mesmo conjunto de pontos.
+      const votos = new Map<string, number>()
+      for (const p of assunto.pontos) {
+        if (p.categoria) votos.set(p.categoria, (votos.get(p.categoria) ?? 0) + 1)
+      }
+      let categoria = assunto.categoria ?? 'Outros'
+      let maisVotos = 0
+      for (const nome of CATEGORIAS) {
+        const v = votos.get(nome) ?? 0
+        if (v > maisVotos) {
+          maisVotos = v
+          categoria = nome
+        }
+      }
 
       const { data: novo, error: erroInsert } = await db
         .from('insights')

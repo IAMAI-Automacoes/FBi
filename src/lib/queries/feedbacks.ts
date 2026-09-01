@@ -113,30 +113,33 @@ export async function buscarCategoriasAtivas(restauranteId?: number) {
 }
 
 /**
- * Quantos feedbacks cada categoria tem, respeitando o período/busca ativos.
+ * Quantos feedbacks ORIGINAIS de cada categoria existem no período ativo.
  *
- * Alimenta o número que aparece à direita de cada categoria no filtro. Conta
- * PONTOS SEPARADOS (`feedbacks_restaurante`), não mensagens originais: é o
- * ponto que carrega a categoria, e uma mensagem que fala de comida e de
- * ambiente deve somar 1 em cada uma — somar na mensagem inteira daria o número
- * errado nas duas.
+ * O número conta a MENSAGEM do cliente, não os pontos separados dela: uma
+ * mensagem que reclama duas vezes de comida conta 1 em "Comida", e uma que fala
+ * de comida e de ambiente conta 1 em cada. É o mesmo número de itens que a
+ * lista da tela mostra quando aquela categoria é escolhida no filtro — se
+ * contasse pontos, o filtro diria "48" e a lista traria 30 cards.
+ *
+ * Usa `feedbacks_originais_view`, que já traz em `categorias` o array das
+ * categorias dos pontos daquela mensagem — a mesma coluna que o filtro usa para
+ * decidir o que exibir (`overlaps`), então contagem e resultado não têm como
+ * divergir.
  *
  * Ignora de propósito o filtro de CATEGORIA: os números precisam continuar
- * visíveis depois de o dono selecionar uma, senão o filtro mostraria "48" na
- * escolhida e "0" em todas as outras assim que fosse usado.
+ * visíveis depois de o dono escolher uma, senão as outras zerariam na hora.
  */
 export async function contarFeedbacksPorCategoria(
   filtros: FiltrosFeedback,
   restauranteId?: number,
 ): Promise<Record<string, number>> {
-  let query = supabase
-    .from('feedbacks_restaurante')
-    .select('categoria')
-    .not('categoria', 'is', null)
+  let query = supabase.from('feedbacks_originais_view').select('categorias')
 
   if (restauranteId) query = query.eq('restaurante_id', restauranteId)
 
-  if (filtros.datas) {
+  if (filtros.ids && filtros.ids.length > 0) {
+    query = query.in('id', filtros.ids)
+  } else if (filtros.datas) {
     const ini = startOfDay(filtros.datas.from)
     const fim = addDays(startOfDay(filtros.datas.to ?? filtros.datas.from), 1)
     query = query.gte('created_at', ini.toISOString()).lt('created_at', fim.toISOString())
@@ -149,13 +152,20 @@ export async function contarFeedbacksPorCategoria(
     query = query.ilike('sentimento', `%${filtros.sentimento}%`)
   }
 
+  if (filtros.busca) {
+    query = query.ilike('texto_exibicao', `%${filtros.busca}%`)
+  }
+
   const { data, error } = await query
   if (error) throw error
 
+  // Uma mensagem soma 1 em cada categoria distinta que ela toca.
   const contagem: Record<string, number> = {}
   for (const linha of data ?? []) {
-    const c = (linha as { categoria: string | null }).categoria
-    if (c) contagem[c] = (contagem[c] ?? 0) + 1
+    const cats = (linha as { categorias: string[] | null }).categorias ?? []
+    for (const c of new Set(cats)) {
+      if (c) contagem[c] = (contagem[c] ?? 0) + 1
+    }
   }
   return contagem
 }
