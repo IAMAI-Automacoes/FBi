@@ -153,7 +153,10 @@ export function InsightCard({
       </CardContent>
       <CardFooter className="px-4 sm:px-5 pb-3 sm:pb-3 pt-1 sm:pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-auto">
         {temFeedbacksLigados ? (
-          <FeedbacksRelacionadosPopover insightId={insight.id} totalFeedbacks={totalFeedbacks} />
+          <FeedbacksRelacionadosPopover
+            origem={{ tipo: 'insight', id: insight.id }}
+            totalFeedbacks={totalFeedbacks}
+          />
         ) : (
           <span
             className="text-sm text-gray-400 font-medium cursor-help"

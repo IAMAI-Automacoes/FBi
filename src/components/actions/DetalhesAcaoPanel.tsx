@@ -1,8 +1,7 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { Button } from '@/components/ui/button'
-import { Pencil, CalendarDays, MessageSquare, Trash2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Pencil, CalendarDays, Trash2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
@@ -22,6 +21,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { FeedbacksRelacionadosPopover } from '@/components/insights/FeedbacksRelacionadosPopover'
 
 interface DetalhesAcaoPanelProps {
   // Mesma linha de `acoes_operacionais` que o TaskCard recebe.
@@ -104,9 +105,16 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
           <SheetDescription className="sr-only">Detalhes da ação</SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* `space-y-6` no lugar do 5: o par responsável/prazo precisa respirar
+            longe do plano, senão parece rodapé dele. O plano em si sobe para
+            perto do título com `pt-1` — os dois formam a mesma leitura ("o que
+            é" e "como resolver"), e o espaço padrão do container os separava
+            mais do que a relação entre eles justifica. */}
+        <div className="flex-1 overflow-y-auto px-5 pb-5 pt-1 space-y-6">
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Plano de ação</p>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
+              Plano de ação
+            </p>
             {task.plano_detalhado ? (
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                 {task.plano_detalhado}
@@ -118,9 +126,11 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
 
           {/* `min-w-0` nas duas colunas: sem isso um nome comprido de
               responsável recusa encolher e empurra o prazo para fora. */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 pt-1">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Responsável</p>
+              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
+                Responsável
+              </p>
               <div className="flex items-center gap-2 min-w-0">
                 <Avatar className="w-8 h-8 border border-border shrink-0">
                   <AvatarFallback
@@ -140,7 +150,9 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             </div>
 
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Prazo</p>
+              <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
+                Prazo
+              </p>
               <p className="flex items-center gap-1.5 text-sm text-gray-800 min-w-0">
                 <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
                 <span className="truncate">{dataExibida ?? 'Sem prazo definido'}</span>
@@ -148,46 +160,58 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             </div>
           </div>
 
-          {/* Feedbacks relacionados: saiu do card e vive aqui.
-              No card era mais um link competindo com o clique de abrir; aqui
-              está junto do resto do contexto, que é onde o dono vai quando
-              quer entender a ação em vez de só olhá-la. */}
-          {task.insight_id && (
-            <div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">
-                Feedbacks relacionados
-              </p>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2 font-normal"
-              >
-                <Link to={`/feedbacks?insight_id=${task.insight_id}`}>
-                  <MessageSquare className="w-4 h-4 text-[#1D4ED8]" />
-                  Ver os feedbacks que originaram esta ação
-                </Link>
-              </Button>
-            </div>
-          )}
+          {/* Mesma telinha dos insights: abre por cima com os pontos, o
+              sentimento de cada um e a mensagem original expansível. Navegar
+              para outra página só para ler três frases era caro demais — e a
+              lista vem de `feedback_acao`, não do insight de origem, porque a
+              ação acumula pontos que o insight nunca teve. */}
+          <div>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
+              Feedbacks relacionados
+            </p>
+            <FeedbacksRelacionadosPopover
+              origem={{ tipo: 'acao', id: Number(task.id) }}
+              rotulo="Ver os feedbacks desta ação"
+            />
+          </div>
         </div>
+        {/* Editar é a ação esperada aqui, então leva o peso visual — mas em
+            `outline`, não no azul cheio: o painel é de leitura, e um botão
+            primário sólido no rodapé faz a tela inteira parecer um formulário.
 
-        <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row gap-2 sm:justify-start">
-          <Button onClick={onEditar} className="flex-1 sm:flex-none flex items-center gap-2">
+            Excluir vira ícone, sem texto e sem vermelho parado. Vermelho em
+            repouso grita numa tela que a pessoa abre para consultar, e dois
+            botões grandes lado a lado disputando a mesma faixa é justamente o
+            desenho que faz um painel parecer template. A cor só aparece no
+            hover, quando a intenção já é essa. */}
+        <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row items-center justify-between gap-2 sm:justify-between">
+          <Button
+            onClick={onEditar}
+            variant="outline"
+            className="flex items-center gap-2 font-medium"
+          >
             <Pencil className="w-4 h-4" />
-            Editar
+            Editar ação
           </Button>
 
-          {/* Excluir passa por confirmação: apagar uma ação leva junto os
-              vínculos com os feedbacks dela, e um clique errado aqui não tem
-              como ser desfeito. */}
           {onExcluir && (
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="flex-1 sm:flex-none flex items-center gap-2">
-                  <Trash2 className="w-4 h-4" />
-                  Excluir
-                </Button>
-              </AlertDialogTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Excluir ação"
+                      className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">Excluir ação</TooltipContent>
+              </Tooltip>
+
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Excluir esta ação?</AlertDialogTitle>

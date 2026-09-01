@@ -25,9 +25,18 @@ interface PontoLigado {
 }
 
 interface FeedbacksRelacionadosPopoverProps {
-  insightId: string
-  /** Já calculado no card, a partir do mesmo `insight_feedback(count)`. */
-  totalFeedbacks: number
+  /**
+   * De onde vêm os pontos. Insight lê `insight_feedback`; ação lê
+   * `feedback_acao` — a ação não pode herdar a lista do insight de origem
+   * porque ela ganha pontos que o insight nunca teve (a re-varredura ao criar,
+   * e todo feedback novo que o `vincular-feedback` gruda nela depois).
+   */
+  origem: { tipo: 'insight'; id: string } | { tipo: 'acao'; id: number }
+  /** Já calculado por quem chama. `undefined` = descobre ao abrir. */
+  totalFeedbacks?: number
+  /** Texto do gatilho. Sem isso, monta "N feedbacks relacionados". */
+  rotulo?: string
+  className?: string
 }
 
 /**
@@ -51,8 +60,10 @@ interface FeedbacksRelacionadosPopoverProps {
  * quem falou, não um item à parte da lista.
  */
 export function FeedbacksRelacionadosPopover({
-  insightId,
+  origem,
   totalFeedbacks,
+  rotulo,
+  className,
 }: FeedbacksRelacionadosPopoverProps) {
   const [open, setOpen] = useState(false)
   const [carregado, setCarregado] = useState(false)
@@ -66,8 +77,14 @@ export function FeedbacksRelacionadosPopover({
     setCarregando(true)
     setErro(null)
     try {
+      // As duas tabelas de vínculo têm a mesma forma (uma coluna apontando para
+      // `feedbacks_restaurante`), então muda só de onde ler e por qual coluna
+      // filtrar — o resto do achatamento e do JSX serve aos dois.
+      const tabela = origem.tipo === 'insight' ? 'insight_feedback' : 'feedback_acao'
+      const coluna = origem.tipo === 'insight' ? 'insight_id' : 'acao_id'
+
       const { data, error } = await supabase
-        .from('insight_feedback')
+        .from(tabela)
         .select(
           `feedback_restaurante_id,
            feedbacks_restaurante!inner(
@@ -75,7 +92,7 @@ export function FeedbacksRelacionadosPopover({
              feedbacks_originais(id, texto_original, created_at)
            )`,
         )
-        .eq('insight_id', insightId)
+        .eq(coluna, origem.id)
       if (error) throw error
 
       const lista: PontoLigado[] = (data ?? []).map((linha) => {
@@ -118,8 +135,18 @@ export function FeedbacksRelacionadosPopover({
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className="text-sm text-blue-600 hover:underline font-medium text-left">
-          {totalFeedbacks} {totalFeedbacks === 1 ? 'feedback relacionado' : 'feedbacks relacionados'} →
+        <button
+          type="button"
+          className={cn(
+            'text-sm text-blue-600 hover:underline font-medium text-left',
+            className,
+          )}
+        >
+          {rotulo ??
+            `${totalFeedbacks ?? ''} ${
+              totalFeedbacks === 1 ? 'feedback relacionado' : 'feedbacks relacionados'
+            }`.trim()}{' '}
+          →
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[27rem] max-w-[92vw] max-h-[70vh] overflow-y-auto p-0">
@@ -146,8 +173,9 @@ export function FeedbacksRelacionadosPopover({
 
               {pontos.length === 0 ? (
                 <p className="text-sm text-gray-400">
-                  Este insight foi gerado antes do vínculo com os feedbacks de origem. Gere os
-                  insights novamente para poder rastreá-los.
+                  {origem.tipo === 'insight'
+                    ? 'Este insight foi gerado antes do vínculo com os feedbacks de origem. Gere os insights novamente para poder rastreá-los.'
+                    : 'Nenhum feedback ligado a esta ação ainda. Use "Buscar feedbacks relacionados" ao editá-la.'}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -226,12 +254,16 @@ export function FeedbacksRelacionadosPopover({
             </>
           )}
 
-          <Link
-            to={`/feedbacks?insight_id=${insightId}`}
-            className="block pt-1 text-center text-xs font-medium text-blue-600 hover:underline"
-          >
-            Ver na página de feedbacks →
-          </Link>
+          {/* A pagina de feedbacks filtra por insight; sem um, nao ha para
+              onde mandar — a acao criada a mao cai nesse caso. */}
+          {origem.tipo === 'insight' && (
+            <Link
+              to={`/feedbacks?insight_id=${origem.id}`}
+              className="block pt-1 text-center text-xs font-medium text-blue-600 hover:underline"
+            >
+              Ver na página de feedbacks →
+            </Link>
+          )}
         </div>
       </PopoverContent>
     </Popover>
