@@ -98,5 +98,44 @@ checa('selecao que cruza os dois usa o primeiro', tamanhoNoIntervalo(doc, 2, 12)
 checa('aumentar a partir do texto (nao da barra)', tamanhoNoIntervalo(doc, 0, 6) + 1, 19)
 checa('diminuir a partir do texto', tamanhoNoIntervalo(doc, 0, 6) - 1, 17)
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O toggle de negrito/itálico — a regra do Word e do Google Docs
+//
+// Se TODO o trecho selecionado tem a marca, o botão remove; senão, aplica em
+// tudo. O resultado é sempre uniforme.
+//
+// Antes cada trecho era invertido por conta própria, e uma seleção com uma
+// parte em itálico e outra sem TROCAVA as duas: o inclinado ficava reto e o
+// reto ficava inclinado.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Espelha `EditorTextoRico.alternar`. */
+function decidirToggle(cobertos: { italico?: boolean }[]): boolean {
+  return !cobertos.every((t) => t.italico)
+}
+
+checa('nada em italico -> aplica', decidirToggle([{}, {}]), true)
+checa('tudo em italico -> remove', decidirToggle([{ italico: true }, { italico: true }]), false)
+checa('MISTO -> aplica em tudo', decidirToggle([{ italico: true }, {}]), true)
+checa('misto invertido -> aplica em tudo', decidirToggle([{}, { italico: true }]), true)
+
+// Dois cliques a partir de misto: uniformiza e depois limpa — nunca volta ao
+// estado bagunçado do começo.
+const passo1 = decidirToggle([{ italico: true }, {}])          // true  -> tudo italico
+const passo2 = decidirToggle([{ italico: passo1 }, { italico: passo1 }])
+checa('2o clique depois de uniformizar remove', passo2, false)
+
+// ── tamanho: uniforme mostra o numero, misto mostra vazio ───────────────────
+function tamanhoExibido(cobertos: { tamanho?: number }[]): number | null {
+  if (cobertos.length === 0) return 11
+  const primeiro = cobertos[0].tamanho ?? 11
+  return cobertos.every((t) => (t.tamanho ?? 11) === primeiro) ? primeiro : null
+}
+
+checa('tamanho uniforme', tamanhoExibido([{ tamanho: 18 }, { tamanho: 18 }]), 18)
+checa('tamanho misto vira vazio', tamanhoExibido([{ tamanho: 18 }, { tamanho: 11 }]), null)
+checa('sem marca e o padrao', tamanhoExibido([{}, {}]), 11)
+
 console.log(falhas === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${falhas} FALHA(S)`)
 if (falhas > 0) process.exit(1)

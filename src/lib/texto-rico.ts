@@ -33,37 +33,47 @@ export interface Trecho extends Marcas {
 /**
  * Como o itálico é desenhado.
  *
- * `font-style: italic` sozinho, no Inter, é sutil demais: num parágrafo
- * inteiro marcado, quem lê não percebe que ele está diferente do de cima.
+ * `font-style: italic` sozinho, no Inter, é sutil demais — num parágrafo
+ * inteiro marcado, quem lê não percebe que ele difere do de cima.
  *
- * `font-style: oblique <ângulo>` NÃO resolve — o Chrome ignora o ângulo por
- * completo. Medido: 22° e 40° saem pixel a pixel idênticos ao itálico normal,
- * tanto com a face itálica carregada (ele usa a face e descarta o ângulo)
- * quanto sem ela (ele sintetiza sempre no mesmo ângulo fixo).
+ * Duas tentativas que NÃO funcionam, medidas no Chrome:
  *
- * O que funciona é `skewX`, que inclina de verdade. Somado aos ~10° da face
- * itálica real, os -12° daqui dão cerca de 22° — o trecho se reconhece sem
- * precisar comparar com a linha vizinha.
+ * 1. `font-style: oblique <ângulo>` — o ângulo é ignorado por completo. 22° e
+ *    40° saem pixel a pixel iguais ao itálico normal, tanto com a face
+ *    itálica carregada (usa a face, descarta o ângulo) quanto sem ela
+ *    (sintetiza sempre no mesmo ângulo fixo).
  *
- * ## O preço
+ * 2. `skewX` no trecho inteiro — inclina de verdade, mas desalinha: um bloco
+ *    de várias linhas é uma caixa alta, e inclinar a caixa desloca o começo
+ *    de cada linha proporcionalmente à distância do eixo. Nenhuma
+ *    `transform-origin` resolve, porque é geometria: com o eixo no centro a
+ *    primeira linha recua e a última avança; com o eixo no topo a última
+ *    invade a margem.
  *
- * `skewX` exige `inline-block`, e isso muda como o trecho quebra: ele quebra
- * internamente (por isso o `maxWidth`), mas não começa no meio de uma linha
- * cheia — um itálico longo no meio de um parágrafo pula inteiro para a linha
- * seguinte, deixando um vão. Aceitável porque o uso real é marcar uma frase
- * ou um parágrafo inteiro, que é onde o destaque tem sentido.
+ * O que funciona é `skewX` PALAVRA A PALAVRA. Cada palavra é uma caixa de uma
+ * linha de altura, então o deslocamento interno é o da própria letra — que é o
+ * efeito desejado — e some entre uma palavra e outra. As linhas encostam todas
+ * na mesma margem.
  *
- * A inclinação também desloca as linhas de um bloco alto (o topo vai para a
- * direita, a base para a esquerda). Com a origem no centro, metade vai para
- * cada lado, e em três ou quatro linhas o efeito é discreto.
+ * Somado aos ~10° da face itálica real, os -9° daqui dão perto de 19°.
  */
-export const ESTILO_ITALICO = {
-  fontStyle: 'italic',
+export const ANGULO_ITALICO = -9
+
+/** Estilo de cada palavra em itálico. Ver `ANGULO_ITALICO` para o porquê. */
+export const ESTILO_PALAVRA_ITALICA = {
   display: 'inline-block',
-  transform: 'skewX(-12deg)',
-  transformOrigin: 'center',
-  maxWidth: '100%',
+  transform: `skewX(${ANGULO_ITALICO}deg)`,
 } as const
+
+/**
+ * Quebra um texto em palavras e espaços.
+ *
+ * Os espaços ficam FORA das caixas inclinadas: um espaço em branco inclinado
+ * não muda de aparência, e mantê-lo fora evita criar uma caixa por espaço.
+ */
+export function emPalavras(texto: string): string[] {
+  return texto.split(/(\s+)/).filter((p) => p !== '')
+}
 
 export const TAMANHO_PADRAO = 11
 export const TAMANHO_MIN = 8

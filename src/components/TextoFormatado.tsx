@@ -1,5 +1,5 @@
 import { Fragment, type CSSProperties } from 'react'
-import { ESTILO_ITALICO, analisar } from '@/lib/texto-rico'
+import { ESTILO_PALAVRA_ITALICA, analisar, emPalavras } from '@/lib/texto-rico'
 import { cn } from '@/lib/utils'
 
 interface TextoFormatadoProps {
@@ -37,19 +37,32 @@ export function TextoFormatado({ texto, className }: TextoFormatadoProps) {
               // não existe classe do Tailwind que o cubra.
               const estilo: CSSProperties = {}
               if (t.tamanho) estilo.fontSize = `${t.tamanho}px`
-              if (t.italico) Object.assign(estilo, ESTILO_ITALICO)
-              const conteudo = (
+              if (t.italico) estilo.fontStyle = 'italic'
+
+              // Em itálico cada PALAVRA vai na sua própria caixa inclinada —
+              // ver `ANGULO_ITALICO`. Inclinar o trecho inteiro desalinharia o
+              // começo de cada linha.
+              const conteudo = t.italico
+                ? emPalavras(t.texto).map((parte, k) =>
+                    /^\s+$/.test(parte) ? (
+                      <Fragment key={k}>{parte}</Fragment>
+                    ) : (
+                      <span key={k} style={ESTILO_PALAVRA_ITALICA}>
+                        {parte}
+                      </span>
+                    ),
+                  )
+                : t.texto
+
+              return (
                 <span
+                  key={j}
                   style={estilo}
-                  className={cn(
-                    t.negrito && 'font-semibold text-gray-900',
-                    t.italico && 'italic',
-                  )}
+                  className={cn(t.negrito && 'font-semibold text-gray-900')}
                 >
-                  {t.texto}
+                  {conteudo}
                 </span>
               )
-              return <Fragment key={j}>{conteudo}</Fragment>
             })}
           </p>
         )

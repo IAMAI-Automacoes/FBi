@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Italic, Minus, Plus } from 'lucide-react'
 import {
-  ESTILO_ITALICO,
+  ESTILO_PALAVRA_ITALICA,
+  emPalavras,
   TAMANHO_MAX,
   TAMANHO_MIN,
   TAMANHO_PADRAO,
@@ -67,19 +68,31 @@ export function EditorTextoRico({
   const ref = useRef<HTMLDivElement>(null)
 
   /**
-   * Deita os `<i>` recém-escritos.
+   * Deita as palavras dos `<i>` recém-escritos.
    *
    * O conteúdo do editor é montado como texto HTML (`montar()`), então não há
-   * onde pendurar um `style` de React — a inclinação é aplicada aqui, nó a nó.
-   * Ver `ESTILO_ITALICO` para por que `skewX` e não `font-style` sozinho.
+   * onde pendurar um `style` de React — a inclinação é aplicada aqui, nó a nó,
+   * uma caixa por palavra. Ver `ANGULO_ITALICO` para por que palavra a palavra
+   * e não no trecho inteiro.
    *
    * Roda depois de cada escrita no `innerHTML`. Não suja o que é salvo: o
-   * `analisar()` reconhece o itálico pela TAG, ignora `style` que não seja
-   * `font-size`, e o `montar()` devolve um `<i>` limpo.
+   * `analisar()` reconhece o itálico pela TAG e ignora `span` sem `font-size`,
+   * então essas caixas somem na leitura e o `montar()` devolve um `<i>` limpo.
    */
   const deitarItalicos = (el: HTMLElement) => {
     el.querySelectorAll('i').forEach((i) => {
-      Object.assign(i.style, ESTILO_ITALICO)
+      const texto = i.textContent ?? ''
+      i.textContent = ''
+      for (const parte of emPalavras(texto)) {
+        if (/^\s+$/.test(parte)) {
+          i.appendChild(document.createTextNode(parte))
+          continue
+        }
+        const caixa = document.createElement('span')
+        Object.assign(caixa.style, ESTILO_PALAVRA_ITALICA)
+        caixa.textContent = parte
+        i.appendChild(caixa)
+      }
     })
   }
   /**
@@ -203,36 +216,67 @@ export function EditorTextoRico({
   }
 
   /**
-   * O tamanho do que está selecionado agora.
+   * Os trechos que a seleção cobre, com as marcas de cada um.
    *
-   * Com vários tamanhos dentro da seleção, vale o do PRIMEIRO trecho: é o que
-   * a pessoa vê no começo do que pintou, e um "+" a partir dali é previsível.
-   * Devolver a média ou o maior faria o primeiro clique dar um salto que
-   * ninguém pediu.
+   * É a base das duas decisões da barra: qual número mostrar e o que o botão
+   * de negrito/itálico deve fazer.
    */
-  const tamanhoDaSelecao = (): number => {
+  const trechosSelecionados = (): Trecho[] => {
     const el = ref.current
     const sel = lerSelecao()
-    if (!el || !sel) return TAMANHO_PADRAO
+    if (!el || !sel) return []
 
     const linhas = analisar(el.innerHTML)
+    const dentro: Trecho[] = []
     let pos = 0
     for (let i = 0; i < linhas.length; i++) {
       for (const t of linhas[i]) {
         const ini = pos
         const fim = pos + t.texto.length
         pos = fim
-        // O cursor sem seleção (inicio === fim) fica NA BORDA de um trecho;
-        // por isso `>=` no fim, senão ele nunca cai dentro de nada.
-        const dentro =
-          sel.inicio === sel.fim
-            ? sel.inicio >= ini && sel.inicio <= fim
-            : fim > sel.inicio && ini < sel.fim
-        if (dentro) return t.tamanho ?? TAMANHO_PADRAO
+        // Cursor sem seleção fica NA BORDA de um trecho, por isso o `<=`.
+        const cobre = sel.inicio === sel.fim
+          ? sel.inicio >= ini && sel.inicio <= fim
+          : fim > sel.inicio && ini < sel.fim
+        if (cobre) dentro.push(t)
       }
       if (i < linhas.length - 1) pos += 1 // o <br>
     }
-    return TAMANHO_PADRAO
+    return dentro
+  }
+
+  /**
+   * Liga ou desliga uma marca — a regra do Word e do Google Docs.
+   *
+   * Se TODO o trecho selecionado já tem a marca, o botão a remove; caso
+   * contrário (nada tem, ou só uma parte tem), ele aplica em tudo. O resultado
+   * é sempre uniforme.
+   *
+   * Antes cada trecho era invertido por conta própria, e uma seleção com uma
+   * parte em itálico e outra sem trocava as duas de lugar: o que estava
+   * inclinado ficava reto e o reto ficava inclinado. Dois cliques devolviam ao
+   * estado inicial sem nunca deixar tudo igual.
+   */
+  const alternar = (marca: 'negrito' | 'italico') => {
+    const cobertos = trechosSelecionados()
+    if (cobertos.length === 0) return
+    const todosTem = cobertos.every((t) => t[marca])
+    aplicar((m) => ({ ...m, [marca]: !todosTem }))
+  }
+
+  /**
+   * O tamanho da seleção, ou `null` quando ela mistura tamanhos.
+   *
+   * `null` é o que o Word e o Docs mostram como campo VAZIO: não existe um
+   * número que descreva a seleção, e exibir o do primeiro trecho seria dizer
+   * que o resto também é aquilo.
+   */
+  const tamanhoDaSelecao = (): number | null => {
+    const cobertos = trechosSelecionados()
+    if (cobertos.length === 0) return TAMANHO_PADRAO
+    const primeiro = cobertos[0].tamanho ?? TAMANHO_PADRAO
+    const uniforme = cobertos.every((t) => (t.tamanho ?? TAMANHO_PADRAO) === primeiro)
+    return uniforme ? primeiro : null
   }
 
   /**
@@ -334,7 +378,7 @@ export function EditorTextoRico({
                 onClick={() => mudarTamanho(-1)}
                 className={btn}
                 aria-label="Diminuir a letra"
-                disabled={tamanho <= TAMANHO_MIN}
+                disabled={tamanho !== null && tamanho <= TAMANHO_MIN}
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -344,12 +388,16 @@ export function EditorTextoRico({
               <input
                 type="text"
                 inputMode="numeric"
-                value={tamanho}
+                value={tamanho ?? ''}
+                placeholder="—"
                 onChange={(e) => {
                   const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
-                  if (Number.isFinite(n)) setTamanho(n)
+                  setTamanho(Number.isFinite(n) ? n : null)
                 }}
                 onBlur={() => {
+                  // Aqui o valor digitado É a intenção — diferente do +/−, que
+                  // precisa partir do texto. Campo vazio não faz nada.
+                  if (tamanho === null) return
                   const n = limitarTamanho(tamanho)
                   setTamanho(n)
                   aplicar((m) => ({ ...m, tamanho: n === TAMANHO_PADRAO ? undefined : n }))
@@ -363,7 +411,7 @@ export function EditorTextoRico({
                 onClick={() => mudarTamanho(1)}
                 className={btn}
                 aria-label="Aumentar a letra"
-                disabled={tamanho >= TAMANHO_MAX}
+                disabled={tamanho !== null && tamanho >= TAMANHO_MAX}
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -372,7 +420,7 @@ export function EditorTextoRico({
 
               <button
                 type="button"
-                onClick={() => aplicar((m) => ({ ...m, negrito: !m.negrito }))}
+                onClick={() => alternar('negrito')}
                 className={btn}
                 aria-label="Negrito"
                 title="Negrito"
@@ -381,7 +429,7 @@ export function EditorTextoRico({
               </button>
               <button
                 type="button"
-                onClick={() => aplicar((m) => ({ ...m, italico: !m.italico }))}
+                onClick={() => alternar('italico')}
                 className={btn}
                 aria-label="Itálico"
                 title="Itálico"
