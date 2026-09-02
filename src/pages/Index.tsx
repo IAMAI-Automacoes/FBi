@@ -12,6 +12,7 @@ import {
   buscarUltimosFeedbacks,
 } from '@/lib/queries/visao-geral'
 import { useToast } from '@/hooks/use-toast'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { MessageSquare, Settings } from 'lucide-react'
@@ -19,7 +20,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 
 export default function Index() {
-  const [period, setPeriod] = useState<PeriodInfo>('7d')
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('visao-geral:periodo', '7d')
   const [data, setData] = useState<DashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()

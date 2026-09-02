@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Archive } from 'lucide-react'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { CampoBusca } from '@/components/CampoBusca'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import {
   FiltroPeriodo,
   type PeriodoPreset,
@@ -43,14 +44,14 @@ export default function AcoesArquivadas() {
   // Mesmos três filtros de /feedbacks. A lista de arquivadas só cresce — é o
   // único lugar do app onde nada sai —, então em poucos meses ela é a maior
   // do sistema e rolar deixa de ser uma forma de achar coisa.
-  const [busca, setBusca] = useState('')
-  const [categorias, setCategorias] = useState<string[]>([])
+  const [busca, setBusca] = useFiltroPersistente('arquivadas:busca', '')
+  const [categorias, setCategorias] = useFiltroPersistente<string[]>('arquivadas:categorias', [])
   // `periodo` é o atalho (7/30/90/tudo) e `datas` é o intervalo do calendário;
   // o intervalo tem precedência, igual a /feedbacks. Aqui o padrão é 'all' e
   // não '7d': o arquivo existe justamente para consultar coisa antiga, e abrir
   // filtrado em uma semana esconderia quase tudo que está lá.
-  const [periodo, setPeriodo] = useState<PeriodoPreset>('all')
-  const [datas, setDatas] = useState<IntervaloDatas | undefined>()
+  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoPreset>('arquivadas:periodo', 'all')
+  const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>('arquivadas:datas', undefined)
 
   // Contagem por categoria SOBRE o que os outros filtros já deixaram passar,
   // e não sobre a lista inteira: o número ao lado de cada categoria tem que

@@ -29,6 +29,7 @@ import { useUserProfile } from '@/hooks/use-user-profile'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
 
 const PERIOD_LABEL: Record<PeriodInfo, string> = {
@@ -70,7 +71,7 @@ function SatisfacaoTooltip({ active, payload }: { active?: boolean; payload?: an
 
 export default function Reports() {
   const { profile, loading: profileLoading } = useUserProfile()
-  const [period, setPeriod] = useState<PeriodInfo>('30d')
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('relatorios:periodo', '30d')
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState<any>(null)
   const [stats, setStats] = useState<EstatisticasRelatorio | null>(null)
