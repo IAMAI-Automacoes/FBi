@@ -107,7 +107,7 @@ export function EditorTextoRico({
    * valor usado, não o tamanho do que estava selecionado, e o `+` somava
    * sobre o valor errado.
    */
-  const [tamanho, setTamanho] = useState(TAMANHO_PADRAO)
+  const [tamanho, setTamanho] = useState<number | null>(TAMANHO_PADRAO)
   /** HTML que o editor escreveu por último — para não reescrever o que já está lá. */
   const ultimoRef = useRef<string>('')
 
@@ -324,15 +324,43 @@ export function EditorTextoRico({
     deitarItalicos(el)
     restaurarSelecao(sel.inicio, sel.fim)
     publicar()
+
+    // A barra é redesenhada A PARTIR DO CONTEÚDO recém-escrito, e não do
+    // número que o botão calculou.
+    //
+    // Havia duas fontes de verdade — o estado da barra, atualizado no clique,
+    // e o texto, atualizado logo depois. Entre um e outro o `selectionchange`
+    // disparava, lia o tamanho ANTIGO e o escrevia por cima do novo; o clique
+    // seguinte então partia do valor errado. É isso que produzia o salto de
+    // dois números seguido da correção de um.
+    setTamanho(tamanhoDaSelecao())
   }
 
+  /**
+   * O "+" e o "−" da barra.
+   *
+   * Partem do tamanho do TEXTO, não do número na tela: os dois andam juntos
+   * enquanto a seleção não muda, mas divergem assim que alguém pinta outro
+   * trecho.
+   *
+   * Com tamanhos misturados na seleção, cada trecho sobe ou desce a partir do
+   * SEU valor, como no Word e no Docs — um título de 18 com corpo de 11 vira
+   * 19 e 12, e não os dois no mesmo número.
+   *
+   * Não escreve na barra: quem a redesenha é o `aplicar`, depois de gravar o
+   * conteúdo. Ver a nota lá sobre as duas fontes de verdade.
+   */
   const mudarTamanho = (delta: number) => {
-    // Parte do tamanho do TEXTO, não do número que está na tela. Os dois
-    // andam juntos enquanto a seleção não muda, mas divergem assim que
-    // alguém pinta outro trecho — e é aí que "+" fazia a letra encolher.
-    const novo = limitarTamanho(tamanhoDaSelecao() + delta)
-    setTamanho(novo)
-    aplicar((m) => ({ ...m, tamanho: novo === TAMANHO_PADRAO ? undefined : novo }))
+    const atual = tamanhoDaSelecao()
+    if (atual !== null) {
+      const novo = limitarTamanho(atual + delta)
+      aplicar((m) => ({ ...m, tamanho: novo === TAMANHO_PADRAO ? undefined : novo }))
+      return
+    }
+    aplicar((m) => {
+      const novo = limitarTamanho((m.tamanho ?? TAMANHO_PADRAO) + delta)
+      return { ...m, tamanho: novo === TAMANHO_PADRAO ? undefined : novo }
+    })
   }
 
   /**
@@ -375,6 +403,11 @@ export function EditorTextoRico({
             <div className="flex w-fit items-center gap-0.5 rounded-md border border-gray-200 bg-white px-1 py-0.5">
               <button
                 type="button"
+                // Sem isto o mousedown tira o foco do texto ANTES de o clique
+                // chegar, e o navegador colapsa a seleção — o handler então age
+                // sobre uma seleção que já não existe. É o gesto padrão das
+                // barras de editor, e a origem dos números pulando.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => mudarTamanho(-1)}
                 className={btn}
                 aria-label="Diminuir a letra"
@@ -399,7 +432,6 @@ export function EditorTextoRico({
                   // precisa partir do texto. Campo vazio não faz nada.
                   if (tamanho === null) return
                   const n = limitarTamanho(tamanho)
-                  setTamanho(n)
                   aplicar((m) => ({ ...m, tamanho: n === TAMANHO_PADRAO ? undefined : n }))
                 }}
                 aria-label="Tamanho da letra"
@@ -408,6 +440,7 @@ export function EditorTextoRico({
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => mudarTamanho(1)}
                 className={btn}
                 aria-label="Aumentar a letra"
@@ -420,6 +453,7 @@ export function EditorTextoRico({
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => alternar('negrito')}
                 className={btn}
                 aria-label="Negrito"
@@ -429,6 +463,7 @@ export function EditorTextoRico({
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => alternar('italico')}
                 className={btn}
                 aria-label="Itálico"
