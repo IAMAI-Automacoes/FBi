@@ -24,12 +24,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* O itálico reforçado do plano de ação NÃO mora aqui, e sim em estilo inline
-   (ver `INCLINACAO_ITALICO` em lib/texto-rico.ts).
-   `font-style: oblique 14deg` escrito em CSS chega ao arquivo final como
-   `font-style: oblique`, sem o ângulo: o processador de CSS do build descarta
-   a parte angular — testado também com a minificação desligada. Inline, o
-   valor não passa por ele. */
+/* O itálico do plano de ação NÃO mora aqui: ele é estilo inline, em
+   `ESTILO_ITALICO` (lib/texto-rico.ts). O motivo está lá — em resumo, o
+   Chrome ignora o ângulo de `font-style: oblique <n>deg`, então a inclinação
+   extra vem de `skewX`, que precisa acompanhar o `inline-block` no mesmo
+   elemento. */
 
 /* Nome do restaurante usa a fonte da marca, com fallback serif. */
 .fonte-marca {

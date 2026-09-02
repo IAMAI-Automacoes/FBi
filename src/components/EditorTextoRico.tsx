@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Italic, Minus, Plus } from 'lucide-react'
 import {
-  INCLINACAO_ITALICO,
+  ESTILO_ITALICO,
   TAMANHO_MAX,
   TAMANHO_MIN,
   TAMANHO_PADRAO,
@@ -70,8 +70,8 @@ export function EditorTextoRico({
    * Deita os `<i>` recém-escritos.
    *
    * O conteúdo do editor é montado como texto HTML (`montar()`), então não há
-   * onde pendurar um `style` de React. E a inclinação precisa ser inline: em
-   * folha de estilo o ângulo é descartado no build (ver `INCLINACAO_ITALICO`).
+   * onde pendurar um `style` de React — a inclinação é aplicada aqui, nó a nó.
+   * Ver `ESTILO_ITALICO` para por que `skewX` e não `font-style` sozinho.
    *
    * Roda depois de cada escrita no `innerHTML`. Não suja o que é salvo: o
    * `analisar()` reconhece o itálico pela TAG, ignora `style` que não seja
@@ -79,7 +79,7 @@ export function EditorTextoRico({
    */
   const deitarItalicos = (el: HTMLElement) => {
     el.querySelectorAll('i').forEach((i) => {
-      i.style.fontStyle = INCLINACAO_ITALICO
+      Object.assign(i.style, ESTILO_ITALICO)
     })
   }
   /**
