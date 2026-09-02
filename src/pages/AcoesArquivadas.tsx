@@ -13,7 +13,7 @@ import { isWithinInterval, startOfDay, endOfDay, subDays } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TaskCard } from '@/components/actions/TaskCard'
-import { TaskModal } from '@/components/insights/TaskModal'
+import { DetalhesAcaoPanel } from '@/components/actions/DetalhesAcaoPanel'
 import { buscarAcoesArquivadas, desarquivarAcao, excluirAcao } from '@/lib/queries/acoes'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -231,22 +231,14 @@ export default function AcoesArquivadas() {
 
       {/* Abre no clique do card: mostra os dados travados e oferece Excluir. */}
       {acaoAberta && (
-        <TaskModal
-          open={!!acaoAberta}
-          onOpenChange={(aberto) => !aberto && setAcaoAberta(null)}
-          somenteLeitura
-          task={{
-            id: acaoAberta.id,
-            title: acaoAberta.titulo_acao,
-            priority: acaoAberta.prioridade,
-            source: acaoAberta.categoria,
-            status: acaoAberta.status,
-            insight_id: acaoAberta.insight_id,
-            responsavel: acaoAberta.responsavel,
-            prazo: acaoAberta.prazo,
-            plano_detalhado: acaoAberta.plano_detalhado,
+        <DetalhesAcaoPanel
+          task={acaoAberta}
+          onClose={() => setAcaoAberta(null)}
+          onExcluir={() => {
+            const id = acaoAberta.id
+            setAcaoAberta(null)
+            handleExcluir(String(id))
           }}
-          onDelete={handleExcluir}
         />
       )}
     </div>

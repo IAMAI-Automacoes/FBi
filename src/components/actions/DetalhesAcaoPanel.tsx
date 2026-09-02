@@ -34,7 +34,8 @@ interface DetalhesAcaoPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   task: any
   onClose: () => void
-  onEditar: () => void
+  /** Ausente em ação arquivada: não há o que editar num registro fechado. */
+  onEditar?: () => void
   /** Exclui a ação. Sem isso, o botão de excluir não aparece. */
   onExcluir?: () => void
 }
@@ -236,6 +237,7 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                     botão de feedbacks é o que impede clicar em excluir quando
                     se queria ler os feedbacks. */}
                 <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {onEditar && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -250,6 +252,7 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                     </TooltipTrigger>
                     <TooltipContent side="top">Editar</TooltipContent>
                   </Tooltip>
+                  )}
 
                   {onExcluir && (
                     <AlertDialog>

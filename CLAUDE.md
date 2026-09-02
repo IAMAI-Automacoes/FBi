@@ -53,6 +53,12 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 
 ## Regras Obrigatórias
 
+- **Typecheck:** use `npm run typecheck` (aponta para `tsconfig.app.json`).
+  `npx tsc --noEmit` na raiz **não checa nada** — o `tsconfig.json` tem
+  `"files": []` e só declara `references`, então o comando passa limpo mesmo
+  com erro no código. Há ~34 erros preexistentes (tipos gerados do Supabase
+  desatualizados quanto a `acoes_operacionais.fixado`); o que importa é não
+  aumentar esse número.
 - **Commits em português:** `feat:`, `fix:`, `refactor:`, `chore:`
 - **Sem `any` sem justificativa** em comentário
 - **RLS sempre ativo** — nunca desabilitar

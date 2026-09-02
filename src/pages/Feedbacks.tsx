@@ -247,7 +247,7 @@ export default function Feedbacks() {
     setExtra(barraFiltros)
     return () => setExtra(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros, periodoAberto, contagemCategorias])
+  }, [filtros, contagemCategorias])
 
   return (
     <div className="mx-auto max-w-[1050px] pb-12 animate-fade-in-up">

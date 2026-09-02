@@ -310,7 +310,6 @@ export function ChatFab({
     setEditandoUid(null)
     setTextoEdicao('')
     setHasError(false)
-    setFormularioPendente(null)
 
     // Rebobina: esquece as mensagens seguintes E as anotações aprendidas dali em
     // diante. Depois refaz o contexto (memória já sem o que foi esquecido) e
@@ -513,7 +512,6 @@ export function ChatFab({
     setView('chat')
     setHasError(false)
     setFailedMessage('')
-    setFormularioPendente(null)
     setAnexos([])
     setContextoInsight(null)
   }
@@ -865,7 +863,6 @@ export function ChatFab({
     setCitacao(null)
     setHasError(false)
     setFailedMessage('')
-    setFormularioPendente(null)
 
     // A mensagem aparece na hora — buscar contexto e chamar a IA vem depois
     adicionarMensagemUsuario(msgTexto, anexosMsg.length ? anexosMsg : undefined, citando || undefined)
