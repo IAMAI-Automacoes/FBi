@@ -26,14 +26,13 @@ import { estiloCategoria } from '@/lib/categorias-feedback'
 import { gerarPdfRelatorio } from '@/lib/pdf/gerar-pdf-relatorio'
 import { supabase } from '@/lib/supabase/client'
 import { useUserProfile } from '@/hooks/use-user-profile'
-import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { montarLinhasCsv, serializarCsv } from '@/lib/relatorio-csv'
 import { toast } from 'sonner'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
@@ -133,108 +132,66 @@ export default function Reports() {
     setGerandoCsv(true)
     try {
       const { currentStart } = getPeriodDates(period)
-      const { data: brutos } = restauranteId
-        ? await supabase
-            .from('feedbacks_restaurante')
-            .select('created_at, categoria, sentimento, texto_original, resumo')
-            .eq('restaurante_id', restauranteId)
-            .gte('created_at', currentStart.toISOString())
-            .order('created_at', { ascending: false })
-        : { data: [] as any[] }
+      const desde = currentStart.toISOString()
 
-      const temaCritico =
-        kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum'
-          ? `${kpis.criticalTheme} (${kpis.criticalPercent}% negativas)` : 'Nenhum'
+      // Insights e ações vêm junto: eles não estão na página de relatórios,
+      // mas são o que o sistema CONCLUIU e o que está sendo FEITO. Sem eles a
+      // planilha conta só o problema.
+      const [brutosRes, insRes, acoesRes] = await Promise.all([
+        restauranteId
+          ? supabase
+              .from('feedbacks_restaurante')
+              .select('created_at, categoria, sentimento, texto_original, resumo')
+              .eq('restaurante_id', restauranteId)
+              .gte('created_at', desde)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        restauranteId
+          ? supabase
+              .from('insights')
+              .select('titulo, prioridade, descricao')
+              .eq('restaurante_id', restauranteId)
+              .eq('ativo', true)
+              .gte('created_at', desde)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        restauranteId
+          ? supabase
+              .from('acoes_operacionais')
+              .select('titulo_acao, status, prioridade, categoria')
+              .eq('restaurante_id', restauranteId)
+              .is('arquivada_em', null)
+              .order('ordem', { ascending: true })
+          : Promise.resolve({ data: [] as any[] }),
+      ])
 
-      // Mesma regra da tela e do PDF: só mostra variação vs. período anterior
-      // quando ele tem base suficiente (senão "+200%" saindo de 1 avaliação
-      // engana). Antes o CSV só checava `hasPrevData`, ignorando essa trava.
-      const comparavelCsv = kpis.hasPrevData && kpis.prevConfiavel
-
-      const { currentStart: inicio } = getPeriodDates(period)
-
-      const linhas: string[][] = [
-        ['RELATÓRIO', nomeRestaurante],
-        ['Período', PERIOD_LABEL[period]],
-        // As datas exatas, e não só "Últimos 30 dias": a planilha vai ser
-        // aberta semanas depois, quando o rótulo relativo já não diz nada.
-        ['De', format(inicio, 'dd/MM/yyyy')],
-        ['Até', format(new Date(), 'dd/MM/yyyy')],
-        ['Gerado em', format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })],
-        [],
-        ['Todos os números abaixo são só deste período.'],
-        ['A satisfação vai de 0 a 100: 100 = todas positivas, 0 = todas negativas.'],
-        [],
-        ['RESUMO'],
-        ['Métrica', 'Valor', 'vs. período anterior'],
-        ['Total de avaliações', String(kpis.totalFeedbacks), comparavelCsv ? kpis.totalTrend : '—'],
-        ['Índice de satisfação (0-100)', String(kpis.sentiment), comparavelCsv ? kpis.sentimentTrend : '—'],
-        ['Avaliações positivas', `${kpis.positivos} (${kpis.positivePercent}%)`, ''],
-        ['Avaliações neutras', `${kpis.neutros} (${kpis.neutralPercent}%)`, ''],
-        ['Avaliações negativas', `${kpis.negativos} (${kpis.negativePercent}%)`, ''],
-        ['Tema que mais preocupa', temaCritico, ''],
-        ['Clientes únicos', String(stats.clientesUnicos), ''],
-        ['Clientes que avaliaram mais de uma vez', String(stats.clientesRecorrentes), ''],
-        ['Avaliações por cliente', String(stats.avaliacoesPorCliente), ''],
-        [],
-        ['POR CATEGORIA'],
-        ['Onde o restaurante vai melhor e pior.'],
-        ['Categoria', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porCategoria.map((c) => [c.nome, String(c.total), String(c.satisfacao)]),
-        [],
-        ['EVOLUÇÃO NO PERÍODO'],
-        ['Um dia por linha. Satisfação em branco = nenhuma avaliação naquele dia.'],
-        ['Data', 'Avaliações', 'Satisfação (0-100)'],
-        ...tendencia.map((t) => [t.date, String(t.avaliacoes), t.sentiment == null ? '' : String(t.sentiment)]),
-        [],
-        ['O QUE OS CLIENTES MAIS COMENTAM'],
-        ['Assunto agrupado pela IA, com quantas vezes apareceu no período.'],
-        ['Assunto', 'Tipo', 'Vezes'],
-        ...temas.map((t) => [
-          t.rotulo,
-          t.tipo === 'elogio' ? 'Elogio' : 'Reclamação',
-          String(t.quantidade),
-        ]),
-        [],
-        ['POR DIA DA SEMANA'],
-        ['Soma de todas as semanas do período — mostra o dia que costuma pesar.'],
-        ['Dia', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porDiaSemana.map((d) => [d.nome, String(d.total), d.satisfacao == null ? '' : String(d.satisfacao)]),
-        [],
-        ['POR FAIXA DE HORÁRIO'],
-        ['Hora em que a avaliação chegou, não a do atendimento.'],
-        ['Faixa', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porFaixaHorario.map((f) => [f.nome, String(f.total), f.satisfacao == null ? '' : String(f.satisfacao)]),
-        [],
-        ['TODAS AS AVALIAÇÕES'],
-        // O que o sistema chama de "avaliação" é um ASSUNTO citado, não uma
-        // mensagem: quem falou de comida e de atendimento na mesma mensagem
-        // gerou duas. É a mesma contagem do resumo lá em cima — conferido —,
-        // e dizer isso aqui evita que alguém compare esta lista com o número
-        // de clientes e ache que um dos dois está errado.
-        ['Uma linha por assunto citado. Uma mensagem que fala de dois assuntos'],
-        ['vira duas linhas — o total daqui é o mesmo "Total de avaliações" do resumo.'],
-        ['Data', 'Hora', 'Categoria', 'Sentimento', 'Avaliação'],
-        ...(brutos || []).map((f: any) => {
-          const d = parseISO(f.created_at)
-          return [
-            format(d, 'dd/MM/yyyy'), format(d, 'HH:mm'),
-            f.categoria || 'Outros', f.sentimento || '',
-            (f.texto_original || f.resumo || '').replace(/[\r\n]+/g, ' '),
-          ]
+      const csv = serializarCsv(
+        montarLinhasCsv({
+          nomeRestaurante,
+          rotuloPeriodo: PERIOD_LABEL[period],
+          inicio: currentStart,
+          fim: new Date(),
+          kpis,
+          stats,
+          tendencia,
+          temas,
+          insights: insRes.data || [],
+          acoes: acoesRes.data || [],
+          avaliacoes: brutosRes.data || [],
+          // Só entra se a leitura da IA já foi gerada na tela: o CSV não vai
+          // chamar a IA por conta própria — baixar uma planilha não deveria
+          // custar uma chamada nem a espera dela.
+          resumoIa: analise?.resumo ?? null,
         }),
-      ]
+      )
 
-      const csv = linhas
-        .map((cols) => cols.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))
-        .join('\r\n')
       baixar(
-        new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }),
+        new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
         `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.csv`,
       )
-      toast.success('CSV baixado!')
+      toast.success('Planilha baixada')
     } catch (e: any) {
-      toast.error('Erro ao gerar o CSV', { description: e.message })
+      toast.error('Erro ao gerar a planilha', { description: e.message })
     } finally {
       setGerandoCsv(false)
     }
@@ -475,57 +432,67 @@ function LayoutNovo({
               <SelectItem value="90d">Últimos 3 meses</SelectItem>
             </SelectContent>
           </Select>
-          {/* Um botão só, com o formato escolhido dentro.
-              Eram dois lado a lado — um contornado escrito "Exportar" e um
-              verde escrito "PDF" —, e o par não dizia que faziam a mesma
-              coisa em formatos diferentes: um parecia a ação e o outro um
-              atalho. Aqui a ação é "Baixar" e o formato é a escolha.
+          {/* Split button: a ação fica na esquerda com o rótulo, o formato na
+              seta à direita — o padrão de export em ferramenta de dados
+              (Linear, Stripe, Notion), e o que a pesquisa de referência
+              recomenda quando há um padrão claro com variantes.
 
-              Verde e não o azul da marca: é o único botão da barra que
-              produz um arquivo, e o azul já é a cor de tudo que é clicável
-              no app. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                disabled={semDados || gerandoCsv || gerandoPdf}
-                className="h-10 gap-2 rounded-md bg-emerald-600 px-4 font-medium text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
-              >
-                {gerandoCsv || gerandoPdf ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {gerandoCsv ? 'Gerando planilha…' : gerandoPdf ? 'Gerando PDF…' : 'Baixar'}
-                <ChevronDown className="h-4 w-4 opacity-70" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              {/* Cada item diz o que o arquivo SERVE para fazer, não só o
-                  que ele é: quem baixa está escolhendo entre ler e calcular. */}
-              <DropdownMenuItem
-                onClick={handleExportPdf}
-                disabled={gerandoPdf}
-                className="gap-3 py-2.5"
-              >
-                <FileText className="h-4 w-4 shrink-0 text-red-600" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Relatório em PDF</p>
-                  <p className="text-xs text-gray-500">Com análise escrita, pronto para enviar</p>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleExportCSV}
-                disabled={gerandoCsv}
-                className="gap-3 py-2.5"
-              >
-                <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">Planilha (CSV)</p>
-                  <p className="text-xs text-gray-500">Todos os números, para abrir no Excel</p>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              A metade esquerda baixa o PDF direto, porque é o que 9 em 10
+              downloads de relatório são. Quem quer a planilha abre a seta.
+              Antes era um botão só que só abria menu: dois cliques para a
+              coisa mais comum.
+
+              Altura 40px e `text-sm`, iguais aos do seletor de período ao
+              lado — antes o botão era `font-medium` num tamanho que não
+              batia com nada da barra, e por isso parecia colado ali. */}
+          <div className="flex items-stretch">
+            <Button
+              onClick={handleExportPdf}
+              disabled={semDados || gerandoPdf || gerandoCsv}
+              className="h-10 gap-2 rounded-l-md rounded-r-none border-r border-emerald-700/40 bg-emerald-600 px-3.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+            >
+              {gerandoPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="Escolher formato"
+                  disabled={semDados || gerandoPdf || gerandoCsv}
+                  className="h-10 rounded-l-none rounded-r-md bg-emerald-600 px-2 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[268px]">
+                {/* Cada item diz para que o arquivo SERVE, não só o que ele
+                    é: quem baixa escolhe entre ler e calcular. */}
+                <DropdownMenuItem onClick={handleExportPdf} disabled={gerandoPdf} className="gap-3 py-2.5">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Relatório em PDF</p>
+                    <p className="text-xs leading-snug text-gray-500">
+                      Com gráficos e análise escrita, pronto para enviar
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCSV} disabled={gerandoCsv} className="gap-3 py-2.5">
+                  <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Planilha (CSV)</p>
+                    <p className="text-xs leading-snug text-gray-500">
+                      Todos os dados, para abrir no Excel
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 

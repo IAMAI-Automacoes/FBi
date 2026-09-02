@@ -1,6 +1,14 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AnaliseRelatorio } from '@/lib/queries/relatorios'
+import {
+  barraEmpilhada,
+  barrasHorizontais,
+  linhaEvolucao,
+  VERDE as G_VERDE,
+  VERMELHO as G_VERMELHO,
+  CINZA as G_CINZA,
+} from './graficos'
 
 // Paleta (mesma identidade do app)
 const AZUL: [number, number, number] = [29, 78, 216]
@@ -179,26 +187,12 @@ export async function gerarPdfRelatorio(
       { n: neu, pct: kpis.neutralPercent ?? 0, c: CINZA_NEUTRO, r: 'Neutras' },
       { n: neg, pct: kpis.negativePercent ?? 0, c: VERMELHO, r: 'Negativas' },
     ]
-    let x = M
-    segs.forEach((s) => {
-      if (!s.n) return
-      const w = (s.n / total) * UTIL
-      setFundo(s.c)
-      doc.rect(x, y, w, 6, 'F')
-      x += w
+    y = barraEmpilhada(doc, {
+      x: M,
+      y,
+      largura: UTIL,
+      partes: segs.map((s) => ({ rotulo: s.r, valor: s.n, cor: s.c })),
     })
-    y += 11
-    doc.setFontSize(8.5)
-    let lx = M
-    segs.forEach((s) => {
-      setFundo(s.c)
-      doc.circle(lx + 1.4, y - 1.4, 1.4, 'F')
-      setCor(CINZA)
-      const txt = `${s.r}: ${s.n} (${s.pct}%)`
-      doc.text(txt, lx + 4.5, y)
-      lx += doc.getTextWidth(txt) + 14
-    })
-    y += 5
   }
 
   // ── Pontos fortes e fracos (dois blocos) ─────────────────────────────────
@@ -237,65 +231,110 @@ export async function gerarPdfRelatorio(
   if (categorias.length > 0) {
     secao('Satisfação por categoria')
     paragrafo(analise.leitura_categorias, { tamanho: 9.5, lh: 4.8 })
-    espaco(20)
-    autoTable(doc, {
-      startY: y + 1,
-      head: [['Categoria', 'Avaliações', 'Satisfação (0-100)']],
-      body: categorias.map((c: any) => [
-        limpar(c.nome || c.name || '-'),
-        String(c.total ?? c.count ?? '-'),
-        String(c.satisfacao ?? c.score ?? '-'),
-      ]),
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 2.5, textColor: TINTA },
-      headStyles: { fontStyle: 'bold', textColor: CINZA, fillColor: FUNDO_SUAVE },
-      alternateRowStyles: { fillColor: [252, 253, 254] },
-      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } },
-      margin: { left: M, right: M },
+    // Barras e não tabela: a pergunta aqui é "onde estou bem e onde estou
+    // mal", e comparar comprimentos responde isso de relance — três colunas
+    // de números exigem ler todas para achar a menor.
+    espaco(categorias.length * 9 + 14)
+    doc.setFontSize(7.5)
+    setCor(CINZA)
+    doc.text('avaliações', M + 44, y - 1, { align: 'right' })
+    doc.text('satisfação (0-100)', M + UTIL, y - 1, { align: 'right' })
+    y = barrasHorizontais(doc, {
+      x: M,
+      y: y + 1,
+      largura: UTIL,
+      maximo: 100,
+      largRotulo: 46,
+      itens: categorias.map((c: any) => ({
+        rotulo: limpar(c.nome || c.name || '-'),
+        valor: Number(c.satisfacao ?? c.score ?? 0),
+        detalhe: String(c.total ?? c.count ?? ''),
+        semDados: !(c.total ?? c.count),
+      })),
     })
-    y = (doc as any).lastAutoTable.finalY + 4
+    y += 3
+  }
+
+  // ── Evolução da satisfação ───────────────────────────────────────────────
+  // Faltava no PDF e é a única seção que responde "está melhorando ou
+  // piorando?" — a tela mostra o gráfico, e quem recebia o arquivo via só
+  // fotografias de um instante.
+  const tendencia = dadosRelatorio.tendencia || []
+  if (tendencia.length > 1) {
+    secao('Evolução da satisfação')
+    paragrafo(
+      'Linha: satisfação do dia. Barras ao fundo: quantas avaliações houve. Dia sem avaliação não recebe ponto.',
+      { tamanho: 9, cor: CINZA, lh: 4.5 },
+    )
+    espaco(44)
+    y = linhaEvolucao(doc, {
+      x: M + 6,
+      y: y + 2,
+      largura: UTIL - 6,
+      altura: 30,
+      pontos: tendencia.map((t: any) => ({
+        rotulo: limpar(t.date),
+        valor: t.sentiment ?? null,
+        volume: t.avaliacoes ?? 0,
+      })),
+    })
+    y += 2
   }
 
   // ── O que os clientes mais comentam ──────────────────────────────────────
-  // Os assuntos que a IA agrupou. É a parte mais concreta do relatório — diz
-  // do que se falou, com nome, e não só quantos foram e em que categoria.
   const temas = dadosRelatorio.temas || []
   if (temas.length > 0) {
-    const elogios = temas.filter((t: any) => t.tipo === 'elogio')
-    const reclamacoes = temas.filter((t: any) => t.tipo === 'reclamacao')
+    const porTipo = (tipo: string) =>
+      temas
+        .filter((t: any) => (t.tipo ?? '').toLowerCase() === tipo)
+        .slice(0, 8)
+        .map((t: any) => ({
+          rotulo: limpar(t.rotulo),
+          valor: Number(t.quantidade ?? 0),
+          cor: tipo === 'elogio' ? G_VERDE : tipo === 'neutro' ? G_CINZA : G_VERMELHO,
+        }))
 
+    const reclamacoes = porTipo('reclamacao')
+    const elogios = porTipo('elogio')
+
+    // Os dois lados sempre, com teto SEPARADO para cada um.
+    //
+    // Antes era uma lista só, cortada em 14, com as reclamações na frente — e
+    // como elas são a maioria, os elogios eram empurrados para fora: o
+    // relatório do Camelo saiu sem UM elogio sequer, sendo que o assunto mais
+    // citado do período era "Comida saborosa", com 19 menções. Quem recebia o
+    // arquivo lia um restaurante em que nada dá certo.
     secao('O que os clientes mais comentam')
     paragrafo(
       'Assuntos que a IA agrupou a partir do que foi escrito, e quantas vezes cada um apareceu.',
       { tamanho: 9, cor: CINZA, lh: 4.5 },
     )
-    espaco(18)
-    autoTable(doc, {
-      startY: y + 1,
-      head: [['Assunto', 'Tipo', 'Vezes']],
-      // Reclamações primeiro: num relatório que alguém lê para decidir o que
-      // fazer, o que incomoda vale mais que o que agrada.
-      body: [...reclamacoes, ...elogios].slice(0, 14).map((t: any) => [
-        limpar(t.rotulo),
-        t.tipo === 'elogio' ? 'Elogio' : 'Reclamacao',
-        String(t.quantidade ?? '-'),
-      ]),
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 2.5, textColor: TINTA },
-      headStyles: { fontStyle: 'bold', textColor: CINZA, fillColor: FUNDO_SUAVE },
-      alternateRowStyles: { fillColor: [252, 253, 254] },
-      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } },
-      margin: { left: M, right: M },
-      // Reclamação em vermelho, elogio em verde: a coluna "Tipo" vira uma
-      // pista de cor, e a tabela se lê sem precisar percorrer palavra a palavra.
-      didParseCell: (dados: any) => {
-        if (dados.section === 'body' && dados.column.index === 1) {
-          dados.cell.styles.textColor = dados.cell.raw === 'Elogio' ? VERDE : VERMELHO
-          dados.cell.styles.fontStyle = 'bold'
-        }
-      },
-    })
-    y = (doc as any).lastAutoTable.finalY + 4
+
+    const desenharLista = (titulo: string, itens: any[], cor: [number, number, number]) => {
+      if (itens.length === 0) return
+      espaco(itens.length * 9 + 16)
+      y += 2
+      doc.setFontSize(8.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(cor[0], cor[1], cor[2])
+      doc.text(titulo.toUpperCase(), M, y)
+      y += 4
+      y = barrasHorizontais(doc, {
+        x: M,
+        y,
+        largura: UTIL,
+        largRotulo: 82,
+        alturaBarra: 5.4,
+        maximo: Math.max(...itens.map((i) => i.valor), 1),
+        sufixo: 'x',
+        itens,
+      })
+      y += 1
+    }
+
+    desenharLista('O que mais incomodou', reclamacoes, G_VERMELHO)
+    desenharLista('O que mais agradou', elogios, G_VERDE)
+    y += 2
   }
 
   // ── Quando as avaliações chegam ──────────────────────────────────────────
