@@ -248,8 +248,8 @@ export default function MyAccount() {
   }
 
   return (
-      {dialogo}
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
+      {dialogo}
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
         <Link
           to="/"

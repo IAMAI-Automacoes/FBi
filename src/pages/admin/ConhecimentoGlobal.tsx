@@ -129,8 +129,8 @@ export function ConhecimentoGlobal() {
       : <Type className="h-4 w-4" />
 
   return (
-      {dialogo}
     <div className="flex-1 overflow-y-auto bg-gray-50">
+      {dialogo}
       <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Cabeçalho */}
         <div>
