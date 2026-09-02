@@ -93,8 +93,7 @@ export default function RecuperarSenha() {
 
     if (novaSenha !== confirmarSenha) {
       toast({
-        title: 'Senhas não conferem',
-        description: 'A senha e a confirmação devem ser iguais.',
+        title: 'As senhas não conferem',
         variant: 'destructive',
       })
       return
@@ -102,8 +101,7 @@ export default function RecuperarSenha() {
 
     if (novaSenha.length < 6) {
       toast({
-        title: 'Senha muito curta',
-        description: 'A senha deve ter pelo menos 6 caracteres.',
+        title: 'A senha precisa de 6 caracteres',
         variant: 'destructive',
       })
       return

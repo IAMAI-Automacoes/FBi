@@ -427,9 +427,7 @@ export default function Insights() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Gerar insights agora?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    O {mascote.nome} vai analisar os feedbacks que ainda não viraram insight ou ação
-                    e gerar novos insights operacionais. Os insights fixados são mantidos; os demais
-                    são substituídos.
+                    Os fixados são mantidos; os demais, substituídos.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -461,31 +459,33 @@ export default function Insights() {
                   <Settings2 className="w-4 h-4" />
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              {/* Uma pergunta só, e o número é a resposta — por isso a roleta é
+                  o centro da caixa e não um controle perdido embaixo de dois
+                  parágrafos. A explicação de "menor gera mais vezes" saiu: a
+                  própria frase ao redor do número já diz o que ele faz, e a
+                  pessoa que abre isto veio justamente para mexer nele.
+
+                  `max-w-[340px]`: a caixa tem uma linha de texto e um seletor;
+                  na largura padrão de 440px sobrava vazio dos dois lados do
+                  número, que é o que fazia parecer um formulário inacabado. */}
+              <AlertDialogContent className="max-w-[340px] gap-4">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Geração automática de insights</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Defina quantos novos feedbacks acumulados disparam uma análise automática do Chef
-                    Pepê. Você sempre pode gerar insights manualmente a qualquer momento.
+                  <AlertDialogTitle>Gerar insights automaticamente</AlertDialogTitle>
+                  <AlertDialogDescription className="sr-only">
+                    Escolha de quantos em quantos feedbacks a análise roda sozinha.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
-                <div className="py-2">
-                  <p className="text-sm font-medium text-gray-700 mb-2 text-center">
-                    Analisar automaticamente a cada:
-                  </p>
+                <div className="flex flex-col items-center gap-1 py-1">
+                  <p className="text-[13px] text-gray-500">a cada</p>
                   <RoletaNumerica
                     min={FEEDBACKS_MIN}
                     max={FEEDBACKS_MAX}
                     value={feedbacksPorAnalise}
                     onChange={setFeedbacksPorAnalise}
-                    className="mx-auto w-24"
+                    className="w-24"
                   />
-                  <p className="text-xs text-gray-400 text-center -mt-1">feedbacks</p>
-                  <p className="text-xs text-gray-400 mt-3">
-                    Valores menores geram insights com mais frequência; valores maiores aguardam mais
-                    dados antes de analisar.
-                  </p>
+                  <p className="text-[13px] text-gray-500">novos feedbacks</p>
                 </div>
 
                 <AlertDialogFooter>
@@ -496,9 +496,9 @@ export default function Insights() {
                       handleSalvarConfig()
                     }}
                     disabled={savingConfig}
-                    className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
+                    className="bg-gray-900 text-white hover:bg-gray-800"
                   >
-                    {savingConfig ? 'Salvando...' : 'Salvar'}
+                    {savingConfig ? 'Salvando…' : 'Salvar'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

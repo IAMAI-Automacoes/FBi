@@ -234,13 +234,11 @@ export default function Onboarding() {
 
       if (error) throw error
 
-      toast({ title: 'Tudo pronto!', description: 'Seu ambiente foi configurado com sucesso.' })
+      toast({ title: 'Tudo pronto' })
       window.location.href = '/'
     } catch (error: any) {
       console.error('Erro ao salvar onboarding:', error)
-      toast({
-        title: 'Erro',
-        description: error.message || 'Não foi possível salvar as configurações. Tente novamente.',
+      toast({ title: error.message || 'Não foi possível salvar as configurações. Tente novamente.',
         variant: 'destructive',
       })
     } finally {

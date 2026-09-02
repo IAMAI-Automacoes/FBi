@@ -194,8 +194,7 @@ export function TaskModal({
       })
     } else {
       toast({
-        title: 'Ação criada com sucesso',
-        description: `A ação "${title}" foi adicionada ao backlog.`,
+        title: 'Ação criada',
       })
     }
     onOpenChange(false)

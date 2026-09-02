@@ -358,9 +358,9 @@ export default function Garcons() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                  <AlertDialogTitle>Excluir {editando?.nome_garcon}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Isso remove {editando?.nome_garcon} e o QR Code dele. Esta ação não pode ser desfeita.
+                    O QR Code dele sai junto. Não dá para desfazer.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

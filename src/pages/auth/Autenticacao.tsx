@@ -107,16 +107,14 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
     if (criando) {
       if (senha !== confirmarSenha) {
         toast({
-          title: 'Senhas não conferem',
-          description: 'A senha e a confirmação devem ser iguais.',
+          title: 'As senhas não conferem',
           variant: 'destructive',
         })
         return
       }
       if (senha.length < 6) {
         toast({
-          title: 'Senha muito curta',
-          description: 'Use pelo menos 6 caracteres.',
+          title: 'A senha precisa de 6 caracteres',
           variant: 'destructive',
         })
         return

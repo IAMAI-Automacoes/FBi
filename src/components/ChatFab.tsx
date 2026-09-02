@@ -962,7 +962,7 @@ export function ChatFab({
       removerRegistro(id) // marca avulsa (modo automático)
       desmarcarPropostaPorRegistro(id) // volta a proposta ao azul, mantendo o botão
       refetchConfig()
-      toast({ title: 'Desfeito', description: 'Voltou ao estado anterior. Você pode aplicar de novo.' })
+      toast({ title: 'Desfeito' })
     } catch (e: any) {
       toast({ title: 'Não consegui desfazer', description: e.message, variant: 'destructive' })
     }

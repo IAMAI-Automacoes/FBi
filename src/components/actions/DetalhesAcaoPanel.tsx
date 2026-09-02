@@ -294,15 +294,14 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                 <AlertDialogHeader>
                   <AlertDialogTitle>Excluir esta ação?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    “{task.titulo_acao}” será removida do quadro. Os feedbacks ligados a ela
-                    voltam a ficar disponíveis para novos insights. Não dá para desfazer.
+                    Os feedbacks ligados a ela voltam para novos insights. Não dá para desfazer.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={onExcluir}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    className="bg-red-600 text-white hover:bg-red-700"
                   >
                     Excluir
                   </AlertDialogAction>

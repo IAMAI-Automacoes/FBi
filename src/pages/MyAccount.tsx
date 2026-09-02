@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useConfirmacao } from '@/hooks/use-confirmacao'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
@@ -15,6 +16,7 @@ import { excluirMinhaConta } from '@/lib/queries/conta'
 import { ImageCropper } from '@/components/ImageCropper'
 
 export default function MyAccount() {
+  const { confirmar, dialogo } = useConfirmacao()
   const { usuario, refetchUsuario, logout } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -84,7 +86,7 @@ export default function MyAccount() {
       .from('avatars')
       .upload(filePath, blob, { contentType: 'image/jpeg' })
     if (uploadError) {
-      toast({ title: 'Erro', description: 'Falha no upload da imagem', variant: 'destructive' })
+      toast({ title: 'Falha no upload da imagem', variant: 'destructive' })
       setUploadingAvatar(false)
       return
     }
@@ -99,9 +101,7 @@ export default function MyAccount() {
       .eq('id', usuario.id)
 
     if (updateError) {
-      toast({
-        title: 'Erro',
-        description: 'Falha ao salvar a imagem no perfil',
+      toast({ title: 'Falha ao salvar a imagem no perfil',
         variant: 'destructive',
       })
     } else {
@@ -180,11 +180,13 @@ export default function MyAccount() {
   }
 
   const handleExcluirConta = async () => {
-    if (!confirm(
-      'Tem certeza que quer EXCLUIR sua conta?\n\n' +
-      'Você perde o acesso na hora e não recupera sozinho, nem criando conta de novo com o ' +
-      'mesmo email. Fale com o suporte se precisar restaurar depois.',
-    )) return
+    const ok = await confirmar({
+      titulo: 'Excluir sua conta?',
+      descricao: 'Você perde o acesso na hora e não recupera sozinho. Só o suporte restaura.',
+      confirmar: 'Excluir conta',
+      destrutivo: true,
+    })
+    if (!ok) return
     setExcluindo(true)
     try {
       await excluirMinhaConta()
@@ -197,14 +199,12 @@ export default function MyAccount() {
   }
 
   const handleCancelarAssinatura = async () => {
-    if (
-      !confirm(
-        'Cancelar sua assinatura?\n\n' +
-          'Você mantém o acesso até a data que já pagou (se houver) e, depois disso, o painel é ' +
-          'bloqueado. Seus dados continuam guardados — é só reativar quando quiser.',
-      )
-    )
-      return
+    const ok = await confirmar({
+      titulo: 'Cancelar a assinatura?',
+      descricao: 'Você mantém o acesso até o fim do período pago. Seus dados ficam guardados.',
+      confirmar: 'Cancelar assinatura',
+    })
+    if (!ok) return
     setCancelando(true)
     try {
       const { data, error } = await supabase.functions.invoke('cancelar-assinatura', { body: {} })
@@ -248,6 +248,7 @@ export default function MyAccount() {
   }
 
   return (
+      {dialogo}
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
         <Link

@@ -37,9 +37,7 @@ export default function AcoesArquivadas() {
         })),
       )
     } catch {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar as ações arquivadas.',
+      toast({ title: 'Não foi possível carregar as ações arquivadas.',
         variant: 'destructive',
       })
     } finally {
@@ -57,7 +55,7 @@ export default function AcoesArquivadas() {
       setAcoes((prev) => prev.filter((a) => a.id !== id))
       toast({ title: 'Ação desarquivada', description: 'Ela voltou para o quadro de Ações.' })
     } catch {
-      toast({ title: 'Erro', description: 'Falha ao desarquivar a ação', variant: 'destructive' })
+      toast({ title: 'Falha ao desarquivar a ação', variant: 'destructive' })
     }
   }
 
@@ -68,7 +66,7 @@ export default function AcoesArquivadas() {
       setAcaoAberta(null)
       toast({ title: 'Ação excluída' })
     } catch {
-      toast({ title: 'Erro', description: 'Falha ao excluir a ação', variant: 'destructive' })
+      toast({ title: 'Falha ao excluir a ação', variant: 'destructive' })
     }
   }
 

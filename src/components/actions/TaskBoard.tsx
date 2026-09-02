@@ -311,9 +311,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       }
     } catch (err) {
       console.error(err)
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar as ações.',
+      toast({ title: 'Não foi possível carregar as ações.',
         variant: 'destructive',
       })
     } finally {
@@ -355,8 +353,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     try {
       await atualizarStatusAcao(parseInt(taskId), newStatus)
       toast({
-        title: oldStatus !== newStatus ? 'Status atualizado' : 'Avanço de etapa',
-        description: `A tarefa foi movida para ${newStatus === 'EM_ANDAMENTO' ? 'Em Andamento' : newStatus === 'CONCLUIDO' ? 'Concluído' : 'Pendente'}.`,
+        title: `Movida para ${newStatus === 'EM_ANDAMENTO' ? 'Em andamento' : newStatus === 'CONCLUIDO' ? 'Concluído' : 'Pendente'}`,
       })
 
       // Quem avisa o cliente é o motor de retorno, não o navegador. A mudança de
@@ -365,7 +362,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       // o status muda pela API ou por outra aba. O disparo daqui era um segundo
       // caminho, que mandava a mensagem na hora e não sabia desfazer.
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao atualizar o status.', variant: 'destructive' })
+      toast({ title: 'Falha ao atualizar o status.', variant: 'destructive' })
       load() // reload to reset state on error
     }
   }
@@ -425,7 +422,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       }),
     )
     atualizarOrdemAcoes(pares.map((p) => ({ id: parseInt(p.id), ordem: p.ordem }))).catch(() => {
-      toast({ title: 'Erro', description: 'Falha ao organizar a coluna.', variant: 'destructive' })
+      toast({ title: 'Falha ao organizar a coluna.', variant: 'destructive' })
     })
   }
 
@@ -631,9 +628,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
     if (changedOrders.length > 0) {
       atualizarOrdemAcoes(changedOrders).catch(() => {
-        toast({
-          title: 'Erro',
-          description: 'Falha ao salvar a nova ordem.',
+        toast({ title: 'Falha ao salvar a nova ordem.',
           variant: 'destructive',
         })
       })
@@ -649,11 +644,11 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const handleDeleteTask = async (taskId: string) => {
     try {
       await excluirAcao(parseInt(taskId))
-      toast({ title: 'Tarefa excluída', description: 'A tarefa foi removida com sucesso.' })
+      toast({ title: 'Ação excluída' })
       setModalOpen(false)
       load()
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao excluir a tarefa', variant: 'destructive' })
+      toast({ title: 'Falha ao excluir a tarefa', variant: 'destructive' })
     }
   }
 
@@ -765,7 +760,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           })
       }
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao salvar ação', variant: 'destructive' })
+      toast({ title: 'Falha ao salvar ação', variant: 'destructive' })
     }
     setModalOpen(false)
   }
@@ -776,7 +771,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       setTasks((prev) => prev.filter((t) => t.id !== taskId))
       toast({ title: 'Ação arquivada', description: 'Veja em Ações › Arquivadas.' })
     } catch {
-      toast({ title: 'Erro', description: 'Falha ao arquivar a ação', variant: 'destructive' })
+      toast({ title: 'Falha ao arquivar a ação', variant: 'destructive' })
     }
   }
 
@@ -786,7 +781,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       await alternarFixadoAcao(parseInt(taskId), fixado)
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, fixado: !fixado } : t)))
-      toast({ title: 'Erro', description: 'Falha ao fixar a ação', variant: 'destructive' })
+      toast({ title: 'Falha ao fixar a ação', variant: 'destructive' })
     }
   }
 

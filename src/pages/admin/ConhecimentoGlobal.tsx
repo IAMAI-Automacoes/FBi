@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { useConfirmacao } from '@/hooks/use-confirmacao'
 import {
   listarDocumentosGlobais, indexarDocumentoGlobal, removerDocumento,
   buscarConteudoDocumento, extrairTextoDeUrl, extrairTextoDePdf, DocumentoIA,
@@ -22,6 +23,7 @@ import {
  * documentos nas próprias Configurações.
  */
 export function ConhecimentoGlobal() {
+  const { confirmar, dialogo } = useConfirmacao()
   const { toast } = useToast()
   const [docs, setDocs] = useState<DocumentoIA[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -106,7 +108,13 @@ export function ConhecimentoGlobal() {
   }
 
   const excluir = async (doc: DocumentoIA) => {
-    if (!confirm(`Remover "${doc.titulo}" da base global? Isso afeta todos os restaurantes.`)) return
+    const ok = await confirmar({
+      titulo: `Remover "${doc.titulo}"?`,
+      descricao: 'Afeta a IA de todos os restaurantes.',
+      confirmar: 'Remover',
+      destrutivo: true,
+    })
+    if (!ok) return
     try {
       await removerDocumento(doc.id)
       setDocs((p) => p.filter((d) => d.id !== doc.id))
@@ -121,6 +129,7 @@ export function ConhecimentoGlobal() {
       : <Type className="h-4 w-4" />
 
   return (
+      {dialogo}
     <div className="flex-1 overflow-y-auto bg-gray-50">
       <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
         {/* Cabeçalho */}

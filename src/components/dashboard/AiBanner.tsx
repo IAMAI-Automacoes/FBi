@@ -43,7 +43,7 @@ export function AiBanner() {
 
   const atualizarAgora = async () => {
     if (!restauranteId) {
-      toast({ title: 'Erro', description: 'Restaurante não encontrado.', variant: 'destructive' })
+      toast({ title: 'Restaurante não encontrado.', variant: 'destructive' })
       return
     }
     setRefreshing(true)
@@ -63,7 +63,7 @@ export function AiBanner() {
 
       if (novoTexto) {
         setTextoBanner(novoTexto)
-        toast({ title: 'Banner atualizado', description: 'Resumo inteligente atualizado.' })
+        toast({ title: 'Banner atualizado' })
       } else {
         toast({
           title: 'Sem alterações',
@@ -72,9 +72,7 @@ export function AiBanner() {
         carregarBanner()
       }
     } catch (error: any) {
-      toast({
-        title: 'Erro',
-        description: 'Falha ao atualizar: ' + error.message,
+      toast({ title: 'Falha ao atualizar: ' + error.message,
         variant: 'destructive',
       })
     } finally {

@@ -203,22 +203,14 @@ export function TopHeader() {
       </header>
 
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
-        <AlertDialogContent className="sm:max-w-[420px] rounded-xl">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Sair da conta?</AlertDialogTitle>
-            <AlertDialogDescription className="text-base mt-2">
-              Você precisará fazer login novamente para acessar o painel de insights e feedbacks do
-              seu restaurante.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Sair da conta?</AlertDialogTitle>
+            <AlertDialogDescription>Você vai precisar entrar de novo.</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogCancel className="mt-0">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-sm"
-            >
-              Sair da conta
-            </AlertDialogAction>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout}>Sair</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

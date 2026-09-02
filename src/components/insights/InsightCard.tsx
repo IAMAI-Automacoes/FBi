@@ -103,16 +103,14 @@ export function InsightCard({
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O insight será excluído permanentemente.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Excluir este insight?</AlertDialogTitle>
+            <AlertDialogDescription>Não dá para desfazer.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={onDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               Excluir
             </AlertDialogAction>

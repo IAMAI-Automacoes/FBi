@@ -73,7 +73,7 @@ export function PainelMemorias() {
     listarRestaurantesRef().then((r) => {
       setRestaurantes(r)
       if (r.length && restauranteId === null) setRestauranteId(r[0].id)
-    }).catch((e) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }))
+    }).catch((e) => toast({ title: e.message, variant: 'destructive' }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

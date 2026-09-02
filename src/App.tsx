@@ -1,8 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import { Toaster } from '@/components/ui/toaster'
-import { Toaster as Sonner } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider } from '@/hooks/use-auth'
 import { RestauranteConfigProvider } from '@/hooks/use-restaurante-config'
@@ -45,7 +44,6 @@ const App = () => (
       <BrowserRouter>
         <TooltipProvider>
         <Toaster />
-        <Sonner />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
         {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}

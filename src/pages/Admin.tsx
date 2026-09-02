@@ -42,6 +42,7 @@ import { LinkifiedText } from '@/components/LinkifiedText'
 import { MessageMenu } from '@/components/MessageMenu'
 import { EmojiInputButton } from '@/components/EmojiPicker'
 import { QuoteBox, type QuoteInfo } from '@/components/QuoteBox'
+import { useConfirmacao } from '@/hooks/use-confirmacao'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -1124,6 +1125,7 @@ const EMPTY_CUPON = {
 }
 
 export default function Admin() {
+  const { confirmar, dialogo } = useConfirmacao()
   const navigate = useNavigate()
   const { isAdmin, loading: loadingAdmin } = usePlatformAdmin()
   const location = useLocation()
@@ -1230,11 +1232,15 @@ export default function Admin() {
 
   const alternarExclusao = useCallback(async (conta: ContaAdmin) => {
     const excluindo = !conta.excluida_em
-    if (excluindo && !confirm(
-      `Excluir a conta "${conta.nome_restaurante || conta.email}"?\n\n` +
-      'A pessoa perde o acesso na hora e não recupera sozinha — nem criando conta de novo ' +
-      'com o mesmo email. Os dados continuam no banco e só você pode restaurar, quando quiser.',
-    )) return
+    if (excluindo) {
+      const ok = await confirmar({
+        titulo: `Excluir "${conta.nome_restaurante || conta.email}"?`,
+        descricao: 'A pessoa perde o acesso na hora. Os dados ficam no banco e só você restaura.',
+        confirmar: 'Excluir conta',
+        destrutivo: true,
+      })
+      if (!ok) return
+    }
 
     setSalvandoContaId(conta.id)
     try {
@@ -1430,6 +1436,7 @@ export default function Admin() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {dialogo}
       {/* Header — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
       {!ehAppMensagens && (
       <div className="shrink-0 bg-white border-b border-gray-200">
