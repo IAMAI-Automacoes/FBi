@@ -1,0 +1,1 @@
+var e=`/assets/easy-feed-icon-CnpD6SBE.png`;export{e as t};
