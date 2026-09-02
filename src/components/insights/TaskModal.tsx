@@ -394,29 +394,20 @@ export function TaskModal({
 
      "Cancelar" não leva borda: uma borda dá a ele o mesmo peso visual de um
      botão de ação, e desfazer não é uma ação que se ofereça com destaque. */
-  /* O primário é o cinza-900, não o azul da marca.
-     O azul saturado é a cor de link e de destaque do app inteiro — usá-lo
-     também no botão de salvar o punha no mesmo peso de tudo que é clicável na
-     tela, e o resultado era um retângulo colorido que não parecia decisão,
-     parecia enfeite. Preto sobre branco é o contraste mais alto disponível: em
-     um rodapé de dois botões, ele é o único que precisa saltar.
-
-     Altura de 36px (h-9), não 40: o rodapé tem dois botões e nenhum campo, e
-     40px ali fazia a faixa competir em peso com o formulário inteiro. */
+  /* `primario` / `neutro` no tamanho `forma` — ver a definição das variantes
+     em `ui/button.tsx`, que explica por que o botão ganhou volume em vez de
+     ser um retângulo de cor chapada. */
   const botoes = (
     <>
-      <Button
-        variant="ghost"
-        onClick={() => onOpenChange(false)}
-        className="h-9 px-3.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-      >
+      <Button variant="neutro" size="forma" onClick={() => onOpenChange(false)}>
         {somenteLeitura ? 'Fechar' : 'Cancelar'}
       </Button>
       {!somenteLeitura && (
         <Button
+          variant="primario"
+          size="forma"
           onClick={handleSave}
           disabled={!!task && !houveAlteracao}
-          className="h-9 px-4 text-sm font-medium bg-gray-900 text-white shadow-sm transition-colors hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
         >
           {task ? 'Salvar' : 'Criar ação'}
         </Button>

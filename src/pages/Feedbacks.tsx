@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { format, isSameDay } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import type { DateRange } from 'react-day-picker'
 import {
   Select,
   SelectContent,
@@ -12,10 +9,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarDays, Folder, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Folder, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   buscarFeedbacks,
@@ -23,8 +17,8 @@ import {
   FiltrosFeedback,
 } from '@/lib/queries/feedbacks'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
-import { DataSegmentada } from '@/components/DataSegmentada'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { FiltroPeriodo } from '@/components/FiltroPeriodo'
 import { CampoBusca } from '@/components/CampoBusca'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { useAuth } from '@/hooks/use-auth'
@@ -34,21 +28,6 @@ import { supabase } from '@/lib/supabase/client'
 
 const LIMIT = 10
 
-const PERIODOS: { value: FiltrosFeedback['periodo']; label: string }[] = [
-  { value: '7d', label: 'Últimos 7 dias' },
-  { value: '30d', label: 'Últimos 30 dias' },
-  { value: '90d', label: 'Últimos 90 dias' },
-  { value: 'all', label: 'Todo o período' },
-]
-
-function rotuloPeriodo(filtros: FiltrosFeedback): string {
-  if (filtros.datas) {
-    const { from, to } = filtros.datas
-    if (!to || isSameDay(from, to)) return format(from, "d 'de' MMM", { locale: ptBR })
-    return `${format(from, 'd MMM', { locale: ptBR })} – ${format(to, 'd MMM', { locale: ptBR })}`
-  }
-  return PERIODOS.find((p) => p.value === filtros.periodo)?.label ?? 'Período'
-}
 
 export default function Feedbacks() {
   const { toast } = useToast()
@@ -60,7 +39,6 @@ export default function Feedbacks() {
   const [totalFeedbacks, setTotalFeedbacks] = useState(0)
   const [loading, setLoading] = useState(true)
   const [contagemCategorias, setContagemCategorias] = useState<Record<string, number>>({})
-  const [periodoAberto, setPeriodoAberto] = useState(false)
   /** Preenchido quando a página foi aberta a partir de um insight ou de uma ação. */
   const [filtroInsight, setFiltroInsight] = useState<{ id: string; titulo: string } | null>(null)
 
@@ -100,22 +78,6 @@ export default function Feedbacks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.periodo, filtros.sentimento, filtros.ordenacao, filtros.categorias, filtros.datas])
 
-  const definirInicio = (data: Date | undefined) => {
-    if (!data) return
-    setFiltros((prev) => {
-      const to = prev.datas?.to
-      return { ...prev, datas: { from: data, to: to && to < data ? data : to } }
-    })
-  }
-  const definirFim = (data: Date | undefined) => {
-    if (!data) return
-    setFiltros((prev) => {
-      const from = prev.datas?.from ?? data
-      return { ...prev, datas: { from: from > data ? data : from, to: data } }
-    })
-  }
-
-  // /feedbacks?insight_id=... → mostra só os feedbacks que geraram o insight.
   const insightIdParam = searchParams.get('insight_id')
   useEffect(() => {
     if (!insightIdParam) {
@@ -215,18 +177,6 @@ export default function Feedbacks() {
 
   const dataToDisplay = feedbacks
 
-  const escolherPreset = (periodo: FiltrosFeedback['periodo']) => {
-    setFiltros((prev) => ({ ...prev, periodo, datas: undefined }))
-    setPeriodoAberto(false)
-  }
-
-  const escolherIntervalo = (range: DateRange | undefined) => {
-    setFiltros((prev) => ({
-      ...prev,
-      datas: range?.from ? { from: range.from, to: range.to } : undefined,
-    }))
-  }
-
   // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
   // filtros onde a lista rolando pudesse vazar por cima.
@@ -238,101 +188,12 @@ export default function Feedbacks() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
           {/* Período: atalhos (7/30/90 dias, tudo) + calendário de intervalo, num controle só */}
-          <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="h-10 shrink-0 bg-white shadow-sm border-gray-200 font-normal justify-start"
-              >
-                <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
-                {rotuloPeriodo(filtros)}
-                {filtros.datas && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Limpar intervalo"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setFiltros((prev) => ({ ...prev, datas: undefined }))
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setFiltros((prev) => ({ ...prev, datas: undefined }))
-                      }
-                    }}
-                    className="ml-2 -mr-1 rounded-sm p-0.5 hover:bg-gray-100 text-gray-500"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <div className="flex flex-col">
-                <div className="flex flex-col sm:flex-row">
-                  <div className="flex sm:flex-col gap-0.5 p-2 sm:border-r border-b sm:border-b-0">
-                    {PERIODOS.map((p) => (
-                      <button
-                        key={p.value}
-                        onClick={() => escolherPreset(p.value)}
-                        className={cn(
-                          'text-left text-sm px-3 py-2 rounded-md whitespace-nowrap hover:bg-gray-100 transition-colors',
-                          !filtros.datas && filtros.periodo === p.value
-                            ? 'bg-[#EFF6FF] text-[#1D4ED8] font-medium'
-                            : 'text-gray-700',
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    <Calendar
-                      mode="range"
-                      selected={filtros.datas}
-                      onSelect={escolherIntervalo}
-                      locale={ptBR}
-                      disabled={{ after: new Date() }}
-                      endMonth={new Date()}
-                    />
-                  </div>
-                </div>
-                {/* Fileira só do tamanho do conteúdo — o campo "De" acaba caindo
-                    do lado esquerdo (embaixo dos atalhos) e o "até" do lado
-                    direito (embaixo do calendário), sem precisar de duas colunas. */}
-                <div className="border-t p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Datas selecionadas</p>
-                  <div className="flex items-center gap-2 w-fit">
-                    <DataSegmentada
-                      value={filtros.datas?.from}
-                      onChange={definirInicio}
-                      maxDate={new Date()}
-                    />
-                    <span className="text-xs text-muted-foreground shrink-0">até</span>
-                    <DataSegmentada
-                      value={filtros.datas?.to}
-                      onChange={definirFim}
-                      maxDate={new Date()}
-                    />
-                  </div>
-                  {filtros.datas && (
-                    <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-xs"
-                        onClick={() => setFiltros((prev) => ({ ...prev, datas: undefined }))}
-                      >
-                        Limpar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <FiltroPeriodo
+            periodo={filtros.periodo}
+            datas={filtros.datas}
+            onPeriodo={(periodo) => setFiltros((prev) => ({ ...prev, periodo }))}
+            onDatas={(datas) => setFiltros((prev) => ({ ...prev, datas }))}
+          />
 
           <Select
             value={filtros.sentimento}

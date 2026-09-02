@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Archive, CalendarDays } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
+import { ArrowLeft, Archive } from 'lucide-react'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { CampoBusca } from '@/components/CampoBusca'
+import {
+  FiltroPeriodo,
+  type PeriodoPreset,
+  type IntervaloDatas,
+} from '@/components/FiltroPeriodo'
 import { CATEGORIAS_FEEDBACK } from '@/lib/categorias-feedback'
-import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import type { DateRange } from 'react-day-picker'
+import { isWithinInterval, startOfDay, endOfDay, subDays } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TaskCard } from '@/components/actions/TaskCard'
@@ -23,6 +24,13 @@ import { useToast } from '@/hooks/use-toast'
  * Lista simples em vez de Kanban: são todas CONCLUIDO, então não há fluxo entre
  * colunas. Desarquivar devolve a ação ao quadro sem mexer no status.
  */
+/** Quantos dias cada atalho do filtro cobre. 'all' não entra: não tem corte. */
+const DIAS_DO_PRESET: Record<Exclude<PeriodoPreset, 'all'>, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+}
+
 export default function AcoesArquivadas() {
   const { usuario } = useAuth()
   const { toast } = useToast()
@@ -37,8 +45,12 @@ export default function AcoesArquivadas() {
   // do sistema e rolar deixa de ser uma forma de achar coisa.
   const [busca, setBusca] = useState('')
   const [categorias, setCategorias] = useState<string[]>([])
-  const [periodo, setPeriodo] = useState<DateRange | undefined>()
-  const [periodoAberto, setPeriodoAberto] = useState(false)
+  // `periodo` é o atalho (7/30/90/tudo) e `datas` é o intervalo do calendário;
+  // o intervalo tem precedência, igual a /feedbacks. Aqui o padrão é 'all' e
+  // não '7d': o arquivo existe justamente para consultar coisa antiga, e abrir
+  // filtrado em uma semana esconderia quase tudo que está lá.
+  const [periodo, setPeriodo] = useState<PeriodoPreset>('all')
+  const [datas, setDatas] = useState<IntervaloDatas | undefined>()
 
   // Contagem por categoria SOBRE o que os outros filtros já deixaram passar,
   // e não sobre a lista inteira: o número ao lado de cada categoria tem que
@@ -49,16 +61,18 @@ export default function AcoesArquivadas() {
       const txt = !termo ||
         [a.titulo_acao, a.plano_detalhado, a.responsavel]
           .some((c: string | null) => (c ?? '').toLowerCase().includes(termo))
-      const dt = !periodo?.from || (() => {
-        const d = new Date(a.arquivada_em ?? a.created_at)
-        return isWithinInterval(d, {
-          start: startOfDay(periodo.from!),
-          end: endOfDay(periodo.to ?? periodo.from!),
-        })
-      })()
+      // Conta a partir de quando a ação foi arquivada, não de quando nasceu:
+      // é essa a data que a lista mostra e por onde ela é ordenada.
+      const d = new Date(a.arquivada_em ?? a.created_at)
+      const dt = datas
+        ? isWithinInterval(d, {
+            start: startOfDay(datas.from),
+            end: endOfDay(datas.to ?? datas.from),
+          })
+        : periodo === 'all' || d >= startOfDay(subDays(new Date(), DIAS_DO_PRESET[periodo]))
       return txt && dt
     })
-  }, [acoes, busca, periodo])
+  }, [acoes, busca, periodo, datas])
 
   const contagemCategorias = useMemo(() => {
     const c: Record<string, number> = {}
@@ -77,7 +91,7 @@ export default function AcoesArquivadas() {
     [baseParaContagem, categorias],
   )
 
-  const temFiltro = !!busca.trim() || categorias.length > 0 || !!periodo?.from
+  const temFiltro = !!busca.trim() || categorias.length > 0 || !!datas || periodo !== 'all'
 
   const carregar = useCallback(async () => {
     if (!usuario?.restaurante_id) return
@@ -146,39 +160,12 @@ export default function AcoesArquivadas() {
           controle que não muda nada. */}
       {!loading && acoes.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-          <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="h-10 shrink-0 justify-start border-gray-200 bg-white font-normal shadow-sm"
-              >
-                <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
-                {periodo?.from
-                  ? periodo.to && periodo.to.getTime() !== periodo.from.getTime()
-                    ? `${format(periodo.from, 'd MMM', { locale: ptBR })} – ${format(periodo.to, 'd MMM', { locale: ptBR })}`
-                    : format(periodo.from, "d 'de' MMM", { locale: ptBR })
-                  : 'Período'}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={periodo}
-                onSelect={setPeriodo}
-                locale={ptBR}
-                numberOfMonths={2}
-                disabled={{ after: new Date() }}
-              />
-              {periodo?.from && (
-                <div className="flex justify-end border-t p-2">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs"
-                    onClick={() => { setPeriodo(undefined); setPeriodoAberto(false) }}>
-                    Limpar
-                  </Button>
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
+          <FiltroPeriodo
+            periodo={periodo}
+            datas={datas}
+            onPeriodo={setPeriodo}
+            onDatas={setDatas}
+          />
 
           <FiltroCategorias
             contagens={contagemCategorias}
@@ -217,7 +204,12 @@ export default function AcoesArquivadas() {
               variant="ghost"
               size="sm"
               className="mt-2 h-8 text-xs"
-              onClick={() => { setBusca(''); setCategorias([]); setPeriodo(undefined) }}
+              onClick={() => {
+                setBusca('')
+                setCategorias([])
+                setDatas(undefined)
+                setPeriodo('all')
+              }}
             >
               Limpar filtros
             </Button>
