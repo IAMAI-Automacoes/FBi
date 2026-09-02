@@ -63,7 +63,7 @@ function RotuloCampo({
   return (
     <Label
       htmlFor={htmlFor}
-      className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500"
+      className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700"
     >
       <Icone className="h-3.5 w-3.5 text-gray-400" />
       {children}
@@ -360,8 +360,8 @@ export function TaskModal({
         <RotuloCampo icone={Check}>Plano de ação</RotuloCampo>
         <div
           className={cn(
-            'rounded-lg border bg-slate-50/70 p-3 transition-colors',
-            erro('plano') ? 'border-red-400' : 'border-slate-200',
+            'rounded-lg border bg-white px-3 pb-3 pt-2 transition-colors focus-within:border-gray-400',
+            erro('plano') ? 'border-red-400' : 'border-gray-200',
           )}
         >
           <PlanoAcao
@@ -394,12 +394,21 @@ export function TaskModal({
 
      "Cancelar" não leva borda: uma borda dá a ele o mesmo peso visual de um
      botão de ação, e desfazer não é uma ação que se ofereça com destaque. */
+  /* O primário é o cinza-900, não o azul da marca.
+     O azul saturado é a cor de link e de destaque do app inteiro — usá-lo
+     também no botão de salvar o punha no mesmo peso de tudo que é clicável na
+     tela, e o resultado era um retângulo colorido que não parecia decisão,
+     parecia enfeite. Preto sobre branco é o contraste mais alto disponível: em
+     um rodapé de dois botões, ele é o único que precisa saltar.
+
+     Altura de 36px (h-9), não 40: o rodapé tem dois botões e nenhum campo, e
+     40px ali fazia a faixa competir em peso com o formulário inteiro. */
   const botoes = (
     <>
       <Button
         variant="ghost"
         onClick={() => onOpenChange(false)}
-        className="h-10 px-4 font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+        className="h-9 px-3.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
       >
         {somenteLeitura ? 'Fechar' : 'Cancelar'}
       </Button>
@@ -407,9 +416,9 @@ export function TaskModal({
         <Button
           onClick={handleSave}
           disabled={!!task && !houveAlteracao}
-          className="h-10 px-5 font-medium bg-[#1D4ED8] text-white shadow-sm hover:bg-[#1A43BC] disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+          className="h-9 px-4 text-sm font-medium bg-gray-900 text-white shadow-sm transition-colors hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
         >
-          {task ? 'Salvar alterações' : 'Criar ação'}
+          {task ? 'Salvar' : 'Criar ação'}
         </Button>
       )}
     </>
@@ -425,18 +434,21 @@ export function TaskModal({
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
-          <SheetHeader className="p-5 border-b bg-white shrink-0 text-left space-y-1">
-            <SheetTitle className="text-lg font-bold leading-snug">{titulo}</SheetTitle>
-            <SheetDescription className="text-xs text-gray-500">
-              {somenteLeitura
-                ? 'Esta ação está arquivada e não pode ser alterada.'
-                : 'As alterações valem assim que você salvar.'}
+          {/* Sem a linha de apoio ("as alterações valem ao salvar") e sem
+              borda: ela dizia o que o botão Salvar já diz, e a borda somada ao
+              padding de 20px empurrava o primeiro campo para longe do nome do
+              painel. Agora o título e o campo de título ficam próximos, que é
+              como se lê — o nome da tela e a primeira coisa a preencher. */}
+          <SheetHeader className="shrink-0 bg-white px-5 pb-1 pt-5 text-left">
+            <SheetTitle className="text-base font-semibold leading-snug">{titulo}</SheetTitle>
+            <SheetDescription className="sr-only">
+              {somenteLeitura ? 'Ação arquivada, sem edição.' : 'Editar os dados da ação.'}
             </SheetDescription>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto p-5">{formulario}</div>
+          <div className="flex-1 overflow-y-auto px-5 pb-5 pt-3">{formulario}</div>
 
-          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row justify-end gap-1 sm:space-x-0">
+          <SheetFooter className="shrink-0 flex-row justify-end gap-1 border-t bg-white p-4 sm:space-x-0">
             {botoes}
           </SheetFooter>
         </SheetContent>
@@ -447,21 +459,30 @@ export function TaskModal({
   // ---- CRIAR: no centro, com o quadro ainda visível atrás ----
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Coluna com o MIOLO rolando e o rodapé preso embaixo, em vez de um
+          `overflow-y-auto` no diálogo inteiro. Com a rolagem no todo, o plano
+          crescendo empurrava os botões para fora da área visível, e salvar
+          exigia parar de escrever e rolar atrás deles.
+
+          `useAlturaAutomatica` completa o par: a cada linha nova o miolo rola
+          os mesmos pixels, então a base fica parada e a linha que está sendo
+          digitada não sai do lugar. */}
       <DialogContent
         classNameOverlay="bg-black/25 backdrop-blur-[1px]"
-        className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto p-0 gap-0"
+        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]"
       >
-        <DialogHeader className="p-5 border-b text-left space-y-1">
-          <DialogTitle className="text-lg font-bold leading-snug">{titulo}</DialogTitle>
-          <DialogDescription className="text-xs text-gray-500">
-            Descreva o que precisa ser feito. Ao salvar, procuramos os feedbacks que esta ação
-            resolve e ligamos a ela.
+        <DialogHeader className="shrink-0 px-5 pb-1 pt-5 text-left">
+          <DialogTitle className="text-base font-semibold leading-snug">{titulo}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Preencha os dados da nova ação.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-5">{formulario}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">{formulario}</div>
 
-        <DialogFooter className="p-4 border-t bg-gray-50/70 gap-1 sm:justify-end sm:space-x-0">{botoes}</DialogFooter>
+        <DialogFooter className="shrink-0 gap-1 border-t bg-white p-4 sm:justify-end sm:space-x-0">
+          {botoes}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

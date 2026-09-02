@@ -8,6 +8,7 @@ import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
 import { estiloCategoria } from '@/lib/categorias-feedback'
 import { cn } from '@/lib/utils'
+import { TextoFormatado } from '@/components/TextoFormatado'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
@@ -167,9 +168,7 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
               Plano de ação
             </p>
             {task.plano_detalhado ? (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {task.plano_detalhado}
-              </p>
+              <TextoFormatado texto={task.plano_detalhado} />
             ) : (
               <p className="text-sm text-gray-400 italic">Nenhum plano detalhado ainda.</p>
             )}

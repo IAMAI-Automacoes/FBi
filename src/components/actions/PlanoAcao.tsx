@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Sparkles, RotateCcw } from 'lucide-react'
+import { Loader2, Sparkles, Bold, Heading } from 'lucide-react'
 import { toast } from 'sonner'
 import { gerarPlanoAcao } from '@/lib/queries/acoes'
 import { useAlturaAutomatica } from '@/hooks/use-altura-automatica'
@@ -40,11 +40,52 @@ export function PlanoAcao({
   // eixos de rolagem no mesmo gesto.
   const refTexto = useAlturaAutomatica<HTMLTextAreaElement>(plano)
 
-  const sujo = plano !== planoOriginalRef.current
+  const escrever = (texto: string) => {
+    setPlano(texto)
+    onPlanoUpdate?.(texto)
+  }
 
-  const handleDesfazer = () => {
-    setPlano(planoOriginalRef.current)
-    onPlanoUpdate?.(planoOriginalRef.current)
+  /**
+   * Formatação em marcadores de texto (`**negrito**`, `## Título`), e não num
+   * editor de conteúdo rico.
+   *
+   * O plano vai para `acoes_operacionais.plano_detalhado`, que é `text` puro,
+   * e esse mesmo texto é lido pela IA quando ela procura os feedbacks que a
+   * ação resolve e quando gera o plano. HTML ali sujaria o prompt com tags e
+   * quebraria a exibição em todo lugar que hoje mostra o campo direto.
+   *
+   * Com marcador, o texto continua legível como texto em qualquer lugar, e o
+   * painel de detalhes renderiza o destaque (ver `TextoFormatado`).
+   */
+  const formatar = (marca: 'negrito' | 'titulo') => {
+    const el = refTexto.current
+    if (!el) return
+    const ini = el.selectionStart
+    const fim = el.selectionEnd
+
+    let novo: string
+    let cursor: number
+    if (marca === 'negrito') {
+      const sel = plano.slice(ini, fim) || 'texto'
+      novo = plano.slice(0, ini) + '**' + sel + '**' + plano.slice(fim)
+      cursor = ini + 2 + sel.length
+    } else {
+      // Título vale para a linha inteira: procura o começo dela e prefixa.
+      const inicioLinha = plano.lastIndexOf('\n', ini - 1) + 1
+      const jaTem = plano.slice(inicioLinha).startsWith('## ')
+      novo = jaTem
+        ? plano.slice(0, inicioLinha) + plano.slice(inicioLinha + 3)
+        : plano.slice(0, inicioLinha) + '## ' + plano.slice(inicioLinha)
+      cursor = ini + (jaTem ? -3 : 3)
+    }
+
+    escrever(novo)
+    // O valor só chega ao DOM no próximo quadro; sem isto o cursor volta para
+    // o fim do texto e a pessoa perde o lugar onde estava escrevendo.
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(cursor, cursor)
+    })
   }
 
   const handleGerarComIA = async () => {
@@ -81,30 +122,46 @@ export function PlanoAcao({
   return (
     <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
       {!isConcluido && (
-        <div className="flex items-center justify-end gap-2">
-          {sujo && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDesfazer}
-              className="flex items-center gap-1 text-slate-600"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Desfazer
-            </Button>
-          )}
+        <div className="flex items-center gap-1">
+          {/* Ícone só, sem rótulo: são dois controles de formatação numa barra
+              estreita, e "Negrito"/"Título" escritos por extenso pesariam mais
+              que o campo que eles editam. */}
           <Button
-            variant="outline"
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => formatar('negrito')}
+            aria-label="Negrito"
+            title="Negrito"
+            className="h-7 w-7 text-gray-500 hover:bg-gray-200/70 hover:text-gray-900"
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => formatar('titulo')}
+            aria-label="Título"
+            title="Título da linha"
+            className="h-7 w-7 text-gray-500 hover:bg-gray-200/70 hover:text-gray-900"
+          >
+            <Heading className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
             size="sm"
             onClick={handleGerarComIA}
             disabled={gerandoComIA || acaoId === undefined}
             title={acaoId === undefined ? 'Salve a ação primeiro para gerar o plano com IA' : undefined}
-            className="flex items-center gap-1"
+            className="ml-auto h-7 gap-1.5 px-2 text-xs text-gray-500 hover:text-gray-900"
           >
             {gerandoComIA ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="h-3.5 w-3.5" />
             )}
             Gerar com IA
           </Button>
@@ -113,15 +170,20 @@ export function PlanoAcao({
 
       {/* `overflow-hidden`: sem ele a barra de rolagem pisca no instante entre
           o texto crescer e o efeito remedir a altura. */}
+      {/* `spellCheck={false}`: o corretor do navegador sublinhava de vermelho
+          nome de prato, nome de funcionário e termo de cozinha — palavras
+          certas que ele não conhece. Num plano operacional isso é quase toda
+          linha, e o vermelho passa a significar nada.
+
+          `overflow-hidden`: sem ele a barra de rolagem pisca no instante entre
+          o texto crescer e o efeito remedir a altura. */}
       <Textarea
         ref={refTexto}
         value={plano}
-        onChange={(e) => {
-          setPlano(e.target.value)
-          onPlanoUpdate?.(e.target.value)
-        }}
-        placeholder="Digite o plano de ação..."
-        className="min-h-[120px] text-sm resize-none overflow-hidden leading-relaxed"
+        onChange={(e) => escrever(e.target.value)}
+        spellCheck={false}
+        placeholder="Digite o plano de ação…"
+        className="min-h-[120px] resize-none overflow-hidden border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none focus-visible:ring-0"
         disabled={isConcluido}
       />
 
