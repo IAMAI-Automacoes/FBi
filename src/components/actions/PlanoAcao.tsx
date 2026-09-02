@@ -72,32 +72,40 @@ export function PlanoAcao({
 
   return (
     <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
-      {!isConcluido && (
-        <div className="flex items-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleGerarComIA}
-            disabled={gerandoComIA || acaoId === undefined}
-            title={acaoId === undefined ? 'Salve a ação primeiro para gerar o plano com IA' : undefined}
-            className="ml-auto h-7 gap-1.5 px-2 text-xs text-gray-500 hover:text-gray-900"
-          >
-            {gerandoComIA ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            Gerar com IA
-          </Button>
-        </div>
-      )}
-
+      {/* "Gerar com IA" entra DENTRO da barra do editor, no canto oposto ao
+          dos botões de formatação. Ele tinha uma faixa só para si acima da
+          caixa, e as duas empilhadas pareciam dois cabeçalhos para um campo
+          só. Na mesma linha, o que edita o texto fica de um lado e o que o
+          reescreve inteiro fica do outro. */}
       <EditorTextoRico
         valor={plano}
         onChange={escrever}
         placeholder="Descreva os passos do plano…"
         disabled={isConcluido}
+        acoes={
+          isConcluido ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleGerarComIA}
+              disabled={gerandoComIA || acaoId === undefined}
+              title={
+                acaoId === undefined
+                  ? 'Salve a ação primeiro para gerar o plano com IA'
+                  : undefined
+              }
+              className="h-7 gap-1.5 px-2 text-xs text-gray-500 hover:text-gray-900"
+            >
+              {gerandoComIA ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Gerar com IA
+            </Button>
+          )
+        }
       />
 
       {isConcluido && (

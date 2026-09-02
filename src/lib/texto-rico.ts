@@ -34,14 +34,19 @@ export interface Trecho extends Marcas {
  * Inclinação do itálico, aplicada SEMPRE como estilo inline.
  *
  * O itálico do Inter é discreto — no meio de um parágrafo passava
- * despercebido. Este ângulo deita a letra além do padrão da face (perto de
- * 10°) e torna o trecho reconhecível de relance.
+ * despercebido, e 14° ainda deixava a diferença sutil. Em 22° o trecho é
+ * reconhecível sem comparar com a linha vizinha, que é o ponto de marcar algo
+ * em itálico num plano operacional.
+ *
+ * O teto útil é por volta de 25°: acima disso as hastes das letras se cruzam
+ * com as da linha de baixo e o texto fica difícil de ler, que é o oposto do
+ * que o destaque serve para fazer.
  *
  * Em CSS não funciona: `font-style: oblique 14deg` chega ao arquivo final como
  * `font-style: oblique`, porque o processador de CSS do build corta a parte
  * angular. Inline, o navegador recebe o valor inteiro.
  */
-export const INCLINACAO_ITALICO = 'oblique 14deg'
+export const INCLINACAO_ITALICO = 'oblique 22deg'
 
 export const TAMANHO_PADRAO = 11
 export const TAMANHO_MIN = 8

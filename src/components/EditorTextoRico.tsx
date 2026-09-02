@@ -19,6 +19,16 @@ interface EditorTextoRicoProps {
   placeholder?: string
   disabled?: boolean
   className?: string
+  /**
+   * Vai no canto direito da MESMA barra dos botões de formatação.
+   *
+   * Existe para o "Gerar com IA" do plano de ação. Ele morava numa linha
+   * própria acima da caixa, e as duas faixas empilhadas — uma com um botão à
+   * direita, outra com a formatação à esquerda — pareciam dois cabeçalhos
+   * para um campo só. Numa linha, o que edita o texto fica à esquerda e o que
+   * o substitui inteiro fica à direita, longe.
+   */
+  acoes?: React.ReactNode
 }
 
 /**
@@ -52,6 +62,7 @@ export function EditorTextoRico({
   placeholder,
   disabled,
   className,
+  acoes,
 }: EditorTextoRicoProps) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -213,9 +224,10 @@ export function EditorTextoRico({
         pos = fim
         // O cursor sem seleção (inicio === fim) fica NA BORDA de um trecho;
         // por isso `>=` no fim, senão ele nunca cai dentro de nada.
-        const dentro = sel.inicio === sel.fim
-          ? sel.inicio >= ini && sel.inicio <= fim
-          : fim > sel.inicio && ini < sel.fim
+        const dentro =
+          sel.inicio === sel.fim
+            ? sel.inicio >= ini && sel.inicio <= fim
+            : fim > sel.inicio && ini < sel.fim
         if (dentro) return t.tamanho ?? TAMANHO_PADRAO
       }
       if (i < linhas.length - 1) pos += 1 // o <br>
@@ -308,51 +320,78 @@ export function EditorTextoRico({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled])
 
-  const btn = 'flex h-7 w-7 items-center justify-center rounded text-gray-600 transition-colors hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-40'
+  const btn =
+    'flex h-7 w-7 items-center justify-center rounded text-gray-600 transition-colors hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-40'
 
   return (
     <div className={cn('space-y-2', className)}>
-      {!disabled && (
-        <div className="flex w-fit items-center gap-0.5 rounded-md border border-gray-200 bg-white px-1 py-0.5">
-          <button type="button" onClick={() => mudarTamanho(-1)} className={btn}
-            aria-label="Diminuir a letra" disabled={tamanho <= TAMANHO_MIN}>
-            <Minus className="h-3.5 w-3.5" />
-          </button>
+      {(!disabled || acoes) && (
+        <div className="flex items-center gap-2">
+          {!disabled && (
+            <div className="flex w-fit items-center gap-0.5 rounded-md border border-gray-200 bg-white px-1 py-0.5">
+              <button
+                type="button"
+                onClick={() => mudarTamanho(-1)}
+                className={btn}
+                aria-label="Diminuir a letra"
+                disabled={tamanho <= TAMANHO_MIN}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
 
-          {/* O número é campo, não rótulo: dá para ir direto ao tamanho que se
-              quer em vez de apertar a seta oito vezes. */}
-          <input
-            type="text"
-            inputMode="numeric"
-            value={tamanho}
-            onChange={(e) => {
-              const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
-              if (Number.isFinite(n)) setTamanho(n)
-            }}
-            onBlur={() => {
-              const n = limitarTamanho(tamanho)
-              setTamanho(n)
-              aplicar((m) => ({ ...m, tamanho: n === TAMANHO_PADRAO ? undefined : n }))
-            }}
-            aria-label="Tamanho da letra"
-            className="h-6 w-9 rounded border border-gray-200 text-center text-xs tabular-nums text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-300"
-          />
+              {/* O número é campo, não rótulo: dá para ir direto ao tamanho que se
+                quer em vez de apertar a seta oito vezes. */}
+              <input
+                type="text"
+                inputMode="numeric"
+                value={tamanho}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
+                  if (Number.isFinite(n)) setTamanho(n)
+                }}
+                onBlur={() => {
+                  const n = limitarTamanho(tamanho)
+                  setTamanho(n)
+                  aplicar((m) => ({ ...m, tamanho: n === TAMANHO_PADRAO ? undefined : n }))
+                }}
+                aria-label="Tamanho da letra"
+                className="h-6 w-9 rounded border border-gray-200 text-center text-xs tabular-nums text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-300"
+              />
 
-          <button type="button" onClick={() => mudarTamanho(1)} className={btn}
-            aria-label="Aumentar a letra" disabled={tamanho >= TAMANHO_MAX}>
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+              <button
+                type="button"
+                onClick={() => mudarTamanho(1)}
+                className={btn}
+                aria-label="Aumentar a letra"
+                disabled={tamanho >= TAMANHO_MAX}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
 
-          <span className="mx-1 h-4 w-px bg-gray-200" />
+              <span className="mx-1 h-4 w-px bg-gray-200" />
 
-          <button type="button" onClick={() => aplicar((m) => ({ ...m, negrito: !m.negrito }))}
-            className={btn} aria-label="Negrito" title="Negrito">
-            <Bold className="h-3.5 w-3.5" />
-          </button>
-          <button type="button" onClick={() => aplicar((m) => ({ ...m, italico: !m.italico }))}
-            className={btn} aria-label="Itálico" title="Itálico">
-            <Italic className="h-3.5 w-3.5" />
-          </button>
+              <button
+                type="button"
+                onClick={() => aplicar((m) => ({ ...m, negrito: !m.negrito }))}
+                className={btn}
+                aria-label="Negrito"
+                title="Negrito"
+              >
+                <Bold className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => aplicar((m) => ({ ...m, italico: !m.italico }))}
+                className={btn}
+                aria-label="Itálico"
+                title="Itálico"
+              >
+                <Italic className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {acoes && <div className="ml-auto">{acoes}</div>}
         </div>
       )}
 
