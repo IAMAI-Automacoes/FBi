@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
-  FileText, Download, FileDown, Users, ThumbsUp, ThumbsDown,
+  FileText, Download, FileSpreadsheet, ChevronDown, Users, ThumbsUp, ThumbsDown,
   AlertTriangle, Loader2, PartyPopper, CalendarDays, Clock,
   Heart, MessageCircle, ChevronRight, TrendingUp,
 } from 'lucide-react'
@@ -28,6 +28,12 @@ import { supabase } from '@/lib/supabase/client'
 import { useUserProfile } from '@/hooks/use-user-profile'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
@@ -145,10 +151,19 @@ export default function Reports() {
       // engana). Antes o CSV só checava `hasPrevData`, ignorando essa trava.
       const comparavelCsv = kpis.hasPrevData && kpis.prevConfiavel
 
+      const { currentStart: inicio } = getPeriodDates(period)
+
       const linhas: string[][] = [
         ['RELATÓRIO', nomeRestaurante],
         ['Período', PERIOD_LABEL[period]],
+        // As datas exatas, e não só "Últimos 30 dias": a planilha vai ser
+        // aberta semanas depois, quando o rótulo relativo já não diz nada.
+        ['De', format(inicio, 'dd/MM/yyyy')],
+        ['Até', format(new Date(), 'dd/MM/yyyy')],
         ['Gerado em', format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })],
+        [],
+        ['Todos os números abaixo são só deste período.'],
+        ['A satisfação vai de 0 a 100: 100 = todas positivas, 0 = todas negativas.'],
         [],
         ['RESUMO'],
         ['Métrica', 'Valor', 'vs. período anterior'],
@@ -163,22 +178,42 @@ export default function Reports() {
         ['Avaliações por cliente', String(stats.avaliacoesPorCliente), ''],
         [],
         ['POR CATEGORIA'],
+        ['Onde o restaurante vai melhor e pior.'],
         ['Categoria', 'Avaliações', 'Satisfação (0-100)'],
         ...stats.porCategoria.map((c) => [c.nome, String(c.total), String(c.satisfacao)]),
         [],
         ['EVOLUÇÃO NO PERÍODO'],
+        ['Um dia por linha. Satisfação em branco = nenhuma avaliação naquele dia.'],
         ['Data', 'Avaliações', 'Satisfação (0-100)'],
         ...tendencia.map((t) => [t.date, String(t.avaliacoes), t.sentiment == null ? '' : String(t.sentiment)]),
         [],
+        ['O QUE OS CLIENTES MAIS COMENTAM'],
+        ['Assunto agrupado pela IA, com quantas vezes apareceu no período.'],
+        ['Assunto', 'Tipo', 'Vezes'],
+        ...temas.map((t) => [
+          t.rotulo,
+          t.tipo === 'elogio' ? 'Elogio' : 'Reclamação',
+          String(t.quantidade),
+        ]),
+        [],
         ['POR DIA DA SEMANA'],
+        ['Soma de todas as semanas do período — mostra o dia que costuma pesar.'],
         ['Dia', 'Avaliações', 'Satisfação (0-100)'],
         ...stats.porDiaSemana.map((d) => [d.nome, String(d.total), d.satisfacao == null ? '' : String(d.satisfacao)]),
         [],
         ['POR FAIXA DE HORÁRIO'],
+        ['Hora em que a avaliação chegou, não a do atendimento.'],
         ['Faixa', 'Avaliações', 'Satisfação (0-100)'],
         ...stats.porFaixaHorario.map((f) => [f.nome, String(f.total), f.satisfacao == null ? '' : String(f.satisfacao)]),
         [],
         ['TODAS AS AVALIAÇÕES'],
+        // O que o sistema chama de "avaliação" é um ASSUNTO citado, não uma
+        // mensagem: quem falou de comida e de atendimento na mesma mensagem
+        // gerou duas. É a mesma contagem do resumo lá em cima — conferido —,
+        // e dizer isso aqui evita que alguém compare esta lista com o número
+        // de clientes e ache que um dos dois está errado.
+        ['Uma linha por assunto citado. Uma mensagem que fala de dois assuntos'],
+        ['vira duas linhas — o total daqui é o mesmo "Total de avaliações" do resumo.'],
         ['Data', 'Hora', 'Categoria', 'Sentimento', 'Avaliação'],
         ...(brutos || []).map((f: any) => {
           const d = parseISO(f.created_at)
@@ -233,6 +268,12 @@ export default function Reports() {
       kpis,
       estatisticas: stats,
       categorias: stats?.porCategoria ?? [],
+      // Os temas e o comportamento por dia/hora estão na tela desde sempre e
+      // não chegavam ao PDF: quem recebia o arquivo via um relatório sem os
+      // assuntos que os clientes citaram, que é a parte mais concreta dele.
+      temas,
+      porDiaSemana: stats?.porDiaSemana ?? [],
+      porFaixaHorario: stats?.porFaixaHorario ?? [],
       insights: insRes.data || [],
       feedbacks: fbRes.data || [],
     }
@@ -434,20 +475,57 @@ function LayoutNovo({
               <SelectItem value="90d">Últimos 3 meses</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant="outline" onClick={handleExportCSV} disabled={semDados || gerandoCsv}
-            className="rounded-md border-gray-200 bg-white text-gray-700"
-          >
-            {gerandoCsv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Exportar
-          </Button>
-          <Button
-            onClick={handleExportPdf} disabled={semDados || gerandoPdf}
-            className="rounded-md bg-green-600 text-white hover:bg-green-700"
-          >
-            {gerandoPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-            PDF
-          </Button>
+          {/* Um botão só, com o formato escolhido dentro.
+              Eram dois lado a lado — um contornado escrito "Exportar" e um
+              verde escrito "PDF" —, e o par não dizia que faziam a mesma
+              coisa em formatos diferentes: um parecia a ação e o outro um
+              atalho. Aqui a ação é "Baixar" e o formato é a escolha.
+
+              Verde e não o azul da marca: é o único botão da barra que
+              produz um arquivo, e o azul já é a cor de tudo que é clicável
+              no app. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={semDados || gerandoCsv || gerandoPdf}
+                className="h-10 gap-2 rounded-md bg-emerald-600 px-4 font-medium text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+              >
+                {gerandoCsv || gerandoPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {gerandoCsv ? 'Gerando planilha…' : gerandoPdf ? 'Gerando PDF…' : 'Baixar'}
+                <ChevronDown className="h-4 w-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {/* Cada item diz o que o arquivo SERVE para fazer, não só o
+                  que ele é: quem baixa está escolhendo entre ler e calcular. */}
+              <DropdownMenuItem
+                onClick={handleExportPdf}
+                disabled={gerandoPdf}
+                className="gap-3 py-2.5"
+              >
+                <FileText className="h-4 w-4 shrink-0 text-red-600" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Relatório em PDF</p>
+                  <p className="text-xs text-gray-500">Com análise escrita, pronto para enviar</p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleExportCSV}
+                disabled={gerandoCsv}
+                className="gap-3 py-2.5"
+              >
+                <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">Planilha (CSV)</p>
+                  <p className="text-xs text-gray-500">Todos os números, para abrir no Excel</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

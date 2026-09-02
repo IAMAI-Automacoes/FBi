@@ -256,6 +256,105 @@ export async function gerarPdfRelatorio(
     y = (doc as any).lastAutoTable.finalY + 4
   }
 
+  // ── O que os clientes mais comentam ──────────────────────────────────────
+  // Os assuntos que a IA agrupou. É a parte mais concreta do relatório — diz
+  // do que se falou, com nome, e não só quantos foram e em que categoria.
+  const temas = dadosRelatorio.temas || []
+  if (temas.length > 0) {
+    const elogios = temas.filter((t: any) => t.tipo === 'elogio')
+    const reclamacoes = temas.filter((t: any) => t.tipo === 'reclamacao')
+
+    secao('O que os clientes mais comentam')
+    paragrafo(
+      'Assuntos que a IA agrupou a partir do que foi escrito, e quantas vezes cada um apareceu.',
+      { tamanho: 9, cor: CINZA, lh: 4.5 },
+    )
+    espaco(18)
+    autoTable(doc, {
+      startY: y + 1,
+      head: [['Assunto', 'Tipo', 'Vezes']],
+      // Reclamações primeiro: num relatório que alguém lê para decidir o que
+      // fazer, o que incomoda vale mais que o que agrada.
+      body: [...reclamacoes, ...elogios].slice(0, 14).map((t: any) => [
+        limpar(t.rotulo),
+        t.tipo === 'elogio' ? 'Elogio' : 'Reclamacao',
+        String(t.quantidade ?? '-'),
+      ]),
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 2.5, textColor: TINTA },
+      headStyles: { fontStyle: 'bold', textColor: CINZA, fillColor: FUNDO_SUAVE },
+      alternateRowStyles: { fillColor: [252, 253, 254] },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } },
+      margin: { left: M, right: M },
+      // Reclamação em vermelho, elogio em verde: a coluna "Tipo" vira uma
+      // pista de cor, e a tabela se lê sem precisar percorrer palavra a palavra.
+      didParseCell: (dados: any) => {
+        if (dados.section === 'body' && dados.column.index === 1) {
+          dados.cell.styles.textColor = dados.cell.raw === 'Elogio' ? VERDE : VERMELHO
+          dados.cell.styles.fontStyle = 'bold'
+        }
+      },
+    })
+    y = (doc as any).lastAutoTable.finalY + 4
+  }
+
+  // ── Quando as avaliações chegam ──────────────────────────────────────────
+  // Dia da semana e faixa de horário lado a lado: são a mesma pergunta ("em
+  // que momento isto acontece") vista por dois cortes, e separá-las em duas
+  // seções faria o leitor comparar virando página.
+  const porDia = dadosRelatorio.porDiaSemana || []
+  const porHora = dadosRelatorio.porFaixaHorario || []
+  if (porDia.length > 0 || porHora.length > 0) {
+    secao('Quando as avaliacoes chegam')
+    paragrafo(
+      'Horario em que a mensagem foi enviada, nao o do atendimento. Satisfacao em branco = nenhuma avaliacao naquele recorte.',
+      { tamanho: 9, cor: CINZA, lh: 4.5 },
+    )
+    espaco(18)
+
+    const topoTabelas = y + 1
+    const meia = (UTIL - 6) / 2
+    const corpo = (linhas: any[]) =>
+      linhas.map((d: any) => [
+        limpar(d.nome),
+        String(d.total ?? 0),
+        d.satisfacao == null ? '-' : String(d.satisfacao),
+      ])
+    const estilo = {
+      theme: 'plain' as const,
+      styles: { fontSize: 8.5, cellPadding: 2, textColor: TINTA },
+      headStyles: { fontStyle: 'bold' as const, textColor: CINZA, fillColor: FUNDO_SUAVE },
+      alternateRowStyles: { fillColor: [252, 253, 254] as [number, number, number] },
+      columnStyles: { 1: { halign: 'center' as const }, 2: { halign: 'center' as const } },
+    }
+
+    if (porDia.length > 0) {
+      autoTable(doc, {
+        ...estilo,
+        startY: topoTabelas,
+        head: [['Dia', 'Aval.', 'Satisf.']],
+        body: corpo(porDia),
+        margin: { left: M },
+        tableWidth: meia,
+      })
+    }
+    const fimEsquerda = porDia.length > 0 ? (doc as any).lastAutoTable.finalY : topoTabelas
+
+    if (porHora.length > 0) {
+      autoTable(doc, {
+        ...estilo,
+        startY: topoTabelas,
+        head: [['Horario', 'Aval.', 'Satisf.']],
+        body: corpo(porHora),
+        margin: { left: M + meia + 6 },
+        tableWidth: meia,
+      })
+    }
+    const fimDireita = porHora.length > 0 ? (doc as any).lastAutoTable.finalY : topoTabelas
+
+    y = Math.max(fimEsquerda, fimDireita) + 4
+  }
+
   // ── Clientes ─────────────────────────────────────────────────────────────
   if (analise.leitura_clientes) {
     secao('Clientes')
