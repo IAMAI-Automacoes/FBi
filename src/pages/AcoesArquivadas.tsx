@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Archive } from 'lucide-react'
+import { ArrowLeft, Archive, CalendarDays } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { CampoBusca } from '@/components/CampoBusca'
+import { CATEGORIAS_FEEDBACK } from '@/lib/categorias-feedback'
+import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import type { DateRange } from 'react-day-picker'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TaskCard } from '@/components/actions/TaskCard'
@@ -23,6 +31,53 @@ export default function AcoesArquivadas() {
   const [loading, setLoading] = useState(true)
   /** Ação aberta no modal (somente leitura, com opção de excluir). */
   const [acaoAberta, setAcaoAberta] = useState<any>(null)
+
+  // Mesmos três filtros de /feedbacks. A lista de arquivadas só cresce — é o
+  // único lugar do app onde nada sai —, então em poucos meses ela é a maior
+  // do sistema e rolar deixa de ser uma forma de achar coisa.
+  const [busca, setBusca] = useState('')
+  const [categorias, setCategorias] = useState<string[]>([])
+  const [periodo, setPeriodo] = useState<DateRange | undefined>()
+  const [periodoAberto, setPeriodoAberto] = useState(false)
+
+  // Contagem por categoria SOBRE o que os outros filtros já deixaram passar,
+  // e não sobre a lista inteira: o número ao lado de cada categoria tem que
+  // dizer quantas eu veria clicando nela agora.
+  const baseParaContagem = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return acoes.filter((a) => {
+      const txt = !termo ||
+        [a.titulo_acao, a.plano_detalhado, a.responsavel]
+          .some((c: string | null) => (c ?? '').toLowerCase().includes(termo))
+      const dt = !periodo?.from || (() => {
+        const d = new Date(a.arquivada_em ?? a.created_at)
+        return isWithinInterval(d, {
+          start: startOfDay(periodo.from!),
+          end: endOfDay(periodo.to ?? periodo.from!),
+        })
+      })()
+      return txt && dt
+    })
+  }, [acoes, busca, periodo])
+
+  const contagemCategorias = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const a of baseParaContagem) {
+      if (a.categoria && CATEGORIAS_FEEDBACK.includes(a.categoria)) {
+        c[a.categoria] = (c[a.categoria] ?? 0) + 1
+      }
+    }
+    return c
+  }, [baseParaContagem])
+
+  const acoesFiltradas = useMemo(
+    () => baseParaContagem.filter(
+      (a) => categorias.length === 0 || categorias.includes(a.categoria ?? ''),
+    ),
+    [baseParaContagem, categorias],
+  )
+
+  const temFiltro = !!busca.trim() || categorias.length > 0 || !!periodo?.from
 
   const carregar = useCallback(async () => {
     if (!usuario?.restaurante_id) return
@@ -87,6 +142,55 @@ export default function AcoesArquivadas() {
         </Button>
       </div>
 
+      {/* Só aparece quando há o que filtrar: a barra numa lista vazia é um
+          controle que não muda nada. */}
+      {!loading && acoes.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+          <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-10 shrink-0 justify-start border-gray-200 bg-white font-normal shadow-sm"
+              >
+                <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
+                {periodo?.from
+                  ? periodo.to && periodo.to.getTime() !== periodo.from.getTime()
+                    ? `${format(periodo.from, 'd MMM', { locale: ptBR })} – ${format(periodo.to, 'd MMM', { locale: ptBR })}`
+                    : format(periodo.from, "d 'de' MMM", { locale: ptBR })
+                  : 'Período'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={periodo}
+                onSelect={setPeriodo}
+                locale={ptBR}
+                numberOfMonths={2}
+                disabled={{ after: new Date() }}
+              />
+              {periodo?.from && (
+                <div className="flex justify-end border-t p-2">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs"
+                    onClick={() => { setPeriodo(undefined); setPeriodoAberto(false) }}>
+                    Limpar
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          <FiltroCategorias
+            contagens={contagemCategorias}
+            rotuloItens="ações"
+            selecionadas={categorias}
+            onChange={setCategorias}
+          />
+
+          <CampoBusca value={busca} onChange={setBusca} placeholder="Buscar nas ações" />
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -103,9 +207,25 @@ export default function AcoesArquivadas() {
             Ao concluir uma ação, use o botão "Arquivar" no cartão para guardá-la aqui.
           </p>
         </div>
+      ) : acoesFiltradas.length === 0 ? (
+        // Filtro que não encontra nada precisa dizer isso e oferecer a saída;
+        // sem esta linha a grade some e parece que as ações foram embora.
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
+          <p className="text-sm text-gray-500">Nenhuma ação com esses filtros.</p>
+          {temFiltro && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-8 text-xs"
+              onClick={() => { setBusca(''); setCategorias([]); setPeriodo(undefined) }}
+            >
+              Limpar filtros
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {acoes.map((acao) => (
+          {acoesFiltradas.map((acao) => (
             <TaskCard
               key={acao.id}
               task={acao}

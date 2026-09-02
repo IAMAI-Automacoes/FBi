@@ -143,7 +143,9 @@ export function TaskCard({
                   <Zap className="w-3 h-3" />
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top">Sugerida pela IA</TooltipContent>
+              <TooltipContent side="top" className="px-1.5 py-0.5 text-[11px]">
+                Sugerida pela IA
+              </TooltipContent>
             </Tooltip>
           )}
         </div>

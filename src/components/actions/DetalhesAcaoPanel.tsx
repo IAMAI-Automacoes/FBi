@@ -9,7 +9,7 @@ import { estiloPrioridade } from '@/lib/prioridade'
 import { estiloCategoria } from '@/lib/categorias-feedback'
 import { cn } from '@/lib/utils'
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
 import {
   AlertDialog,
@@ -120,25 +120,6 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* Editar mora no CABEÇALHO, ao lado do X, e não mais no rodapé.
-            É uma ação sobre o item inteiro — o mesmo lugar onde o olho já
-            procura os controles da janela — e assim ela fica na diagonal
-            oposta à de excluir, que é a distância máxima entre a ação que se
-            usa toda hora e a que não tem volta. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={onEditar}
-              variant="ghost"
-              size="icon"
-              aria-label="Editar ação"
-              className="absolute right-11 top-2.5 z-10 h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-            >
-              <Pencil className="h-[18px] w-[18px]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Editar ação</TooltipContent>
-        </Tooltip>
 
         <SheetHeader className="p-5 border-b bg-white shrink-0 space-y-2.5 text-left">
           {/* Prioridade e categoria na MESMA linha: são os dois rótulos que
@@ -240,10 +221,77 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
               Feedbacks relacionados
             </p>
             <div className="space-y-2">
+              <div className="flex items-center gap-2">
               <FeedbacksRelacionadosPopover
                 origem={{ tipo: 'acao', id: acaoId }}
                 rotulo="Ver os feedbacks desta ação"
               />
+                {/* Editar e excluir moram AQUI, na mesma linha do botão de
+                    feedbacks, e não num rodapé próprio. O rodapé existia só
+                    para eles: uma faixa com borda ocupando a largura toda do
+                    painel para dois ícones de 20px, e por isso mesmo lida como
+                    barra de formulário. Aqui eles ficam onde o olho já está —
+                    no fim do conteúdo — e a faixa some.
+
+                    `ml-auto` empurra o par para a direita; a distância até o
+                    botão de feedbacks é o que impede clicar em excluir quando
+                    se queria ler os feedbacks. */}
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={onEditar}
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar ação"
+                        className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                      >
+                        <Pencil className="h-[18px] w-[18px]" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Editar</TooltipContent>
+                  </Tooltip>
+
+                  {onExcluir && (
+                    <AlertDialog>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Excluir ação"
+                              className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="h-[27px] w-[27px]" />
+                            </Button>
+                          </AlertDialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Excluir</TooltipContent>
+                      </Tooltip>
+
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir esta ação?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Os feedbacks ligados a ela voltam para novos insights. Não dá para
+                            desfazer.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={onExcluir}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
+              </div>
 
               {/* Só em ação que NÃO veio de insight: essa já herdou os vínculos
                   do insight de origem, e concluída não precisa mais avisar
@@ -268,48 +316,6 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
             </div>
           </div>
         </div>
-        {/* Sobra só excluir no rodapé, sozinha e no canto oposto ao lápis.
-            Ação sem volta não divide faixa com nenhuma outra: não existe
-            clique vizinho para errar. */}
-        {onExcluir && (
-          <SheetFooter className="p-4 border-t bg-white shrink-0 flex-row items-center justify-start sm:justify-start sm:space-x-0">
-            <AlertDialog>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Excluir ação"
-                      className="h-11 w-11 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                      <Trash2 className="h-[27px] w-[27px]" />
-                    </Button>
-                  </AlertDialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top">Excluir ação</TooltipContent>
-              </Tooltip>
-
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir esta ação?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Os feedbacks ligados a ela voltam para novos insights. Não dá para desfazer.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={onExcluir}
-                    className="bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </SheetFooter>
-        )}
       </SheetContent>
     </Sheet>
   )

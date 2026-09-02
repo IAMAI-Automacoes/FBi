@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { CampoBusca } from '@/components/CampoBusca'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
@@ -35,6 +36,7 @@ export default function Insights() {
   const [filterPriority, setFilterPriority] = useState<string>('Todos')
   const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [showOnlyPinned, setShowOnlyPinned] = useState(false)
+  const [busca, setBusca] = useState('')
 
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
@@ -309,13 +311,20 @@ export default function Insights() {
           (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
         const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
         const pinMatch = !showOnlyPinned || !!i.fixado
-        return prioMatch && catMatch && pinMatch
+        // Busca no que o card mostra: título, descrição e sugestão. Procurar
+        // em campo que não está na tela devolve resultado sem explicação.
+        const termo = busca.trim().toLowerCase()
+        const txtMatch =
+          !termo ||
+          [i.titulo, i.descricao, i.sugestao]
+            .some((c) => (c ?? '').toLowerCase().includes(termo))
+        return prioMatch && catMatch && pinMatch && txtMatch
       })
       // Fixados sempre no topo — sort é estável, então dentro de cada grupo
       // (fixado / não fixado) a ordem por data (`created_at desc`) do fetch
       // original se mantém.
       .sort((a, b) => Number(!!b.fixado) - Number(!!a.fixado))
-  }, [insights, filterPriority, filterCategories, showOnlyPinned])
+  }, [insights, filterPriority, filterCategories, showOnlyPinned, busca])
 
   // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.
   const topoRef = useRef<HTMLDivElement>(null)
@@ -388,6 +397,8 @@ export default function Insights() {
               selecionadas={filterCategories}
               onChange={setFilterCategories}
             />
+
+            <CampoBusca value={busca} onChange={setBusca} placeholder="Buscar nos insights" />
 
             <Button
               type="button"
@@ -519,6 +530,7 @@ export default function Insights() {
     filterPriority,
     filterCategories,
     showOnlyPinned,
+    busca,
     generating,
     configOpen,
     feedbacksPorAnalise,

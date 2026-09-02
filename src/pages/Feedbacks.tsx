@@ -26,6 +26,7 @@ import {
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 import { DataSegmentada } from '@/components/DataSegmentada'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { CampoBusca } from '@/components/CampoBusca'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
@@ -230,15 +231,19 @@ export default function Feedbacks() {
   // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
   // filtros onde a lista rolando pudesse vazar por cima.
+  // Uma linha só: os controles têm larguras próprias (o período pelo texto, os
+  // selects fixos, a busca em w-56) e `overflow-x-auto` cuida das telas estreitas.
+  // Quebrar em duas linhas empurrava a lista para baixo e escondia os
+  // primeiros feedbacks.
   const barraFiltros = (
-      <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center justify-between">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
           {/* Período: atalhos (7/30/90 dias, tudo) + calendário de intervalo, num controle só */}
           <Popover open={periodoAberto} onOpenChange={setPeriodoAberto}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-10 bg-white shadow-sm border-gray-200 font-normal justify-start"
+                className="h-10 shrink-0 bg-white shadow-sm border-gray-200 font-normal justify-start"
               >
                 <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
                 {rotuloPeriodo(filtros)}
@@ -334,7 +339,7 @@ export default function Feedbacks() {
             value={filtros.sentimento}
             onValueChange={(val) => setFiltros((prev) => ({ ...prev, sentimento: val }))}
           >
-            <SelectTrigger className="w-[190px] h-10 bg-white shadow-sm border-gray-200">
+            <SelectTrigger className="w-[168px] h-10 shrink-0 bg-white shadow-sm border-gray-200">
               <SelectValue placeholder="Todos Sentimentos" />
             </SelectTrigger>
             <SelectContent>
@@ -349,7 +354,7 @@ export default function Feedbacks() {
             value={filtros.ordenacao}
             onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, ordenacao: val }))}
           >
-            <SelectTrigger className="w-[150px] h-10 bg-white shadow-sm border-gray-200">
+            <SelectTrigger className="w-[136px] h-10 shrink-0 bg-white shadow-sm border-gray-200">
               <SelectValue placeholder="Ordenar" />
             </SelectTrigger>
             <SelectContent>
@@ -365,15 +370,11 @@ export default function Feedbacks() {
             onChange={(categorias) => setFiltros((prev) => ({ ...prev, categorias }))}
           />
 
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              className="pl-9 h-10 bg-white w-full shadow-sm border-gray-200"
-              placeholder="Buscar nos feedbacks..."
-              value={filtros.busca}
-              onChange={(e) => setFiltros((prev) => ({ ...prev, busca: e.target.value }))}
-            />
-          </div>
+          <CampoBusca
+            value={filtros.busca}
+            placeholder="Buscar nos feedbacks"
+            onChange={(busca) => setFiltros((prev) => ({ ...prev, busca }))}
+          />
         </div>
       </div>
   )
