@@ -390,18 +390,35 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
     .sort((a, b) => b.count - a.count)
 }
 
+/**
+ * Os feedbacks mais recentes DENTRO do período escolhido.
+ *
+ * O `period` não existia aqui: a lista trazia os últimos cinco de sempre, e
+ * com o filtro em 7 dias a tela mostrava "0 feedbacks" no topo e cinco
+ * mensagens logo abaixo — as de semanas atrás. Quem olhava só a lista concluía
+ * que o número estava errado.
+ *
+ * Sem `period`, não há corte — é o que os chamadores antigos esperam.
+ */
 export const buscarUltimosFeedbacks = async (
   restauranteId: number | null,
   limit = 5,
+  period?: PeriodInfo,
 ): Promise<FeedbackItem[]> => {
   if (!restauranteId) return []
 
   // Mensagem ORIGINAL do cliente (transcrição exata). A view deriva o sentimento
   // geral e as categorias a partir dos pedaços separados.
-  const { data, error } = await supabase
+  let consulta = supabase
     .from('feedbacks_originais_view')
     .select('*')
     .eq('restaurante_id', restauranteId)
+
+  if (period) {
+    consulta = consulta.gte('created_at', getPeriodDates(period).currentStart.toISOString())
+  }
+
+  const { data, error } = await consulta
     .order('created_at', { ascending: false })
     .limit(limit)
 

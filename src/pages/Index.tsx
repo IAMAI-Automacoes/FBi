@@ -10,6 +10,7 @@ import {
   buscarTendencia,
   buscarCategorias,
   buscarUltimosFeedbacks,
+  getPeriodDates,
 } from '@/lib/queries/visao-geral'
 import { useToast } from '@/hooks/use-toast'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
@@ -36,7 +37,7 @@ export default function Index() {
         buscarKpis(restauranteId, period),
         buscarTendencia(restauranteId, period),
         buscarCategorias(restauranteId, period),
-        buscarUltimosFeedbacks(restauranteId, 5),
+        buscarUltimosFeedbacks(restauranteId, 5, period),
       ])
       setData({ kpis, chartData, categories, recentFeedbacks })
       hasLoadedOnce.current = true
@@ -115,7 +116,10 @@ export default function Index() {
             period={period}
             onPeriodChange={setPeriod}
           />
-          <TemasFeedback restauranteId={usuario?.restaurante_id ?? null} />
+          <TemasFeedback
+            restauranteId={usuario?.restaurante_id ?? null}
+            dias={getPeriodDates(period).days}
+          />
           <RecentFeedbacks feedbacks={data.recentFeedbacks} />
         </>
       ) : null}

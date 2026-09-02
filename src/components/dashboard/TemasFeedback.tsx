@@ -1,8 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { supabase } from '@/lib/supabase/client'
 import { buscarTemas, type TemaFeedback, type SentimentoFiltro } from '@/lib/queries/temas'
 import { cn } from '@/lib/utils'
@@ -12,13 +9,6 @@ const SENTIMENTOS: { key: SentimentoFiltro; label: string }[] = [
   { key: 'todos', label: 'Todos' },
   { key: 'negativo', label: 'Negativos' },
   { key: 'positivo', label: 'Positivos' },
-]
-
-const PERIODOS = [
-  { dias: 7, label: 'Últimos 7 dias' },
-  { dias: 30, label: 'Últimos 30 dias' },
-  { dias: 90, label: 'Últimos 90 dias' },
-  { dias: 0, label: 'Todo o período' },
 ]
 
 function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atencao' }) {
@@ -71,13 +61,20 @@ function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atenca
  * (positivos / pontos de atenção). Temas neutros não entram aqui — continuam
  * contados normalmente no resto do dashboard, só não aparecem nesta lista.
  * As abas Todos/Positivos/Negativos controlam só a exibição (a busca sempre
- * traz tudo, então trocar de aba não recarrega). Atualiza sozinho por
- * Realtime — sem recarregar a página.
+ * traz tudo, então trocar de aba não recarrega). A JANELA DE TEMPO vem da
+ * página, pelo prop `dias`. Atualiza sozinho por Realtime — sem recarregar a
+ * página.
  */
-export function TemasFeedback({ restauranteId }: { restauranteId: number | null }) {
+export function TemasFeedback({
+  restauranteId,
+  dias,
+}: {
+  restauranteId: number | null
+  /** Janela em dias, vinda do filtro da PÁGINA. */
+  dias: number
+}) {
   const [temas, setTemas] = useState<TemaFeedback[]>([])
   const [sentimento, setSentimento] = useState<SentimentoFiltro>('todos')
-  const [dias, setDias] = useState(30)
   const [carregado, setCarregado] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -112,17 +109,11 @@ export function TemasFeedback({ restauranteId }: { restauranteId: number | null 
     <Card className="shadow-subtle">
       <CardHeader className="p-5 border-b border-border space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Sem seletor de período próprio: o da página manda em tudo.
+              Dois controles de data na mesma tela deixavam este bloco falando
+              de 30 dias enquanto os números acima falavam de 7, sem nada
+              dizendo que eram recortes diferentes. */}
           <CardTitle className="text-base font-semibold">O que os clientes estão comentando</CardTitle>
-          <Select value={String(dias)} onValueChange={(v) => setDias(Number(v))}>
-            <SelectTrigger className="h-8 w-[160px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIODOS.map((p) => (
-                <SelectItem key={p.dias} value={String(p.dias)} className="text-xs">{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Filtro de sentimento — segmentado, discreto */}

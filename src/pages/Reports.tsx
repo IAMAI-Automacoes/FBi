@@ -216,9 +216,14 @@ export default function Reports() {
             .gte('created_at', currentStart.toISOString())
             .order('created_at', { ascending: false }).limit(15)
         : Promise.resolve({ data: [] as any[] }),
+      // Os insights também são do PERÍODO. Sem o corte, um relatório de 7 dias
+      // saía com insights de meses atrás ao lado de números de uma semana — e
+      // o texto que a IA escrevia a partir disso relacionava as duas coisas
+      // como se fossem do mesmo recorte.
       restauranteId
         ? supabase.from('insights').select('titulo, prioridade')
             .eq('restaurante_id', restauranteId).eq('ativo', true)
+            .gte('created_at', currentStart.toISOString())
             .order('created_at', { ascending: false }).limit(8)
         : Promise.resolve({ data: [] as any[] }),
     ])
