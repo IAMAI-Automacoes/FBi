@@ -1,5 +1,5 @@
-import { Fragment } from 'react'
-import { analisar } from '@/lib/texto-rico'
+import { Fragment, type CSSProperties } from 'react'
+import { INCLINACAO_ITALICO, analisar } from '@/lib/texto-rico'
 import { cn } from '@/lib/utils'
 
 interface TextoFormatadoProps {
@@ -35,7 +35,9 @@ export function TextoFormatado({ texto, className }: TextoFormatadoProps) {
               // `fontSize` inline é a única forma: o tamanho é um número
               // escolhido no editor, não um degrau de uma escala fixa, então
               // não existe classe do Tailwind que o cubra.
-              const estilo = t.tamanho ? { fontSize: `${t.tamanho}px` } : undefined
+              const estilo: CSSProperties = {}
+              if (t.tamanho) estilo.fontSize = `${t.tamanho}px`
+              if (t.italico) estilo.fontStyle = INCLINACAO_ITALICO
               const conteudo = (
                 <span
                   style={estilo}

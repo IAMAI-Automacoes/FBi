@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* O `ital,` no começo é o que traz a face ITÁLICA de verdade. Sem ela o
+   Google Fonts serve só os pesos retos, e o navegador inventa a inclinação
+   deformando a letra reta — no Inter isso sai tão sutil que o itálico do
+   plano de ação passava despercebido. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap');
 
 /* Canela — fonte da marca (paga, não está no Google Fonts). Coloque os arquivos
    em public/fonts/ (Canela-Regular.woff2 / Canela-Medium.woff2). Enquanto não
@@ -19,6 +23,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* O itálico reforçado do plano de ação NÃO mora aqui, e sim em estilo inline
+   (ver `INCLINACAO_ITALICO` em lib/texto-rico.ts).
+   `font-style: oblique 14deg` escrito em CSS chega ao arquivo final como
+   `font-style: oblique`, sem o ângulo: o processador de CSS do build descarta
+   a parte angular — testado também com a minificação desligada. Inline, o
+   valor não passa por ele. */
 
 /* Nome do restaurante usa a fonte da marca, com fallback serif. */
 .fonte-marca {
