@@ -34,7 +34,7 @@ const dados = {
     hasPrevData: true, prevConfiavel: true,
   },
   stats: {
-    clientesUnicos: 8, clientesRecorrentes: 1, avaliacoesPorCliente: 5.8,
+    clientesUnicos: 8, clientesRecorrentes: 1, mensagensPorCliente: 5.8,
     porCategoria: [{ nome: 'Comida', total: 44, satisfacao: 48 }],
     porDiaSemana: [{ nome: 'sábado', total: 0, satisfacao: null }],
     porFaixaHorario: [{ nome: 'Jantar (18h–23h)', total: 41, satisfacao: 41 }],
@@ -78,6 +78,22 @@ checa('quebra de linha vira espaco', txt.includes('Linha 1 Linha 2'), true)
 // O separador e o BOM são o que faz o Excel PT-BR abrir direito.
 checa('separador ponto-e-virgula', txt.includes('";"'), true)
 checa('comeca com BOM', txt.charCodeAt(0), 0xfeff)
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A linha de integridade do sentimento
+//
+// `neutros` era calculado por subtração (`total - positivos - negativos`), o
+// que jogava em "neutro" qualquer sentimento desconhecido. Agora é contado, e
+// o que sobra aparece como "Sem classificação" — mas só quando existe.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const semAviso = montarLinhasCsv({ ...dados, kpis: { ...dados.kpis, semClassificacao: 0 } } as never)
+const comAviso = montarLinhasCsv({ ...dados, kpis: { ...dados.kpis, semClassificacao: 4 } } as never)
+const temLinha = (ls: unknown[][]) => ls.some((l) => String(l[0] ?? '').startsWith('Sem classificação'))
+
+checa('sem avaliacao desconhecida, a linha nao aparece', temLinha(semAviso), false)
+checa('com avaliacao desconhecida, a linha aparece', temLinha(comAviso), true)
 
 console.log(falhas === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${falhas} FALHA(S)`)
 if (falhas > 0) process.exit(1)

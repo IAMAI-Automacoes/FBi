@@ -143,10 +143,16 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ['Avaliações positivas', `${numero(kpis.positivos)} (${numero(kpis.positivePercent)}%)`, ''],
     ['Avaliações neutras', `${numero(kpis.neutros)} (${numero(kpis.neutralPercent)}%)`, ''],
     ['Avaliações negativas', `${numero(kpis.negativos)} (${numero(kpis.negativePercent)}%)`, ''],
+    // Só aparece se houver: é uma linha de integridade, não uma métrica. O
+    // valor esperado é zero, e vê-la significa que alguma avaliação chegou com
+    // um sentimento que o sistema não reconhece.
+    ...(kpis.semClassificacao > 0
+      ? [['Sem classificação de sentimento', numero(kpis.semClassificacao), 'verifique com o suporte']]
+      : []),
     ['Tema que mais preocupa', temaCritico, ''],
     ['Clientes diferentes', numero(stats?.clientesUnicos), ''],
     ['Clientes que voltaram a avaliar', numero(stats?.clientesRecorrentes), ''],
-    ['Avaliações por cliente', numero(stats?.avaliacoesPorCliente, 1), ''],
+    ['Mensagens por cliente', numero(stats?.mensagensPorCliente, 1), ''],
     [],
 
     // ── Categorias ───────────────────────────────────────────────────────

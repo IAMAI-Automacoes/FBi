@@ -584,7 +584,7 @@ function LayoutNovo({
                 <div>
                   <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-red-600">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    Tema que mais precisa de atenção
+                    Categoria que mais precisa de atenção
                   </p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{kpis.criticalTheme}</p>
                   <p className="mt-1 text-sm text-gray-600">
@@ -655,10 +655,29 @@ function LayoutNovo({
                       axisLine={false} tickLine={false} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]}
                       tick={{ fontSize: 10, fill: '#9ca3af' }}
                     />
-                    <ReferenceLine
-                      y={70} stroke="#3b82f6" strokeDasharray="4 3" strokeOpacity={0.8}
-                      label={{ value: 'Meta: 70%', position: 'insideTopRight', fill: '#3b82f6', fontSize: 11 }}
-                    />
+                    {/* A linha de referência é o período ANTERIOR, não uma meta.
+                        Havia um `y={70}` fixo rotulado "Meta: 70%" — um número
+                        que ninguém escolheu, igual para todo restaurante, e
+                        chamado de porcentagem quando o eixo é um índice de 0 a
+                        100 (que não é o mesmo que 70% dos clientes satisfeitos).
+                        Uma meta inventada faz o dono perseguir um número que não
+                        é dele; o período anterior é um fato, e responde a
+                        pergunta que ele realmente tem: melhorou ou piorou?
+
+                        Só aparece com base suficiente — a mesma trava que
+                        esconde as variações percentuais quando o período
+                        anterior tem menos de 3 avaliações. */}
+                    {kpis.hasPrevData && kpis.prevConfiavel && (
+                      <ReferenceLine
+                        y={kpis.prevSentiment} stroke="#94a3b8" strokeDasharray="4 3" strokeOpacity={0.9}
+                        label={{
+                          value: `Período anterior: ${kpis.prevSentiment}`,
+                          position: 'insideTopRight',
+                          fill: '#64748b',
+                          fontSize: 11,
+                        }}
+                      />
+                    )}
                     <ChartTooltip content={<SatisfacaoTooltip />} />
                     <Area
                       type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-1))" strokeWidth={2.5}

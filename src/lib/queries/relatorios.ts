@@ -48,7 +48,16 @@ export interface Recorte {
 export interface EstatisticasRelatorio {
   clientesUnicos: number
   clientesRecorrentes: number
-  avaliacoesPorCliente: number
+  /**
+   * MENSAGENS por cliente, não avaliações.
+   *
+   * O nome antigo era `avaliacoesPorCliente` e o rótulo dizia "Avaliações por
+   * cliente", mas a conta sempre foi `mensagens / clientes` — o Camelo
+   * mostrava 5,8 quando as avaliações por cliente eram 15,7. O que o número
+   * responde é "quantas vezes cada pessoa escreveu", que é a pergunta útil;
+   * errado estava o rótulo.
+   */
+  mensagensPorCliente: number
   /** Todas as categorias do período, com o MESMO índice 0-100 do resto da página. */
   porCategoria: Array<{ nome: string; total: number; satisfacao: number }>
   melhorCategoria: Recorte | null
@@ -73,7 +82,7 @@ export async function buscarEstatisticasRelatorio(
   const vazio: EstatisticasRelatorio = {
     clientesUnicos: 0,
     clientesRecorrentes: 0,
-    avaliacoesPorCliente: 0,
+    mensagensPorCliente: 0,
     porCategoria: [],
     melhorCategoria: null,
     piorCategoria: null,
@@ -115,7 +124,7 @@ export async function buscarEstatisticasRelatorio(
   const clientesUnicos = porTelefone.size
   const clientesRecorrentes = [...porTelefone.values()].filter((mensagens) => mensagens.size > 1).length
   const totalMensagens = [...porTelefone.values()].reduce((soma, mensagens) => soma + mensagens.size, 0)
-  const avaliacoesPorCliente = clientesUnicos ? Number((totalMensagens / clientesUnicos).toFixed(1)) : 0
+  const mensagensPorCliente = clientesUnicos ? Number((totalMensagens / clientesUnicos).toFixed(1)) : 0
 
   // Melhor / pior categoria (exige amostra mínima para não eleger categoria de 1 avaliação)
   const porCategoria = new Map<string, any[]>()
@@ -182,7 +191,7 @@ export async function buscarEstatisticasRelatorio(
   return {
     clientesUnicos,
     clientesRecorrentes,
-    avaliacoesPorCliente,
+    mensagensPorCliente,
     porCategoria: listaCategorias,
     melhorCategoria,
     piorCategoria,

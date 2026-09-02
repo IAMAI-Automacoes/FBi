@@ -47,6 +47,14 @@ export interface DashboardData {
     positivePercent: number
     negativePercent: number
     neutralPercent: number
+    /**
+     * Avaliações cujo sentimento não é positivo, negativo nem neutro.
+     *
+     * Deve ser sempre 0. Se passar disso, o classificador começou a gravar um
+     * valor que ninguém aqui conhece, e as três fatias da barra de divisão
+     * param de somar o total — a planilha avisa quando acontece.
+     */
+    semClassificacao: number
     /** Pontos percentuais vs. período anterior, ex: "+8 pts". Usada no card "Avaliações positivas". */
     positivePercentTrend: string
     /** Valor bruto (0-100) do índice de satisfação do período anterior — para
@@ -117,15 +125,33 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     totalTrend = `${v >= 0 ? '+' : ''}${v}%`
   }
 
+  // `toLowerCase` porque o banco tem as duas grafias ('negativo' e 'Negativo'),
+  // vindas de versões diferentes do classificador.
   const isPositivo = (f: any) =>
     f.sentimento?.toLowerCase() === 'positivo' || f.sentimento?.toLowerCase() === 'positive'
   const isNegativo = (f: any) =>
     f.sentimento?.toLowerCase() === 'negativo' || f.sentimento?.toLowerCase() === 'negative'
+  const isNeutro = (f: any) => {
+    const s = f.sentimento?.toLowerCase()
+    return s === 'neutro' || s === 'neutral'
+  }
 
   // Contagens absolutas do período atual (métricas diretas que o dono entende)
   const positivos = currentFeedbacks.filter(isPositivo).length
   const negativos = currentFeedbacks.filter(isNegativo).length
-  const neutros = totalFeedbacks - positivos - negativos
+  // Contado, não subtraído.
+  //
+  // Era `total - positivos - negativos`, e isso jogava em "neutro" tudo que
+  // não fosse reconhecido — sentimento nulo, vazio ou grafado de um jeito
+  // novo. Pior: o ÍNDICE de satisfação usa a definição estrita (só 'neutro' e
+  // 'neutral'), então um valor desconhecido contava como neutro na barra de
+  // divisão e como negativo no índice. As duas leituras da mesma tela
+  // discordariam sem nada explicando.
+  //
+  // Hoje não há sentimento fora dos três valores (conferido no banco), então
+  // isto é uma trava para o dia em que houver.
+  const neutros = currentFeedbacks.filter(isNeutro).length
+  const semClassificacao = totalFeedbacks - positivos - negativos - neutros
   const positivePercent = totalFeedbacks ? Math.round((positivos / totalFeedbacks) * 100) : 0
   const negativePercent = totalFeedbacks ? Math.round((negativos / totalFeedbacks) * 100) : 0
   const neutralPercent = totalFeedbacks ? Math.round((neutros / totalFeedbacks) * 100) : 0
@@ -143,13 +169,12 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivePercentTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v} pts`
   }
 
+  // Índice 0-100: positivo vale 100, neutro vale 50, negativo vale 0. Usa a
+  // MESMA definição de neutro das contagens acima — ver a nota lá.
   const getSentimentScore = (arr: any[]) => {
     if (!arr.length) return 0
     const pos = arr.filter(isPositivo).length
-    const neu = arr.filter((f) => {
-      const s = f.sentimento?.toLowerCase()
-      return s === 'neutro' || s === 'neutral'
-    }).length
+    const neu = arr.filter(isNeutro).length
     return Math.round((pos * 100 + neu * 50) / arr.length)
   }
 
@@ -224,6 +249,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivePercent,
     negativePercent,
     neutralPercent,
+    semClassificacao,
     positivePercentTrend,
     prevSentiment,
   }
