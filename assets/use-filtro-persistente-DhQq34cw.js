@@ -1,0 +1,1 @@
+import{r as e}from"./chunk-QTnfLwEv.js";import{n as t}from"./jsx-runtime-BWRPWl8p.js";var n=e(t(),1),r=new Map;function i(e,t){let[i,a]=(0,n.useState)(()=>r.has(e)?r.get(e):t);return[i,(0,n.useCallback)(t=>{a(n=>{let i=typeof t==`function`?t(n):t;return r.set(e,i),i})},[e])]}function a(e){r.delete(e)}export{i as n,a as t};
