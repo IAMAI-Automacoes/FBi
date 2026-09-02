@@ -500,8 +500,13 @@ export function EditorTextoRico({
           document.execCommand('insertText', false, texto)
         }}
         spellCheck={false}
+        // O tamanho base sai da constante, e não de uma classe: é o mesmo
+        // valor que `mudarTamanho` trata como "padrão" ao remover a marca, e
+        // os dois precisam bater — quando divergiam, passar pelo padrão fazia
+        // a letra saltar para o tamanho do CSS.
+        style={{ fontSize: `${TAMANHO_PADRAO}px` }}
         className={cn(
-          'min-h-[120px] w-full whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800 outline-none',
+          'min-h-[120px] w-full whitespace-pre-wrap break-words leading-relaxed text-gray-800 outline-none',
           'empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]',
           disabled && 'cursor-not-allowed opacity-60',
         )}

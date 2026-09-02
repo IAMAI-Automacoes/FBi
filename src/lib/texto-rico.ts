@@ -75,7 +75,21 @@ export function emPalavras(texto: string): string[] {
   return texto.split(/(\s+)/).filter((p) => p !== '')
 }
 
-export const TAMANHO_PADRAO = 11
+/**
+ * O tamanho do texto quando NENHUMA marca de tamanho existe.
+ *
+ * Precisa ser o valor real com que o parágrafo é desenhado, e é por isso que
+ * ele também é aplicado como `fontSize` no editor e na exibição, em vez de uma
+ * classe do Tailwind. Os dois lados saem daqui e não podem divergir.
+ *
+ * Divergiam: a constante dizia 11 e o texto era desenhado com `text-sm`, ou
+ * seja, 14px. Como um trecho que chega ao tamanho padrão tem a marca REMOVIDA
+ * (ver `mudarTamanho`), passar por ele jogava a letra para os 14 do CSS —
+ * subindo de 10 para 11 a letra aumentava demais, e no 12 encolhia de volta;
+ * descendo de 12 para 11 ela aumentava, justo quando devia diminuir. O bug
+ * acontecia sempre nesses dois números porque só ali a marca sumia.
+ */
+export const TAMANHO_PADRAO = 14
 export const TAMANHO_MIN = 8
 export const TAMANHO_MAX = 32
 

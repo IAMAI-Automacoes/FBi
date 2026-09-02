@@ -10,7 +10,8 @@ const g = globalThis as any
 g.DOMParser = DOMParser
 g.Node = NoDom
 
-const { analisar, montar, paraTextoSimples, estaVazio } = await import('../texto-rico.ts')
+const { analisar, montar, paraTextoSimples, estaVazio, TAMANHO_PADRAO } =
+  await import('../texto-rico.ts')
 
 let falhas = 0
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -65,7 +66,6 @@ checa('nao vazio', estaVazio('<b>x</b>'), false)
 // regra que ele usa para achar o trecho é esta, e é ela que se testa aqui.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TAMANHO_PADRAO = 11
 
 /** Espelha a busca do trecho em `EditorTextoRico.tamanhoDaSelecao`. */
 function tamanhoNoIntervalo(html: string, inicio: number, fim: number): number {
@@ -136,6 +136,46 @@ function tamanhoExibido(cobertos: { tamanho?: number }[]): number | null {
 checa('tamanho uniforme', tamanhoExibido([{ tamanho: 18 }, { tamanho: 18 }]), 18)
 checa('tamanho misto vira vazio', tamanhoExibido([{ tamanho: 18 }, { tamanho: 11 }]), null)
 checa('sem marca e o padrao', tamanhoExibido([{}, {}]), 11)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O padrão tem que ser o tamanho REAL do parágrafo
+//
+// Um trecho que chega ao tamanho padrão tem a marca REMOVIDA — passa a valer o
+// tamanho do container. Se a constante e o container discordarem, atravessar o
+// padrão faz a letra saltar: era 11 aqui e 14 na tela (o `text-sm`), então
+// subir de 10 para 11 AUMENTAVA demais e o 12 encolhia de volta; descendo de
+// 12 para 11 a letra crescia, justo quando devia diminuir.
+//
+// Os dois componentes aplicam `fontSize` a partir desta constante, então o
+// teste trava o valor: mudá-lo aqui muda o container junto.
+// ─────────────────────────────────────────────────────────────────────────────
+
+checa('padrao e o mesmo do container (text-sm = 14px)', TAMANHO_PADRAO, 14)
+
+/** Espelha o que `mudarTamanho` grava. */
+function marcaGravada(novo: number): number | undefined {
+  return novo === TAMANHO_PADRAO ? undefined : novo
+}
+
+/** O tamanho que a tela mostra: a marca, ou o do container quando não há. */
+function tamanhoNaTela(marca: number | undefined): number {
+  return marca ?? TAMANHO_PADRAO
+}
+
+// A sequência é montada EM VOLTA do padrão, seja ele qual for: é atravessá-lo
+// que expunha o salto, e prender o teste a números fixos deixaria de cobrir o
+// caso no dia em que a constante mudar.
+const emVolta = [-2, -1, 0, 1, 2].map((d) => TAMANHO_PADRAO + d)
+
+const subida = emVolta.map((n) => tamanhoNaTela(marcaGravada(n)))
+checa('subida sem salto ao passar pelo padrao', subida, emVolta)
+
+const descida = [...emVolta].reverse().map((n) => tamanhoNaTela(marcaGravada(n)))
+checa('descida sem salto ao passar pelo padrao', descida, [...emVolta].reverse())
+
+// Cada clique move 1px — nunca os 3 do pulo de 11 para os 14 do container.
+const passos = subida.slice(1).map((v, i) => v - subida[i])
+checa('todo passo vale 1', passos, [1, 1, 1, 1])
 
 console.log(falhas === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${falhas} FALHA(S)`)
 if (falhas > 0) process.exit(1)

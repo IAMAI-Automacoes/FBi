@@ -1,5 +1,10 @@
 import { Fragment, type CSSProperties } from 'react'
-import { ESTILO_PALAVRA_ITALICA, analisar, emPalavras } from '@/lib/texto-rico'
+import {
+  ESTILO_PALAVRA_ITALICA,
+  TAMANHO_PADRAO,
+  analisar,
+  emPalavras,
+} from '@/lib/texto-rico'
 import { cn } from '@/lib/utils'
 
 interface TextoFormatadoProps {
@@ -30,7 +35,12 @@ export function TextoFormatado({ texto, className }: TextoFormatadoProps) {
         if (vazia) return <div key={i} className="h-2" />
 
         return (
-          <p key={i} className="text-sm leading-relaxed text-gray-700">
+          <p
+            key={i}
+            // Mesmo tamanho base do editor, saindo da mesma constante.
+            style={{ fontSize: `${TAMANHO_PADRAO}px` }}
+            className="leading-relaxed text-gray-700"
+          >
             {trechos.map((t, j) => {
               // `fontSize` inline é a única forma: o tamanho é um número
               // escolhido no editor, não um degrau de uma escala fixa, então
