@@ -674,6 +674,71 @@ Chame registrar_decisao.`,
     }],
   },
   {
+    id: 'absorvedor_insight',
+    arquivo: 'supabase/functions/vincular-feedback/index.ts:absorverNoInsight',
+    camada: 'servidor',
+    params: { max_tokens: 700 },
+    desligavel: true,
+    nome: 'Absorvedor de feedback no insight (edge function)',
+    papel:
+      'Depois que um feedback novo é ligado a um insight existente, reescreve título, descrição e prioridade do insight para que ele passe a descrever também esse feedback. Só roda no vínculo com INSIGHT — vínculo com ação não altera a ação.',
+    memoria: 'SEM memória. Vê o insight atual, os feedbacks que ele já cobria e o feedback novo.',
+    acessos: [
+      'O insight (título, descrição, prioridade, categoria)',
+      'Até 12 feedbacks já ligados a ele',
+      'O feedback recém-vinculado',
+      'Grava em: insights (titulo, descricao, prioridade)',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'O insight é um texto que afirma representar um conjunto de feedbacks, e o dono decide prioridade lendo esse texto. Sem esta reescrita, um relato grave grudava embaixo de um insight brando: o contador subia, a urgência não, e o card passava a mentir. A prioridade é aplicada por máximo no código (nunca desce), e categoria e assunto_chave ficam fora do alcance do modelo — categoria sai da maioria dos feedbacks, e assunto_chave é a identidade que faz o vínculo por tema funcionar sem IA. Desligar aqui não quebra o vínculo: ele continua sendo criado, só o texto do insight deixa de ser atualizado.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_absorver_insight',
+      conteudo:
+        `Um feedback novo de cliente acabou de ser ligado a um insight que ja existe. Seu trabalho e conferir se o texto do insight ainda descreve corretamente TUDO que ele cobre agora — e reescrever o que estiver desatualizado.
+
+## O insight, como esta hoje
+Titulo: {titulo}
+Descricao: {descricao}
+Prioridade: {prioridade}
+Categoria: {categoria}
+
+## Os feedbacks que ele ja cobria
+{pontos}
+
+## O feedback que acabou de entrar
+"{texto}"
+Sentimento: {sentimento}
+
+## Sua tarefa
+Devolva titulo, descricao e prioridade que descrevam o conjunto INTEIRO — os
+feedbacks antigos E o novo. Se algum campo ja esta bom, repita ele igual.
+
+Regras:
+- ENGLOBAR, nao substituir. O texto novo tem que continuar valendo para os
+  feedbacks antigos. Reescrever o insight so em cima do relato que acabou de
+  chegar e o erro mais grave possivel aqui: apaga o que os outros clientes
+  disseram.
+- Se o feedback novo nao acrescenta nada (e mais um caso do que ja estava
+  escrito), repita os tres campos como estao. Isso e uma resposta correta e
+  comum — a maioria dos vinculos nao muda o insight.
+- PRIORIDADE SO SOBE, nunca desce. Um relato a mais nunca torna o problema
+  menos grave, mesmo que ele seja brando: os relatos graves anteriores
+  continuam existindo. A ordem e OBSERVACAO < IMPORTANTE < URGENTE.
+- Suba para URGENTE quando o feedback novo trouxer algo que a descricao atual
+  nao cobre e que muda o tamanho do problema: passar mal, corpo estranho na
+  comida, risco a saude, cobranca indevida, discriminacao ou falta de higiene.
+- Descricao: no maximo 3 frases, sobre o que os clientes relataram. Sem
+  saudacao, sem plano de acao, sem inventar numero que nao esteja nos relatos.
+- Titulo: curto e especifico, no maximo 10 palavras.
+- Escreva em portugues do Brasil, na mesma voz do texto atual.
+
+Chame registrar_absorcao.`,
+    }],
+  },
+  {
     id: 'perguntas_direcionadas',
     arquivo: 'supabase/functions/gerar-perguntas-direcionadas/index.ts:28',
     camada: 'servidor',

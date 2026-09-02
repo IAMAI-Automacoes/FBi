@@ -264,7 +264,11 @@ export default function Insights() {
    * origem de toda ação que tinha nascido dele. Medido antes da correção: 33
    * ações, zero com `insight_id`.
    *
-   * Marcar dispara o trigger que devolve os pontos ao pool de análise.
+   * Marcar dispara o trigger `trg_insights_encerrado_libera`, que desde a
+   * migration 20260902000000 INVALIDA os pontos em vez de devolvê-los ao pool:
+   * eles não geram mais insight sozinhos (senão a próxima rodada recriaria
+   * exatamente o que o dono acabou de excluir), mas continuam podendo ser
+   * ligados a um insight novo que outros feedbacks levantem sobre o assunto.
    */
   const handleDeleteInsight = async (id: string) => {
     try {
@@ -282,7 +286,7 @@ export default function Insights() {
       setInsights((prev) => prev.filter((i) => i.id !== id))
       toast({
         title: 'Insight excluído',
-        description: 'Os feedbacks dele voltaram a ficar disponíveis para análise.',
+        description: 'Os feedbacks dele não serão mais usados para gerar novos insights.',
       })
     } catch (e: any) {
       toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' })
