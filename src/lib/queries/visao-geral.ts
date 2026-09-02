@@ -57,6 +57,11 @@ export interface DashboardData {
     semClassificacao: number
     /** Pontos percentuais vs. período anterior, ex: "+8 pts". Usada no card "Avaliações positivas". */
     positivePercentTrend: string
+    /** Mensagens recebidas — uma por vez que um cliente escreveu. */
+    totalMensagens: number
+    mensagensTrend: string
+    /** Mensagens do período anterior, para a trava de base mínima. */
+    prevMensagens: number
     /** Valor bruto (0-100) do índice de satisfação do período anterior — para
      *  textos que precisem citar o número sem reconstruí-lo a partir da string
      *  formatada de `sentimentTrend` (ex.: "estável", "+5 pts"). */
@@ -86,6 +91,26 @@ export const getPeriodDates = (period: PeriodInfo) => {
   return { now, currentStart, previousStart, days }
 }
 
+/**
+ * As MENSAGENS originais do período — uma por vez que um cliente escreveu.
+ *
+ * Consulta `feedbacks_originais` direto, e não conta `origem_id` distinto nos
+ * separados: existem mensagens que ainda não foram divididas em assuntos (8 no
+ * Camelo, em 30 dias), e contar pelos separados as perderia — o número diria
+ * 45 quando o restaurante recebeu 53.
+ */
+const getMensagensDoPeriodo = async (restauranteId: number | null, period: PeriodInfo) => {
+  if (!restauranteId) return []
+  const { previousStart } = getPeriodDates(period)
+  const { data, error } = await supabase
+    .from('feedbacks_originais')
+    .select('id, created_at')
+    .eq('restaurante_id', restauranteId)
+    .gte('created_at', previousStart.toISOString())
+  if (error) throw error
+  return data || []
+}
+
 const getFeedbacksForPeriod = async (restauranteId: number | null, period: PeriodInfo) => {
   // Conta sem restaurante vinculado (onboarding incompleto): nada a buscar
   if (!restauranteId) return []
@@ -103,7 +128,10 @@ const getFeedbacksForPeriod = async (restauranteId: number | null, period: Perio
 }
 
 export const buscarKpis = async (restauranteId: number | null, periodo: PeriodInfo) => {
-  const feedbacks = await getFeedbacksForPeriod(restauranteId, periodo)
+  const [feedbacks, mensagens] = await Promise.all([
+    getFeedbacksForPeriod(restauranteId, periodo),
+    getMensagensDoPeriodo(restauranteId, periodo),
+  ])
   const { currentStart } = getPeriodDates(periodo)
 
   const currentFeedbacks = feedbacks.filter((f) => isAfter(parseISO(f.created_at), currentStart))
@@ -111,6 +139,27 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
 
   const totalFeedbacks = currentFeedbacks.length
   const prevTotal = previousFeedbacks.length
+
+  // ── Mensagens x assuntos ─────────────────────────────────────────────────
+  // Duas contagens diferentes da mesma realidade, e as duas importam:
+  //
+  //   mensagens = quantas vezes um cliente escreveu
+  //   assuntos  = quantos pontos ele levantou (uma mensagem que fala de comida
+  //               e de atendimento vira dois)
+  //
+  // O card do topo mostra MENSAGENS, que é o que o dono chama de "avaliação".
+  // O resto da página trabalha com assuntos, porque satisfação por categoria
+  // só faz sentido por assunto. Os dois números aparecem juntos no card para
+  // que a diferença fique explicada onde ela é vista pela primeira vez.
+  const totalMensagens = mensagens.filter((m) => isAfter(parseISO(m.created_at), currentStart)).length
+  const prevMensagens = mensagens.length - totalMensagens
+  let mensagensTrend: string
+  if (prevMensagens === 0) {
+    mensagensTrend = totalMensagens > 0 ? 'novo' : '—'
+  } else {
+    const v = Math.round(((totalMensagens - prevMensagens) / prevMensagens) * 100)
+    mensagensTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v}%`
+  }
   const hasPrevData = prevTotal > 0
   // Comparar 3 avaliações contra 1 gera "+200%" que engana o dono.
   // Só tratamos a variação como confiável com uma base mínima.
@@ -234,6 +283,9 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   return {
     totalFeedbacks,
     totalTrend,
+    totalMensagens,
+    mensagensTrend,
+    prevMensagens,
     sentiment,
     sentimentTrend,
     nps,

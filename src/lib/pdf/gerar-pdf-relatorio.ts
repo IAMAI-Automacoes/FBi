@@ -135,7 +135,9 @@ export async function gerarPdfRelatorio(
   secao('Números do período')
   const comparar = kpis.hasPrevData && kpis.prevConfiavel
   const caixas = [
-    { valor: String(kpis.totalFeedbacks ?? 0), rotulo: 'Avaliações recebidas' },
+    // Mensagens, igual ao card do topo da tela. O número de assuntos aparece
+    // na barra de divisão logo abaixo, que é onde ele é usado.
+    { valor: String(kpis.totalMensagens ?? kpis.totalFeedbacks ?? 0), rotulo: 'Avaliações recebidas' },
     { valor: `${kpis.sentiment ?? 0}/100`, rotulo: 'Índice de satisfação' },
     { valor: `${kpis.positivePercent ?? 0}%`, rotulo: 'Positivas' },
     { valor: String(est.clientesUnicos ?? 0), rotulo: 'Clientes' },
@@ -175,6 +177,13 @@ export async function gerarPdfRelatorio(
   const total = kpis.totalFeedbacks || 0
   if (total > 0) {
     secao('Como as avaliações se dividem')
+    // Uma linha dizendo sobre O QUE é a divisão: os números aqui são
+    // assuntos, e o card acima mostra mensagens. Sem isto, as duas contagens
+    // aparecem na mesma página sem nada ligando uma à outra.
+    paragrafo(
+      `${total} assuntos citados nas ${kpis.totalMensagens ?? total} mensagens do período.`,
+      { tamanho: 9, cor: CINZA, lh: 4.5 },
+    )
     espaco(20)
     const pos = kpis.positivos || 0
     const neu = kpis.neutros || 0

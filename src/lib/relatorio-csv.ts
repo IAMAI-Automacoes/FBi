@@ -120,7 +120,8 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     // Antes das tabelas, porque as duas confusões mais comuns são achar que
     // "avaliação" é pessoa e não saber a escala da satisfação.
     ['COMO LER ESTA PLANILHA'],
-    ['Avaliação', 'Um assunto citado por um cliente. Quem falou de comida e de atendimento na mesma mensagem gerou duas.'],
+    ['Mensagem', 'Uma vez que um cliente escreveu. É o número do topo da página de relatórios.'],
+    ['Assunto', 'Um ponto levantado dentro de uma mensagem. Quem falou de comida e de atendimento gerou dois — por isso as tabelas abaixo somam mais que as mensagens.'],
     ['Satisfação', 'Escala de 0 a 100. 100 = só avaliações positivas; 50 = tantas positivas quanto negativas; 0 = só negativas.'],
     ['Período', 'Todos os números abaixo são apenas do intervalo indicado acima.'],
     ['Em branco', 'Célula vazia significa que não houve avaliação naquele recorte — diferente de zero.'],
@@ -138,7 +139,10 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     // ── Números ──────────────────────────────────────────────────────────
     ['RESUMO EM NÚMEROS'],
     ['Métrica', 'Valor', 'vs. período anterior'],
-    ['Total de avaliações', numero(kpis.totalFeedbacks), variacao(kpis.totalTrend)],
+    // As duas contagens, uma embaixo da outra: é aqui que a diferença fica
+    // clara para quem for somar as tabelas de baixo e comparar com o topo.
+    ['Avaliações recebidas (mensagens)', numero(kpis.totalMensagens), variacao(kpis.mensagensTrend)],
+    ['Assuntos citados (base das tabelas abaixo)', numero(kpis.totalFeedbacks), variacao(kpis.totalTrend)],
     ['Índice de satisfação (0-100)', numero(kpis.sentiment), variacao(kpis.sentimentTrend)],
     ['Avaliações positivas', `${numero(kpis.positivos)} (${numero(kpis.positivePercent)}%)`, ''],
     ['Avaliações neutras', `${numero(kpis.neutros)} (${numero(kpis.neutralPercent)}%)`, ''],
@@ -256,7 +260,7 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     // ── Detalhe ──────────────────────────────────────────────────────────
     ['TODAS AS AVALIAÇÕES'],
     ['Uma linha por assunto citado, da mais recente à mais antiga.'],
-    ['O total daqui é o mesmo "Total de avaliações" do resumo.'],
+    ['O total daqui é o mesmo "Assuntos citados" do resumo.'],
     ['Data', 'Hora', 'Categoria', 'Sentimento', 'O que o cliente disse'],
     ...d.avaliacoes.map((f) => {
       const dt = parseISO(f.created_at)

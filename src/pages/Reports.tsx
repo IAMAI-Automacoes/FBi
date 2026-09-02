@@ -513,11 +513,28 @@ function LayoutNovo({
         <>
           {/* 4 KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* MENSAGENS, não assuntos.
+                O card mostrava 113 quando o restaurante tinha recebido 53
+                mensagens — o 113 é a soma dos assuntos citados, porque quem
+                fala de comida e de atendimento na mesma mensagem gera dois.
+                Para o dono, "avaliação recebida" é uma pessoa que escreveu.
+
+                O detalhe traz os assuntos logo abaixo, e é ali que a diferença
+                fica explicada: é o primeiro lugar onde os dois números se
+                encontram, e sem isso o resto da página (que trabalha por
+                assunto) pareceria não bater com o topo. */}
             <KpiCardNovo
               icon={MessageCircle} iconBg="bg-blue-50" iconColor="text-blue-600"
-              label="Avaliações recebidas" valor={String(kpis.totalFeedbacks)}
-              trend={kpis.totalTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
-              prevTotal={kpis.prevTotal}
+              label="Avaliações recebidas" valor={String(kpis.totalMensagens)}
+              trend={kpis.mensagensTrend}
+              hasPrevData={kpis.prevMensagens > 0}
+              prevConfiavel={kpis.prevMensagens >= 3}
+              prevTotal={kpis.prevMensagens}
+              detalhe={
+                kpis.totalFeedbacks !== kpis.totalMensagens
+                  ? `${kpis.totalFeedbacks} assuntos citados`
+                  : undefined
+              }
             />
             <KpiCardNovo
               icon={Heart} iconBg="bg-green-50" iconColor="text-green-600"
