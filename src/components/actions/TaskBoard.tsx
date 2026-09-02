@@ -272,6 +272,19 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   /** Card cujo painel lateral de detalhes (plano completo + prazo +
    *  responsável) está aberto — só leitura, ver `DetalhesAcaoPanel`. */
   const [detalhesTask, setDetalhesTask] = useState<ExtendedActionTask | null>(null)
+  /**
+   * A edição foi aberta a partir do painel de detalhes?
+   *
+   * Editar só se chega por lá — não há botão de editar no card. Quem termina
+   * de editar estava lendo os detalhes um passo antes, então fechar o editor
+   * direto no quadro perde o lugar: para conferir o que acabou de salvar, a
+   * pessoa precisa achar o card de novo e abri-lo de novo.
+   *
+   * Vale tanto para salvar quanto para cancelar: os dois são "terminei aqui",
+   * e desistir da edição devolvendo ao quadro puniria quem só abriu para
+   * olhar.
+   */
+  const [veioDosDetalhes, setVeioDosDetalhes] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -646,10 +659,28 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }
   }
 
-  const handleOpenModal = (status: ActionStatus, task?: ExtendedActionTask) => {
+  const handleOpenModal = (
+    status: ActionStatus,
+    task?: ExtendedActionTask,
+    opcoes?: { dosDetalhes?: boolean },
+  ) => {
     setActiveColumn(status)
     setEditingTask(task || null)
+    setVeioDosDetalhes(!!opcoes?.dosDetalhes)
     setModalOpen(true)
+  }
+
+  /**
+   * Fecha o editor e, se ele veio dos detalhes, reabre o painel.
+   *
+   * Recebe a versão ATUALIZADA da ação porque `setTasks` não é imediato: ler
+   * `tasks` aqui devolveria o card como estava antes de salvar, e o painel
+   * reabriria mostrando o texto antigo por um instante.
+   */
+  const fecharEditor = (atualizada?: ExtendedActionTask | null) => {
+    setModalOpen(false)
+    if (veioDosDetalhes && atualizada) setDetalhesTask(atualizada)
+    setVeioDosDetalhes(false)
   }
 
   const handleDeleteTask = async (taskId: string) => {
@@ -676,25 +707,22 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           responsavel: taskData.responsavel ?? null,
           prazo: taskData.prazo ?? null,
         })
+        const comAlteracoes: ExtendedActionTask = {
+          ...editingTask,
+          titulo_acao: atualizada.titulo_acao,
+          prioridade: atualizada.prioridade,
+          categoria: atualizada.categoria,
+          plano_detalhado: atualizada.plano_detalhado,
+          responsavel: atualizada.responsavel,
+          prazo: atualizada.prazo,
+        }
         // Atualiza só o card em memória — recarregar tudo do banco (`load()`)
         // troca a tela inteira por esqueleto de carregamento por um instante,
         // um "pisca" que não faz sentido pra uma edição pontual.
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === editingTask.id
-              ? {
-                  ...t,
-                  titulo_acao: atualizada.titulo_acao,
-                  prioridade: atualizada.prioridade,
-                  categoria: atualizada.categoria,
-                  plano_detalhado: atualizada.plano_detalhado,
-                  responsavel: atualizada.responsavel,
-                  prazo: atualizada.prazo,
-                }
-              : t,
-          ),
-        )
+        setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? comAlteracoes : t)))
         toast({ title: 'Ação atualizada' })
+        fecharEditor(comAlteracoes)
+        return
       } else {
         const currentPendente = tasks.filter((t) => t.status === 'PENDENTE')
         const maxOrdem =
@@ -772,6 +800,11 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       }
     } catch (err) {
       toast({ title: 'Falha ao salvar ação', variant: 'destructive' })
+      // Salvar falhou: se a edição veio dos detalhes, devolve para lá com o
+      // que já estava lá. Fechar tudo esconderia a ação que a pessoa não
+      // conseguiu salvar.
+      fecharEditor(editingTask)
+      return
     }
     setModalOpen(false)
   }
@@ -962,7 +995,12 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         {modalOpen && (
           <TaskModal
             open={modalOpen}
-            onOpenChange={setModalOpen}
+            // Cancelar e Esc passam por aqui; salvar chama `fecharEditor`
+            // direto, com a versão nova.
+            onOpenChange={(aberto) => {
+              if (aberto) setModalOpen(true)
+              else fecharEditor(editingTask)
+            }}
             task={
               editingTask
                 ? {
@@ -1007,7 +1045,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             onEditar={() => {
               const status = detalhesTask.status
               setDetalhesTask(null)
-              handleOpenModal(status, detalhesTask)
+              handleOpenModal(status, detalhesTask, { dosDetalhes: true })
             }}
             onExcluir={() => {
               const id = detalhesTask.id
