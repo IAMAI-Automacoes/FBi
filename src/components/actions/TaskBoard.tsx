@@ -279,12 +279,23 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }),
   )
 
-  const load = async () => {
+  /**
+   * `silencioso`: recarrega os dados SEM trocar a tela por skeletons.
+   *
+   * Toda recarga levantava `loading`, e o quadro inteiro virava três colunas
+   * de retângulos cinza por uma fração de segundo — inclusive quando a pessoa
+   * só tinha excluído um card e o resto da tela continuava válido. Esse
+   * pisca-pisca é o que fazia parecer que a página recarregou.
+   *
+   * O skeleton continua na PRIMEIRA carga, onde ele é a resposta certa: ali
+   * não há nada na tela ainda, e o vazio sem aviso é pior que o cinza.
+   */
+  const load = async ({ silencioso = false } = {}) => {
     if (!usuario?.restaurante_id) {
       return
     }
     try {
-      setLoading(true)
+      if (!silencioso) setLoading(true)
       const data = await buscarAcoes(usuario.restaurante_id, true)
       if (data) {
         const mapped: ExtendedActionTask[] = data.map((d) => ({
@@ -315,7 +326,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }
 
@@ -363,7 +374,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       // caminho, que mandava a mensagem na hora e não sabia desfazer.
     } catch (err) {
       toast({ title: 'Falha ao atualizar o status.', variant: 'destructive' })
-      load() // reload to reset state on error
+      load({ silencioso: true }) // desfaz o movimento otimista sem piscar a tela
     }
   }
 
@@ -646,7 +657,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       await excluirAcao(parseInt(taskId))
       toast({ title: 'Ação excluída' })
       setModalOpen(false)
-      load()
+      load({ silencioso: true })
     } catch (err) {
       toast({ title: 'Falha ao excluir a tarefa', variant: 'destructive' })
     }
