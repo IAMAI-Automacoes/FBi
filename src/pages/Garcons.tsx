@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { addDays, addMonths, format } from 'date-fns'
+import { addDays, addMonths, format, startOfMonth } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,13 +18,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight,
+  Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
 import { desenharPoster, landingUrl, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
-import { getIniciais, corAvatar } from '@/lib/iniciais'
+import { getIniciais, CORES_AVATAR } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
 
 interface Garcom {
@@ -79,23 +80,21 @@ function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
   return addMonths(inicio, 1)
 }
 
-/** Resumo de uma linha na lista da Equipe: total de aberturas e, se houver
- *  bônus já batido mas ainda não pago, quantos — é o gancho pra abrir o
- *  painel e resolver. */
-function resumoGarcom(
-  g: Garcom,
-  regrasAtivas: RegraBonificacao[],
-  scansPorRegra: Record<string, Record<number, number>>,
-  totalAberturas: number,
-): string {
-  const base = `${totalAberturas} abertura${totalAberturas === 1 ? '' : 's'}`
-  const pendentes = regrasAtivas.filter((r) => {
-    const scans = scansPorRegra[r.id]?.[g.id] ?? 0
-    const pagoEm = g.bonus_pagamentos[r.id]
-    const pago = !!(pagoEm && r.periodo_inicio && pagoEm >= r.periodo_inicio)
-    return scans >= r.meta_escaneamentos && !pago
-  }).length
-  return pendentes > 0 ? `${base} · ${pendentes} bônus pendente${pendentes > 1 ? 's' : ''}` : base
+/** Cor do avatar pela POSIÇÃO na lista, não pelo hash do nome — com poucos
+ *  garçons (o caso comum aqui) o hash colide com frequência e duas pessoas
+ *  acabam com a mesma cor. Por posição, ninguém repete enquanto a lista
+ *  couber na paleta. */
+function corPorIndice(i: number) {
+  return CORES_AVATAR[i % CORES_AVATAR.length]
+}
+
+/** Cor da barrinha de progresso de uma regra: cinza em andamento, âmbar
+ *  quando bateu a meta e ainda falta pagar (pede atenção), verde quando já
+ *  foi pago. */
+function corBarraRegra(atingiu: boolean, pago: boolean): string {
+  if (pago) return 'bg-emerald-500'
+  if (atingiu) return 'bg-amber-500'
+  return 'bg-gray-400'
 }
 
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -122,19 +121,16 @@ export default function Garcons() {
   const [loading, setLoading] = useState(true)
   const [baixando, setBaixando] = useState(false)
 
-  // Criar garçom — popup próprio, aberto por um botão.
-  const [criarAberto, setCriarAberto] = useState(false)
-  const [novoNome, setNovoNome] = useState('')
-  const [novoTelefone, setNovoTelefone] = useState('')
-  const [criando, setCriando] = useState(false)
+  // Criar/editar garçom — um popup só, reaproveitado pelos dois fluxos.
+  const [formAberto, setFormAberto] = useState<'criar' | 'editar' | null>(null)
+  const [formNome, setFormNome] = useState('')
+  const [formTelefone, setFormTelefone] = useState('')
+  const [salvandoForm, setSalvandoForm] = useState(false)
 
   // Painel de detalhes — guarda só o id (não o objeto) pra nunca ficar com
   // uma cópia desatualizada depois de salvar; `garcomAtual` é derivado toda
   // renderização a partir da lista viva.
   const [detalheId, setDetalheId] = useState<number | null>(null)
-  const [nomeForm, setNomeForm] = useState('')
-  const [telefoneForm, setTelefoneForm] = useState('')
-  const [salvandoDados, setSalvandoDados] = useState(false)
 
   const [regras, setRegras] = useState<RegraBonificacao[]>([])
   /** Painel de regras aberto? */
@@ -145,6 +141,9 @@ export default function Garcons() {
   /** scansPorRegra[regraId][garcomId] = escaneamentos DESDE o início do
    *  período atual daquela regra (não o total acumulado). */
   const [scansPorRegra, setScansPorRegra] = useState<Record<string, Record<number, number>>>({})
+  /** Escaneamentos de cada garçom só no mês calendário atual — independente
+   *  de qualquer regra, é só pra dar contexto ao lado do total geral. */
+  const [scansEsteMes, setScansEsteMes] = useState<Record<number, number>>({})
   const [pagando, setPagando] = useState('')
 
   const carregar = useCallback(async () => {
@@ -202,18 +201,23 @@ export default function Garcons() {
     }
     setQrs(map)
 
+    // Uma busca só de qr_scans cobre tanto o progresso de cada regra quanto
+    // "aberturas neste mês" (que não depende de regra nenhuma) — o início
+    // mais antigo entre os dois é até onde precisa voltar.
     const idsQr = Object.keys(qrCodeIdParaGarcom).map(Number)
+    const inicioMes = startOfMonth(new Date()).toISOString()
     const regrasComPeriodo = listaRegras.filter((reg) => reg.periodo_inicio && reg.meta_escaneamentos > 0)
-    if (regrasComPeriodo.length > 0 && idsQr.length > 0) {
-      const maisAntigo = regrasComPeriodo.reduce(
+    if (idsQr.length > 0) {
+      const desde = regrasComPeriodo.reduce(
         (min, reg) => (reg.periodo_inicio! < min ? reg.periodo_inicio! : min),
-        regrasComPeriodo[0].periodo_inicio!,
+        inicioMes,
       )
       const { data: scans } = await supabase
         .from('qr_scans')
         .select('qr_code_id, scanned_at')
         .in('qr_code_id', idsQr)
-        .gte('scanned_at', maisAntigo)
+        .gte('scanned_at', desde)
+
       const porRegra: Record<string, Record<number, number>> = {}
       for (const reg of regrasComPeriodo) {
         const porGarcom: Record<number, number> = {}
@@ -225,8 +229,17 @@ export default function Garcons() {
         porRegra[reg.id] = porGarcom
       }
       setScansPorRegra(porRegra)
+
+      const porMes: Record<number, number> = {}
+      for (const s of scans ?? []) {
+        if (s.scanned_at < inicioMes) continue
+        const gId = qrCodeIdParaGarcom[s.qr_code_id]
+        if (gId) porMes[gId] = (porMes[gId] ?? 0) + 1
+      }
+      setScansEsteMes(porMes)
     } else {
       setScansPorRegra({})
+      setScansEsteMes({})
     }
 
     setLoading(false)
@@ -235,17 +248,6 @@ export default function Garcons() {
   useEffect(() => { carregar() }, [carregar])
 
   const garcomAtual = garcons.find((g) => g.id === detalheId) ?? null
-
-  // Semeia o formulário do painel toda vez que ABRE um garçom diferente —
-  // depende só do id (não do objeto), senão um `setGarcons` depois de salvar
-  // (que troca a referência) reexecutaria isto e apagaria o que a pessoa
-  // ainda estivesse digitando.
-  useEffect(() => {
-    if (!detalheId) return
-    const g = garcons.find((x) => x.id === detalheId)
-    if (g) { setNomeForm(g.nome_garcon); setTelefoneForm(g.telefone ?? '') }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detalheId])
 
   // Cria (se necessário) o QR daquele garçom e retorna o slug
   const ensureQr = async (garcomId: number): Promise<string> => {
@@ -259,49 +261,39 @@ export default function Garcons() {
     return slug
   }
 
-  const adicionar = async () => {
-    const nome = novoNome.trim()
-    if (!nome || !restauranteId) return
-    setCriando(true)
-    try {
-      const { data, error } = await supabase
-        .from('garcons')
-        .insert({
-          nome_garcon: nome, telefone: novoTelefone.trim() || null, restaurante_id: restauranteId, ativo: true,
-        })
-        .select('id, nome_garcon, ativo, telefone, bonus_pagamentos')
-        .single()
-      if (error) throw error
-      setGarcons((p) => [...p, { ...(data as any), bonus_pagamentos: (data as any).bonus_pagamentos ?? {} }])
-      setNovoNome('')
-      setNovoTelefone('')
-      setCriarAberto(false)
-      toast.success('Garçom adicionado.')
-    } catch (e: any) {
-      toast.error('Erro ao adicionar', { description: e.message })
-    } finally {
-      setCriando(false)
-    }
-  }
+  const abrirCriar = () => { setFormAberto('criar'); setFormNome(''); setFormTelefone('') }
+  const abrirEditar = (g: Garcom) => { setFormAberto('editar'); setFormNome(g.nome_garcon); setFormTelefone(g.telefone ?? '') }
 
-  const salvarDados = async () => {
-    if (!garcomAtual) return
-    const nome = nomeForm.trim()
+  const salvarForm = async () => {
+    const nome = formNome.trim()
     if (!nome) return
-    setSalvandoDados(true)
+    setSalvandoForm(true)
     try {
-      const telefone = telefoneForm.trim() || null
-      const { error } = await supabase
-        .from('garcons')
-        .update({ nome_garcon: nome, telefone })
-        .eq('id', garcomAtual.id)
-      if (error) throw error
-      setGarcons((p) => p.map((g) => (g.id === garcomAtual.id ? { ...g, nome_garcon: nome, telefone } : g)))
-      toast.success('Dados salvos.')
+      const telefone = formTelefone.trim() || null
+      if (formAberto === 'criar') {
+        if (!restauranteId) return
+        const { data, error } = await supabase
+          .from('garcons')
+          .insert({ nome_garcon: nome, telefone, restaurante_id: restauranteId, ativo: true })
+          .select('id, nome_garcon, ativo, telefone, bonus_pagamentos')
+          .single()
+        if (error) throw error
+        setGarcons((p) => [...p, { ...(data as any), bonus_pagamentos: (data as any).bonus_pagamentos ?? {} }])
+        toast.success('Garçom adicionado.')
+      } else if (formAberto === 'editar' && garcomAtual) {
+        const { error } = await supabase
+          .from('garcons')
+          .update({ nome_garcon: nome, telefone })
+          .eq('id', garcomAtual.id)
+        if (error) throw error
+        setGarcons((p) => p.map((g) => (g.id === garcomAtual.id ? { ...g, nome_garcon: nome, telefone } : g)))
+        toast.success('Dados salvos.')
+      }
+      setFormAberto(null)
     } catch (e: any) {
       toast.error('Erro ao salvar', { description: e.message })
     } finally {
-      setSalvandoDados(false)
+      setSalvandoForm(false)
     }
   }
 
@@ -428,8 +420,6 @@ export default function Garcons() {
   const temAberturas = maiorScans > 0
   const medalha = ['🥇', '🥈', '🥉']
   const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
-  const dadosMudaram = !!garcomAtual
-    && (nomeForm.trim() !== garcomAtual.nome_garcon || telefoneForm.trim() !== (garcomAtual.telefone ?? ''))
 
   if (loading) {
     return (
@@ -466,7 +456,7 @@ export default function Garcons() {
                     {ranking.map((g, i) => {
                       const scans = qrs[g.id]?.total_scans ?? 0
                       const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
-                      const cor = corAvatar(g.nome_garcon)
+                      const cor = corPorIndice(i)
                       return (
                         <li
                           key={g.id}
@@ -508,7 +498,7 @@ export default function Garcons() {
         {/* Equipe */}
         <TabsContent value="equipe" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => setCriarAberto(true)}>
+            <Button onClick={abrirCriar}>
               <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
             </Button>
             <div className="flex-1" />
@@ -532,8 +522,8 @@ export default function Garcons() {
             <Card>
               <CardContent className="p-0">
                 <ul className="divide-y divide-border">
-                  {garcons.map((g) => {
-                    const cor = corAvatar(g.nome_garcon)
+                  {garcons.map((g, i) => {
+                    const cor = corPorIndice(i)
                     const total = qrs[g.id]?.total_scans ?? 0
                     return (
                       <li key={g.id}>
@@ -551,10 +541,36 @@ export default function Garcons() {
                             {getIniciais(g.nome_garcon)}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-gray-900">{g.nome_garcon}</p>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                              {resumoGarcom(g, regrasAtivas, scansPorRegra, total)}
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-sm font-semibold text-gray-900">{g.nome_garcon}</p>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {total} abertura{total === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                            {regrasAtivas.length > 0 && (
+                              <div className="mt-2 space-y-1.5">
+                                {regrasAtivas.map((regra) => {
+                                  const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
+                                  const meta = regra.meta_escaneamentos
+                                  const pct = Math.min(100, Math.round((scans / meta) * 100))
+                                  const atingiu = scans >= meta
+                                  const pagoEm = g.bonus_pagamentos[regra.id]
+                                  const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
+                                  return (
+                                    <div
+                                      key={regra.id}
+                                      title={`${rotuloRegra(regra)}: ${scans}/${meta}`}
+                                      className="h-1.5 w-2/3 overflow-hidden rounded-full bg-gray-100"
+                                    >
+                                      <div
+                                        className={cn('h-full rounded-full', corBarraRegra(atingiu, pago))}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                           <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
                         </button>
@@ -568,46 +584,48 @@ export default function Garcons() {
         </TabsContent>
       </Tabs>
 
-      {/* Novo garçom */}
-      <Dialog open={criarAberto} onOpenChange={(open) => { setCriarAberto(open); if (!open) { setNovoNome(''); setNovoTelefone('') } }}>
+      {/* Novo / editar garçom — o mesmo popup atende os dois fluxos */}
+      <Dialog open={!!formAberto} onOpenChange={(open) => !open && setFormAberto(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Novo garçom</DialogTitle>
+            <DialogTitle>{formAberto === 'editar' ? 'Editar garçom' : 'Novo garçom'}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="novo-nome">Nome</Label>
+              <Label htmlFor="form-nome">Nome</Label>
               <Input
-                id="novo-nome"
+                id="form-nome"
                 autoFocus
-                value={novoNome}
-                onChange={(e) => setNovoNome(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }}
+                value={formNome}
+                onChange={(e) => setFormNome(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
                 placeholder="Nome do garçom"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="novo-telefone">Telefone (opcional)</Label>
+              <Label htmlFor="form-telefone">Telefone (opcional)</Label>
               <Input
-                id="novo-telefone"
-                value={novoTelefone}
-                onChange={(e) => setNovoTelefone(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }}
+                id="form-telefone"
+                value={formTelefone}
+                onChange={(e) => setFormTelefone(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
                 placeholder="(11) 99999-9999"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCriarAberto(false)}>Cancelar</Button>
-            <Button onClick={adicionar} disabled={criando || !novoNome.trim()}>
-              {criando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-              Adicionar
+            <Button variant="outline" onClick={() => setFormAberto(null)}>Cancelar</Button>
+            <Button onClick={salvarForm} disabled={salvandoForm || !formNome.trim()}>
+              {salvandoForm && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {formAberto === 'editar' ? 'Salvar' : 'Adicionar'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Detalhes do garçom — abre ao clicar no card, na lateral direita */}
+      {/* Detalhes do garçom — só leitura, abre ao clicar no card, na lateral
+          direita. Mesmo estilo do painel de detalhes de uma ação: cabeçalho
+          com avatar, seções rotuladas, e editar/excluir como ícones no fim. */}
       <Sheet open={!!garcomAtual} onOpenChange={(open) => { if (!open) setDetalheId(null) }} modal={false}>
         <SheetContent
           semOverlay
@@ -622,7 +640,8 @@ export default function Garcons() {
                   <span
                     className={cn(
                       'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                      corAvatar(garcomAtual.nome_garcon).bg, corAvatar(garcomAtual.nome_garcon).text,
+                      corPorIndice(garcons.findIndex((g) => g.id === garcomAtual.id)).bg,
+                      corPorIndice(garcons.findIndex((g) => g.id === garcomAtual.id)).text,
                     )}
                   >
                     {getIniciais(garcomAtual.nome_garcon)}
@@ -636,34 +655,30 @@ export default function Garcons() {
                 </div>
               </SheetHeader>
 
-              <div className="flex-1 overflow-y-auto px-5 pb-5 pt-5 space-y-6">
-                <div className="space-y-3">
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dados</p>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="det-nome">Nome</Label>
-                    <Input id="det-nome" value={nomeForm} onChange={(e) => setNomeForm(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="det-telefone">Telefone</Label>
-                    <Input
-                      id="det-telefone"
-                      value={telefoneForm}
-                      onChange={(e) => setTelefoneForm(e.target.value)}
-                      placeholder="(11) 99999-9999"
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={salvarDados}
-                    disabled={salvandoDados || !nomeForm.trim() || !dadosMudaram}
-                  >
-                    {salvandoDados && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                    Salvar dados
-                  </Button>
+              <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4 space-y-6">
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Telefone</p>
+                  <p className="text-sm text-gray-800">
+                    {garcomAtual.telefone || <span className="text-gray-400 italic">Sem telefone cadastrado</span>}
+                  </p>
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Bonificação</p>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Aberturas do QR</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{qrs[garcomAtual.id]?.total_scans ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">no total</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{scansEsteMes[garcomAtual.id] ?? 0}</p>
+                      <p className="text-xs text-muted-foreground">este mês</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Bonificação</p>
                   {regrasAtivas.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Nenhuma regra ativa. Configure em "Bonificação", na tela de Equipe.
@@ -709,7 +724,7 @@ export default function Garcons() {
                             </div>
                             <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
                               <div
-                                className={cn('h-full rounded-full', atingiu ? 'bg-emerald-500' : 'bg-gray-400')}
+                                className={cn('h-full rounded-full', corBarraRegra(atingiu, pago))}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
@@ -720,41 +735,65 @@ export default function Garcons() {
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">QR Code</p>
-                  <p className="text-sm text-gray-600">
-                    {qrs[garcomAtual.id]?.total_scans ?? 0} aberturas no total
-                  </p>
+                {/* Mesmo padrão do painel de ação: ação primária à esquerda,
+                    editar/excluir como ícones à direita (`ml-auto`), sem um
+                    rodapé próprio só pra eles. */}
+                <div className="flex items-center gap-2 border-t pt-4">
                   <Button variant="outline" size="sm" onClick={() => baixarPng(garcomAtual)}>
                     <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar QR Code (PNG)
                   </Button>
-                </div>
 
-                <div className="border-t pt-4">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" className="px-0 text-red-600 hover:bg-transparent hover:text-red-700">
-                        <Trash2 className="h-4 w-4 mr-1.5" /> Excluir garçom
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          O QR Code dele sai junto. Não dá para desfazer.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => remover(garcomAtual.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  <div className="ml-auto flex shrink-0 items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => abrirEditar(garcomAtual)}
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Editar garçom"
+                          className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                         >
-                          Excluir
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          <Pencil className="h-[18px] w-[18px]" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Editar</TooltipContent>
+                    </Tooltip>
+
+                    <AlertDialog>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Excluir garçom"
+                              className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="h-[18px] w-[18px]" />
+                            </Button>
+                          </AlertDialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Excluir</TooltipContent>
+                      </Tooltip>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            O QR Code dele sai junto. Não dá para desfazer.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => remover(garcomAtual.id)}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </div>
             </>

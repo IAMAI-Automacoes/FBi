@@ -24,8 +24,10 @@ export function getIniciais(texto?: string | null, max = 2): string {
 
 /** Paleta pra avatar por iniciais — cada pessoa cai sempre na mesma cor
  *  (hash do nome), pra diferenciar responsáveis num relance sem precisar
- *  ler o nome inteiro. */
-const CORES_AVATAR = [
+ *  ler o nome inteiro. Exportada porque listas curtas (ex.: equipe de
+ *  garçons) preferem indexar por posição em vez de por hash — com poucos
+ *  itens e só 8 cores, o hash colide com frequência incômoda. */
+export const CORES_AVATAR = [
   { bg: 'bg-blue-500', text: 'text-white' },
   { bg: 'bg-violet-500', text: 'text-white' },
   { bg: 'bg-pink-500', text: 'text-white' },
