@@ -61,6 +61,28 @@ function numero(n: number | null | undefined, casas = 0): string {
 }
 
 /**
+ * Uma data ou hora escrita de um jeito que o Excel NÃO reconhece como data.
+ *
+ * Sem isto, "03/08/2026" — e mesmo algo mais solto como "4 ago" — é lido pelo
+ * Excel como uma data DE VERDADE ao abrir o arquivo (não como texto), e ele
+ * reformata a célula sozinho. Quando a coluna fica mais estreita que o
+ * formato que o Excel escolheu, a célula vira uma fileira de "#" — foi o
+ * "########" que apareceu nas colunas De/Até e na tabela de avaliações,
+ * enquanto "Gerado em" (que tem " às HH:mm" junto) escapou porque esse texto
+ * extra quebra o padrão de data pura.
+ *
+ * A correção-padrão para isto em CSV (e não existe outra dentro do formato
+ * texto puro: CSV não tem como marcar "esta célula é texto") é escrever a
+ * célula como uma fórmula que RESULTA no texto: `="03/08/2026"`. O Excel
+ * calcula a fórmula, mostra exatamente o texto entre aspas, e não tenta mais
+ * adivinhar o tipo da célula. Funciona igual no Google Sheets, que também
+ * avalia fórmulas ao importar CSV.
+ */
+function dataTexto(valorFormatado: string): string {
+  return `="${valorFormatado}"`
+}
+
+/**
  * "Positivo", "Negativo", "Neutro" — sempre do mesmo jeito.
  *
  * O banco guarda as duas grafias (`negativo` e `Negativo`), porque vieram de
@@ -111,8 +133,8 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ['Período', d.rotuloPeriodo],
     // As datas por extenso, e não só "Últimos 30 dias": a planilha vai ser
     // aberta semanas depois, quando o rótulo relativo já não diz nada.
-    ['De', format(d.inicio, 'dd/MM/yyyy')],
-    ['Até', format(d.fim, 'dd/MM/yyyy')],
+    ['De', dataTexto(format(d.inicio, 'dd/MM/yyyy'))],
+    ['Até', dataTexto(format(d.fim, 'dd/MM/yyyy'))],
     ['Gerado em', format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })],
     [],
 
@@ -208,7 +230,11 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ['EVOLUÇÃO DIA A DIA'],
     ['Um dia por linha, do mais antigo ao mais recente.'],
     ['Data', 'Avaliações', 'Satisfação (0-100)'],
-    ...d.tendencia.map((t) => [t.date, numero(t.avaliacoes), numero(t.sentiment)]),
+    // `t.date` já vem como "4 ago" (sem ano) ou "seg" (dia da semana), a
+    // depender do período — nenhum dos dois é uma data completa, mas o Excel
+    // ainda tenta adivinhar "4 ago" como dia+mês do ano corrente. Mesma
+    // proteção da tabela de avaliações, por segurança.
+    ...d.tendencia.map((t) => [dataTexto(t.date), numero(t.avaliacoes), numero(t.sentiment)]),
     [],
 
     ['POR DIA DA SEMANA'],
@@ -265,8 +291,8 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ...d.avaliacoes.map((f) => {
       const dt = parseISO(f.created_at)
       return [
-        format(dt, 'dd/MM/yyyy'),
-        format(dt, 'HH:mm'),
+        dataTexto(format(dt, 'dd/MM/yyyy')),
+        dataTexto(format(dt, 'HH:mm')),
         f.categoria || 'Outros',
         sentimentoLegivel(f.sentimento),
         // Quebra de linha dentro da célula desalinha a planilha em vários

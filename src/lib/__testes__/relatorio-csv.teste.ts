@@ -95,5 +95,50 @@ const temLinha = (ls: unknown[][]) => ls.some((l) => String(l[0] ?? '').startsWi
 checa('sem avaliacao desconhecida, a linha nao aparece', temLinha(semAviso), false)
 checa('com avaliacao desconhecida, a linha aparece', temLinha(comAviso), true)
 
+// ─────────────────────────────────────────────────────────────────────────────
+// As datas viravam "########" no Excel
+//
+// "03/08/2026" sozinho é lido pelo Excel como uma data DE VERDADE, e quando a
+// coluna é mais estreita que o formato escolhido a célula vira uma fileira de
+// "#". A correção padrão em CSV é escrever a célula como fórmula que RESULTA
+// no texto: ="03/08/2026" — o Excel calcula e mostra o texto, sem adivinhar
+// mais nada. Isto testa que a fórmula chega inteira ao arquivo final, com a
+// escapagem de aspas do CSV aplicada corretamente por cima dela.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const acharLinha = (ls: (string | number)[][], rotulo: string) => ls.find((l) => l[0] === rotulo)
+
+const deLinha = acharLinha(linhas, 'De')
+checa('data De vira formula de texto', deLinha?.[1], '="03/08/2026"')
+
+// O CSV final: a fórmula ="03/08/2026" tem 2 aspas internas, cada uma dobra
+// (regra do CSV), e o campo inteiro fica entre um terceiro par de aspas — o
+// resultado esperado no texto bruto é: "=""03/08/2026"""
+checa(
+  'a fórmula sai corretamente escapada no CSV',
+  txt.includes('"De";"=""03/08/2026"""'),
+  true,
+)
+
+// A tabela de avaliações: Data E Hora, as duas protegidas. O valor esperado
+// vem do próprio horário de sistema (não fixo "13:20") para o teste não
+// quebrar rodando num fuso diferente do de quem escreveu.
+const dtAvaliacao = new Date('2026-08-25T13:20:00Z')
+const dd = String(dtAvaliacao.getDate()).padStart(2, '0')
+const mm = String(dtAvaliacao.getMonth() + 1).padStart(2, '0')
+const hh = String(dtAvaliacao.getHours()).padStart(2, '0')
+const min = String(dtAvaliacao.getMinutes()).padStart(2, '0')
+
+const linhaAvaliacao = linhas.find(
+  (l) => typeof l[0] === 'string' && l[0].startsWith('=') && String(l[4] ?? '').includes('Linha 1'),
+)
+checa('Data da avaliação protegida', linhaAvaliacao?.[0], `="${dd}/${mm}/2026"`)
+checa('Hora da avaliação protegida', linhaAvaliacao?.[1], `="${hh}:${min}"`)
+
+// "Gerado em" tem texto junto (" às HH:mm") — não é uma data pura, não
+// precisa (e não deve) da proteção, para não poluir à toa.
+const geradoEm = acharLinha(linhas, 'Gerado em')
+checa('Gerado em NÃO usa a fórmula (já não parece data pura)', String(geradoEm?.[1]).startsWith('='), false)
+
 console.log(falhas === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${falhas} FALHA(S)`)
 if (falhas > 0) process.exit(1)

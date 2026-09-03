@@ -423,7 +423,7 @@ function LayoutNovo({
         <div />
         <div className="flex items-center gap-1.5 w-full sm:w-auto">
           <Select value={period} onValueChange={(v) => setPeriod(v as PeriodInfo)}>
-            <SelectTrigger className="w-[170px] rounded-md border-gray-200 bg-white">
+            <SelectTrigger className="h-9 w-[170px] rounded-md border-gray-200 bg-white">
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
@@ -432,31 +432,37 @@ function LayoutNovo({
               <SelectItem value="90d">Últimos 3 meses</SelectItem>
             </SelectContent>
           </Select>
-          {/* Split button: a ação fica na esquerda com o rótulo, o formato na
-              seta à direita — o padrão de export em ferramenta de dados
-              (Linear, Stripe, Notion), e o que a pesquisa de referência
-              recomenda quando há um padrão claro com variantes.
+          {/* Split button — pesquisado antes de refazer: um botão de export
+              com um padrão claro (baixar o formato mais usado) e variantes
+              (o resto, atrás da seta) é o desenho recomendado para "export"
+              em ferramenta de dados, e o ícone de seta-para-baixo só serve
+              para reforçar o rótulo, não decorar.
 
-              A metade esquerda baixa o PDF direto, porque é o que 9 em 10
-              downloads de relatório são. Quem quer a planilha abre a seta.
-              Antes era um botão só que só abria menu: dois cliques para a
-              coisa mais comum.
+              Trocado de verde chapado (bg-emerald-600, mesma cor "sucesso" de
+              um toast — confundia "baixei o arquivo" com "deu certo") para a
+              mesma linguagem escura do resto do app: um degradê curto de
+              cinza-900, com uma linha clara no alto de dentro simulando luz
+              pegando a quina — é o mesmo tratamento do botão de Salvar dos
+              popups de ação, então "isto é uma decisão" fica consistente em
+              vez de cada botão ter sua própria cor.
 
-              Altura 40px e `text-sm`, iguais aos do seletor de período ao
-              lado — antes o botão era `font-medium` num tamanho que não
-              batia com nada da barra, e por isso parecia colado ali. */}
+              Formato: pílula (cantos totalmente arredondados), não retângulo
+              com pontas quadradas — e 36px de altura (h-9), abaixo dos 40px
+              anteriores, com o MESMO text-sm de antes; só o botão encolheu,
+              não a letra. O seletor de período ao lado encolhe junto, para
+              os dois ficarem na mesma linha de novo. */}
           <div className="flex items-stretch">
             <Button
               onClick={handleExportPdf}
               disabled={semDados || gerandoPdf || gerandoCsv}
-              className="h-10 gap-2 rounded-l-md rounded-r-none border-r border-emerald-700/40 bg-emerald-600 px-3.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
             >
               {gerandoPdf ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}
+              Baixar
             </Button>
 
             <DropdownMenu>
@@ -464,9 +470,9 @@ function LayoutNovo({
                 <Button
                   aria-label="Escolher formato"
                   disabled={semDados || gerandoPdf || gerandoCsv}
-                  className="h-10 rounded-l-none rounded-r-md bg-emerald-600 px-2 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                  className="h-9 rounded-l-none rounded-r-full bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                 >
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[268px]">
