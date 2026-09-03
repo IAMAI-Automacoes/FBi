@@ -818,7 +818,7 @@ function LayoutNovo({
                 </div>
               )}
               <Link
-                to="/feedbacks"
+                to={`/feedbacks?periodo=${period}`}
                 className="mt-4 flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
               >
                 Ver todos os comentários <ChevronRight className="h-4 w-4" />

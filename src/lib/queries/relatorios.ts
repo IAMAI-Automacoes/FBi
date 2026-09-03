@@ -326,6 +326,46 @@ function numerosSuspeitos(texto: string, permitidos: Set<number>): number[] {
   return [...achados].filter((n) => !permitidos.has(n))
 }
 
+/** Remove acentos para comparar texto sem depender de o modelo ter escrito igual. */
+function semAcentos(s: string): string {
+  return s.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+}
+
+/**
+ * Textos que a IA pode citar entre aspas simples no relatório: o rótulo de um
+ * tema de verdade (`dados.temas[].rotulo`) ou um trecho do que o cliente
+ * escreveu (`dados.feedbacks[].texto_original`/`.resumo`). Usado por
+ * `frasesSuspeitas` para flagar quando a IA formata como citação literal
+ * ('assim, entre aspas') algo que na verdade parafraseou ou inventou — ex.:
+ * escrever 'Atendimento mal educado' quando o tema real é "Atendimento ruim"
+ * ou "Demora no atendimento".
+ */
+function frasesPermitidas(dados: any): string[] {
+  const fontes: string[] = []
+  for (const t of dados.temas || []) {
+    if (typeof t?.rotulo === 'string') fontes.push(t.rotulo)
+  }
+  for (const f of dados.feedbacks || []) {
+    if (typeof f?.texto_original === 'string') fontes.push(f.texto_original)
+    if (typeof f?.resumo === 'string') fontes.push(f.resumo)
+  }
+  return fontes.map((s) => semAcentos(s.toLowerCase()))
+}
+
+/**
+ * Extrai o que está entre aspas simples no texto (8+ caracteres — uma aspa
+ * curta como 'ok' é ênfase de frase, não uma alegação de citação literal) e
+ * devolve o que não aparece, nem sem acento, em nenhuma fonte real.
+ */
+function frasesSuspeitas(texto: string, permitidas: string[]): string[] {
+  const achadas = new Set<string>()
+  for (const m of texto.matchAll(/'([^']{8,})'/g)) achadas.add(m[1].trim())
+  return [...achadas].filter((frase) => {
+    const norm = semAcentos(frase.toLowerCase())
+    return !permitidas.some((fonte) => fonte.includes(norm))
+  })
+}
+
 /**
  * Pede à IA a análise estruturada (campo a campo) para o template do PDF.
  * Se a IA falhar ou devolver algo inválido, cai no texto calculado.
@@ -366,18 +406,25 @@ export async function gerarAnaliseRelatorio(dados: any): Promise<AnaliseRelatori
       porIa: true,
     }
 
-    // Rede de segurança final: o prompt já instrui "nunca invente número", mas
-    // isso é uma instrução de linguagem natural — nada garantia até aqui que a
-    // IA de fato só citou os números reais. Se ela citar um % ou um "X de 100"
-    // que não bate com nenhum dado calculado, descarta a resposta inteira e
-    // usa o texto 100% determinístico (nunca mostra um número não verificado).
+    // Rede de segurança final: o prompt já instrui "nunca invente número" e
+    // "só cite entre aspas o que é real", mas isso é instrução de linguagem
+    // natural — nada garantia até aqui que a IA de fato só citou números e
+    // frases reais. Se ela citar um % ou um "X de 100" que não bate com nenhum
+    // dado calculado, ou uma frase entre aspas simples que não é nem o rótulo
+    // de um tema real nem um trecho do que um cliente escreveu (ex.: formatar
+    // como citação literal algo que na verdade parafraseou), descarta a
+    // resposta inteira e usa o texto 100% determinístico.
     const textoLivre = [
       resultado.resumo, resultado.ponto_forte, resultado.ponto_fraco,
       resultado.leitura_categorias, resultado.leitura_clientes,
     ].join(' ')
     const suspeitos = numerosSuspeitos(textoLivre, numerosPermitidos(dados))
-    if (suspeitos.length) {
-      console.warn('Análise da IA citou número(s) fora dos dados reais, usando texto calculado:', suspeitos)
+    const suspeitosFrases = frasesSuspeitas(textoLivre, frasesPermitidas(dados))
+    if (suspeitos.length || suspeitosFrases.length) {
+      console.warn(
+        'Análise da IA citou número(s) ou frase(s) entre aspas fora dos dados reais, usando texto calculado:',
+        suspeitos, suspeitosFrases,
+      )
       return fallback
     }
 
@@ -407,12 +454,17 @@ export async function gerarResumoExecutivo(dadosRelatorio: any): Promise<string>
     const texto = String(resposta ?? '')
 
     // Mesma rede de segurança de `gerarAnaliseRelatorio`: texto livre não tem
-    // como ser validado por schema, então checamos os números citados contra
-    // os dados reais. Se algo não bater, prefere não mostrar nada a mostrar
-    // um número que pode estar errado — a tela já trata resumo vazio.
+    // como ser validado por schema, então checamos os números e as frases
+    // entre aspas citados contra os dados reais. Se algo não bater, prefere
+    // não mostrar nada a mostrar algo que pode estar errado — a tela já trata
+    // resumo vazio.
     const suspeitos = numerosSuspeitos(texto, numerosPermitidos(dadosRelatorio))
-    if (suspeitos.length) {
-      console.warn('Resumo executivo citou número(s) fora dos dados reais, ocultando:', suspeitos)
+    const suspeitosFrases = frasesSuspeitas(texto, frasesPermitidas(dadosRelatorio))
+    if (suspeitos.length || suspeitosFrases.length) {
+      console.warn(
+        'Resumo executivo citou número(s) ou frase(s) entre aspas fora dos dados reais, ocultando:',
+        suspeitos, suspeitosFrases,
+      )
       return ''
     }
     return texto
