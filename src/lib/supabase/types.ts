@@ -945,7 +945,7 @@ export type Database = {
       garcons: {
         Row: {
           ativo: boolean | null
-          bonus_pago_em: string | null
+          bonus_pagamentos: Json
           created_at: string
           id: number
           nome_garcon: string | null
@@ -953,7 +953,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          bonus_pago_em?: string | null
+          bonus_pagamentos?: Json
           created_at?: string
           id?: number
           nome_garcon?: string | null
@@ -961,7 +961,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          bonus_pago_em?: string | null
+          bonus_pagamentos?: Json
           created_at?: string
           id?: number
           nome_garcon?: string | null

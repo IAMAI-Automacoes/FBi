@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -16,38 +15,56 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Plus, Trash2, Download, FileDown, Loader2, Settings, Trophy, Check } from 'lucide-react'
+import { Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
 import { desenharPoster, landingUrl, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
+import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
 
-interface Garcom { id: number; nome_garcon: string; ativo: boolean; bonus_pago_em: string | null }
+interface Garcom {
+  id: number
+  nome_garcon: string
+  ativo: boolean
+  /** regra.id -> data em que o bônus daquela regra foi marcado como pago. */
+  bonus_pagamentos: Record<string, string>
+}
 interface QrInfo { slug: string; total_scans: number }
 
 type Frequencia = 'semanal' | 'mensal' | 'trimestral'
 
-interface ConfigBonificacao {
+interface RegraBonificacao {
+  id: string
+  nome: string
   meta_escaneamentos: number
   frequencia: Frequencia
   premio: string
   renovar_automatico: boolean
-  /** null = regra nunca foi salva/ativada ainda. */
+  ativa: boolean
+  /** null = regra recém-criada, ainda sem período rodando. */
   periodo_inicio: string | null
-}
-
-const CONFIG_BONIF_PADRAO: ConfigBonificacao = {
-  meta_escaneamentos: 50,
-  frequencia: 'mensal',
-  premio: '',
-  renovar_automatico: true,
-  periodo_inicio: null,
 }
 
 const FREQUENCIA_LABEL: Record<Frequencia, string> = {
   semanal: 'Semanal',
   mensal: 'Mensal',
   trimestral: 'Trimestral',
+}
+const FREQUENCIA_CURTA: Record<Frequencia, string> = {
+  semanal: 'semana',
+  mensal: 'mês',
+  trimestral: 'trimestre',
+}
+
+function novaRegraVazia(): RegraBonificacao {
+  return {
+    id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal',
+    premio: '', renovar_automatico: true, ativa: true, periodo_inicio: null,
+  }
+}
+
+function rotuloRegra(r: RegraBonificacao): string {
+  return r.nome.trim() || `${r.meta_escaneamentos} QRs por ${FREQUENCIA_CURTA[r.frequencia]}`
 }
 
 function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
@@ -86,16 +103,16 @@ export default function Garcons() {
   const [editNome, setEditNome] = useState('')
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
 
-  // Regra de bonificação da equipe — `configBonif` é o rascunho editável na
-  // tela, `configBonifSalvo` é o último estado gravado no banco (usado pelo
-  // botão "Cancelar" pra descartar edições não salvas).
-  const [configBonif, setConfigBonif] = useState<ConfigBonificacao>(CONFIG_BONIF_PADRAO)
-  const [configBonifSalvo, setConfigBonifSalvo] = useState<ConfigBonificacao>(CONFIG_BONIF_PADRAO)
-  const [salvandoConfig, setSalvandoConfig] = useState(false)
-  /** Escaneamentos de cada garçom DESDE o início do período atual da regra
-   *  (não o total acumulado) — é contra isso que a meta é medida. */
-  const [scansPeriodo, setScansPeriodo] = useState<Record<number, number>>({})
-  const [pagando, setPagando] = useState<number | null>(null)
+  const [regras, setRegras] = useState<RegraBonificacao[]>([])
+  /** Painel de regras aberto? */
+  const [regrasAbertas, setRegrasAbertas] = useState(false)
+  /** null = mostrando a lista de regras; objeto = editando/criando uma. */
+  const [regraForm, setRegraForm] = useState<RegraBonificacao | null>(null)
+  const [salvandoRegra, setSalvandoRegra] = useState(false)
+  /** scansPorRegra[regraId][garcomId] = escaneamentos DESDE o início do
+   *  período atual daquela regra (não o total acumulado). */
+  const [scansPorRegra, setScansPorRegra] = useState<Record<string, Record<number, number>>>({})
+  const [pagando, setPagando] = useState('')
 
   const carregar = useCallback(async () => {
     const { data: u } = await supabase.auth.getUser()
@@ -111,35 +128,32 @@ export default function Garcons() {
     setPosterTema(r.qr_estilo ?? 'classico')
     setPosterMsg(r.qr_mensagem ?? '')
 
-    let cfg: ConfigBonificacao = { ...CONFIG_BONIF_PADRAO, ...(r.config_bonificacao as Partial<ConfigBonificacao> | null) }
+    let listaRegras = (Array.isArray(r.config_bonificacao) ? r.config_bonificacao : []) as unknown as RegraBonificacao[]
 
-    // Se o período configurado já acabou e "renovar automaticamente" está
-    // ligado, avança pro período atual (pode pular vários de uma vez, se
-    // ninguém abriu a tela por um tempo) e grava de volta no banco. É isso
-    // que zera o progresso de todo mundo sem precisar de um job rodando.
-    let periodoInicio = cfg.periodo_inicio ? new Date(cfg.periodo_inicio) : null
-    if (periodoInicio && cfg.renovar_automatico) {
-      let fim = avancarPeriodo(periodoInicio, cfg.frequencia)
-      let mudou = false
+    // Cada regra ativa que já passou do fim do período avança sozinha (pode
+    // pular vários períodos de uma vez, se ninguém abriu a tela por um
+    // tempo) — é isso que zera o progresso sem precisar de um job rodando.
+    let mudou = false
+    listaRegras = listaRegras.map((regra) => {
+      if (!regra.periodo_inicio || !regra.renovar_automatico) return regra
+      let inicio = new Date(regra.periodo_inicio)
+      let fim = avancarPeriodo(inicio, regra.frequencia)
       while (fim.getTime() <= Date.now()) {
-        periodoInicio = fim
-        fim = avancarPeriodo(periodoInicio, cfg.frequencia)
+        inicio = fim
+        fim = avancarPeriodo(inicio, regra.frequencia)
         mudou = true
       }
-      if (mudou) {
-        cfg = { ...cfg, periodo_inicio: periodoInicio.toISOString() }
-        await supabase.from('restaurantes').update({ config_bonificacao: cfg as any }).eq('id', r.id)
-      }
-    }
-    setConfigBonif(cfg)
-    setConfigBonifSalvo(cfg)
+      return mudou ? { ...regra, periodo_inicio: inicio.toISOString() } : regra
+    })
+    if (mudou) await supabase.from('restaurantes').update({ config_bonificacao: listaRegras as any }).eq('id', r.id)
+    setRegras(listaRegras)
 
     const { data: gs } = await supabase
       .from('garcons')
-      .select('id, nome_garcon, ativo, bonus_pago_em')
+      .select('id, nome_garcon, ativo, bonus_pagamentos')
       .eq('restaurante_id', r.id)
       .order('created_at', { ascending: true })
-    setGarcons((gs ?? []) as Garcom[])
+    setGarcons(((gs ?? []) as any[]).map((g) => ({ ...g, bonus_pagamentos: g.bonus_pagamentos ?? {} })) as Garcom[])
 
     const { data: qc } = await supabase
       .from('qr_codes')
@@ -156,20 +170,30 @@ export default function Garcons() {
     setQrs(map)
 
     const idsQr = Object.keys(qrCodeIdParaGarcom).map(Number)
-    if (periodoInicio && idsQr.length > 0) {
+    const regrasComPeriodo = listaRegras.filter((reg) => reg.periodo_inicio && reg.meta_escaneamentos > 0)
+    if (regrasComPeriodo.length > 0 && idsQr.length > 0) {
+      const maisAntigo = regrasComPeriodo.reduce(
+        (min, reg) => (reg.periodo_inicio! < min ? reg.periodo_inicio! : min),
+        regrasComPeriodo[0].periodo_inicio!,
+      )
       const { data: scans } = await supabase
         .from('qr_scans')
-        .select('qr_code_id')
+        .select('qr_code_id, scanned_at')
         .in('qr_code_id', idsQr)
-        .gte('scanned_at', periodoInicio.toISOString())
-      const porGarcom: Record<number, number> = {}
-      for (const s of scans ?? []) {
-        const gId = qrCodeIdParaGarcom[s.qr_code_id]
-        if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
+        .gte('scanned_at', maisAntigo)
+      const porRegra: Record<string, Record<number, number>> = {}
+      for (const reg of regrasComPeriodo) {
+        const porGarcom: Record<number, number> = {}
+        for (const s of scans ?? []) {
+          if (s.scanned_at < reg.periodo_inicio!) continue
+          const gId = qrCodeIdParaGarcom[s.qr_code_id]
+          if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
+        }
+        porRegra[reg.id] = porGarcom
       }
-      setScansPeriodo(porGarcom)
+      setScansPorRegra(porRegra)
     } else {
-      setScansPeriodo({})
+      setScansPorRegra({})
     }
 
     setLoading(false)
@@ -197,10 +221,10 @@ export default function Garcons() {
       const { data, error } = await supabase
         .from('garcons')
         .insert({ nome_garcon: nome, restaurante_id: restauranteId, ativo: true })
-        .select('id, nome_garcon, ativo, bonus_pago_em')
+        .select('id, nome_garcon, ativo, bonus_pagamentos')
         .single()
       if (error) throw error
-      setGarcons((p) => [...p, data as Garcom])
+      setGarcons((p) => [...p, { ...(data as any), bonus_pagamentos: (data as any).bonus_pagamentos ?? {} }])
       setNovo('')
     } catch (e: any) {
       toast.error('Erro ao adicionar', { description: e.message })
@@ -282,52 +306,79 @@ export default function Garcons() {
     }
   }
 
-  const salvarConfig = async () => {
+  const gravarRegras = async (novasRegras: RegraBonificacao[]) => {
     if (!restauranteId) return
-    setSalvandoConfig(true)
+    const { error } = await supabase
+      .from('restaurantes')
+      .update({ config_bonificacao: novasRegras as any })
+      .eq('id', restauranteId)
+    if (error) throw error
+    setRegras(novasRegras)
+  }
+
+  const salvarRegraForm = async () => {
+    if (!regraForm) return
+    setSalvandoRegra(true)
     try {
-      const cfg: ConfigBonificacao = {
-        ...configBonif,
+      const ehNova = !regraForm.id
+      const regraFinal: RegraBonificacao = {
+        ...regraForm,
+        id: regraForm.id || crypto.randomUUID(),
         // Primeira vez que a regra é salva: começa o período agora.
-        periodo_inicio: configBonif.periodo_inicio ?? new Date().toISOString(),
+        periodo_inicio: regraForm.periodo_inicio ?? new Date().toISOString(),
       }
-      const { error } = await supabase
-        .from('restaurantes')
-        .update({ config_bonificacao: cfg as any })
-        .eq('id', restauranteId)
-      if (error) throw error
-      setConfigBonif(cfg)
-      setConfigBonifSalvo(cfg)
-      toast.success('Regra de bonificação salva!')
+      const novasRegras = ehNova
+        ? [...regras, regraFinal]
+        : regras.map((r) => (r.id === regraFinal.id ? regraFinal : r))
+      await gravarRegras(novasRegras)
+      setRegraForm(null)
+      toast.success(ehNova ? 'Regra criada.' : 'Regra salva.')
     } catch (e: any) {
       toast.error('Erro ao salvar regra', { description: e.message })
     } finally {
-      setSalvandoConfig(false)
+      setSalvandoRegra(false)
     }
   }
 
-  const cancelarConfig = () => setConfigBonif(configBonifSalvo)
-
-  const pagarBonus = async (g: Garcom) => {
-    setPagando(g.id)
+  const excluirRegra = async (id: string) => {
     try {
-      const agora = new Date().toISOString()
-      const { error } = await supabase.from('garcons').update({ bonus_pago_em: agora }).eq('id', g.id)
+      await gravarRegras(regras.filter((r) => r.id !== id))
+    } catch (e: any) {
+      toast.error('Erro ao excluir regra', { description: e.message })
+    }
+  }
+
+  const alternarAtivaRegra = async (regra: RegraBonificacao) => {
+    const anteriores = regras
+    setRegras((p) => p.map((r) => (r.id === regra.id ? { ...r, ativa: !r.ativa } : r)))
+    try {
+      await gravarRegras(regras.map((r) => (r.id === regra.id ? { ...r, ativa: !r.ativa } : r)))
+    } catch (e: any) {
+      setRegras(anteriores)
+      toast.error('Erro ao atualizar regra', { description: e.message })
+    }
+  }
+
+  const pagarBonus = async (g: Garcom, regra: RegraBonificacao) => {
+    const chave = `${g.id}:${regra.id}`
+    setPagando(chave)
+    try {
+      const pagamentos = { ...g.bonus_pagamentos, [regra.id]: new Date().toISOString() }
+      const { error } = await supabase.from('garcons').update({ bonus_pagamentos: pagamentos }).eq('id', g.id)
       if (error) throw error
-      setGarcons((p) => p.map((x) => (x.id === g.id ? { ...x, bonus_pago_em: agora } : x)))
-      toast.success(`Bônus de ${g.nome_garcon} marcado como pago!`)
+      setGarcons((p) => p.map((x) => (x.id === g.id ? { ...x, bonus_pagamentos: pagamentos } : x)))
+      toast.success(`Bônus de ${g.nome_garcon} marcado como pago.`)
     } catch (e: any) {
       toast.error('Erro ao marcar bônus como pago', { description: e.message })
     } finally {
-      setPagando(null)
+      setPagando('')
     }
   }
 
   const ranking = [...garcons].sort((a, b) => (qrs[b.id]?.total_scans ?? 0) - (qrs[a.id]?.total_scans ?? 0))
   const temAberturas = ranking.some((g) => (qrs[g.id]?.total_scans ?? 0) > 0)
   const medalha = ['🥇', '🥈', '🥉']
-
-  const regraAtiva = !!configBonif.periodo_inicio && configBonif.meta_escaneamentos > 0
+  const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
 
   if (loading) {
     return (
@@ -382,97 +433,6 @@ export default function Garcons() {
 
         {/* Equipe */}
         <TabsContent value="equipe" className="mt-0 space-y-4">
-          {/* Configuração da regra de bonificação */}
-          <Card className="shadow-sm">
-            <CardContent className="p-5 sm:p-6">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="flex items-center gap-2 text-base font-bold text-gray-900">
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  Configuração da Regra de Bonificação da Equipe
-                </h3>
-                {regraAtiva && (
-                  <Badge className="gap-1.5 border-none bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Regra Ativa
-                  </Badge>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="meta-escaneamentos">Meta de Escaneamentos</Label>
-                  <div className="relative">
-                    <Input
-                      id="meta-escaneamentos"
-                      type="number"
-                      min={1}
-                      value={configBonif.meta_escaneamentos}
-                      onChange={(e) => setConfigBonif((p) => ({
-                        ...p, meta_escaneamentos: Math.max(0, Number(e.target.value) || 0),
-                      }))}
-                      className="pr-12"
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                      QRs
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Frequência / Período</Label>
-                  <Select
-                    value={configBonif.frequencia}
-                    onValueChange={(v) => setConfigBonif((p) => ({ ...p, frequencia: v as Frequencia }))}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(FREQUENCIA_LABEL) as Frequencia[]).map((f) => (
-                        <SelectItem key={f} value={f}>{FREQUENCIA_LABEL[f]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="premio-bonif">Prêmio / Bonificação</Label>
-                  <Input
-                    id="premio-bonif"
-                    value={configBonif.premio}
-                    onChange={(e) => setConfigBonif((p) => ({ ...p, premio: e.target.value }))}
-                    placeholder="Ex.: R$ 100,00 de Bônus"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-2.5">
-                <Switch
-                  checked={configBonif.renovar_automatico}
-                  onCheckedChange={(v) => setConfigBonif((p) => ({ ...p, renovar_automatico: v }))}
-                />
-                <span className="text-sm text-gray-600">
-                  Renovar automaticamente ao fim do período:{' '}
-                  <span className={cn(
-                    'font-semibold',
-                    configBonif.renovar_automatico ? 'text-emerald-600' : 'text-muted-foreground',
-                  )}
-                  >
-                    {configBonif.renovar_automatico ? 'Ativado' : 'Desativado'}
-                  </span>
-                </span>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2 border-t pt-4">
-                <Button variant="outline" onClick={cancelarConfig} disabled={salvandoConfig}>
-                  Cancelar
-                </Button>
-                <Button onClick={salvarConfig} disabled={salvandoConfig || configBonif.meta_escaneamentos <= 0}>
-                  {salvandoConfig && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                  Salvar Regra
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Adicionar garçom + exportar tudo */}
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={novo}
@@ -486,6 +446,10 @@ export default function Garcons() {
               Adicionar
             </Button>
             <div className="flex-1" />
+            <Button variant="outline" onClick={() => setRegrasAbertas(true)}>
+              <Settings2 className="h-4 w-4 mr-1.5" />
+              Bonificação{regrasAtivas.length > 0 ? ` (${regrasAtivas.length})` : ''}
+            </Button>
             {garcons.length > 0 && (
               <Button variant="outline" onClick={baixarPdf} disabled={baixando}>
                 {baixando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileDown className="h-4 w-4 mr-1" />}
@@ -503,93 +467,87 @@ export default function Garcons() {
               <CardContent className="p-0">
                 <ul className="divide-y divide-border">
                   {garcons.map((g) => {
-                    const scans = scansPeriodo[g.id] ?? 0
-                    const meta = configBonif.meta_escaneamentos
-                    const pct = meta > 0 ? Math.min(100, Math.round((scans / meta) * 100)) : 0
-                    const atingiu = regraAtiva && scans >= meta
-                    const falta = Math.max(0, meta - scans)
-                    const pago = !!(
-                      g.bonus_pago_em && configBonif.periodo_inicio && g.bonus_pago_em >= configBonif.periodo_inicio
-                    )
-
+                    const cor = corAvatar(g.nome_garcon)
                     return (
-                      <li
-                        key={g.id}
-                        className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
+                      <li key={g.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 flex-1 items-start gap-3">
                           <button
                             type="button"
                             onClick={() => abrirEdicao(g)}
-                            title="Clique para renomear"
+                            title="Renomear"
                             className={cn(
-                              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-                              atingiu ? 'bg-emerald-500' : 'bg-slate-400',
+                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                              cor.bg, cor.text,
                             )}
                           >
-                            {g.nome_garcon.slice(0, 2).toUpperCase()}
+                            {getIniciais(g.nome_garcon)}
                           </button>
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => abrirEdicao(g)}
-                                className="text-left font-semibold hover:underline"
-                              >
-                                {g.nome_garcon}
-                              </button>
-                              {atingiu && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                                  <Trophy className="h-3 w-3" /> Meta atingida
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {regraAtiva ? `${scans} / ${meta} QRs (${pct}%)` : `${scans} aberturas`}
-                              {regraAtiva && (
-                                <>
-                                  {' • '}
-                                  {atingiu
-                                    ? pago
-                                      ? `Bônus pago${g.bonus_pago_em ? ` em ${format(new Date(g.bonus_pago_em), 'dd/MM')}` : ''}`
-                                      : 'Recompensa liberada para pagamento'
-                                    : `Faltam ${falta} escaneamento${falta === 1 ? '' : 's'} para atingir a meta`}
-                                </>
-                              )}
-                            </p>
-                            {regraAtiva && (
-                              <div className="mt-2 h-2 w-full max-w-xs overflow-hidden rounded-full bg-gray-200">
-                                <div
-                                  className={cn(
-                                    'h-full rounded-full transition-all',
-                                    atingiu ? 'bg-emerald-500' : 'bg-blue-500',
-                                  )}
-                                  style={{ width: `${pct}%` }}
-                                />
+                            <button
+                              type="button"
+                              onClick={() => abrirEdicao(g)}
+                              className="text-left text-sm font-semibold text-gray-900 hover:underline"
+                            >
+                              {g.nome_garcon}
+                            </button>
+
+                            {regrasAtivas.length === 0 ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {qrs[g.id]?.total_scans ?? 0} aberturas
+                              </p>
+                            ) : (
+                              <div className="mt-1.5 space-y-2">
+                                {regrasAtivas.map((regra) => {
+                                  const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
+                                  const meta = regra.meta_escaneamentos
+                                  const pct = Math.min(100, Math.round((scans / meta) * 100))
+                                  const atingiu = scans >= meta
+                                  const pagoEm = g.bonus_pagamentos[regra.id]
+                                  const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
+
+                                  return (
+                                    <div key={regra.id}>
+                                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                        <p className="text-xs text-gray-500">
+                                          <span className="font-medium text-gray-700">{rotuloRegra(regra)}</span>
+                                          {' — '}
+                                          {scans}/{meta}
+                                          {atingiu
+                                            ? pago
+                                              ? `, pago${pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}`
+                                              : `, meta batida${regra.premio ? ` (${regra.premio})` : ''}`
+                                            : ` (faltam ${meta - scans})`}
+                                        </p>
+                                        {atingiu && !pago && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 px-2 text-[11px]"
+                                            disabled={pagando === `${g.id}:${regra.id}`}
+                                            onClick={() => pagarBonus(g, regra)}
+                                          >
+                                            {pagando === `${g.id}:${regra.id}`
+                                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                              : <Check className="h-3 w-3 mr-1" />}
+                                            Marcar como pago
+                                          </Button>
+                                        )}
+                                      </div>
+                                      <div className="mt-1 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-gray-100">
+                                        <div
+                                          className={cn('h-full rounded-full', atingiu ? 'bg-emerald-500' : 'bg-gray-400')}
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
                               </div>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                          {atingiu && !pago && (
-                            <Button
-                              size="sm"
-                              onClick={() => pagarBonus(g)}
-                              disabled={pagando === g.id}
-                              className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                              {pagando === g.id
-                                ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                                : <Check className="h-3.5 w-3.5 mr-1" />}
-                              Pagar Bônus
-                            </Button>
-                          )}
-                          {atingiu && pago && (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
-                              <Check className="h-3.5 w-3.5" /> Bônus pago
-                            </span>
-                          )}
+                        <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-start">
                           <Button variant="outline" size="sm" onClick={() => baixarPng(g)}>
                             <Download className="h-3.5 w-3.5 mr-1" /> PNG
                           </Button>
@@ -655,6 +613,172 @@ export default function Garcons() {
               Salvar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Regras de bonificação — lista, ou o formulário de uma regra */}
+      <Dialog
+        open={regrasAbertas}
+        onOpenChange={(open) => { setRegrasAbertas(open); if (!open) setRegraForm(null) }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          {!regraForm ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Bonificação por escaneamentos</DialogTitle>
+              </DialogHeader>
+              {regras.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma regra criada ainda.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {regras.map((r) => (
+                    <li key={r.id} className="flex items-center gap-3 py-2.5">
+                      <button type="button" onClick={() => setRegraForm({ ...r })} className="min-w-0 flex-1 text-left">
+                        <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
+                          {rotuloRegra(r)}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {FREQUENCIA_LABEL[r.frequencia]}{r.premio ? ` · ${r.premio}` : ''}
+                        </p>
+                      </button>
+                      <Switch checked={r.ativa} onCheckedChange={() => alternarAtivaRegra(r)} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <DialogFooter className="sm:justify-start">
+                <Button variant="outline" onClick={() => setRegraForm(novaRegraVazia())} className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-1.5" /> Nova regra
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <button
+                  type="button"
+                  onClick={() => setRegraForm(null)}
+                  className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-gray-700"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Regras
+                </button>
+                <DialogTitle>{regraForm.id ? 'Editar regra' : 'Nova regra'}</DialogTitle>
+              </DialogHeader>
+
+              <div className="grid gap-4 py-1">
+                <div className="space-y-1.5">
+                  <Label htmlFor="regra-nome">Nome (opcional)</Label>
+                  <Input
+                    id="regra-nome"
+                    value={regraForm.nome}
+                    onChange={(e) => setRegraForm({ ...regraForm, nome: e.target.value })}
+                    placeholder="Ex.: Meta do mês"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="regra-meta">Meta de escaneamentos</Label>
+                    <div className="relative">
+                      <Input
+                        id="regra-meta"
+                        type="number"
+                        min={1}
+                        value={regraForm.meta_escaneamentos}
+                        onChange={(e) => setRegraForm({
+                          ...regraForm, meta_escaneamentos: Math.max(0, Number(e.target.value) || 0),
+                        })}
+                        className="pr-10"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                        QRs
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Frequência</Label>
+                    <Select
+                      value={regraForm.frequencia}
+                      onValueChange={(v) => setRegraForm({ ...regraForm, frequencia: v as Frequencia })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(FREQUENCIA_LABEL) as Frequencia[]).map((f) => (
+                          <SelectItem key={f} value={f}>{FREQUENCIA_LABEL[f]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="regra-premio">Prêmio</Label>
+                  <Input
+                    id="regra-premio"
+                    value={regraForm.premio}
+                    onChange={(e) => setRegraForm({ ...regraForm, premio: e.target.value })}
+                    placeholder="Ex.: R$ 100,00"
+                  />
+                </div>
+
+                <label htmlFor="regra-renovar" className="flex cursor-pointer items-center justify-between">
+                  <span className="text-sm text-gray-600">Renovar automaticamente ao fim do período</span>
+                  <Switch
+                    id="regra-renovar"
+                    checked={regraForm.renovar_automatico}
+                    onCheckedChange={(v) => setRegraForm({ ...regraForm, renovar_automatico: v })}
+                  />
+                </label>
+
+                <label htmlFor="regra-ativa" className="flex cursor-pointer items-center justify-between">
+                  <span className="text-sm text-gray-600">Regra ativa</span>
+                  <Switch
+                    id="regra-ativa"
+                    checked={regraForm.ativa}
+                    onCheckedChange={(v) => setRegraForm({ ...regraForm, ativa: v })}
+                  />
+                </label>
+              </div>
+
+              <DialogFooter className="sm:justify-between">
+                {regraForm.id ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700">
+                        Excluir
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir "{rotuloRegra(regraForm)}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => { excluirRegra(regraForm.id); setRegraForm(null) }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : <div />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setRegraForm(null)}>Cancelar</Button>
+                  <Button onClick={salvarRegraForm} disabled={salvandoRegra || regraForm.meta_escaneamentos <= 0}>
+                    {salvandoRegra && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                    Salvar
+                  </Button>
+                </div>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
