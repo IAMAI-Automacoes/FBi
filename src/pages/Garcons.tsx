@@ -88,13 +88,22 @@ function corPorIndice(i: number) {
   return CORES_AVATAR[i % CORES_AVATAR.length]
 }
 
-/** Cor da barrinha de progresso de uma regra: cinza em andamento, âmbar
- *  quando bateu a meta e ainda falta pagar (pede atenção), verde quando já
- *  foi pago. */
-function corBarraRegra(atingiu: boolean, pago: boolean): string {
-  if (pago) return 'bg-emerald-500'
-  if (atingiu) return 'bg-amber-500'
-  return 'bg-gray-400'
+/** Cor única da barrinha de progresso de uma regra — o texto ao lado (quantos
+ *  já foi, quantos falta, se já foi pago) já diz o estado; a barra só mostra
+ *  o quanto andou. */
+const COR_BARRA_REGRA = 'bg-blue-500'
+
+/** Só dígitos, formatado como telefone BR enquanto a pessoa digita — nunca
+ *  deixa passar letra nem símbolo que não seja da própria formatação. Fixo
+ *  no DDD (2) + 4 dígitos até completar telefone fixo (10) e vira 9 dígitos
+ *  (celular) daí em diante, até o limite de 11. */
+function formatarTelefone(valor: string): string {
+  const digitos = valor.replace(/\D/g, '').slice(0, 11)
+  if (!digitos) return ''
+  if (digitos.length <= 2) return `(${digitos}`
+  if (digitos.length <= 6) return `(${digitos.slice(0, 2)}) ${digitos.slice(2)}`
+  if (digitos.length <= 10) return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`
+  return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
 }
 
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -548,24 +557,27 @@ export default function Garcons() {
                               </span>
                             </div>
                             {regrasAtivas.length > 0 && (
-                              <div className="mt-2 space-y-1.5">
+                              <div className="mt-2.5 space-y-2.5">
                                 {regrasAtivas.map((regra) => {
                                   const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
                                   const meta = regra.meta_escaneamentos
                                   const pct = Math.min(100, Math.round((scans / meta) * 100))
                                   const atingiu = scans >= meta
+                                  const falta = Math.max(0, meta - scans)
                                   const pagoEm = g.bonus_pagamentos[regra.id]
                                   const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
                                   return (
-                                    <div
-                                      key={regra.id}
-                                      title={`${rotuloRegra(regra)}: ${scans}/${meta}`}
-                                      className="h-1.5 w-2/3 overflow-hidden rounded-full bg-gray-100"
-                                    >
-                                      <div
-                                        className={cn('h-full rounded-full', corBarraRegra(atingiu, pago))}
-                                        style={{ width: `${pct}%` }}
-                                      />
+                                    <div key={regra.id} title={rotuloRegra(regra)} className="w-2/3">
+                                      <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                                        <span>{scans} de {meta} feitos</span>
+                                        <span>{pago ? 'pago' : atingiu ? 'meta batida' : `faltam ${falta}`}</span>
+                                      </div>
+                                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                                        <div
+                                          className={cn('h-full rounded-full', COR_BARRA_REGRA)}
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
                                     </div>
                                   )
                                 })}
@@ -606,8 +618,10 @@ export default function Garcons() {
               <Label htmlFor="form-telefone">Telefone (opcional)</Label>
               <Input
                 id="form-telefone"
+                type="tel"
+                inputMode="numeric"
                 value={formTelefone}
-                onChange={(e) => setFormTelefone(e.target.value)}
+                onChange={(e) => setFormTelefone(formatarTelefone(e.target.value))}
                 onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
                 placeholder="(11) 99999-9999"
               />
@@ -696,16 +710,14 @@ export default function Garcons() {
 
                         return (
                           <div key={regra.id}>
-                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                              <p className="text-xs text-gray-500">
-                                <span className="font-medium text-gray-700">{rotuloRegra(regra)}</span>
-                                {' — '}
-                                {scans}/{meta}
-                                {atingiu
-                                  ? pago
-                                    ? `, pago${pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}`
-                                    : `, meta batida${regra.premio ? ` (${regra.premio})` : ''}`
-                                  : ` (faltam ${meta - scans})`}
+                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                              <p className="text-sm font-semibold text-gray-800">
+                                {rotuloRegra(regra)}
+                                {atingiu && pago && (
+                                  <span className="ml-1.5 font-normal text-gray-400">
+                                    · pago{pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}
+                                  </span>
+                                )}
                               </p>
                               {atingiu && !pago && (
                                 <Button
@@ -722,9 +734,19 @@ export default function Garcons() {
                                 </Button>
                               )}
                             </div>
-                            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-500">
+                              <span>{scans} de {meta} feitos</span>
+                              <span>
+                                {pago
+                                  ? '100% concluído'
+                                  : atingiu
+                                    ? `meta batida${regra.premio ? ` — ${regra.premio}` : ''}`
+                                    : `faltam ${meta - scans}`}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full bg-gray-100">
                               <div
-                                className={cn('h-full rounded-full', corBarraRegra(atingiu, pago))}
+                                className={cn('h-full rounded-full', COR_BARRA_REGRA)}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
