@@ -12,10 +12,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from '@/components/ui/sheet'
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft } from 'lucide-react'
+import {
+  Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
 import { desenharPoster, landingUrl, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
@@ -26,6 +31,7 @@ interface Garcom {
   id: number
   nome_garcon: string
   ativo: boolean
+  telefone: string | null
   /** regra.id -> data em que o bônus daquela regra foi marcado como pago. */
   bonus_pagamentos: Record<string, string>
 }
@@ -73,6 +79,25 @@ function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
   return addMonths(inicio, 1)
 }
 
+/** Resumo de uma linha na lista da Equipe: total de aberturas e, se houver
+ *  bônus já batido mas ainda não pago, quantos — é o gancho pra abrir o
+ *  painel e resolver. */
+function resumoGarcom(
+  g: Garcom,
+  regrasAtivas: RegraBonificacao[],
+  scansPorRegra: Record<string, Record<number, number>>,
+  totalAberturas: number,
+): string {
+  const base = `${totalAberturas} abertura${totalAberturas === 1 ? '' : 's'}`
+  const pendentes = regrasAtivas.filter((r) => {
+    const scans = scansPorRegra[r.id]?.[g.id] ?? 0
+    const pagoEm = g.bonus_pagamentos[r.id]
+    const pago = !!(pagoEm && r.periodo_inicio && pagoEm >= r.periodo_inicio)
+    return scans >= r.meta_escaneamentos && !pago
+  }).length
+  return pendentes > 0 ? `${base} · ${pendentes} bônus pendente${pendentes > 1 ? 's' : ''}` : base
+}
+
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 function gerarSlug(n = 8) {
   let s = ''
@@ -95,13 +120,21 @@ export default function Garcons() {
   const [posterTema, setPosterTema] = useState('classico')
   const [posterMsg, setPosterMsg] = useState('')
   const [loading, setLoading] = useState(true)
-  const [novo, setNovo] = useState('')
-  const [saving, setSaving] = useState(false)
   const [baixando, setBaixando] = useState(false)
-  /** Garçom aberto no dialog pra renomear (null = fechado). */
-  const [editando, setEditando] = useState<Garcom | null>(null)
-  const [editNome, setEditNome] = useState('')
-  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
+
+  // Criar garçom — popup próprio, aberto por um botão.
+  const [criarAberto, setCriarAberto] = useState(false)
+  const [novoNome, setNovoNome] = useState('')
+  const [novoTelefone, setNovoTelefone] = useState('')
+  const [criando, setCriando] = useState(false)
+
+  // Painel de detalhes — guarda só o id (não o objeto) pra nunca ficar com
+  // uma cópia desatualizada depois de salvar; `garcomAtual` é derivado toda
+  // renderização a partir da lista viva.
+  const [detalheId, setDetalheId] = useState<number | null>(null)
+  const [nomeForm, setNomeForm] = useState('')
+  const [telefoneForm, setTelefoneForm] = useState('')
+  const [salvandoDados, setSalvandoDados] = useState(false)
 
   const [regras, setRegras] = useState<RegraBonificacao[]>([])
   /** Painel de regras aberto? */
@@ -150,7 +183,7 @@ export default function Garcons() {
 
     const { data: gs } = await supabase
       .from('garcons')
-      .select('id, nome_garcon, ativo, bonus_pagamentos')
+      .select('id, nome_garcon, ativo, telefone, bonus_pagamentos')
       .eq('restaurante_id', r.id)
       .order('created_at', { ascending: true })
     setGarcons(((gs ?? []) as any[]).map((g) => ({ ...g, bonus_pagamentos: g.bonus_pagamentos ?? {} })) as Garcom[])
@@ -201,6 +234,19 @@ export default function Garcons() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  const garcomAtual = garcons.find((g) => g.id === detalheId) ?? null
+
+  // Semeia o formulário do painel toda vez que ABRE um garçom diferente —
+  // depende só do id (não do objeto), senão um `setGarcons` depois de salvar
+  // (que troca a referência) reexecutaria isto e apagaria o que a pessoa
+  // ainda estivesse digitando.
+  useEffect(() => {
+    if (!detalheId) return
+    const g = garcons.find((x) => x.id === detalheId)
+    if (g) { setNomeForm(g.nome_garcon); setTelefoneForm(g.telefone ?? '') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detalheId])
+
   // Cria (se necessário) o QR daquele garçom e retorna o slug
   const ensureQr = async (garcomId: number): Promise<string> => {
     if (qrs[garcomId]) return qrs[garcomId].slug
@@ -214,46 +260,48 @@ export default function Garcons() {
   }
 
   const adicionar = async () => {
-    const nome = novo.trim()
+    const nome = novoNome.trim()
     if (!nome || !restauranteId) return
-    setSaving(true)
+    setCriando(true)
     try {
       const { data, error } = await supabase
         .from('garcons')
-        .insert({ nome_garcon: nome, restaurante_id: restauranteId, ativo: true })
-        .select('id, nome_garcon, ativo, bonus_pagamentos')
+        .insert({
+          nome_garcon: nome, telefone: novoTelefone.trim() || null, restaurante_id: restauranteId, ativo: true,
+        })
+        .select('id, nome_garcon, ativo, telefone, bonus_pagamentos')
         .single()
       if (error) throw error
       setGarcons((p) => [...p, { ...(data as any), bonus_pagamentos: (data as any).bonus_pagamentos ?? {} }])
-      setNovo('')
+      setNovoNome('')
+      setNovoTelefone('')
+      setCriarAberto(false)
+      toast.success('Garçom adicionado.')
     } catch (e: any) {
       toast.error('Erro ao adicionar', { description: e.message })
     } finally {
-      setSaving(false)
+      setCriando(false)
     }
   }
 
-  const abrirEdicao = (g: Garcom) => {
-    setEditando(g)
-    setEditNome(g.nome_garcon)
-  }
-
-  const salvarEdicao = async () => {
-    const nome = editNome.trim()
-    if (!nome || !editando) return
-    setSalvandoEdicao(true)
+  const salvarDados = async () => {
+    if (!garcomAtual) return
+    const nome = nomeForm.trim()
+    if (!nome) return
+    setSalvandoDados(true)
     try {
+      const telefone = telefoneForm.trim() || null
       const { error } = await supabase
         .from('garcons')
-        .update({ nome_garcon: nome })
-        .eq('id', editando.id)
+        .update({ nome_garcon: nome, telefone })
+        .eq('id', garcomAtual.id)
       if (error) throw error
-      setGarcons((p) => p.map((g) => (g.id === editando.id ? { ...g, nome_garcon: nome } : g)))
-      setEditando(null)
+      setGarcons((p) => p.map((g) => (g.id === garcomAtual.id ? { ...g, nome_garcon: nome, telefone } : g)))
+      toast.success('Dados salvos.')
     } catch (e: any) {
       toast.error('Erro ao salvar', { description: e.message })
     } finally {
-      setSalvandoEdicao(false)
+      setSalvandoDados(false)
     }
   }
 
@@ -261,7 +309,7 @@ export default function Garcons() {
     try {
       await supabase.from('garcons').delete().eq('id', id)
       setGarcons((p) => p.filter((g) => g.id !== id))
-      if (editando?.id === id) setEditando(null)
+      if (detalheId === id) setDetalheId(null)
     } catch {
       toast.error('Erro ao remover garçom')
     }
@@ -376,9 +424,12 @@ export default function Garcons() {
   }
 
   const ranking = [...garcons].sort((a, b) => (qrs[b.id]?.total_scans ?? 0) - (qrs[a.id]?.total_scans ?? 0))
-  const temAberturas = ranking.some((g) => (qrs[g.id]?.total_scans ?? 0) > 0)
+  const maiorScans = ranking.length ? qrs[ranking[0].id]?.total_scans ?? 0 : 0
+  const temAberturas = maiorScans > 0
   const medalha = ['🥇', '🥈', '🥉']
   const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
+  const dadosMudaram = !!garcomAtual
+    && (nomeForm.trim() !== garcomAtual.nome_garcon || telefoneForm.trim() !== (garcomAtual.telefone ?? ''))
 
   if (loading) {
     return (
@@ -392,40 +443,63 @@ export default function Garcons() {
     <div className="flex-1">
       <Tabs defaultValue="ranking" className="w-full">
         <TabsList className="mb-6">
-          <TabsTrigger value="ranking">Ranking de aberturas do QR</TabsTrigger>
+          <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="equipe">Equipe</TabsTrigger>
         </TabsList>
 
         {/* Ranking */}
         <TabsContent value="ranking" className="mt-0">
           <Card>
-            <CardContent className="p-2">
+            <CardContent className="p-5 sm:p-6">
               {ranking.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-12 text-center">Nenhum garçom cadastrado ainda.</p>
+                <p className="py-12 text-center text-sm text-muted-foreground">Nenhum garçom cadastrado ainda.</p>
               ) : !temAberturas ? (
-                <p className="text-sm text-muted-foreground py-12 text-center">
+                <p className="py-12 text-center text-sm text-muted-foreground">
                   Ainda não há aberturas registradas. Baixe os QR Codes na aba <b>Equipe</b> e distribua.
                 </p>
               ) : (
-                <ul className="divide-y divide-border">
-                  {ranking.map((g, i) => {
-                    const scans = qrs[g.id]?.total_scans ?? 0
-                    return (
-                      <li key={g.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-7 text-center text-base font-bold text-muted-foreground">
-                            {i < 3 ? medalha[i] : `${i + 1}º`}
+                <>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    Quem mais fez os clientes escanearem o QR Code.
+                  </p>
+                  <ul className="space-y-1">
+                    {ranking.map((g, i) => {
+                      const scans = qrs[g.id]?.total_scans ?? 0
+                      const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
+                      const cor = corAvatar(g.nome_garcon)
+                      return (
+                        <li
+                          key={g.id}
+                          className={cn('flex items-center gap-3 rounded-lg px-3 py-3', i === 0 && 'bg-amber-50/70')}
+                        >
+                          <span className="w-6 shrink-0 text-center text-sm font-bold text-muted-foreground">
+                            {i < 3 ? medalha[i] : i + 1}
                           </span>
-                          <span className="font-medium truncate">{g.nome_garcon}</span>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <span className="text-lg font-bold text-emerald-600">{scans}</span>
-                          <span className="text-xs text-muted-foreground ml-1">aberturas</span>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
+                          <span
+                            className={cn(
+                              'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                              cor.bg, cor.text,
+                            )}
+                          >
+                            {getIniciais(g.nome_garcon)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="truncate text-sm font-medium text-gray-900">{g.nome_garcon}</span>
+                              <span className="shrink-0 text-sm font-bold text-gray-900">
+                                {scans}
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">aberturas</span>
+                              </span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
               )}
             </CardContent>
           </Card>
@@ -434,16 +508,8 @@ export default function Garcons() {
         {/* Equipe */}
         <TabsContent value="equipe" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={novo}
-              onChange={(e) => setNovo(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }}
-              placeholder="Nome do garçom..."
-              className="max-w-xs"
-            />
-            <Button onClick={adicionar} disabled={saving || !novo.trim()}>
-              {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-              Adicionar
+            <Button onClick={() => setCriarAberto(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
             </Button>
             <div className="flex-1" />
             <Button variant="outline" onClick={() => setRegrasAbertas(true)}>
@@ -460,7 +526,7 @@ export default function Garcons() {
 
           {garcons.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Nenhum garçom cadastrado. Adicione o primeiro acima.
+              Nenhum garçom cadastrado. Clique em "Novo garçom" acima.
             </CardContent></Card>
           ) : (
             <Card>
@@ -468,118 +534,30 @@ export default function Garcons() {
                 <ul className="divide-y divide-border">
                   {garcons.map((g) => {
                     const cor = corAvatar(g.nome_garcon)
+                    const total = qrs[g.id]?.total_scans ?? 0
                     return (
-                      <li key={g.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex min-w-0 flex-1 items-start gap-3">
-                          <button
-                            type="button"
-                            onClick={() => abrirEdicao(g)}
-                            title="Renomear"
+                      <li key={g.id}>
+                        <button
+                          type="button"
+                          onClick={() => setDetalheId(g.id)}
+                          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50"
+                        >
+                          <span
                             className={cn(
                               'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
                               cor.bg, cor.text,
                             )}
                           >
                             {getIniciais(g.nome_garcon)}
-                          </button>
+                          </span>
                           <div className="min-w-0 flex-1">
-                            <button
-                              type="button"
-                              onClick={() => abrirEdicao(g)}
-                              className="text-left text-sm font-semibold text-gray-900 hover:underline"
-                            >
-                              {g.nome_garcon}
-                            </button>
-
-                            {regrasAtivas.length === 0 ? (
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {qrs[g.id]?.total_scans ?? 0} aberturas
-                              </p>
-                            ) : (
-                              <div className="mt-1.5 space-y-2">
-                                {regrasAtivas.map((regra) => {
-                                  const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
-                                  const meta = regra.meta_escaneamentos
-                                  const pct = Math.min(100, Math.round((scans / meta) * 100))
-                                  const atingiu = scans >= meta
-                                  const pagoEm = g.bonus_pagamentos[regra.id]
-                                  const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
-
-                                  return (
-                                    <div key={regra.id}>
-                                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                                        <p className="text-xs text-gray-500">
-                                          <span className="font-medium text-gray-700">{rotuloRegra(regra)}</span>
-                                          {' — '}
-                                          {scans}/{meta}
-                                          {atingiu
-                                            ? pago
-                                              ? `, pago${pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}`
-                                              : `, meta batida${regra.premio ? ` (${regra.premio})` : ''}`
-                                            : ` (faltam ${meta - scans})`}
-                                        </p>
-                                        {atingiu && !pago && (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-6 px-2 text-[11px]"
-                                            disabled={pagando === `${g.id}:${regra.id}`}
-                                            onClick={() => pagarBonus(g, regra)}
-                                          >
-                                            {pagando === `${g.id}:${regra.id}`
-                                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                              : <Check className="h-3 w-3 mr-1" />}
-                                            Marcar como pago
-                                          </Button>
-                                        )}
-                                      </div>
-                                      <div className="mt-1 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-gray-100">
-                                        <div
-                                          className={cn('h-full rounded-full', atingiu ? 'bg-emerald-500' : 'bg-gray-400')}
-                                          style={{ width: `${pct}%` }}
-                                        />
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
+                            <p className="truncate text-sm font-semibold text-gray-900">{g.nome_garcon}</p>
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {resumoGarcom(g, regrasAtivas, scansPorRegra, total)}
+                            </p>
                           </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-start">
-                          <Button variant="outline" size="sm" onClick={() => baixarPng(g)}>
-                            <Download className="h-3.5 w-3.5 mr-1" /> PNG
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost" size="icon"
-                                className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                                title="Excluir garçom"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir {g.nome_garcon}?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  O QR Code dele sai junto. Não dá para desfazer.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => remover(g.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
+                        </button>
                       </li>
                     )
                   })}
@@ -590,31 +568,199 @@ export default function Garcons() {
         </TabsContent>
       </Tabs>
 
-      {/* Renomear garçom — abre ao clicar no avatar ou no nome */}
-      <Dialog open={!!editando} onOpenChange={(open) => !open && setEditando(null)}>
+      {/* Novo garçom */}
+      <Dialog open={criarAberto} onOpenChange={(open) => { setCriarAberto(open); if (!open) { setNovoNome(''); setNovoTelefone('') } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Renomear Garçom</DialogTitle>
+            <DialogTitle>Novo garçom</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="editar-garcom">Nome</Label>
-            <Input
-              id="editar-garcom"
-              autoFocus
-              value={editNome}
-              onChange={(e) => setEditNome(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') salvarEdicao() }}
-            />
+          <div className="grid gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="novo-nome">Nome</Label>
+              <Input
+                id="novo-nome"
+                autoFocus
+                value={novoNome}
+                onChange={(e) => setNovoNome(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }}
+                placeholder="Nome do garçom"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="novo-telefone">Telefone (opcional)</Label>
+              <Input
+                id="novo-telefone"
+                value={novoTelefone}
+                onChange={(e) => setNovoTelefone(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }}
+                placeholder="(11) 99999-9999"
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
-            <Button onClick={salvarEdicao} disabled={salvandoEdicao || !editNome.trim()}>
-              {salvandoEdicao && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Salvar
+            <Button variant="outline" onClick={() => setCriarAberto(false)}>Cancelar</Button>
+            <Button onClick={adicionar} disabled={criando || !novoNome.trim()}>
+              {criando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Detalhes do garçom — abre ao clicar no card, na lateral direita */}
+      <Sheet open={!!garcomAtual} onOpenChange={(open) => { if (!open) setDetalheId(null) }} modal={false}>
+        <SheetContent
+          semOverlay
+          className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          {garcomAtual && (
+            <>
+              <SheetHeader className="p-5 border-b bg-white shrink-0 text-left">
+                <div className="flex items-center gap-3 pr-8">
+                  <span
+                    className={cn(
+                      'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
+                      corAvatar(garcomAtual.nome_garcon).bg, corAvatar(garcomAtual.nome_garcon).text,
+                    )}
+                  >
+                    {getIniciais(garcomAtual.nome_garcon)}
+                  </span>
+                  <div className="min-w-0">
+                    <SheetTitle className="truncate text-lg font-bold leading-snug">
+                      {garcomAtual.nome_garcon}
+                    </SheetTitle>
+                    <SheetDescription className="sr-only">Detalhes do garçom</SheetDescription>
+                  </div>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto px-5 pb-5 pt-5 space-y-6">
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Dados</p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="det-nome">Nome</Label>
+                    <Input id="det-nome" value={nomeForm} onChange={(e) => setNomeForm(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="det-telefone">Telefone</Label>
+                    <Input
+                      id="det-telefone"
+                      value={telefoneForm}
+                      onChange={(e) => setTelefoneForm(e.target.value)}
+                      placeholder="(11) 99999-9999"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={salvarDados}
+                    disabled={salvandoDados || !nomeForm.trim() || !dadosMudaram}
+                  >
+                    {salvandoDados && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                    Salvar dados
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Bonificação</p>
+                  {regrasAtivas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma regra ativa. Configure em "Bonificação", na tela de Equipe.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {regrasAtivas.map((regra) => {
+                        const scans = scansPorRegra[regra.id]?.[garcomAtual.id] ?? 0
+                        const meta = regra.meta_escaneamentos
+                        const pct = Math.min(100, Math.round((scans / meta) * 100))
+                        const atingiu = scans >= meta
+                        const pagoEm = garcomAtual.bonus_pagamentos[regra.id]
+                        const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
+                        const chave = `${garcomAtual.id}:${regra.id}`
+
+                        return (
+                          <div key={regra.id}>
+                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                              <p className="text-xs text-gray-500">
+                                <span className="font-medium text-gray-700">{rotuloRegra(regra)}</span>
+                                {' — '}
+                                {scans}/{meta}
+                                {atingiu
+                                  ? pago
+                                    ? `, pago${pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}`
+                                    : `, meta batida${regra.premio ? ` (${regra.premio})` : ''}`
+                                  : ` (faltam ${meta - scans})`}
+                              </p>
+                              {atingiu && !pago && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[11px]"
+                                  disabled={pagando === chave}
+                                  onClick={() => pagarBonus(garcomAtual, regra)}
+                                >
+                                  {pagando === chave
+                                    ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                    : <Check className="h-3 w-3 mr-1" />}
+                                  Marcar como pago
+                                </Button>
+                              )}
+                            </div>
+                            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                              <div
+                                className={cn('h-full rounded-full', atingiu ? 'bg-emerald-500' : 'bg-gray-400')}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">QR Code</p>
+                  <p className="text-sm text-gray-600">
+                    {qrs[garcomAtual.id]?.total_scans ?? 0} aberturas no total
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => baixarPng(garcomAtual)}>
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar QR Code (PNG)
+                  </Button>
+                </div>
+
+                <div className="border-t pt-4">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="px-0 text-red-600 hover:bg-transparent hover:text-red-700">
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Excluir garçom
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O QR Code dele sai junto. Não dá para desfazer.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => remover(garcomAtual.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Regras de bonificação — lista, ou o formulário de uma regra */}
       <Dialog

@@ -950,6 +950,7 @@ export type Database = {
           id: number
           nome_garcon: string | null
           restaurante_id: number | null
+          telefone: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -958,6 +959,7 @@ export type Database = {
           id?: number
           nome_garcon?: string | null
           restaurante_id?: number | null
+          telefone?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -966,6 +968,7 @@ export type Database = {
           id?: number
           nome_garcon?: string | null
           restaurante_id?: number | null
+          telefone?: string | null
         }
         Relationships: []
       }
