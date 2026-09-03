@@ -507,18 +507,33 @@ export default function Garcons() {
         {/* Equipe */}
         <TabsContent value="equipe" className="mt-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={abrirCriar}>
+            <Button onClick={abrirCriar} className="rounded-full">
               <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
             </Button>
             <div className="flex-1" />
-            <Button variant="outline" onClick={() => setRegrasAbertas(true)}>
-              <Settings2 className="h-4 w-4 mr-1.5" />
-              Bonificação{regrasAtivas.length > 0 ? ` (${regrasAtivas.length})` : ''}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Bonificação"
+                  onClick={() => setRegrasAbertas(true)}
+                  className="relative h-9 w-9"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  {regrasAtivas.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                      {regrasAtivas.length}
+                    </span>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Bonificação</TooltipContent>
+            </Tooltip>
             {garcons.length > 0 && (
-              <Button variant="outline" onClick={baixarPdf} disabled={baixando}>
-                {baixando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileDown className="h-4 w-4 mr-1" />}
-                PDF de todos
+              <Button variant="primario" size="sm" onClick={baixarPdf} disabled={baixando}>
+                {baixando ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileDown className="h-4 w-4 mr-1.5" />}
+                Baixar QRCodes
               </Button>
             )}
           </div>
@@ -572,11 +587,8 @@ export default function Garcons() {
                                         <span>{scans} de {meta} feitos</span>
                                         <span>{pago ? 'pago' : atingiu ? 'meta batida' : `faltam ${falta}`}</span>
                                       </div>
-                                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                                        <div
-                                          className={cn('h-full rounded-full', COR_BARRA_REGRA)}
-                                          style={{ width: `${pct}%` }}
-                                        />
+                                      <div className="h-3 w-full overflow-hidden bg-gray-200">
+                                        <div className={cn('h-full', COR_BARRA_REGRA)} style={{ width: `${pct}%` }} />
                                       </div>
                                     </div>
                                   )
@@ -744,11 +756,8 @@ export default function Garcons() {
                                     : `faltam ${meta - scans}`}
                               </span>
                             </div>
-                            <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                              <div
-                                className={cn('h-full rounded-full', COR_BARRA_REGRA)}
-                                style={{ width: `${pct}%` }}
-                              />
+                            <div className="mt-1.5 h-3 w-full overflow-hidden bg-gray-200">
+                              <div className={cn('h-full', COR_BARRA_REGRA)} style={{ width: `${pct}%` }} />
                             </div>
                           </div>
                         )
@@ -761,7 +770,7 @@ export default function Garcons() {
                     editar/excluir como ícones à direita (`ml-auto`), sem um
                     rodapé próprio só pra eles. */}
                 <div className="flex items-center gap-2 border-t pt-4">
-                  <Button variant="outline" size="sm" onClick={() => baixarPng(garcomAtual)}>
+                  <Button variant="primario" size="sm" onClick={() => baixarPng(garcomAtual)}>
                     <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar QR Code (PNG)
                   </Button>
 
