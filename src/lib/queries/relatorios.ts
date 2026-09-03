@@ -133,10 +133,22 @@ export async function buscarEstatisticasRelatorio(
     if (!porCategoria.has(c)) porCategoria.set(c, [])
     porCategoria.get(c)!.push(f)
   }
-  // Todas as categorias (para exibição) — mesmo índice 0-100 usado no resto do relatório
+  // Todas as categorias (para exibição) — mesmo índice 0-100 usado no resto do relatório.
+  //
+  // Por SATISFAÇÃO, da pior para a melhor — não por número de avaliações.
+  // A seção se chama "onde o restaurante vai melhor e pior", e ordenar por
+  // volume desalinhava exatamente essa promessa: no relatório do Camelo,
+  // "Comida" (49 de satisfação) aparecia no topo só por ter mais avaliações,
+  // enquanto "Música/Som" (100, o melhor resultado) ficava perto do fim,
+  // entre várias categorias zeradas — no gráfico de barras isso lia como uma
+  // ordem aleatória, sem crescer nem cair.
+  //
+  // Esta é a MESMA fonte que alimenta a tela, o CSV e o PDF: ordenar aqui uma
+  // vez evita os três discordarem entre si (a tela já reordenava por conta
+  // própria antes de desenhar; CSV e PDF usavam a ordem crua, por volume).
   const listaCategorias = [...porCategoria.entries()]
     .map(([nome, arr]) => ({ nome, total: arr.length, satisfacao: calcSatisfacao(arr)! }))
-    .sort((a, b) => b.total - a.total)
+    .sort((a, b) => a.satisfacao - b.satisfacao)
   // Melhor/pior só com amostra mínima, para não eleger categoria de 1 avaliação
   const cats: Recorte[] = listaCategorias
     .filter((c) => c.total >= MIN_AMOSTRA)

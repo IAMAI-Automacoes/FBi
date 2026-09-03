@@ -183,7 +183,7 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
 
     // ── Categorias ───────────────────────────────────────────────────────
     ['SATISFAÇÃO POR CATEGORIA'],
-    ['Onde o restaurante vai melhor e pior. Ordenado por número de avaliações.'],
+    ['Onde o restaurante vai melhor e pior. Da satisfação mais baixa para a mais alta.'],
     ['Categoria', 'Avaliações', '% do total', 'Satisfação (0-100)'],
     ...(stats?.porCategoria ?? []).map((c: { nome: string; total: number; satisfacao: number }) => [
       c.nome,
@@ -305,8 +305,13 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
   return linhas
 }
 
-/** Nome legível do status da ação (o banco guarda em caixa alta com underscore). */
-function situacaoLegivel(status: string): string {
+/**
+ * Nome legível do status da ação (o banco guarda em caixa alta com
+ * underscore). Exportada porque o PDF usa a mesma tradução — os dois
+ * arquivos mostram "Ações em andamento" e não podem chamar o mesmo status
+ * de duas formas diferentes.
+ */
+export function situacaoLegivel(status: string): string {
   const mapa: Record<string, string> = {
     SUGERIDA: 'Sugerida pela IA',
     PENDENTE: 'A fazer',

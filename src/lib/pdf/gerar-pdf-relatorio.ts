@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AnaliseRelatorio } from '@/lib/queries/relatorios'
+import { situacaoLegivel } from '@/lib/relatorio-csv'
 import {
   barraEmpilhada,
   barrasHorizontais,
@@ -360,9 +361,9 @@ export async function gerarPdfRelatorio(
   // ── O que os clientes mais comentam ──────────────────────────────────────
   const temas = dadosRelatorio.temas || []
   if (temas.length > 0) {
+    const doTipo = (tipo: string) => temas.filter((t: any) => (t.tipo ?? '').toLowerCase() === tipo)
     const porTipo = (tipo: string) =>
-      temas
-        .filter((t: any) => (t.tipo ?? '').toLowerCase() === tipo)
+      doTipo(tipo)
         .slice(0, 8)
         .map((t: any) => ({
           rotulo: limpar(t.rotulo),
@@ -370,28 +371,41 @@ export async function gerarPdfRelatorio(
           cor: tipo === 'elogio' ? G_VERDE : tipo === 'neutro' ? G_CINZA : G_VERMELHO,
         }))
 
+    const totalReclamacoes = doTipo('reclamacao').length
+    const totalElogios = doTipo('elogio').length
     const reclamacoes = porTipo('reclamacao')
     const elogios = porTipo('elogio')
 
-    // Os dois lados sempre, com teto SEPARADO para cada um.
+    // Os dois lados sempre, com teto SEPARADO para cada um (8 por lista).
     //
     // Antes era uma lista só, cortada em 14, com as reclamações na frente — e
     // como elas são a maioria, os elogios eram empurrados para fora: o
     // relatório do Camelo saiu sem UM elogio sequer, sendo que o assunto mais
     // citado do período era "Comida saborosa", com 19 menções. Quem recebia o
     // arquivo lia um restaurante em que nada dá certo.
+    //
+    // Quando a lista de verdade é maior que o teto — o Camelo tem 18
+    // reclamações agrupadas, o PDF só cabe 8 — uma linha avisa que o resto
+    // está na planilha. Sem isto, "8 problemas" e "18 problemas" pareciam a
+    // mesma coisa: nada dizia que a lista foi cortada.
     const notaTemas = 'Assuntos que a IA agrupou a partir do que foi escrito, e quantas vezes cada um apareceu.'
-    const alturaLista = (n: number) => (n > 0 ? 4 + n * (5.4 + 2.6) + 1 : 0)
+    const alturaLista = (n: number, cortado: boolean) =>
+      n > 0 ? 4 + n * (5.4 + 2.6) + 1 + (cortado ? 4 : 0) : 0
     // As DUAS listas entram no mesmo bloco: era aqui que a bagunça aparecia —
     // as reclamações cabiam na página atual, os elogios não, e a lista de
     // elogios nascia sozinha na página seguinte sem repetir do que se tratava.
     blocoUnido(
-      16 + linhasDe(notaTemas, 9) * 4.5 + 2 + alturaLista(reclamacoes.length) + alturaLista(elogios.length) + 2,
+      16 +
+        linhasDe(notaTemas, 9) * 4.5 +
+        2 +
+        alturaLista(reclamacoes.length, totalReclamacoes > 8) +
+        alturaLista(elogios.length, totalElogios > 8) +
+        2,
     )
     secao('O que os clientes mais comentam')
     paragrafo(notaTemas, { tamanho: 9, cor: CINZA, lh: 4.5 })
 
-    const desenharLista = (titulo: string, itens: any[], cor: [number, number, number]) => {
+    const desenharLista = (titulo: string, itens: any[], total: number, cor: [number, number, number]) => {
       if (itens.length === 0) return
       y += 2
       doc.setFontSize(8.5)
@@ -409,11 +423,18 @@ export async function gerarPdfRelatorio(
         sufixo: 'x',
         itens,
       })
+      if (total > itens.length) {
+        doc.setFontSize(7)
+        doc.setFont('helvetica', 'italic')
+        setCor(CINZA)
+        doc.text(`+ ${total - itens.length} outros na planilha (CSV).`, M, y + 2)
+        y += 4
+      }
       y += 1
     }
 
-    desenharLista('O que mais incomodou', reclamacoes, G_VERMELHO)
-    desenharLista('O que mais agradou', elogios, G_VERDE)
+    desenharLista('O que mais incomodou', reclamacoes, totalReclamacoes, G_VERMELHO)
+    desenharLista('O que mais agradou', elogios, totalElogios, G_VERDE)
     y += 2
   }
 
@@ -529,6 +550,44 @@ export async function gerarPdfRelatorio(
       setCor(TINTA)
       doc.text(`-  ${limpar(ins.titulo)} [${limpar(ins.prioridade)}]`, M + 1, y)
       y += 5
+    }
+    y += 2
+  }
+
+  // ── Ações em andamento ────────────────────────────────────────────────────
+  // Faltava no PDF (o CSV já trazia). Sem isto o relatório mostra só o que o
+  // sistema DETECTOU ("Insights do sistema", acima) e nunca o que o
+  // restaurante decidiu FAZER a respeito — metade da história. Não depende
+  // do período: são as ações abertas hoje, não as criadas nesta janela.
+  //
+  // Como pode crescer bastante (o Camelo já tem 14), não entra no
+  // `blocoUnido` — é normal fluir por mais de uma página, igual às citações
+  // logo abaixo; o rótulo "(continuação)" do `espaco()` cobre a quebra.
+  const acoes = dadosRelatorio.acoes || []
+  if (acoes.length > 0) {
+    secao('Ações em andamento')
+    paragrafo(
+      'O que o restaurante decidiu fazer. Não depende do período — são as ações abertas hoje.',
+      { tamanho: 9, cor: CINZA, lh: 4.5 },
+    )
+    for (const a of acoes) {
+      const linhasTitulo = doc.splitTextToSize(limpar(a.titulo_acao || '-'), UTIL - 4)
+      espaco(linhasTitulo.length * 4.4 + 9)
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'bold')
+      setCor(AZUL)
+      doc.text(
+        limpar(
+          `${situacaoLegivel(a.status).toUpperCase()} · ${(a.categoria || 'OUTROS').toUpperCase()} · ${(a.prioridade || '').toUpperCase()}`,
+        ),
+        M + 1,
+        y,
+      )
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      setCor(TINTA)
+      doc.text(linhasTitulo, M + 1, y + 4.4)
+      y += linhasTitulo.length * 4.4 + 6
     }
     y += 2
   }

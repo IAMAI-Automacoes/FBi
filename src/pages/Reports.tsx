@@ -197,10 +197,10 @@ export default function Reports() {
     }
   }
 
-  /** Monta o pacote de dados que alimenta a IA e o PDF. */
+  /** Monta o pacote de dados que alimenta a IA, o PDF e (parcialmente) o CSV. */
   const montarDados = async () => {
     const { currentStart } = getPeriodDates(period)
-    const [fbRes, insRes] = await Promise.all([
+    const [fbRes, insRes, acoesRes] = await Promise.all([
       restauranteId
         ? supabase.from('feedbacks_restaurante')
             .select('categoria, sentimento, texto_original, resumo')
@@ -218,6 +218,18 @@ export default function Reports() {
             .gte('created_at', currentStart.toISOString())
             .order('created_at', { ascending: false }).limit(8)
         : Promise.resolve({ data: [] as any[] }),
+      // Ações abertas — não dependem do período (são o que está sendo feito
+      // HOJE, não o que foi criado nesta janela). Já entravam no CSV; o PDF
+      // não tinha isto e ficava com metade da história: mostrava o que a IA
+      // detectou ("Insights do sistema") sem mostrar o que já está em
+      // andamento por causa disso.
+      restauranteId
+        ? supabase.from('acoes_operacionais')
+            .select('titulo_acao, status, prioridade, categoria')
+            .eq('restaurante_id', restauranteId)
+            .is('arquivada_em', null)
+            .order('ordem', { ascending: true })
+        : Promise.resolve({ data: [] as any[] }),
     ])
     return {
       periodo: PERIOD_LABEL[period],
@@ -232,6 +244,7 @@ export default function Reports() {
       porDiaSemana: stats?.porDiaSemana ?? [],
       porFaixaHorario: stats?.porFaixaHorario ?? [],
       insights: insRes.data || [],
+      acoes: acoesRes.data || [],
       feedbacks: fbRes.data || [],
     }
   }
@@ -398,7 +411,11 @@ function LayoutNovo({
   // Sempre mostra todas as categorias que já têm alguma avaliação no
   // período — sem cortar, sem botão de "ver mais", sem linha inventada
   // pra categoria sem dado nenhum (decisão explícita do Raver).
-  const categoriasOrdenadas = [...(stats.porCategoria || [])].sort((a, b) => a.satisfacao - b.satisfacao)
+  //
+  // A ordenação (pior satisfação primeiro) já vem pronta de
+  // `buscarEstatisticasRelatorio` — é a mesma fonte que alimenta o CSV e o
+  // PDF, para os três nunca mais discordarem sobre a ordem das categorias.
+  const categoriasOrdenadas = stats.porCategoria || []
 
   const elogios = temas.filter((t) => t.tipo === 'elogio').slice(0, 6)
   const criticas = temas.filter((t) => t.tipo === 'reclamacao').slice(0, 6)
