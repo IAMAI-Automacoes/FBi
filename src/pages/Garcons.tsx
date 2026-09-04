@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { addDays, addMonths, format, startOfMonth } from 'date-fns'
+import { addDays, addMonths, format, startOfMonth, startOfWeek, startOfQuarter } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
+import { FiltroPeriodo, type PeriodoPreset, type IntervaloDatas } from '@/components/FiltroPeriodo'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,13 +44,16 @@ interface Garcom {
 }
 interface QrInfo { slug: string; total_scans: number }
 
-type Frequencia = 'semanal' | 'mensal' | 'trimestral'
+type Frequencia = 'semanal' | 'mensal' | 'trimestral' | 'personalizado'
 
 interface RegraBonificacao {
   id: string
   nome: string
   meta_escaneamentos: number
   frequencia: Frequencia
+  /** Só usado quando frequencia === 'personalizado': a cada quantos dias
+   *  o período se renova. */
+  dias_personalizados: number
   premio: string
   renovar_automatico: boolean
   ativa: boolean
@@ -60,22 +65,26 @@ const FREQUENCIA_LABEL: Record<Frequencia, string> = {
   semanal: 'Semanal',
   mensal: 'Mensal',
   trimestral: 'Trimestral',
+  personalizado: 'Período personalizado',
 }
 const FREQUENCIA_CURTA: Record<Frequencia, string> = {
   semanal: 'semana',
   mensal: 'mês',
   trimestral: 'trimestre',
+  personalizado: 'período',
 }
 
 function novaRegraVazia(): RegraBonificacao {
   return {
-    id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal',
+    id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal', dias_personalizados: 15,
     premio: '', renovar_automatico: true, ativa: true, periodo_inicio: null,
   }
 }
 
 function rotuloRegra(r: RegraBonificacao): string {
-  return r.nome.trim() || `${r.meta_escaneamentos} QRs por ${FREQUENCIA_CURTA[r.frequencia]}`
+  if (r.nome.trim()) return r.nome.trim()
+  if (r.frequencia === 'personalizado') return `${r.meta_escaneamentos} QRs a cada ${r.dias_personalizados} dias`
+  return `${r.meta_escaneamentos} QRs por ${FREQUENCIA_CURTA[r.frequencia]}`
 }
 
 /** Rótulo de campo do formulário de regra — mesmo desenho do popup de ação
@@ -92,9 +101,10 @@ function RotuloCampo({
   )
 }
 
-function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
-  if (frequencia === 'semanal') return addDays(inicio, 7)
-  if (frequencia === 'trimestral') return addMonths(inicio, 3)
+function avancarPeriodo(inicio: Date, regra: Pick<RegraBonificacao, 'frequencia' | 'dias_personalizados'>): Date {
+  if (regra.frequencia === 'semanal') return addDays(inicio, 7)
+  if (regra.frequencia === 'trimestral') return addMonths(inicio, 3)
+  if (regra.frequencia === 'personalizado') return addDays(inicio, Math.max(1, regra.dias_personalizados || 1))
   return addMonths(inicio, 1)
 }
 
@@ -129,6 +139,10 @@ function corPorIndice(i: number) {
  *  ouro #D4AF37, prata #C0C0C0, bronze #CD7F32 — as referências hex mais
  *  citadas pra essas cores — com uma faixa bem mais clara (quase branca) no
  *  meio simulando o reflexo. */
+/** Valor do item "sem regra" do filtro do Ranking — o Select do Radix não
+ *  aceita item com value="" (colide com o estado "nada selecionado"). */
+const SEM_REGRA = '__todas__'
+
 const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; gradiente: string; numero: string }> = {
   1: {
     altura: 'h-24',
@@ -151,6 +165,13 @@ const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; gradiente: string; numer
  *  já foi, quantos falta, se já foi pago) já diz o estado; a barra só mostra
  *  o quanto andou. */
 const COR_BARRA_REGRA = 'bg-blue-500'
+
+/** Verde nos toggles de regra ("ativa", "renovar automaticamente") em vez
+ *  do azul padrão do Switch — azul já é o "ligado" de todo o resto da tela
+ *  (barra de progresso, checkbox de seleção); aqui a cor também marca "vale
+ *  dinheiro de verdade", então emerald (o mesmo tom do "meta batida") lê
+ *  melhor como "regra rendendo" do que mais um azul genérico. */
+const CLASSE_SWITCH_REGRA = 'data-[state=checked]:bg-emerald-600'
 
 /** A mesma pílula escura em degradê do botão de "Baixar" de Relatórios —
  *  compartilhada entre o botão normal (dividido, com dropdown) e o "Baixar
@@ -206,14 +227,31 @@ async function posterCanvas(url: string, nome: string, temaId: string, tagline: 
 }
 
 export default function Garcons() {
+  /** Controlada (não `defaultValue`) pra poder trocar de aba pelo código —
+   *  clicar num garçom no Ranking leva pra Equipe com o painel dele aberto. */
+  const [aba, setAba] = useState<'ranking' | 'equipe'>('ranking')
+
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
   const [garcons, setGarcons] = useState<Garcom[]>([])
   const [qrs, setQrs] = useState<Record<number, QrInfo>>({})
+  /** qr_code.id -> garcom.id — precisa sobreviver fora de `carregar()` pra
+   *  alimentar a busca de escaneamentos filtrada por período do Ranking. */
+  const [qrCodeIdParaGarcomState, setQrCodeIdParaGarcomState] = useState<Record<number, number>>({})
   const [posterTema, setPosterTema] = useState('classico')
   const [posterMsg, setPosterMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [baixando, setBaixando] = useState(false)
+
+  // Filtro do Ranking — mesmo componente usado em /feedbacks, ou uma regra
+  // específica (que dispensa o filtro de data: usa o período dela mesma).
+  const [rankingPeriodo, setRankingPeriodo] = useFiltroPersistente<PeriodoPreset>('garcons:ranking-periodo', 'all')
+  const [rankingDatas, setRankingDatas] = useFiltroPersistente<IntervaloDatas | undefined>('garcons:ranking-datas', undefined)
+  const [rankingRegraId, setRankingRegraId] = useFiltroPersistente('garcons:ranking-regra', '')
+  /** Escaneamentos de cada garçom dentro do filtro de data do Ranking — só
+   *  calculado quando o filtro não é "todo o período" (nesse caso o total
+   *  acumulado de `qrs` já serve, sem precisar de outra busca). */
+  const [scansRanking, setScansRanking] = useState<Record<number, number>>({})
 
   // "Baixar só os selecionados": enquanto true, os cards viram checáveis em
   // vez de abrirem o painel de detalhes.
@@ -243,9 +281,13 @@ export default function Garcons() {
   /** scansPorRegra[regraId][garcomId] = escaneamentos DESDE o início do
    *  período atual daquela regra (não o total acumulado). */
   const [scansPorRegra, setScansPorRegra] = useState<Record<string, Record<number, number>>>({})
-  /** Escaneamentos de cada garçom só no mês calendário atual — independente
-   *  de qualquer regra, é só pra dar contexto ao lado do total geral. */
+  /** Escaneamentos de cada garçom nos períodos-padrão do calendário atual
+   *  (semana/mês/trimestre) — independente de qualquer regra, é o que
+   *  aparece em destaque no painel do garçom (mais fácil de olhar do que
+   *  só o total acumulado, que nunca zera). */
+  const [scansEstaSemana, setScansEstaSemana] = useState<Record<number, number>>({})
   const [scansEsteMes, setScansEsteMes] = useState<Record<number, number>>({})
+  const [scansEsteTrimestre, setScansEsteTrimestre] = useState<Record<number, number>>({})
   const [pagando, setPagando] = useState('')
 
   const carregar = useCallback(async () => {
@@ -271,10 +313,10 @@ export default function Garcons() {
     listaRegras = listaRegras.map((regra) => {
       if (!regra.periodo_inicio || !regra.renovar_automatico) return regra
       let inicio = new Date(regra.periodo_inicio)
-      let fim = avancarPeriodo(inicio, regra.frequencia)
+      let fim = avancarPeriodo(inicio, regra)
       while (fim.getTime() <= Date.now()) {
         inicio = fim
-        fim = avancarPeriodo(inicio, regra.frequencia)
+        fim = avancarPeriodo(inicio, regra)
         mudou = true
       }
       return mudou ? { ...regra, periodo_inicio: inicio.toISOString() } : regra
@@ -302,17 +344,20 @@ export default function Garcons() {
       qrCodeIdParaGarcom[q.id] = q.garcom_id
     }
     setQrs(map)
+    setQrCodeIdParaGarcomState(qrCodeIdParaGarcom)
 
-    // Uma busca só de qr_scans cobre tanto o progresso de cada regra quanto
-    // "aberturas neste mês" (que não depende de regra nenhuma) — o início
-    // mais antigo entre os dois é até onde precisa voltar.
+    // Uma busca só de qr_scans cobre o progresso de cada regra e os três
+    // períodos-padrão (semana/mês/trimestre) — o início mais antigo entre
+    // todos eles é até onde precisa voltar.
     const idsQr = Object.keys(qrCodeIdParaGarcom).map(Number)
+    const inicioSemana = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
     const inicioMes = startOfMonth(new Date()).toISOString()
+    const inicioTrimestre = startOfQuarter(new Date()).toISOString()
     const regrasComPeriodo = listaRegras.filter((reg) => reg.periodo_inicio && reg.meta_escaneamentos > 0)
     if (idsQr.length > 0) {
       const desde = regrasComPeriodo.reduce(
         (min, reg) => (reg.periodo_inicio! < min ? reg.periodo_inicio! : min),
-        inicioMes,
+        inicioTrimestre,
       )
       const { data: scans } = await supabase
         .from('qr_scans')
@@ -332,22 +377,85 @@ export default function Garcons() {
       }
       setScansPorRegra(porRegra)
 
-      const porMes: Record<number, number> = {}
-      for (const s of scans ?? []) {
-        if (antesDe(s.scanned_at, inicioMes)) continue
-        const gId = qrCodeIdParaGarcom[s.qr_code_id]
-        if (gId) porMes[gId] = (porMes[gId] ?? 0) + 1
+      // Mesma varredura, três contadores — cada um só soma o que está
+      // dentro do próprio início.
+      const contarDesde = (inicio: string) => {
+        const porGarcom: Record<number, number> = {}
+        for (const s of scans ?? []) {
+          if (antesDe(s.scanned_at, inicio)) continue
+          const gId = qrCodeIdParaGarcom[s.qr_code_id]
+          if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
+        }
+        return porGarcom
       }
-      setScansEsteMes(porMes)
+      setScansEstaSemana(contarDesde(inicioSemana))
+      setScansEsteMes(contarDesde(inicioMes))
+      setScansEsteTrimestre(contarDesde(inicioTrimestre))
     } else {
       setScansPorRegra({})
+      setScansEstaSemana({})
       setScansEsteMes({})
+      setScansEsteTrimestre({})
     }
 
     setLoading(false)
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // Escaneamentos do Ranking dentro do filtro escolhido. Regra selecionada
+  // dispensa a busca (reaproveita `scansPorRegra`, já calculado); "todo o
+  // período" sem regra também dispensa (o total de `qrs` já é isso). Só um
+  // recorte de data de verdade precisa buscar de novo.
+  useEffect(() => {
+    if (rankingRegraId) return
+    if (rankingPeriodo === 'all' && !rankingDatas) return
+    const idsQr = Object.keys(qrCodeIdParaGarcomState).map(Number)
+    if (idsQr.length === 0) { setScansRanking({}); return }
+
+    let cancelado = false
+    ;(async () => {
+      let consulta = supabase.from('qr_scans').select('qr_code_id, scanned_at').in('qr_code_id', idsQr)
+      if (rankingDatas) {
+        const inicioDoDia = new Date(rankingDatas.from)
+        inicioDoDia.setHours(0, 0, 0, 0)
+        consulta = consulta.gte('scanned_at', inicioDoDia.toISOString())
+        if (rankingDatas.to) {
+          const fimDoDia = new Date(rankingDatas.to)
+          fimDoDia.setHours(23, 59, 59, 999)
+          consulta = consulta.lte('scanned_at', fimDoDia.toISOString())
+        }
+      } else {
+        const dias = rankingPeriodo === '7d' ? 7 : rankingPeriodo === '30d' ? 30 : 90
+        consulta = consulta.gte('scanned_at', addDays(new Date(), -dias).toISOString())
+      }
+      const { data: scans } = await consulta
+      if (cancelado) return
+      const porGarcom: Record<number, number> = {}
+      for (const s of scans ?? []) {
+        const gId = qrCodeIdParaGarcomState[s.qr_code_id]
+        if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
+      }
+      setScansRanking(porGarcom)
+    })()
+    return () => { cancelado = true }
+  }, [rankingPeriodo, rankingDatas, rankingRegraId, qrCodeIdParaGarcomState])
+
+  /** Quantos escaneamentos contam pro Ranking, respeitando o filtro atual
+   *  (regra selecionada > recorte de data > total acumulado). */
+  const scansParaRanking = (garcomId: number): number => {
+    if (rankingRegraId) return scansPorRegra[rankingRegraId]?.[garcomId] ?? 0
+    if (rankingPeriodo === 'all' && !rankingDatas) return qrs[garcomId]?.total_scans ?? 0
+    return scansRanking[garcomId] ?? 0
+  }
+
+  /** Clicar num garçom no Ranking leva pra Equipe com o painel dele já
+   *  aberto — ver a colocação e faltar um clique pra agir é a fricção que
+   *  esse atalho tira. */
+  const abrirDetalheDoRanking = (garcomId: number) => {
+    setAba('equipe')
+    setDetalheId(garcomId)
+  }
 
   const garcomAtual = garcons.find((g) => g.id === detalheId) ?? null
 
@@ -525,8 +633,8 @@ export default function Garcons() {
     }
   }
 
-  const ranking = [...garcons].sort((a, b) => (qrs[b.id]?.total_scans ?? 0) - (qrs[a.id]?.total_scans ?? 0))
-  const maiorScans = ranking.length ? qrs[ranking[0].id]?.total_scans ?? 0 : 0
+  const ranking = [...garcons].sort((a, b) => scansParaRanking(b.id) - scansParaRanking(a.id))
+  const maiorScans = ranking.length ? scansParaRanking(ranking[0].id) : 0
   const temAberturas = maiorScans > 0
   const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
 
@@ -540,7 +648,7 @@ export default function Garcons() {
 
   return (
     <div className="flex-1">
-      <Tabs defaultValue="ranking" className="w-full">
+      <Tabs value={aba} onValueChange={(v) => setAba(v as 'ranking' | 'equipe')} className="w-full">
         <TabsList className="mb-6">
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="equipe">Equipe</TabsTrigger>
@@ -552,105 +660,156 @@ export default function Garcons() {
             <Card><CardContent className="p-5 sm:p-6">
               <p className="py-12 text-center text-sm text-muted-foreground">Nenhum garçom cadastrado ainda.</p>
             </CardContent></Card>
-          ) : !temAberturas ? (
-            <Card><CardContent className="p-5 sm:p-6">
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                Ainda não há aberturas registradas. Baixe os QR Codes na aba <b>Equipe</b> e distribua.
-              </p>
-            </CardContent></Card>
           ) : (
             <>
-              <Card>
-                <CardContent className="p-3 sm:p-4">
-                  <div className="flex items-end justify-center gap-3 sm:gap-6">
-                    {[1, 0, 2].map((idx) => {
-                      const g = ranking[idx]
-                      if (!g) return null
-                      const posicao = (idx + 1) as 1 | 2 | 3
-                      const scans = qrs[g.id]?.total_scans ?? 0
-                      const cor = corPorIndice(idx)
-                      const config = PODIO_CONFIG[posicao]
-                      return (
-                        <div key={g.id} className="flex flex-col items-center">
-                          <span
-                            className={cn(
-                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                              cor.bg, cor.text,
-                            )}
-                          >
-                            {getIniciais(g.nome_garcon)}
-                          </span>
-                          <p className="mt-1.5 max-w-[92px] truncate text-center text-sm font-semibold text-gray-900">
-                            {g.nome_garcon}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {scans} abertura{scans === 1 ? '' : 's'}
-                          </p>
-                          <div
-                            className={cn('mt-1.5 w-20 rounded-t-lg', config.altura)}
-                            style={{
-                              background: config.gradiente,
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.5)',
-                              borderTop: '2px solid rgba(255,255,255,0.6)',
-                            }}
-                          >
-                            <div
-                              className="flex h-8 items-center justify-center text-lg font-bold"
-                              style={{ color: config.numero, textShadow: '0 1px 0 rgba(255,255,255,0.5), 0 -1px 0 rgba(0,0,0,0.25)' }}
-                            >
-                              {posicao}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Mesmo filtro de período de /feedbacks — e, além dele, uma
+                  regra específica: escolher uma troca o recorte de data pelo
+                  período dela mesma (afinal a regra já TEM o próprio
+                  período), então os dois filtros se excluem. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={rankingRegraId || SEM_REGRA}
+                  onValueChange={(v) => setRankingRegraId(v === SEM_REGRA ? '' : v)}
+                >
+                  <SelectTrigger className="h-10 w-[220px] border-gray-200 bg-white">
+                    <SelectValue placeholder="Todas as aberturas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SEM_REGRA}>Todas as aberturas</SelectItem>
+                    {regras.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{rotuloRegra(r)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!rankingRegraId && (
+                  <FiltroPeriodo
+                    periodo={rankingPeriodo}
+                    datas={rankingDatas}
+                    onPeriodo={setRankingPeriodo}
+                    onDatas={setRankingDatas}
+                  />
+                )}
+              </div>
 
-              {/* Do 4º em diante é só lista — o pódio já contou a história de
-                  quem chegou na frente; daqui pra baixo o que importa é achar
-                  o nome, e a colocação é só o número mesmo. */}
-              {ranking.length > 3 && (
-                <Card>
-                  <CardContent className="p-2">
-                    <ul className="divide-y divide-border">
-                      {ranking.slice(3).map((g, i) => {
-                        const posicao = i + 4
-                        const scans = qrs[g.id]?.total_scans ?? 0
-                        const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
-                        const cor = corPorIndice(posicao - 1)
-                        return (
-                          <li key={g.id} className="flex items-center gap-3 px-4 py-3.5">
-                            <span className="w-6 shrink-0 text-center text-sm font-bold text-muted-foreground">
-                              {posicao}
-                            </span>
-                            <span
-                              className={cn(
-                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                                cor.bg, cor.text,
-                              )}
+              {!temAberturas ? (
+                <Card><CardContent className="p-5 sm:p-6">
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    {rankingRegraId || rankingPeriodo !== 'all' || rankingDatas ? (
+                      'Nenhuma abertura nesse filtro.'
+                    ) : (
+                      <>Ainda não há aberturas registradas. Baixe os QR Codes na aba <b>Equipe</b> e distribua.</>
+                    )}
+                  </p>
+                </CardContent></Card>
+              ) : (
+                <>
+                  {/* `w-fit` + `mx-auto`: o card só é largo o quanto o pódio
+                      precisa, não a tela inteira — sobrava muito vazio dos
+                      dois lados quando tinha só 3 pessoas. */}
+                  <Card className="w-fit mx-auto">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex items-end justify-center gap-3 sm:gap-6">
+                        {[1, 0, 2].map((idx) => {
+                          const g = ranking[idx]
+                          if (!g) return null
+                          const posicao = (idx + 1) as 1 | 2 | 3
+                          const scans = scansParaRanking(g.id)
+                          const cor = corPorIndice(idx)
+                          const config = PODIO_CONFIG[posicao]
+                          return (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => abrirDetalheDoRanking(g.id)}
+                              className="flex flex-col items-center rounded-lg p-1 transition-colors hover:bg-gray-50"
                             >
-                              {getIniciais(g.nome_garcon)}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-baseline justify-between gap-2">
-                                <span className="truncate text-sm font-medium text-gray-900">{g.nome_garcon}</span>
-                                <span className="shrink-0 text-sm font-bold text-gray-900">
-                                  {scans}
-                                  <span className="ml-1 text-xs font-normal text-muted-foreground">aberturas</span>
-                                </span>
+                              <span
+                                className={cn(
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                  cor.bg, cor.text,
+                                )}
+                              >
+                                {getIniciais(g.nome_garcon)}
+                              </span>
+                              <p className="mt-1.5 max-w-[92px] truncate text-center text-sm font-semibold text-gray-900">
+                                {g.nome_garcon}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {scans} abertura{scans === 1 ? '' : 's'}
+                              </p>
+                              <div
+                                className={cn('mt-1.5 w-20 rounded-t-lg', config.altura)}
+                                style={{
+                                  background: config.gradiente,
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.5)',
+                                  borderTop: '2px solid rgba(255,255,255,0.6)',
+                                }}
+                              >
+                                <div
+                                  className="flex h-8 items-center justify-center text-lg font-bold"
+                                  style={{ color: config.numero, textShadow: '0 1px 0 rgba(255,255,255,0.5), 0 -1px 0 rgba(0,0,0,0.25)' }}
+                                >
+                                  {posicao}
+                                </div>
                               </div>
-                              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </CardContent>
-                </Card>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Do 4º em diante é só lista — o pódio já contou a história
+                      de quem chegou na frente; daqui pra baixo o que importa é
+                      achar o nome, e a colocação é só o número mesmo. */}
+                  {ranking.length > 3 && (
+                    <Card>
+                      <CardContent className="p-2">
+                        <ul className="divide-y divide-border">
+                          {ranking.slice(3).map((g, i) => {
+                            const posicao = i + 4
+                            const scans = scansParaRanking(g.id)
+                            const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
+                            const cor = corPorIndice(posicao - 1)
+                            return (
+                              <li key={g.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => abrirDetalheDoRanking(g.id)}
+                                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50"
+                                >
+                                  <span className="w-6 shrink-0 text-center text-sm font-bold text-muted-foreground">
+                                    {posicao}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                      cor.bg, cor.text,
+                                    )}
+                                  >
+                                    {getIniciais(g.nome_garcon)}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <span className="truncate text-sm font-medium text-gray-900">{g.nome_garcon}</span>
+                                      <span className="shrink-0 text-sm font-bold text-gray-900">
+                                        {scans}
+                                        <span className="ml-1 text-xs font-normal text-muted-foreground">aberturas</span>
+                                      </span>
+                                    </div>
+                                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
             </>
           )}
@@ -937,16 +1096,30 @@ export default function Garcons() {
 
                 <div>
                   <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Aberturas do QR</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-2xl font-bold text-gray-900">{qrs[garcomAtual.id]?.total_scans ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">no total</p>
+                  {/* Os três períodos-padrão em destaque — são os mesmos que
+                      uma regra de bonificação pode usar (semanal/mensal/
+                      trimestral), então é a pergunta que o dono realmente
+                      faz aqui: "como ele anda NESTE período". O total
+                      acumulado nunca zera e não responde essa pergunta, por
+                      isso vira uma linha pequena embaixo, não a primeira
+                      coisa que se lê. */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
+                      <p className="text-2xl font-bold text-gray-900">{scansEstaSemana[garcomAtual.id] ?? 0}</p>
+                      <p className="text-[11px] text-muted-foreground">esta semana</p>
                     </div>
-                    <div>
+                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
                       <p className="text-2xl font-bold text-gray-900">{scansEsteMes[garcomAtual.id] ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">este mês</p>
+                      <p className="text-[11px] text-muted-foreground">este mês</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
+                      <p className="text-2xl font-bold text-gray-900">{scansEsteTrimestre[garcomAtual.id] ?? 0}</p>
+                      <p className="text-[11px] text-muted-foreground">este trimestre</p>
                     </div>
                   </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {qrs[garcomAtual.id]?.total_scans ?? 0} no total, desde sempre
+                  </p>
                 </div>
 
                 <div>
@@ -1105,7 +1278,7 @@ export default function Garcons() {
                       <li key={r.id} className="flex items-center gap-3 py-3">
                         <button
                           type="button"
-                          onClick={() => setRegraForm({ ...r })}
+                          onClick={() => setRegraForm({ ...r, dias_personalizados: r.dias_personalizados ?? 15 })}
                           className="min-w-0 flex-1 text-left"
                         >
                           <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
@@ -1115,7 +1288,11 @@ export default function Garcons() {
                             {FREQUENCIA_LABEL[r.frequencia]}{r.premio ? ` · ${r.premio}` : ''}
                           </p>
                         </button>
-                        <Switch checked={r.ativa} onCheckedChange={() => alternarAtivaRegra(r)} />
+                        <Switch
+                          checked={r.ativa}
+                          onCheckedChange={() => alternarAtivaRegra(r)}
+                          className={CLASSE_SWITCH_REGRA}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -1191,6 +1368,30 @@ export default function Garcons() {
                     </div>
                   </div>
 
+                  {/* Só aparece pra frequência personalizada — as outras três
+                      (semanal/mensal/trimestral) não precisam disto, e mostrar
+                      um campo que não faz nada nelas só confundiria. */}
+                  {regraForm.frequencia === 'personalizado' && (
+                    <div className="space-y-2">
+                      <RotuloCampo icone={CalendarClock} htmlFor="regra-dias">A cada quantos dias renova</RotuloCampo>
+                      <div className="relative">
+                        <Input
+                          id="regra-dias"
+                          type="number"
+                          min={1}
+                          value={regraForm.dias_personalizados}
+                          onChange={(e) => setRegraForm({
+                            ...regraForm, dias_personalizados: Math.max(1, Number(e.target.value) || 1),
+                          })}
+                          className="h-10 pr-14"
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                          dias
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <RotuloCampo icone={Gift} htmlFor="regra-premio">Prêmio</RotuloCampo>
                     <Input
@@ -1209,6 +1410,7 @@ export default function Garcons() {
                         id="regra-renovar"
                         checked={regraForm.renovar_automatico}
                         onCheckedChange={(v) => setRegraForm({ ...regraForm, renovar_automatico: v })}
+                        className={CLASSE_SWITCH_REGRA}
                       />
                     </label>
                     <label htmlFor="regra-ativa" className="flex cursor-pointer items-center justify-between gap-3">
@@ -1217,6 +1419,7 @@ export default function Garcons() {
                         id="regra-ativa"
                         checked={regraForm.ativa}
                         onCheckedChange={(v) => setRegraForm({ ...regraForm, ativa: v })}
+                        className={CLASSE_SWITCH_REGRA}
                       />
                     </label>
                   </div>
