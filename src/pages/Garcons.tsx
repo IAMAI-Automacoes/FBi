@@ -1,11 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
-import { addDays, addMonths, format, startOfMonth, startOfWeek, startOfQuarter } from 'date-fns'
+import {
+  addDays, addMonths, differenceInCalendarDays, format,
+  startOfMonth, startOfWeek, startOfQuarter,
+} from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
-import { FiltroPeriodo, type PeriodoPreset, type IntervaloDatas } from '@/components/FiltroPeriodo'
+import { FiltroPeriodo, type IntervaloDatas } from '@/components/FiltroPeriodo'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DataSegmentada } from '@/components/DataSegmentada'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -51,9 +55,26 @@ interface RegraBonificacao {
   nome: string
   meta_escaneamentos: number
   frequencia: Frequencia
-  /** Só usado quando frequencia === 'personalizado': a cada quantos dias
-   *  o período se renova. */
+  /** Só usado quando frequencia === 'personalizado' e tipo_personalizado
+   *  === 'dias': a cada quantos dias o período se renova. */
   dias_personalizados: number
+  /** Só usado quando frequencia === 'personalizado': como esse período é
+   *  definido — 'dias' = "a cada N dias, renovando sozinho"; 'data' = uma
+   *  janela fixa "de tal data até tal outra" (a data de início mora em
+   *  `periodo_inicio`, a final aqui embaixo). */
+  tipo_personalizado: 'dias' | 'data'
+  /** Só usado com tipo_personalizado === 'data' — guardada separada só pra
+   *  repopular os dois campos de data ao reabrir a regra pra editar; o
+   *  cálculo em si (avançar o período) reaproveita `dias_personalizados`,
+   *  convertido a partir dessa data no momento de salvar. */
+  data_fim_personalizado: string | null
+  /** Só vale pra frequencia semanal/mensal/trimestral (personalizado já
+   *  define o próprio início): true = o período sempre começa no início
+   *  "de calendário" da unidade (segunda-feira, dia 1, início do trimestre);
+   *  false = começa no dia em que a regra foi criada e renova sempre nesse
+   *  mesmo dia. Só afeta regras NOVAS — mudar isso numa regra que já está
+   *  rodando não pula o período em andamento. */
+  alinhar_calendario: boolean
   premio: string
   renovar_automatico: boolean
   ativa: boolean
@@ -77,14 +98,39 @@ const FREQUENCIA_CURTA: Record<Frequencia, string> = {
 function novaRegraVazia(): RegraBonificacao {
   return {
     id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal', dias_personalizados: 15,
+    tipo_personalizado: 'dias', data_fim_personalizado: null, alinhar_calendario: false,
     premio: '', renovar_automatico: true, ativa: true, periodo_inicio: null,
   }
 }
 
 function rotuloRegra(r: RegraBonificacao): string {
   if (r.nome.trim()) return r.nome.trim()
-  if (r.frequencia === 'personalizado') return `${r.meta_escaneamentos} QRs a cada ${r.dias_personalizados} dias`
+  if (r.frequencia === 'personalizado') {
+    if (r.tipo_personalizado === 'data' && r.periodo_inicio && r.data_fim_personalizado) {
+      const de = format(new Date(r.periodo_inicio), 'dd/MM')
+      const ate = format(new Date(r.data_fim_personalizado), 'dd/MM')
+      return `${r.meta_escaneamentos} QRs de ${de} até ${ate}`
+    }
+    return `${r.meta_escaneamentos} QRs a cada ${r.dias_personalizados} dias`
+  }
   return `${r.meta_escaneamentos} QRs por ${FREQUENCIA_CURTA[r.frequencia]}`
+}
+
+/** Início do período de uma regra recém-criada — só entra em jogo na
+ *  primeira vez que ela é salva (`periodo_inicio` ainda null). Frequência
+ *  personalizada já define o próprio início (a data escolhida, no modo
+ *  'data'; ou "agora", no modo 'dias' — sem noção de calendário). Nas
+ *  outras três, `alinhar_calendario` decide entre "agora" (o padrão de
+ *  sempre) ou o início "de calendário" da unidade — dali em diante o
+ *  avanço por `avancarPeriodo` mantém o alinhamento sozinho, porque somar
+ *  um múltiplo fixo (7 dias / 1 mês / 3 meses) a uma âncora já alinhada
+ *  sempre cai no próximo início alinhado. */
+function calcularInicioRegra(r: RegraBonificacao): string {
+  const agora = new Date()
+  if (r.frequencia === 'personalizado' || !r.alinhar_calendario) return agora.toISOString()
+  if (r.frequencia === 'semanal') return startOfWeek(agora, { weekStartsOn: 1 }).toISOString()
+  if (r.frequencia === 'trimestral') return startOfQuarter(agora).toISOString()
+  return startOfMonth(agora).toISOString()
 }
 
 /** Rótulo de campo do formulário de regra — mesmo desenho do popup de ação
@@ -142,6 +188,19 @@ function corPorIndice(i: number) {
 /** Valor do item "sem regra" do filtro do Ranking — o Select do Radix não
  *  aceita item com value="" (colide com o estado "nada selecionado"). */
 const SEM_REGRA = '__todas__'
+
+/** Atalhos do filtro de período do Ranking — semana/mês/trimestre "de
+ *  calendário" em vez de dias corridos (7d/30d/90d, do `FiltroPeriodo`
+ *  usado em Feedbacks): aqui o que importa é comparar com os mesmos
+ *  períodos que uma regra de bonificação usa, não uma janela relativa a
+ *  hoje sem relação com nada. */
+type RankingPeriodo = 'semana' | 'mes' | 'trimestre' | 'all'
+const PRESETS_RANKING: { value: RankingPeriodo; label: string }[] = [
+  { value: 'semana', label: 'Esta semana' },
+  { value: 'mes', label: 'Este mês' },
+  { value: 'trimestre', label: 'Este trimestre' },
+  { value: 'all', label: 'Todo o período' },
+]
 
 const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; gradiente: string; numero: string }> = {
   1: {
@@ -245,7 +304,7 @@ export default function Garcons() {
 
   // Filtro do Ranking — mesmo componente usado em /feedbacks, ou uma regra
   // específica (que dispensa o filtro de data: usa o período dela mesma).
-  const [rankingPeriodo, setRankingPeriodo] = useFiltroPersistente<PeriodoPreset>('garcons:ranking-periodo', 'all')
+  const [rankingPeriodo, setRankingPeriodo] = useFiltroPersistente<RankingPeriodo>('garcons:ranking-periodo', 'all')
   const [rankingDatas, setRankingDatas] = useFiltroPersistente<IntervaloDatas | undefined>('garcons:ranking-datas', undefined)
   const [rankingRegraId, setRankingRegraId] = useFiltroPersistente('garcons:ranking-regra', '')
   /** Escaneamentos de cada garçom dentro do filtro de data do Ranking — só
@@ -368,8 +427,18 @@ export default function Garcons() {
       const porRegra: Record<string, Record<number, number>> = {}
       for (const reg of regrasComPeriodo) {
         const porGarcom: Record<number, number> = {}
+        // Regra que NÃO renova sozinha tem um fim de verdade (o período que
+        // ela definiu) — sem esse teto, um escaneamento de meses depois do
+        // prazo continuaria contando pra sempre, porque `periodo_inicio`
+        // nunca avança pra "fechar a porta". Regra que renova não precisa
+        // disso: o próprio avanço do período já empurra `periodo_inicio`
+        // pra frente e escaneamentos do ciclo antigo saem de cena sozinhos.
+        const fimReg = reg.renovar_automatico
+          ? null
+          : avancarPeriodo(new Date(reg.periodo_inicio!), reg).toISOString()
         for (const s of scans ?? []) {
           if (antesDe(s.scanned_at, reg.periodo_inicio!)) continue
+          if (fimReg && !antesDe(s.scanned_at, fimReg)) continue
           const gId = qrCodeIdParaGarcom[s.qr_code_id]
           if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
         }
@@ -426,8 +495,10 @@ export default function Garcons() {
           consulta = consulta.lte('scanned_at', fimDoDia.toISOString())
         }
       } else {
-        const dias = rankingPeriodo === '7d' ? 7 : rankingPeriodo === '30d' ? 30 : 90
-        consulta = consulta.gte('scanned_at', addDays(new Date(), -dias).toISOString())
+        const inicio = rankingPeriodo === 'semana' ? startOfWeek(new Date(), { weekStartsOn: 1 })
+          : rankingPeriodo === 'trimestre' ? startOfQuarter(new Date())
+          : startOfMonth(new Date())
+        consulta = consulta.gte('scanned_at', inicio.toISOString())
       }
       const { data: scans } = await consulta
       if (cancelado) return
@@ -579,11 +650,23 @@ export default function Garcons() {
     setSalvandoRegra(true)
     try {
       const ehNova = !regraForm.id
-      const regraFinal: RegraBonificacao = {
+      let regraFinal: RegraBonificacao = {
         ...regraForm,
         id: regraForm.id || crypto.randomUUID(),
-        // Primeira vez que a regra é salva: começa o período agora.
-        periodo_inicio: regraForm.periodo_inicio ?? new Date().toISOString(),
+        // Primeira vez que a regra é salva: define onde o período começa
+        // (agora, ou alinhado ao calendário — ver `calcularInicioRegra`).
+        periodo_inicio: regraForm.periodo_inicio ?? calcularInicioRegra(regraForm),
+      }
+      // Período personalizado "de uma data até outra": os dois campos de
+      // data SÃO o período — a cada save, convertem pra dias e reaproveitam
+      // o mesmo motor de avanço que a opção "a cada N dias" já usa, em vez
+      // de precisar de uma lógica de fim separada só pra este modo.
+      if (regraFinal.frequencia === 'personalizado' && regraFinal.tipo_personalizado === 'data' && regraFinal.data_fim_personalizado) {
+        const dias = Math.max(
+          1,
+          differenceInCalendarDays(new Date(regraFinal.data_fim_personalizado), new Date(regraFinal.periodo_inicio!)) + 1,
+        )
+        regraFinal = { ...regraFinal, dias_personalizados: dias }
       }
       const novasRegras = ehNova
         ? [...regras, regraFinal]
@@ -648,7 +731,17 @@ export default function Garcons() {
 
   return (
     <div className="flex-1">
-      <Tabs value={aba} onValueChange={(v) => setAba(v as 'ranking' | 'equipe')} className="w-full">
+      <Tabs
+        value={aba}
+        onValueChange={(v) => {
+          const nova = v as 'ranking' | 'equipe'
+          setAba(nova)
+          // Voltar pro Ranking com o painel de um garçom aberto (aberto pela
+          // lista da Equipe) deixava ele preso atrás — some junto da troca.
+          if (nova === 'ranking') setDetalheId(null)
+        }}
+        className="w-full"
+      >
         <TabsList className="mb-6">
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="equipe">Equipe</TabsTrigger>
@@ -685,8 +778,9 @@ export default function Garcons() {
                   <FiltroPeriodo
                     periodo={rankingPeriodo}
                     datas={rankingDatas}
-                    onPeriodo={setRankingPeriodo}
-                    onDatas={setRankingDatas}
+                    onPeriodo={(p) => setRankingPeriodo(p)}
+                    onDatas={(d) => setRankingDatas(d)}
+                    presets={PRESETS_RANKING}
                   />
                 )}
               </div>
@@ -1185,60 +1279,70 @@ export default function Garcons() {
                   )}
                 </div>
 
-                {/* Baixar o QR de um garçom só agora é feito escolhendo-o em
-                    "Baixar só os selecionados" (na tela de Equipe) — editar e
-                    excluir continuam aqui como ícones, sem rodapé próprio só
-                    pra eles. */}
-                <div className="flex items-center justify-end gap-1 border-t pt-4">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        onClick={() => abrirEditar(garcomAtual)}
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Editar garçom"
-                        className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                      >
-                        <Pencil className="h-[18px] w-[18px]" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Editar</TooltipContent>
-                  </Tooltip>
-
-                  <AlertDialog>
+                {/* Mesmo botão de "baixar" do resto da página — baixar só o
+                    QR deste garçom sem precisar entrar no modo de seleção da
+                    Equipe pra marcar um só. Editar/excluir continuam como
+                    ícones, do outro lado. */}
+                <div className="flex items-center justify-between gap-2 border-t pt-4">
+                  <Button
+                    onClick={() => baixarPdf([garcomAtual.id])}
+                    disabled={baixando}
+                    className={cn('h-9 gap-1.5 rounded-full px-3.5 text-sm', CLASSE_BOTAO_BAIXAR)}
+                  >
+                    {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    Baixar QR Code
+                  </Button>
+                  <div className="flex items-center gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Excluir garçom"
-                            className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-[18px] w-[18px]" />
-                          </Button>
-                        </AlertDialogTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Excluir</TooltipContent>
-                    </Tooltip>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          O QR Code dele sai junto. Não dá para desfazer.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => remover(garcomAtual.id)}
-                          className="bg-red-600 text-white hover:bg-red-700"
+                        <Button
+                          onClick={() => abrirEditar(garcomAtual)}
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Editar garçom"
+                          className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                         >
-                          Excluir
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          <Pencil className="h-[18px] w-[18px]" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Editar</TooltipContent>
+                    </Tooltip>
+
+                    <AlertDialog>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Excluir garçom"
+                              className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="h-[18px] w-[18px]" />
+                            </Button>
+                          </AlertDialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">Excluir</TooltipContent>
+                      </Tooltip>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            O QR Code dele sai junto. Não dá para desfazer.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => remover(garcomAtual.id)}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </div>
             </>
@@ -1278,7 +1382,12 @@ export default function Garcons() {
                       <li key={r.id} className="flex items-center gap-3 py-3">
                         <button
                           type="button"
-                          onClick={() => setRegraForm({ ...r, dias_personalizados: r.dias_personalizados ?? 15 })}
+                          onClick={() => setRegraForm({
+                            ...r,
+                            dias_personalizados: r.dias_personalizados ?? 15,
+                            tipo_personalizado: r.tipo_personalizado ?? 'dias',
+                            alinhar_calendario: r.alinhar_calendario ?? false,
+                          })}
                           className="min-w-0 flex-1 text-left"
                         >
                           <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
@@ -1370,25 +1479,57 @@ export default function Garcons() {
 
                   {/* Só aparece pra frequência personalizada — as outras três
                       (semanal/mensal/trimestral) não precisam disto, e mostrar
-                      um campo que não faz nada nelas só confundiria. */}
+                      um campo que não faz nada nelas só confundiria. Duas
+                      formas de definir o período: uma quantidade de dias que
+                      se repete sozinha, ou uma janela fixa (data até data),
+                      tipo uma campanha de uma quinzena específica. */}
                   {regraForm.frequencia === 'personalizado' && (
-                    <div className="space-y-2">
-                      <RotuloCampo icone={CalendarClock} htmlFor="regra-dias">A cada quantos dias renova</RotuloCampo>
-                      <div className="relative">
-                        <Input
-                          id="regra-dias"
-                          type="number"
-                          min={1}
-                          value={regraForm.dias_personalizados}
-                          onChange={(e) => setRegraForm({
-                            ...regraForm, dias_personalizados: Math.max(1, Number(e.target.value) || 1),
-                          })}
-                          className="h-10 pr-14"
-                        />
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                          dias
-                        </span>
-                      </div>
+                    <div className="space-y-3">
+                      <Tabs
+                        value={regraForm.tipo_personalizado}
+                        onValueChange={(v) => setRegraForm({ ...regraForm, tipo_personalizado: v as 'dias' | 'data' })}
+                      >
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="dias">Quantidade de dias</TabsTrigger>
+                          <TabsTrigger value="data">De uma data até outra</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+
+                      {regraForm.tipo_personalizado === 'dias' ? (
+                        <div className="space-y-2">
+                          <RotuloCampo icone={CalendarClock} htmlFor="regra-dias">A cada quantos dias renova</RotuloCampo>
+                          <div className="relative">
+                            <Input
+                              id="regra-dias"
+                              type="number"
+                              min={1}
+                              value={regraForm.dias_personalizados}
+                              onChange={(e) => setRegraForm({
+                                ...regraForm, dias_personalizados: Math.max(1, Number(e.target.value) || 1),
+                              })}
+                              className="h-10 pr-14"
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                              dias
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <RotuloCampo icone={CalendarClock}>De / até</RotuloCampo>
+                          <div className="flex w-fit items-center gap-2">
+                            <DataSegmentada
+                              value={regraForm.periodo_inicio ? new Date(regraForm.periodo_inicio) : undefined}
+                              onChange={(d) => setRegraForm({ ...regraForm, periodo_inicio: d ? d.toISOString() : null })}
+                            />
+                            <span className="shrink-0 text-xs text-muted-foreground">até</span>
+                            <DataSegmentada
+                              value={regraForm.data_fim_personalizado ? new Date(regraForm.data_fim_personalizado) : undefined}
+                              onChange={(d) => setRegraForm({ ...regraForm, data_fim_personalizado: d ? d.toISOString() : null })}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1404,6 +1545,28 @@ export default function Garcons() {
                   </div>
 
                   <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
+                    {/* Só faz sentido pra semanal/mensal/trimestral — o
+                        personalizado já define o próprio início (dias ou
+                        data), não tem "início de calendário" pra alinhar. */}
+                    {regraForm.frequencia !== 'personalizado' && (
+                      <div>
+                        <label htmlFor="regra-alinhar" className="flex cursor-pointer items-center justify-between gap-3">
+                          <span className="text-sm text-gray-700">
+                            Sempre começar {regraForm.frequencia === 'semanal' ? 'na segunda-feira'
+                              : regraForm.frequencia === 'trimestral' ? 'no início do trimestre' : 'no dia 1'}
+                          </span>
+                          <Switch
+                            id="regra-alinhar"
+                            checked={regraForm.alinhar_calendario}
+                            onCheckedChange={(v) => setRegraForm({ ...regraForm, alinhar_calendario: v })}
+                            className={CLASSE_SWITCH_REGRA}
+                          />
+                        </label>
+                        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                          Desligado, o período começa a contar a partir de hoje e renova sempre nesse mesmo dia.
+                        </p>
+                      </div>
+                    )}
                     <label htmlFor="regra-renovar" className="flex cursor-pointer items-center justify-between gap-3">
                       <span className="text-sm text-gray-700">Renovar automaticamente ao fim do período</span>
                       <Switch
@@ -1459,7 +1622,15 @@ export default function Garcons() {
                     variant="primario"
                     size="forma"
                     onClick={salvarRegraForm}
-                    disabled={salvandoRegra || regraForm.meta_escaneamentos <= 0}
+                    disabled={
+                      salvandoRegra
+                      || regraForm.meta_escaneamentos <= 0
+                      || (regraForm.frequencia === 'personalizado' && regraForm.tipo_personalizado === 'data' && (
+                        !regraForm.periodo_inicio
+                        || !regraForm.data_fim_personalizado
+                        || new Date(regraForm.data_fim_personalizado) < new Date(regraForm.periodo_inicio)
+                      ))
+                    }
                   >
                     {salvandoRegra && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                     Salvar

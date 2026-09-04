@@ -164,8 +164,8 @@ export default function AcoesArquivadas() {
           <FiltroPeriodo
             periodo={periodo}
             datas={datas}
-            onPeriodo={setPeriodo}
-            onDatas={setDatas}
+            onPeriodo={(p) => setPeriodo(p)}
+            onDatas={(d) => setDatas(d)}
           />
 
           <FiltroCategorias
