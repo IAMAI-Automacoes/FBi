@@ -87,6 +87,12 @@ interface RegraBonificacao {
   periodo_inicio: string | null
   /** ids dos garçons que essa regra vale — null/vazio = todos. */
   garcons_participantes: number[] | null
+  /** "Excluir" não apaga de verdade — só marca isto e a regra some das
+   *  listas normais. O histórico de pagamento de quem já ganhou bônus com
+   *  ela precisa continuar existindo em algum lugar pra aparecer em
+   *  "Arquivadas" no painel do garçom; apagar o registro de verdade
+   *  perderia esse histórico junto. */
+  apagada: boolean
 }
 
 const FREQUENCIA_LABEL: Record<Frequencia, string> = {
@@ -107,7 +113,7 @@ function novaRegraVazia(): RegraBonificacao {
     id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal', dias_personalizados: 15,
     tipo_personalizado: 'dias', data_fim_personalizado: null, alinhar_calendario: false,
     premio: '', renovar_automatico: true, ativa: true, periodo_inicio: null,
-    garcons_participantes: null,
+    garcons_participantes: null, apagada: false,
   }
 }
 
@@ -349,7 +355,11 @@ export default function Garcons() {
    *  reabrir noutro garçom (ou o mesmo, depois) reaproveitaria o estado de
    *  navegação de antes. */
   const [mostrandoArquivadas, setMostrandoArquivadas] = useState(false)
-  useEffect(() => { setMostrandoArquivadas(false) }, [detalheId])
+  /** Qual fatia do histórico a lista de arquivadas mostra — só as regras
+   *  que ainda existem (o caso comum), tudo que ele já ganhou (existentes +
+   *  apagadas) ou só as que foram apagadas desde então. */
+  const [filtroArquivadas, setFiltroArquivadas] = useState<'existentes' | 'todas' | 'apagadas'>('existentes')
+  useEffect(() => { setMostrandoArquivadas(false); setFiltroArquivadas('existentes') }, [detalheId])
 
   const [regras, setRegras] = useState<RegraBonificacao[]>([])
   /** Painel de regras aberto? */
@@ -395,7 +405,7 @@ export default function Garcons() {
     // tempo) — é isso que zera o progresso sem precisar de um job rodando.
     let mudou = false
     listaRegras = listaRegras.map((regra) => {
-      if (!regra.periodo_inicio || !regra.renovar_automatico) return regra
+      if (!regra.periodo_inicio || regra.apagada || !regra.renovar_automatico) return regra
       let inicio = new Date(regra.periodo_inicio)
       let fim = avancarPeriodo(inicio, regra)
       while (fim.getTime() <= Date.now()) {
@@ -570,6 +580,7 @@ export default function Garcons() {
       tipo_personalizado: r.tipo_personalizado ?? 'dias',
       alinhar_calendario: r.alinhar_calendario ?? false,
       garcons_participantes: r.garcons_participantes ?? null,
+      apagada: r.apagada ?? false,
     })
   }
 
@@ -728,9 +739,14 @@ export default function Garcons() {
     }
   }
 
+  // "Excluir" não tira a regra do array — só marca `apagada` e desliga
+  // `ativa`. Tirar de verdade apagaria junto o nome/meta/prêmio que o
+  // histórico de pagamento de cada garçom precisa pra continuar legível em
+  // "Arquivadas" (o pagamento em si mora no garçom, não na regra — mas sem
+  // a regra pra consultar, vira um ID sem nome nem meta pra mostrar).
   const excluirRegra = async (id: string) => {
     try {
-      await gravarRegras(regras.filter((r) => r.id !== id))
+      await gravarRegras(regras.map((r) => (r.id === id ? { ...r, apagada: true, ativa: false } : r)))
     } catch (e: any) {
       toast.error('Erro ao excluir regra', { description: e.message })
     }
@@ -777,7 +793,7 @@ export default function Garcons() {
   const ranking = [...candidatosRanking].sort((a, b) => scansParaRanking(b.id) - scansParaRanking(a.id))
   const maiorScans = ranking.length ? scansParaRanking(ranking[0].id) : 0
   const temAberturas = maiorScans > 0
-  const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
+  const regrasAtivas = regras.filter((r) => !r.apagada && r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
 
   /** Regras ativas que valem PRA ESTE garçom (respeita participantes). */
   const regrasDoGarcom = (garcomId: number) => regrasAtivas.filter((r) => garcomParticipaDaRegra(r, garcomId))
@@ -793,6 +809,21 @@ export default function Garcons() {
     if (!pagamento || !regraEstaPaga(pagamento, regra)) return false
     return Date.now() - new Date(pagamento.pago_em).getTime() > 24 * 3600_000
   }
+
+  /** Histórico completo de "Arquivadas", com filtro — 'existentes' é o
+   *  comportamento padrão de sempre (só regra que ainda existe e já passou
+   *  do prazo de 24h). 'apagadas'/'todas' também trazem regra que já foi
+   *  excluída: uma regra apagada não tem mais "período em andamento" pra
+   *  esperar, então entra direto, sem o prazo de 24h — o pagamento em si
+   *  (guardado no garçom, não na regra) é o que prova que ela foi cumprida,
+   *  a regra só empresta o nome/meta/prêmio pra mostrar. */
+  const regrasArquivadasFiltradas = (g: Garcom, filtro: 'existentes' | 'todas' | 'apagadas'): RegraBonificacao[] =>
+    regras.filter((r) => {
+      if (!regraEstaPaga(pagamentoDeRegra(g.bonus_pagamentos, r.id), r)) return false
+      if (filtro === 'apagadas') return r.apagada
+      if (filtro === 'todas') return true
+      return !r.apagada && foiArquivada(r, g)
+    })
 
   /** Tem pelo menos uma regra batida e ainda não paga? Usado tanto pra
    *  ordenar a lista da Equipe (quem precisa pagar primeiro) quanto pro
@@ -855,7 +886,7 @@ export default function Garcons() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SEM_REGRA}>Todas as aberturas</SelectItem>
-                    {regras.map((r) => (
+                    {regras.filter((r) => !r.apagada).map((r) => (
                       <SelectItem key={r.id} value={r.id}>{rotuloRegra(r)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1315,8 +1346,11 @@ export default function Garcons() {
                 // Arquivadas troca o conteúdo do painel inteiro por só a
                 // lista arquivada — pedido explícito ("some com as coisas
                 // do popup e mostra só a lista"), não uma seção a mais
-                // dentro do mesmo painel.
+                // dentro do mesmo painel. O filtro escolhe QUAL histórico:
+                // só o que ainda existe (padrão), tudo que ele já ganhou —
+                // incluindo regra já apagada — ou só as apagadas.
                 if (mostrandoArquivadas) {
+                  const listaFiltrada = regrasArquivadasFiltradas(garcomAtual, filtroArquivadas)
                   return (
                     <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
                       <button
@@ -1329,15 +1363,36 @@ export default function Garcons() {
                       <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
                         Regras arquivadas
                       </p>
-                      {regrasArquivadasAqui.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhuma regra arquivada ainda.</p>
+                      <Tabs
+                        value={filtroArquivadas}
+                        onValueChange={(v) => setFiltroArquivadas(v as 'existentes' | 'todas' | 'apagadas')}
+                      >
+                        <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="existentes" className="text-xs">Existentes</TabsTrigger>
+                          <TabsTrigger value="todas" className="text-xs">Todas</TabsTrigger>
+                          <TabsTrigger value="apagadas" className="text-xs">Apagadas</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                      {listaFiltrada.length === 0 ? (
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          {filtroArquivadas === 'apagadas'
+                            ? 'Nenhuma regra apagada com bônus pago pra ele.'
+                            : 'Nenhuma regra arquivada ainda.'}
+                        </p>
                       ) : (
-                        <ul className="divide-y divide-border">
-                          {regrasArquivadasAqui.map((regra) => {
+                        <ul className="mt-1 divide-y divide-border">
+                          {listaFiltrada.map((regra) => {
                             const pagamento = pagamentoDeRegra(garcomAtual.bonus_pagamentos, regra.id)
                             return (
                               <li key={regra.id} className="py-3">
-                                <p className="text-sm font-medium text-gray-800">{rotuloRegra(regra)}</p>
+                                <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                                  {rotuloRegra(regra)}
+                                  {regra.apagada && (
+                                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-normal text-gray-500">
+                                      apagada
+                                    </span>
+                                  )}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                   {regra.premio ? `${regra.premio} · ` : ''}
                                   pago em {pagamento ? format(new Date(pagamento.pago_em), 'dd/MM/yyyy') : '—'}
@@ -1391,7 +1446,11 @@ export default function Garcons() {
                     <div>
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Bonificação</p>
-                        {regrasArquivadasAqui.length > 0 && (
+                        {/* Aparece se tiver QUALQUER histórico (mesmo que só
+                            de uma regra já apagada) — senão o botão sumia
+                            justo quando "Apagadas"/"Todas" teriam algo pra
+                            mostrar, sem jeito de chegar lá. */}
+                        {regrasArquivadasFiltradas(garcomAtual, 'todas').length > 0 && (
                           <button
                             type="button"
                             onClick={() => setMostrandoArquivadas(true)}
@@ -1566,13 +1625,13 @@ export default function Garcons() {
               </DialogHeader>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
-                {regras.length === 0 ? (
+                {regras.filter((r) => !r.apagada).length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
                     Nenhuma regra criada ainda.
                   </p>
                 ) : (
                   <ul className="divide-y divide-border">
-                    {regras.map((r) => (
+                    {regras.filter((r) => !r.apagada).map((r) => (
                       <li key={r.id} className="flex items-center gap-2 py-3">
                         {/* Clicar na regra abre só o painel de detalhes (ver
                             <Sheet> abaixo) — editar é um passo a mais, a
@@ -1617,7 +1676,8 @@ export default function Garcons() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Excluir "{rotuloRegra(r)}"?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                                Ela sai da lista e para de valer daqui pra frente. O histórico de quem já foi pago
+                                com ela continua guardado, em "Arquivadas", no painel de cada garçom.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -1889,7 +1949,8 @@ export default function Garcons() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Excluir "{rotuloRegra(regraForm)}"?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                          Ela sai da lista e para de valer daqui pra frente. O histórico de quem já foi pago
+                          com ela continua guardado, em "Arquivadas", no painel de cada garçom.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -2048,7 +2109,8 @@ export default function Garcons() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Excluir "{rotuloRegra(regraDetalhe)}"?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                          Ela sai da lista e para de valer daqui pra frente. O histórico de quem já foi pago
+                          com ela continua guardado, em "Arquivadas", no painel de cada garçom.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
