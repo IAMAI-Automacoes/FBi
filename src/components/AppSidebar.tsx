@@ -22,7 +22,9 @@ import {
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { getIniciais } from '@/lib/iniciais'
 import { usePermissoes } from '@/hooks/use-permissoes'
+import { useAuth } from '@/hooks/use-auth'
 import { buscarTotalNaoLidasCliente } from '@/lib/queries/sugestoes'
+import { contarGarconsPendentes } from '@/lib/queries/bonificacao-garcons'
 import { supabase } from '@/lib/supabase/client'
 
 const navigation = [
@@ -39,6 +41,7 @@ export function AppSidebar() {
   const location = useLocation()
   const { nomeRestaurante, logoUrl } = useRestauranteConfig()
   const { podeVer } = usePermissoes()
+  const { usuario } = useAuth()
 
   const isSugestoesActive = location.pathname === '/sugestoes'
 
@@ -60,6 +63,32 @@ export function AppSidebar() {
   useEffect(() => {
     if (isSugestoesActive) setNaoLidas(0)
   }, [isSugestoesActive])
+
+  // Numerozinho de "tem garçom pra pagar" — mesmo desenho do badge de
+  // Sugestões, só que aqui não some sozinho ao entrar na página: some só
+  // quando o bônus for de fato marcado como pago (é dinheiro, não
+  // notificação — visitar a tela não resolve a pendência). Sem tabela com
+  // realtime dedicado pra "meta batida" (depende de escaneamento, que não
+  // tem restaurante_id pra filtrar por canal), então recalcula ao entrar em
+  // qualquer página e de novo a cada minuto, além de reagir na hora quando
+  // `garcons` muda (cobre o "acabei de marcar como pago" imediatamente).
+  const restauranteId = usuario?.restaurante_id ?? null
+  const [pendentes, setPendentes] = useState(0)
+  useEffect(() => {
+    if (!restauranteId) { setPendentes(0); return }
+    const atualizar = () => contarGarconsPendentes(restauranteId).then(setPendentes).catch(() => {})
+    atualizar()
+    const intervalo = setInterval(atualizar, 60_000)
+    const ch = supabase
+      .channel('sidebar-garcons-pendentes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'garcons', filter: `restaurante_id=eq.${restauranteId}` },
+        atualizar,
+      )
+      .subscribe()
+    return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
+  }, [restauranteId])
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-border bg-white text-sidebar-foreground">
@@ -105,6 +134,16 @@ export function AppSidebar() {
                     <Link to={item.href}>
                       <item.icon className="h-5 w-5" />
                       <span>{item.name}</span>
+                      {/* Mesmo numerozinho vermelho do badge de Sugestões —
+                          aqui é "tem bônus pra pagar", não "tem mensagem pra
+                          ler": continua aparecendo mesmo na própria página
+                          de Garçons, e só some quando o bônus for pago de
+                          verdade (pedido explícito). */}
+                      {item.name === 'Garçons' && pendentes > 0 && (
+                        <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                          {pendentes > 99 ? '99+' : pendentes}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

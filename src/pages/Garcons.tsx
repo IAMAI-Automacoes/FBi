@@ -1,17 +1,22 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
-  addDays, addMonths, differenceInCalendarDays, format,
+  differenceInCalendarDays, format,
   startOfMonth, startOfWeek, startOfQuarter,
 } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
 import { FiltroPeriodo, type IntervaloDatas } from '@/components/FiltroPeriodo'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
+import {
+  antesDe, avancarPeriodo, garcomParticipaDaRegra, pagamentoDeRegra, regraEstaPaga,
+  type PagamentoRegra,
+} from '@/lib/queries/bonificacao-garcons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DataSegmentada } from '@/components/DataSegmentada'
 import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -30,7 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift, User, Phone,
+  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift, User, Users, Phone,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
@@ -43,8 +48,8 @@ interface Garcom {
   nome_garcon: string
   ativo: boolean
   telefone: string | null
-  /** regra.id -> data em que o bônus daquela regra foi marcado como pago. */
-  bonus_pagamentos: Record<string, string>
+  /** regra.id -> pagamento daquele bônus (quando e com qual meta). */
+  bonus_pagamentos: Record<string, string | PagamentoRegra>
 }
 interface QrInfo { slug: string; total_scans: number }
 
@@ -80,6 +85,8 @@ interface RegraBonificacao {
   ativa: boolean
   /** null = regra recém-criada, ainda sem período rodando. */
   periodo_inicio: string | null
+  /** ids dos garçons que essa regra vale — null/vazio = todos. */
+  garcons_participantes: number[] | null
 }
 
 const FREQUENCIA_LABEL: Record<Frequencia, string> = {
@@ -100,7 +107,21 @@ function novaRegraVazia(): RegraBonificacao {
     id: '', nome: '', meta_escaneamentos: 50, frequencia: 'mensal', dias_personalizados: 15,
     tipo_personalizado: 'dias', data_fim_personalizado: null, alinhar_calendario: false,
     premio: '', renovar_automatico: true, ativa: true, periodo_inicio: null,
+    garcons_participantes: null,
   }
+}
+
+/** Só o pedaço "qual é o período" — usado dentro de `rotuloRegra` (junto
+ *  com a meta, ex.: "50 QRs a cada 15 dias") e sozinho no painel de
+ *  detalhes (onde a meta já é campo próprio, não precisa repetir). */
+function rotuloPeriodoRegra(r: RegraBonificacao): string {
+  if (r.frequencia !== 'personalizado') return FREQUENCIA_LABEL[r.frequencia]
+  if (r.tipo_personalizado === 'data' && r.periodo_inicio && r.data_fim_personalizado) {
+    const de = format(new Date(r.periodo_inicio), 'dd/MM')
+    const ate = format(new Date(r.data_fim_personalizado), 'dd/MM')
+    return `De ${de} até ${ate}`
+  }
+  return `A cada ${r.dias_personalizados} dias`
 }
 
 function rotuloRegra(r: RegraBonificacao): string {
@@ -145,26 +166,6 @@ function RotuloCampo({
       {children}
     </Label>
   )
-}
-
-function avancarPeriodo(inicio: Date, regra: Pick<RegraBonificacao, 'frequencia' | 'dias_personalizados'>): Date {
-  if (regra.frequencia === 'semanal') return addDays(inicio, 7)
-  if (regra.frequencia === 'trimestral') return addMonths(inicio, 3)
-  if (regra.frequencia === 'personalizado') return addDays(inicio, Math.max(1, regra.dias_personalizados || 1))
-  return addMonths(inicio, 1)
-}
-
-/**
- * Compara dois timestamps ISO como instantes de verdade (`Date.getTime()`),
- * nunca como string. `periodo_inicio` sai de `new Date().toISOString()` no
- * JS (sempre 3 dígitos de milissegundo + "Z"), mas `scanned_at` vem do
- * Postgres via PostgREST — que manda `timestamptz` como "+00:00" e às vezes
- * com 6 dígitos. Comparar essas duas strings com `<` colocava escaneamentos
- * de ANTES da regra existir como se fossem depois em alguns instantes (a
- * causa do "criei a regra e ela já contou escaneamento antigo").
- */
-function antesDe(a: string, b: string): boolean {
-  return new Date(a).getTime() < new Date(b).getTime()
 }
 
 /** Cor do avatar pela POSIÇÃO na lista, não pelo hash do nome — com poucos
@@ -445,7 +446,7 @@ export default function Garcons() {
           if (antesDe(s.scanned_at, reg.periodo_inicio!)) continue
           if (fimReg && !antesDe(s.scanned_at, fimReg)) continue
           const gId = qrCodeIdParaGarcom[s.qr_code_id]
-          if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
+          if (gId && garcomParticipaDaRegra(reg, gId)) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
         }
         porRegra[reg.id] = porGarcom
       }
@@ -549,6 +550,7 @@ export default function Garcons() {
       dias_personalizados: r.dias_personalizados ?? 15,
       tipo_personalizado: r.tipo_personalizado ?? 'dias',
       alinhar_calendario: r.alinhar_calendario ?? false,
+      garcons_participantes: r.garcons_participantes ?? null,
     })
   }
 
@@ -568,6 +570,10 @@ export default function Garcons() {
     setFormAberto('criar'); setFormNome(''); setFormTelefone(''); setTentouSalvarForm(false)
   }
   const abrirEditar = (g: Garcom) => {
+    // Fecha o painel de detalhes junto — mesmo motivo do de regra: os dois
+    // abertos ao mesmo tempo no canto direito da tela deixavam o formulário
+    // com uma pontinha cortada atrás do painel.
+    setDetalheId(null)
     setFormAberto('editar'); setFormNome(g.nome_garcon); setFormTelefone(g.telefone ?? ''); setTentouSalvarForm(false)
   }
 
@@ -726,8 +732,12 @@ export default function Garcons() {
     const chave = `${g.id}:${regra.id}`
     setPagando(chave)
     try {
-      const pagamentos = { ...g.bonus_pagamentos, [regra.id]: new Date().toISOString() }
-      const { error } = await supabase.from('garcons').update({ bonus_pagamentos: pagamentos }).eq('id', g.id)
+      // Guarda a meta junto com a data: se o dono aumentar a meta depois e o
+      // garçom bater a nova, este registro (com a meta ANTIGA) não cobre
+      // mais ela — `regraEstaPaga` volta a considerar pendente sozinho.
+      const pagamento: PagamentoRegra = { pago_em: new Date().toISOString(), meta: regra.meta_escaneamentos }
+      const pagamentos = { ...g.bonus_pagamentos, [regra.id]: pagamento }
+      const { error } = await supabase.from('garcons').update({ bonus_pagamentos: pagamentos as any }).eq('id', g.id)
       if (error) throw error
       setGarcons((p) => p.map((x) => (x.id === g.id ? { ...x, bonus_pagamentos: pagamentos } : x)))
       toast.success(`Bônus de ${g.nome_garcon} marcado como pago.`)
@@ -738,10 +748,33 @@ export default function Garcons() {
     }
   }
 
-  const ranking = [...garcons].sort((a, b) => scansParaRanking(b.id) - scansParaRanking(a.id))
+  // Regra selecionada no filtro do Ranking só vale pra quem participa dela —
+  // mostrar quem está de fora a zero no ranking sugeriria que ele está
+  // disputando e perdendo, quando na verdade nem concorre.
+  const regraRankingSelecionada = regras.find((r) => r.id === rankingRegraId)
+  const candidatosRanking = regraRankingSelecionada
+    ? garcons.filter((g) => garcomParticipaDaRegra(regraRankingSelecionada, g.id))
+    : garcons
+  const ranking = [...candidatosRanking].sort((a, b) => scansParaRanking(b.id) - scansParaRanking(a.id))
   const maiorScans = ranking.length ? scansParaRanking(ranking[0].id) : 0
   const temAberturas = maiorScans > 0
   const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
+
+  /** Regras ativas que valem PRA ESTE garçom (respeita participantes). */
+  const regrasDoGarcom = (garcomId: number) => regrasAtivas.filter((r) => garcomParticipaDaRegra(r, garcomId))
+
+  /** Tem pelo menos uma regra batida e ainda não paga? Usado tanto pra
+   *  ordenar a lista da Equipe (quem precisa pagar primeiro) quanto pro
+   *  numerozinho da barra lateral. */
+  const precisaPagar = (g: Garcom) => regrasDoGarcom(g.id).some((regra) => {
+    const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
+    return scans >= regra.meta_escaneamentos && !regraEstaPaga(pagamentoDeRegra(g.bonus_pagamentos, regra.id), regra)
+  })
+
+  // Quem precisa pagar sobe pro topo da lista da Equipe — é a informação
+  // mais acionável ali. O resto mantém a ordem de sempre (data de criação),
+  // sem outro critério de ordenação claro que valesse a pena aplicar.
+  const garconsEquipe = [...garcons].sort((a, b) => Number(precisaPagar(b)) - Number(precisaPagar(a)))
 
   if (loading) {
     return (
@@ -1031,17 +1064,30 @@ export default function Garcons() {
             <Card>
               <CardContent className="p-0">
                 <ul className="divide-y divide-border">
-                  {garcons.map((g, i) => {
+                  {garconsEquipe.map((g) => {
+                    const i = garcons.findIndex((x) => x.id === g.id)
                     const cor = corPorIndice(i)
                     const total = qrs[g.id]?.total_scans ?? 0
                     const marcado = selecionados.has(g.id)
+                    const regrasDele = regrasDoGarcom(g.id)
                     return (
                       <li key={g.id}>
-                        <button
-                          type="button"
+                        {/* `div` + `role="button"`, não um `<button>` — precisa
+                            caber um `<button>` de verdade ("Marcar como
+                            pago") lá dentro, e botão dentro de botão é HTML
+                            inválido (o clique do de dentro nem chegaria). */}
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => (selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id)
+                            }
+                          }}
                           className={cn(
-                            'flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors',
+                            'flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors',
                             marcado ? 'bg-blue-100 hover:bg-blue-200' : 'hover:bg-gray-50',
                           )}
                         >
@@ -1070,21 +1116,36 @@ export default function Garcons() {
                                 {total} abertura{total === 1 ? '' : 's'}
                               </span>
                             </div>
-                            {regrasAtivas.length > 0 && (
+                            {regrasDele.length > 0 && (
                               <div className="mt-2.5 space-y-2.5">
-                                {regrasAtivas.map((regra) => {
+                                {regrasDele.map((regra) => {
                                   const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
                                   const meta = regra.meta_escaneamentos
                                   const pct = Math.min(100, Math.round((scans / meta) * 100))
                                   const atingiu = scans >= meta
                                   const falta = Math.max(0, meta - scans)
-                                  const pagoEm = g.bonus_pagamentos[regra.id]
-                                  const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
+                                  const pago = regraEstaPaga(pagamentoDeRegra(g.bonus_pagamentos, regra.id), regra)
+                                  const chave = `${g.id}:${regra.id}`
                                   return (
                                     <div key={regra.id} title={rotuloRegra(regra)} className="w-2/3">
                                       <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-gray-500">
                                         <span>{scans} de {meta} feitos</span>
-                                        <span>{pago ? 'pago' : atingiu ? 'meta batida' : `faltam ${falta}`}</span>
+                                        {atingiu && !pago ? (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-5 px-1.5 text-[10px]"
+                                            disabled={pagando === chave}
+                                            onClick={(e) => { e.stopPropagation(); pagarBonus(g, regra) }}
+                                          >
+                                            {pagando === chave
+                                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                              : <Check className="h-3 w-3 mr-1" />}
+                                            Marcar como pago
+                                          </Button>
+                                        ) : (
+                                          <span>{pago ? 'pago' : `faltam ${falta}`}</span>
+                                        )}
                                       </div>
                                       <div className="h-3 w-full overflow-hidden bg-gray-200">
                                         <div className={cn('h-full', COR_BARRA_REGRA)} style={{ width: `${pct}%` }} />
@@ -1096,7 +1157,7 @@ export default function Garcons() {
                             )}
                           </div>
                           {!selecionando && <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />}
-                        </button>
+                        </div>
                       </li>
                     )
                   })}
@@ -1115,6 +1176,11 @@ export default function Garcons() {
         <DialogContent
           classNameOverlay="bg-black/25 backdrop-blur-[1px]"
           className="gap-0 p-0 sm:max-w-[420px]"
+          // Tem campo digitado (nome, telefone) — um clique de fora sem
+          // querer não pode apagar o que a pessoa já escreveu. Fecha só
+          // pelo X, Cancelar ou Esc.
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
         >
           <DialogHeader className="px-5 pb-1 pt-5 text-left">
             <DialogTitle className="text-base font-semibold leading-snug">
@@ -1177,8 +1243,8 @@ export default function Garcons() {
         <SheetContent
           semOverlay
           className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
+          // Só leitura — não tem o que perder clicando fora. Fecha normal,
+          // igual a um popover: nenhum dado dele fica pendente de salvar.
         >
           {garcomAtual && (
             <>
@@ -1240,19 +1306,19 @@ export default function Garcons() {
 
                 <div>
                   <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Bonificação</p>
-                  {regrasAtivas.length === 0 ? (
+                  {regrasDoGarcom(garcomAtual.id).length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      Nenhuma regra ativa. Configure em "Bonificação", na tela de Equipe.
+                      Nenhuma regra ativa pra ele. Configure em "Bonificação", na tela de Equipe.
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {regrasAtivas.map((regra) => {
+                      {regrasDoGarcom(garcomAtual.id).map((regra) => {
                         const scans = scansPorRegra[regra.id]?.[garcomAtual.id] ?? 0
                         const meta = regra.meta_escaneamentos
                         const pct = Math.min(100, Math.round((scans / meta) * 100))
                         const atingiu = scans >= meta
-                        const pagoEm = garcomAtual.bonus_pagamentos[regra.id]
-                        const pago = !!(pagoEm && regra.periodo_inicio && pagoEm >= regra.periodo_inicio)
+                        const pagamento = pagamentoDeRegra(garcomAtual.bonus_pagamentos, regra.id)
+                        const pago = regraEstaPaga(pagamento, regra)
                         const chave = `${garcomAtual.id}:${regra.id}`
 
                         return (
@@ -1262,7 +1328,7 @@ export default function Garcons() {
                                 {rotuloRegra(regra)}
                                 {atingiu && pago && (
                                   <span className="ml-1.5 font-normal text-gray-400">
-                                    · pago{pagoEm ? ` em ${format(new Date(pagoEm), 'dd/MM')}` : ''}
+                                    · pago{pagamento ? ` em ${format(new Date(pagamento.pago_em), 'dd/MM')}` : ''}
                                   </span>
                                 )}
                               </p>
@@ -1609,6 +1675,60 @@ export default function Garcons() {
                     />
                   </div>
 
+                  {/* Quem participa — mesmo padrão de abas de "quantidade de
+                      dias / de uma data até outra" acima: duas opções, a
+                      segunda revela um controle extra. Sem isso, toda regra
+                      valia igual pra equipe inteira, mesmo pensada só pra
+                      um turno ou uma dupla específica. */}
+                  <div className="space-y-2">
+                    <RotuloCampo icone={Users}>Quem participa</RotuloCampo>
+                    <Tabs
+                      value={regraForm.garcons_participantes ? 'alguns' : 'todos'}
+                      onValueChange={(v) => setRegraForm({
+                        ...regraForm,
+                        garcons_participantes: v === 'todos' ? null : (regraForm.garcons_participantes ?? []),
+                      })}
+                    >
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="todos">Todos os garçons</TabsTrigger>
+                        <TabsTrigger value="alguns">Só alguns</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {regraForm.garcons_participantes && (
+                      garcons.length === 0 ? (
+                        <p className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-muted-foreground">
+                          Nenhum garçom cadastrado ainda.
+                        </p>
+                      ) : (
+                        <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-gray-200 p-1.5">
+                          {garcons.map((g) => {
+                            const marcado = regraForm.garcons_participantes!.includes(g.id)
+                            return (
+                              <label
+                                key={g.id}
+                                htmlFor={`regra-participante-${g.id}`}
+                                className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-gray-50"
+                              >
+                                <Checkbox
+                                  id={`regra-participante-${g.id}`}
+                                  checked={marcado}
+                                  onCheckedChange={(v) => {
+                                    const atual = regraForm.garcons_participantes!
+                                    setRegraForm({
+                                      ...regraForm,
+                                      garcons_participantes: v ? [...atual, g.id] : atual.filter((id) => id !== g.id),
+                                    })
+                                  }}
+                                />
+                                <span className="text-sm text-gray-700">{g.nome_garcon}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )
+                    )}
+                  </div>
+
                   <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
                     {/* Só faz sentido pra semanal/mensal/trimestral — o
                         personalizado já define o próprio início (dias ou
@@ -1723,8 +1843,10 @@ export default function Garcons() {
         <SheetContent
           semOverlay
           className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
+          // Só leitura — clicar fora (na lista, ou no fundo do Dialog de
+          // regras logo atrás) fecha normal e volta pra lista. O Dialog em
+          // si continua protegido (não fecha sozinho por causa disto: ver
+          // comentário no `onPointerDownOutside` dele, acima).
         >
           {regraDetalhe && (
             <>
@@ -1749,12 +1871,27 @@ export default function Garcons() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Meta</p>
-                    <p className="text-sm text-gray-800">{regraDetalhe.meta_escaneamentos} QRs</p>
+                    <p className="text-sm text-gray-800">{regraDetalhe.meta_escaneamentos} QR Codes</p>
                   </div>
                   <div>
                     <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Frequência</p>
-                    <p className="text-sm text-gray-800">{FREQUENCIA_LABEL[regraDetalhe.frequencia]}</p>
+                    {/* Personalizada mostra o período de verdade (a cada N
+                        dias, ou a data-a-data escolhida) — "Período
+                        personalizado" sozinho não diz nada aqui. */}
+                    <p className="text-sm text-gray-800">{rotuloPeriodoRegra(regraDetalhe)}</p>
                   </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Quem participa</p>
+                  <p className="text-sm text-gray-800">
+                    {!regraDetalhe.garcons_participantes || regraDetalhe.garcons_participantes.length === 0
+                      ? 'Todos os garçons'
+                      : garcons
+                        .filter((g) => regraDetalhe.garcons_participantes!.includes(g.id))
+                        .map((g) => g.nome_garcon)
+                        .join(', ') || 'Nenhum garçom selecionado'}
+                  </p>
                 </div>
 
                 {regraDetalhe.premio && (
