@@ -128,7 +128,7 @@ function rotuloRegra(r: RegraBonificacao): string {
 function calcularInicioRegra(r: RegraBonificacao): string {
   const agora = new Date()
   if (r.frequencia === 'personalizado' || !r.alinhar_calendario) return agora.toISOString()
-  if (r.frequencia === 'semanal') return startOfWeek(agora, { weekStartsOn: 1 }).toISOString()
+  if (r.frequencia === 'semanal') return startOfWeek(agora, { weekStartsOn: 0 }).toISOString()
   if (r.frequencia === 'trimestral') return startOfQuarter(agora).toISOString()
   return startOfMonth(agora).toISOString()
 }
@@ -337,6 +337,11 @@ export default function Garcons() {
   /** null = mostrando a lista de regras; objeto = editando/criando uma. */
   const [regraForm, setRegraForm] = useState<RegraBonificacao | null>(null)
   const [salvandoRegra, setSalvandoRegra] = useState(false)
+  /** Regra aberta no painel de detalhes (lateral direita) — clicar numa
+   *  regra da lista abre isto, não o formulário de edição direto; editar
+   *  fica um clique depois, a partir daqui. Mesmo fluxo já usado pra
+   *  garçom (lista → painel de detalhes → editar). */
+  const [detalheRegraId, setDetalheRegraId] = useState<string | null>(null)
   /** scansPorRegra[regraId][garcomId] = escaneamentos DESDE o início do
    *  período atual daquela regra (não o total acumulado). */
   const [scansPorRegra, setScansPorRegra] = useState<Record<string, Record<number, number>>>({})
@@ -529,6 +534,23 @@ export default function Garcons() {
   }
 
   const garcomAtual = garcons.find((g) => g.id === detalheId) ?? null
+  const regraDetalhe = regras.find((r) => r.id === detalheRegraId) ?? null
+
+  /** Abre uma regra existente pra editar — usado só pelo painel de
+   *  detalhes agora. Fecha o painel junto: o formulário (520px) é mais
+   *  largo que o painel (448px) e os dois lado a lado no mesmo canto
+   *  direito da tela deixavam o rodapé do formulário embaixo do painel,
+   *  com o botão de Salvar cortado. O fallback defensivo é pra regras
+   *  salvas antes dos campos de período personalizado existirem. */
+  const abrirEditarRegra = (r: RegraBonificacao) => {
+    setDetalheRegraId(null)
+    setRegraForm({
+      ...r,
+      dias_personalizados: r.dias_personalizados ?? 15,
+      tipo_personalizado: r.tipo_personalizado ?? 'dias',
+      alinhar_calendario: r.alinhar_calendario ?? false,
+    })
+  }
 
   // Cria (se necessário) o QR daquele garçom e retorna o slug
   const ensureQr = async (garcomId: number): Promise<string> => {
@@ -1357,11 +1379,20 @@ export default function Garcons() {
           os botões primario/neutro em vez de um azul-e-fantasma padrão. */}
       <Dialog
         open={regrasAbertas}
-        onOpenChange={(open) => { setRegrasAbertas(open); if (!open) setRegraForm(null) }}
+        onOpenChange={(open) => {
+          setRegrasAbertas(open)
+          if (!open) { setRegraForm(null); setDetalheRegraId(null) }
+        }}
       >
         <DialogContent
           classNameOverlay="bg-black/25 backdrop-blur-[1px]"
           className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]"
+          // O painel de detalhes da regra (Sheet logo abaixo) é portalado
+          // como IRMÃO deste Dialog, não descendente — sem isto, o Radix
+          // via o clique dentro do Sheet como "fora" do Dialog e fechava
+          // ele (e o Sheet junto) sozinho ao clicar em "Editar" lá dentro.
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
         >
           {!regraForm ? (
             <>
@@ -1379,15 +1410,15 @@ export default function Garcons() {
                 ) : (
                   <ul className="divide-y divide-border">
                     {regras.map((r) => (
-                      <li key={r.id} className="flex items-center gap-3 py-3">
+                      <li key={r.id} className="flex items-center gap-2 py-3">
+                        {/* Clicar na regra abre só o painel de detalhes (ver
+                            <Sheet> abaixo) — editar é um passo a mais, a
+                            partir de lá. Ativar/desativar continua aqui do
+                            lado (é a única ação de 1 clique que faz sentido
+                            direto na lista), e excluir agora também. */}
                         <button
                           type="button"
-                          onClick={() => setRegraForm({
-                            ...r,
-                            dias_personalizados: r.dias_personalizados ?? 15,
-                            tipo_personalizado: r.tipo_personalizado ?? 'dias',
-                            alinhar_calendario: r.alinhar_calendario ?? false,
-                          })}
+                          onClick={() => setDetalheRegraId(r.id)}
                           className="min-w-0 flex-1 text-left"
                         >
                           <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
@@ -1402,6 +1433,40 @@ export default function Garcons() {
                           onCheckedChange={() => alternarAtivaRegra(r)}
                           className={CLASSE_SWITCH_REGRA}
                         />
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Excluir regra"
+                                  className="h-8 w-8 shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Excluir</TooltipContent>
+                          </Tooltip>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir "{rotuloRegra(r)}"?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => excluirRegra(r.id)}
+                                className="bg-red-600 text-white hover:bg-red-700"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </li>
                     ))}
                   </ul>
@@ -1552,7 +1617,7 @@ export default function Garcons() {
                       <div>
                         <label htmlFor="regra-alinhar" className="flex cursor-pointer items-center justify-between gap-3">
                           <span className="text-sm text-gray-700">
-                            Sempre começar {regraForm.frequencia === 'semanal' ? 'na segunda-feira'
+                            Sempre começar {regraForm.frequencia === 'semanal' ? 'no domingo'
                               : regraForm.frequencia === 'trimestral' ? 'no início do trimestre' : 'no dia 1'}
                           </span>
                           <Switch
@@ -1576,15 +1641,9 @@ export default function Garcons() {
                         className={CLASSE_SWITCH_REGRA}
                       />
                     </label>
-                    <label htmlFor="regra-ativa" className="flex cursor-pointer items-center justify-between gap-3">
-                      <span className="text-sm text-gray-700">Regra ativa</span>
-                      <Switch
-                        id="regra-ativa"
-                        checked={regraForm.ativa}
-                        onCheckedChange={(v) => setRegraForm({ ...regraForm, ativa: v })}
-                        className={CLASSE_SWITCH_REGRA}
-                      />
-                    </label>
+                    {/* Ativar/desativar mora só na lista de regras (o switch
+                        ao lado de cada uma) — repetir aqui dava dois lugares
+                        pra a mesma coisa, sem necessidade. */}
                   </div>
                 </div>
               </div>
@@ -1592,11 +1651,21 @@ export default function Garcons() {
               <DialogFooter className="shrink-0 gap-1 border-t bg-white p-4 sm:justify-between sm:space-x-0">
                 {regraForm.id ? (
                   <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700">
-                        Excluir
-                      </Button>
-                    </AlertDialogTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Excluir regra"
+                            className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 className="h-[18px] w-[18px]" />
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Excluir</TooltipContent>
+                    </Tooltip>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Excluir "{rotuloRegra(regraForm)}"?</AlertDialogTitle>
@@ -1607,7 +1676,7 @@ export default function Garcons() {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => { excluirRegra(regraForm.id); setRegraForm(null) }}
+                          onClick={() => { excluirRegra(regraForm.id); setRegraForm(null); setDetalheRegraId(null) }}
                           className="bg-red-600 text-white hover:bg-red-700"
                         >
                           Excluir
@@ -1641,6 +1710,123 @@ export default function Garcons() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Detalhes da regra — só leitura, abre ao clicar numa regra da
+          lista acima. Mesmo padrão do painel do garçom: painel na lateral
+          direita da TELA (por isso é um Sheet, não outra vista dentro do
+          Dialog de regras), com Editar/Excluir como ícones no fim; editar
+          e ativar/desativar não vivem aqui — editar abre o formulário por
+          cima, ativar/desativar é só na lista. `modal={false}` +
+          `semOverlay` pra não empilhar um segundo fundo escurecido em cima
+          do overlay do Dialog de regras, que já está aberto atrás. */}
+      <Sheet open={!!regraDetalhe} onOpenChange={(open) => { if (!open) setDetalheRegraId(null) }} modal={false}>
+        <SheetContent
+          semOverlay
+          className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          {regraDetalhe && (
+            <>
+              <SheetHeader className="p-5 border-b bg-white shrink-0 text-left">
+                <SheetTitle className="pr-8 text-lg font-bold leading-snug">{rotuloRegra(regraDetalhe)}</SheetTitle>
+                <SheetDescription className="sr-only">Detalhes da regra de bonificação</SheetDescription>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4 space-y-6">
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Status</p>
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
+                      regraDetalhe.ativa ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500',
+                    )}
+                  >
+                    {regraDetalhe.ativa ? 'Ativa' : 'Inativa'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Meta</p>
+                    <p className="text-sm text-gray-800">{regraDetalhe.meta_escaneamentos} QRs</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Frequência</p>
+                    <p className="text-sm text-gray-800">{FREQUENCIA_LABEL[regraDetalhe.frequencia]}</p>
+                  </div>
+                </div>
+
+                {regraDetalhe.premio && (
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Prêmio</p>
+                    <p className="text-sm text-gray-800">{regraDetalhe.premio}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Renovação</p>
+                  <p className="text-sm text-gray-800">
+                    {regraDetalhe.renovar_automatico ? 'Renova automaticamente' : 'Não renova sozinha'}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-1 border-t pt-4">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => abrirEditarRegra(regraDetalhe)}
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar regra"
+                        className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                      >
+                        <Pencil className="h-[18px] w-[18px]" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Editar</TooltipContent>
+                  </Tooltip>
+
+                  <AlertDialog>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Excluir regra"
+                            className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 className="h-[18px] w-[18px]" />
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Excluir</TooltipContent>
+                    </Tooltip>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir "{rotuloRegra(regraDetalhe)}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O progresso e o histórico de pagamento dela somem junto. Não dá para desfazer.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => { excluirRegra(regraDetalhe.id); setDetalheRegraId(null) }}
+                          className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
