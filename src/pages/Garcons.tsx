@@ -110,6 +110,16 @@ function corPorIndice(i: number) {
  *  o quanto andou. */
 const COR_BARRA_REGRA = 'bg-blue-500'
 
+/** A mesma pílula escura em degradê do botão de "Baixar" de Relatórios —
+ *  compartilhada entre o botão normal (dividido, com dropdown) e o "Baixar
+ *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
+ *  (só o arredondamento/padding muda conforme o contexto). */
+const CLASSE_BOTAO_BAIXAR =
+  'gap-1.5 bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 text-sm font-medium text-white ' +
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
+  'hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 ' +
+  'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
+
 /** Só dígitos, formatado como telefone BR enquanto a pessoa digita — nunca
  *  deixa passar letra nem símbolo que não seja da própria formatação. Fixo
  *  no DDD (2) + 4 dígitos até completar telefone fixo (10) e vira 9 dígitos
@@ -541,19 +551,21 @@ export default function Garcons() {
                 <X className="h-4 w-4 mr-1.5" /> Cancelar
               </Button>
               <Button
-                variant="primario"
-                size="sm"
                 onClick={confirmarSelecao}
                 disabled={selecionados.size === 0 || baixando}
+                className={cn('h-9 rounded-full px-4', CLASSE_BOTAO_BAIXAR)}
               >
-                {baixando ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+                {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 Baixar ({selecionados.size})
               </Button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={abrirCriar} className="rounded-full">
-                <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
+              <Button
+                onClick={abrirCriar}
+                className="h-7 gap-1 rounded-full bg-emerald-600 px-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                <Plus className="h-3.5 w-3.5" /> Novo garçom
               </Button>
               <div className="flex-1" />
               {garcons.length > 0 && (
@@ -561,7 +573,10 @@ export default function Garcons() {
                   <Button
                     onClick={() => baixarPdf()}
                     disabled={baixando}
-                    className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                    className={cn(
+                      'h-9 rounded-l-full rounded-r-none border-r border-white/10 pl-3 pr-2.5 disabled:border-transparent',
+                      CLASSE_BOTAO_BAIXAR,
+                    )}
                   >
                     {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Baixar QRCodes
@@ -571,7 +586,7 @@ export default function Garcons() {
                       <Button
                         aria-label="Escolher garçons"
                         disabled={baixando}
-                        className="h-9 rounded-l-none rounded-r-full bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                        className={cn('h-9 rounded-l-none rounded-r-full px-2.5', CLASSE_BOTAO_BAIXAR)}
                       >
                         <ChevronDown className="h-3.5 w-3.5" />
                       </Button>
@@ -606,14 +621,9 @@ export default function Garcons() {
                     size="icon"
                     aria-label="Bonificação"
                     onClick={() => setRegrasAbertas(true)}
-                    className="relative h-9 w-9"
+                    className="h-9 w-9"
                   >
                     <Settings2 className="h-4 w-4" />
-                    {regrasAtivas.length > 0 && (
-                      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
-                        {regrasAtivas.length}
-                      </span>
-                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">Bonificação</TooltipContent>
@@ -638,7 +648,10 @@ export default function Garcons() {
                         <button
                           type="button"
                           onClick={() => (selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id))}
-                          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50"
+                          className={cn(
+                            'flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors',
+                            marcado ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50',
+                          )}
                         >
                           {selecionando && (
                             <span
