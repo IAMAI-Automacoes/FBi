@@ -20,11 +20,15 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, Pencil,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, ChevronDown,
+  ListChecks, Pencil, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
-import { desenharPoster, landingUrl, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
+import { desenharPoster, landingUrl, baixarBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
 import { getIniciais, CORES_AVATAR } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
 
@@ -80,6 +84,19 @@ function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
   return addMonths(inicio, 1)
 }
 
+/**
+ * Compara dois timestamps ISO como instantes de verdade (`Date.getTime()`),
+ * nunca como string. `periodo_inicio` sai de `new Date().toISOString()` no
+ * JS (sempre 3 dígitos de milissegundo + "Z"), mas `scanned_at` vem do
+ * Postgres via PostgREST — que manda `timestamptz` como "+00:00" e às vezes
+ * com 6 dígitos. Comparar essas duas strings com `<` colocava escaneamentos
+ * de ANTES da regra existir como se fossem depois em alguns instantes (a
+ * causa do "criei a regra e ela já contou escaneamento antigo").
+ */
+function antesDe(a: string, b: string): boolean {
+  return new Date(a).getTime() < new Date(b).getTime()
+}
+
 /** Cor do avatar pela POSIÇÃO na lista, não pelo hash do nome — com poucos
  *  garçons (o caso comum aqui) o hash colide com frequência e duas pessoas
  *  acabam com a mesma cor. Por posição, ninguém repete enquanto a lista
@@ -129,6 +146,11 @@ export default function Garcons() {
   const [posterMsg, setPosterMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [baixando, setBaixando] = useState(false)
+
+  // "Baixar só os selecionados": enquanto true, os cards viram checáveis em
+  // vez de abrirem o painel de detalhes.
+  const [selecionando, setSelecionando] = useState(false)
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set())
 
   // Criar/editar garçom — um popup só, reaproveitado pelos dois fluxos.
   const [formAberto, setFormAberto] = useState<'criar' | 'editar' | null>(null)
@@ -231,7 +253,7 @@ export default function Garcons() {
       for (const reg of regrasComPeriodo) {
         const porGarcom: Record<number, number> = {}
         for (const s of scans ?? []) {
-          if (s.scanned_at < reg.periodo_inicio!) continue
+          if (antesDe(s.scanned_at, reg.periodo_inicio!)) continue
           const gId = qrCodeIdParaGarcom[s.qr_code_id]
           if (gId) porGarcom[gId] = (porGarcom[gId] ?? 0) + 1
         }
@@ -241,7 +263,7 @@ export default function Garcons() {
 
       const porMes: Record<number, number> = {}
       for (const s of scans ?? []) {
-        if (s.scanned_at < inicioMes) continue
+        if (antesDe(s.scanned_at, inicioMes)) continue
         const gId = qrCodeIdParaGarcom[s.qr_code_id]
         if (gId) porMes[gId] = (porMes[gId] ?? 0) + 1
       }
@@ -316,19 +338,8 @@ export default function Garcons() {
     }
   }
 
-  const baixarPng = async (g: Garcom) => {
-    try {
-      const slug = await ensureQr(g.id)
-      const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg)
-      const blob = await canvasToBlob(canvas)
-      baixarBlob(blob, `qrcode-${g.nome_garcon.replace(/\s+/g, '-').toLowerCase()}.png`)
-    } catch (e: any) {
-      toast.error('Erro ao gerar PNG', { description: e.message })
-    }
-  }
-
-  const baixarPdf = async () => {
-    const ativos = garcons.filter((g) => g.ativo)
+  const baixarPdf = async (idsFiltro?: number[]) => {
+    const ativos = garcons.filter((g) => g.ativo && (!idsFiltro || idsFiltro.includes(g.id)))
     if (!ativos.length) { toast.error('Nenhum garçom para exportar'); return }
     setBaixando(true)
     try {
@@ -353,6 +364,20 @@ export default function Garcons() {
     } finally {
       setBaixando(false)
     }
+  }
+
+  const iniciarSelecao = () => { setSelecionando(true); setSelecionados(new Set()) }
+  const cancelarSelecao = () => { setSelecionando(false); setSelecionados(new Set()) }
+  const alternarSelecionado = (id: number) => {
+    setSelecionados((p) => {
+      const novo = new Set(p)
+      if (novo.has(id)) novo.delete(id); else novo.add(id)
+      return novo
+    })
+  }
+  const confirmarSelecao = async () => {
+    await baixarPdf([...selecionados])
+    cancelarSelecao()
   }
 
   const gravarRegras = async (novasRegras: RegraBonificacao[]) => {
@@ -506,37 +531,95 @@ export default function Garcons() {
 
         {/* Equipe */}
         <TabsContent value="equipe" className="mt-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={abrirCriar} className="rounded-full">
-              <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
-            </Button>
-            <div className="flex-1" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Bonificação"
-                  onClick={() => setRegrasAbertas(true)}
-                  className="relative h-9 w-9"
-                >
-                  <Settings2 className="h-4 w-4" />
-                  {regrasAtivas.length > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
-                      {regrasAtivas.length}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Bonificação</TooltipContent>
-            </Tooltip>
-            {garcons.length > 0 && (
-              <Button variant="primario" size="sm" onClick={baixarPdf} disabled={baixando}>
-                {baixando ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileDown className="h-4 w-4 mr-1.5" />}
-                Baixar QRCodes
+          {selecionando ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {selecionados.size} selecionado{selecionados.size === 1 ? '' : 's'}
+              </span>
+              <div className="flex-1" />
+              <Button variant="ghost" onClick={cancelarSelecao}>
+                <X className="h-4 w-4 mr-1.5" /> Cancelar
               </Button>
-            )}
-          </div>
+              <Button
+                variant="primario"
+                size="sm"
+                onClick={confirmarSelecao}
+                disabled={selecionados.size === 0 || baixando}
+              >
+                {baixando ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+                Baixar ({selecionados.size})
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={abrirCriar} className="rounded-full">
+                <Plus className="h-4 w-4 mr-1.5" /> Novo garçom
+              </Button>
+              <div className="flex-1" />
+              {garcons.length > 0 && (
+                <div className="flex items-stretch">
+                  <Button
+                    onClick={() => baixarPdf()}
+                    disabled={baixando}
+                    className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                  >
+                    {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    Baixar QRCodes
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        aria-label="Escolher garçons"
+                        disabled={baixando}
+                        className="h-9 rounded-l-none rounded-r-full bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[260px]">
+                      <DropdownMenuItem onClick={() => baixarPdf()} className="gap-3 py-2.5">
+                        <FileDown className="mt-0.5 h-4 w-4 shrink-0 text-gray-700" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900">Baixar todos de uma vez</p>
+                          <p className="text-xs leading-snug text-gray-500">
+                            Um PDF com o QR Code de cada garçom
+                          </p>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={iniciarSelecao} className="gap-3 py-2.5">
+                        <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-gray-700" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900">Baixar só os selecionados</p>
+                          <p className="text-xs leading-snug text-gray-500">
+                            Escolha quais garçons entram no PDF
+                          </p>
+                        </div>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Bonificação"
+                    onClick={() => setRegrasAbertas(true)}
+                    className="relative h-9 w-9"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    {regrasAtivas.length > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                        {regrasAtivas.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Bonificação</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
 
           {garcons.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
@@ -549,13 +632,24 @@ export default function Garcons() {
                   {garcons.map((g, i) => {
                     const cor = corPorIndice(i)
                     const total = qrs[g.id]?.total_scans ?? 0
+                    const marcado = selecionados.has(g.id)
                     return (
                       <li key={g.id}>
                         <button
                           type="button"
-                          onClick={() => setDetalheId(g.id)}
+                          onClick={() => (selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id))}
                           className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50"
                         >
+                          {selecionando && (
+                            <span
+                              className={cn(
+                                'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border',
+                                marcado ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 bg-white',
+                              )}
+                            >
+                              {marcado && <Check className="h-3.5 w-3.5" />}
+                            </span>
+                          )}
                           <span
                             className={cn(
                               'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
@@ -596,7 +690,7 @@ export default function Garcons() {
                               </div>
                             )}
                           </div>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
+                          {!selecionando && <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />}
                         </button>
                       </li>
                     )
@@ -766,65 +860,60 @@ export default function Garcons() {
                   )}
                 </div>
 
-                {/* Mesmo padrão do painel de ação: ação primária à esquerda,
-                    editar/excluir como ícones à direita (`ml-auto`), sem um
-                    rodapé próprio só pra eles. */}
-                <div className="flex items-center gap-2 border-t pt-4">
-                  <Button variant="primario" size="sm" onClick={() => baixarPng(garcomAtual)}>
-                    <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar QR Code (PNG)
-                  </Button>
+                {/* Baixar o QR de um garçom só agora é feito escolhendo-o em
+                    "Baixar só os selecionados" (na tela de Equipe) — editar e
+                    excluir continuam aqui como ícones, sem rodapé próprio só
+                    pra eles. */}
+                <div className="flex items-center justify-end gap-1 border-t pt-4">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => abrirEditar(garcomAtual)}
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar garçom"
+                        className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                      >
+                        <Pencil className="h-[18px] w-[18px]" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Editar</TooltipContent>
+                  </Tooltip>
 
-                  <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <AlertDialog>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => abrirEditar(garcomAtual)}
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Editar garçom"
-                          className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                        >
-                          <Pencil className="h-[18px] w-[18px]" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Editar</TooltipContent>
-                    </Tooltip>
-
-                    <AlertDialog>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Excluir garçom"
-                              className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            >
-                              <Trash2 className="h-[18px] w-[18px]" />
-                            </Button>
-                          </AlertDialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">Excluir</TooltipContent>
-                      </Tooltip>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            O QR Code dele sai junto. Não dá para desfazer.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => remover(garcomAtual.id)}
-                            className="bg-red-600 text-white hover:bg-red-700"
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Excluir garçom"
+                            className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
                           >
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                            <Trash2 className="h-[18px] w-[18px]" />
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Excluir</TooltipContent>
+                    </Tooltip>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O QR Code dele sai junto. Não dá para desfazer.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => remover(garcomAtual.id)}
+                          className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </>
