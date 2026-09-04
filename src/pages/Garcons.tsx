@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift,
+  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift, User, Phone,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
@@ -139,14 +139,15 @@ const COR_BARRA_REGRA = 'bg-blue-500'
  *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
  *  (só o arredondamento/padding muda conforme o contexto).
  *
- *  `slate-900`/`slate-950` (o tom mais escuro da paleta) são escuros demais
- *  pro azul aparecer em repouso — só ficava visível no `hover`, mais claro.
- *  Um degrau mais claro (`slate-700`→`slate-900`) deixa o preto azulado
- *  perceptível sempre, não só ao passar o mouse. */
+ *  `slate` é cinza-azulado de BAIXA saturação — perto de preto, o olho lê
+ *  só "preto", o azul quase some. `blue-800`/`blue-950` são a cor azul de
+ *  verdade (bem mais saturada) só que escura o bastante pra continuar lendo
+ *  como "preto" — assim o "azulado" fica óbvio sem precisar comparar lado a
+ *  lado ou passar o mouse. */
 const CLASSE_BOTAO_BAIXAR =
-  'gap-1.5 bg-slate-800 bg-gradient-to-b from-slate-700 to-slate-900 text-sm font-medium text-white ' +
+  'gap-1.5 bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 text-sm font-medium text-white ' +
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-  'hover:from-slate-600 hover:to-slate-800 active:shadow-none active:from-slate-800 active:to-slate-800 ' +
+  'hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 ' +
   'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
 
 /** Mesma construção do "baixar" (degradê + luz no topo + sombra baixa, pra
@@ -206,6 +207,9 @@ export default function Garcons() {
   const [formNome, setFormNome] = useState('')
   const [formTelefone, setFormTelefone] = useState('')
   const [salvandoForm, setSalvandoForm] = useState(false)
+  /** Só marca os campos vazios em vermelho depois da primeira tentativa de
+   *  salvar — igual ao popup de ação (TaskModal.tsx). */
+  const [tentouSalvarForm, setTentouSalvarForm] = useState(false)
 
   // Painel de detalhes — guarda só o id (não o objeto) pra nunca ficar com
   // uma cópia desatualizada depois de salvar; `garcomAtual` é derivado toda
@@ -341,15 +345,20 @@ export default function Garcons() {
     return slug
   }
 
-  const abrirCriar = () => { setFormAberto('criar'); setFormNome(''); setFormTelefone('') }
-  const abrirEditar = (g: Garcom) => { setFormAberto('editar'); setFormNome(g.nome_garcon); setFormTelefone(g.telefone ?? '') }
+  const abrirCriar = () => {
+    setFormAberto('criar'); setFormNome(''); setFormTelefone(''); setTentouSalvarForm(false)
+  }
+  const abrirEditar = (g: Garcom) => {
+    setFormAberto('editar'); setFormNome(g.nome_garcon); setFormTelefone(g.telefone ?? ''); setTentouSalvarForm(false)
+  }
 
   const salvarForm = async () => {
+    setTentouSalvarForm(true)
     const nome = formNome.trim()
-    if (!nome) return
+    const telefone = formTelefone.trim()
+    if (!nome || !telefone) return
     setSalvandoForm(true)
     try {
-      const telefone = formTelefone.trim() || null
       if (formAberto === 'criar') {
         if (!restauranteId) return
         const { data, error } = await supabase
@@ -534,10 +543,7 @@ export default function Garcons() {
           ) : (
             <>
               <Card>
-                <CardContent className="p-5 sm:p-6">
-                  <p className="mb-6 text-sm text-muted-foreground">
-                    Quem mais fez os clientes escanearem o QR Code.
-                  </p>
+                <CardContent className="p-4 sm:p-5">
                   <div className="flex items-end justify-center gap-3 sm:gap-6">
                     {[1, 0, 2].map((idx) => {
                       const g = ranking[idx]
@@ -798,15 +804,24 @@ export default function Garcons() {
         </TabsContent>
       </Tabs>
 
-      {/* Novo / editar garçom — o mesmo popup atende os dois fluxos */}
+      {/* Novo / editar garçom — o mesmo popup atende os dois fluxos. Mesmo
+          desenho do popup de ação e do de regra de bonificação: fundo mais
+          claro atrás, campo com ícone, erro só depois de tentar salvar, e os
+          botões primario/neutro em vez de outline-e-azul-padrão. */}
       <Dialog open={!!formAberto} onOpenChange={(open) => !open && setFormAberto(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>{formAberto === 'editar' ? 'Editar garçom' : 'Novo garçom'}</DialogTitle>
+        <DialogContent
+          classNameOverlay="bg-black/25 backdrop-blur-[1px]"
+          className="gap-0 p-0 sm:max-w-[420px]"
+        >
+          <DialogHeader className="px-5 pb-1 pt-5 text-left">
+            <DialogTitle className="text-base font-semibold leading-snug">
+              {formAberto === 'editar' ? 'Editar garçom' : 'Novo garçom'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="form-nome">Nome</Label>
+
+          <div className="space-y-5 px-5 pb-5 pt-3">
+            <div className="space-y-2">
+              <RotuloCampo icone={User} htmlFor="form-nome">Nome</RotuloCampo>
               <Input
                 id="form-nome"
                 autoFocus
@@ -814,10 +829,14 @@ export default function Garcons() {
                 onChange={(e) => setFormNome(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
                 placeholder="Nome do garçom"
+                className={cn(
+                  'h-10',
+                  tentouSalvarForm && !formNome.trim() && 'border-red-400 focus-visible:ring-red-400',
+                )}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="form-telefone">Telefone (opcional)</Label>
+            <div className="space-y-2">
+              <RotuloCampo icone={Phone} htmlFor="form-telefone">Telefone</RotuloCampo>
               <Input
                 id="form-telefone"
                 type="tel"
@@ -826,12 +845,21 @@ export default function Garcons() {
                 onChange={(e) => setFormTelefone(formatarTelefone(e.target.value))}
                 onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
                 placeholder="(11) 99999-9999"
+                className={cn(
+                  'h-10',
+                  tentouSalvarForm && !formTelefone.trim() && 'border-red-400 focus-visible:ring-red-400',
+                )}
               />
             </div>
+
+            {tentouSalvarForm && (!formNome.trim() || !formTelefone.trim()) && (
+              <p className="text-sm text-red-600">Preencha nome e telefone para continuar.</p>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormAberto(null)}>Cancelar</Button>
-            <Button onClick={salvarForm} disabled={salvandoForm || !formNome.trim()}>
+
+          <DialogFooter className="gap-1 border-t bg-white p-4 sm:justify-end sm:space-x-0">
+            <Button variant="neutro" size="forma" onClick={() => setFormAberto(null)}>Cancelar</Button>
+            <Button variant="primario" size="forma" onClick={salvarForm} disabled={salvandoForm}>
               {salvandoForm && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               {formAberto === 'editar' ? 'Salvar' : 'Adicionar'}
             </Button>

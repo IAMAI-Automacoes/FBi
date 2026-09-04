@@ -472,7 +472,7 @@ function LayoutNovo({
             <Button
               onClick={handleExportPdf}
               disabled={semDados || gerandoPdf || gerandoCsv}
-              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-slate-800 bg-gradient-to-b from-slate-700 to-slate-900 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-slate-600 hover:to-slate-800 active:shadow-none active:from-slate-800 active:to-slate-800 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
             >
               {gerandoPdf ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -487,7 +487,7 @@ function LayoutNovo({
                 <Button
                   aria-label="Escolher formato"
                   disabled={semDados || gerandoPdf || gerandoCsv}
-                  className="h-9 rounded-l-none rounded-r-full bg-slate-800 bg-gradient-to-b from-slate-700 to-slate-900 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-slate-600 hover:to-slate-800 active:shadow-none active:from-slate-800 active:to-slate-800 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                  className="h-9 rounded-l-none rounded-r-full bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
