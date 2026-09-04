@@ -119,14 +119,32 @@ function corPorIndice(i: number) {
   return CORES_AVATAR[i % CORES_AVATAR.length]
 }
 
-/** Altura e cor do bloco de cada posição do pódio — ouro, prata e bronze
- *  (aproximados: o Tailwind não tem essas cores prontas). A altura decrescente
- *  é o que faz o conjunto ler como pódio mesmo sem escrever "1º/2º/3º" em
- *  lugar nenhum: o número já mora dentro do próprio bloco. */
-const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; bloco: string; numero: string }> = {
-  1: { altura: 'h-28', bloco: 'bg-amber-400', numero: 'text-amber-900' },
-  2: { altura: 'h-20', bloco: 'bg-slate-300', numero: 'text-slate-700' },
-  3: { altura: 'h-16', bloco: 'bg-orange-400', numero: 'text-orange-900' },
+/** Altura e degradê metálico de cada posição do pódio — ouro, prata e bronze.
+ *
+ *  Uma cor chapada (`bg-amber-400`) lê como plástico, não metal. O efeito de
+ *  metal polido é sempre a mesma receita (pesquisada, não inventada): uma
+ *  faixa clara-escura-clara em diagonal, imitando o brilho batendo numa
+ *  superfície curva — por isso o degradê tem 7 pontos (escuro/claro/médio/
+ *  claro/médio/claro/escuro), não 2. A base de cada metal:
+ *  ouro #D4AF37, prata #C0C0C0, bronze #CD7F32 — as referências hex mais
+ *  citadas pra essas cores — com uma faixa bem mais clara (quase branca) no
+ *  meio simulando o reflexo. */
+const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; gradiente: string; numero: string }> = {
+  1: {
+    altura: 'h-24',
+    gradiente: 'linear-gradient(135deg, #8a6407 6%, #fff6da 16%, #d4af37 34%, #fbe491 50%, #d4af37 66%, #fff6da 84%, #8a6407 94%)',
+    numero: '#5c3f04',
+  },
+  2: {
+    altura: 'h-16',
+    gradiente: 'linear-gradient(135deg, #86888c 6%, #ffffff 16%, #c0c0c0 34%, #f1f2f3 50%, #c0c0c0 66%, #ffffff 84%, #86888c 94%)',
+    numero: '#45474a',
+  },
+  3: {
+    altura: 'h-12',
+    gradiente: 'linear-gradient(135deg, #703f16 6%, #f3cda3 16%, #cd7f32 34%, #eab276 50%, #cd7f32 66%, #f3cda3 84%, #703f16 94%)',
+    numero: '#4a280c',
+  },
 }
 
 /** Cor única da barrinha de progresso de uma regra — o texto ao lado (quantos
@@ -543,7 +561,7 @@ export default function Garcons() {
           ) : (
             <>
               <Card>
-                <CardContent className="p-4 sm:p-5">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-end justify-center gap-3 sm:gap-6">
                     {[1, 0, 2].map((idx) => {
                       const g = ranking[idx]
@@ -556,20 +574,30 @@ export default function Garcons() {
                         <div key={g.id} className="flex flex-col items-center">
                           <span
                             className={cn(
-                              'flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold',
+                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
                               cor.bg, cor.text,
                             )}
                           >
                             {getIniciais(g.nome_garcon)}
                           </span>
-                          <p className="mt-2 max-w-[92px] truncate text-center text-sm font-semibold text-gray-900">
+                          <p className="mt-1.5 max-w-[92px] truncate text-center text-sm font-semibold text-gray-900">
                             {g.nome_garcon}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {scans} abertura{scans === 1 ? '' : 's'}
                           </p>
-                          <div className={cn('mt-2 w-20 rounded-t-lg', config.altura, config.bloco)}>
-                            <div className={cn('flex h-8 items-center justify-center text-lg font-bold', config.numero)}>
+                          <div
+                            className={cn('mt-1.5 w-20 rounded-t-lg', config.altura)}
+                            style={{
+                              background: config.gradiente,
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.5)',
+                              borderTop: '2px solid rgba(255,255,255,0.6)',
+                            }}
+                          >
+                            <div
+                              className="flex h-8 items-center justify-center text-lg font-bold"
+                              style={{ color: config.numero, textShadow: '0 1px 0 rgba(255,255,255,0.5), 0 -1px 0 rgba(0,0,0,0.25)' }}
+                            >
                               {posicao}
                             </div>
                           </div>

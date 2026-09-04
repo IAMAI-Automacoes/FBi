@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { MessageSquare, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 export default function Index() {
   const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('visao-geral:periodo', '7d')
@@ -73,6 +74,39 @@ export default function Index() {
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
 
+      {/* Filtro de período — no topo da página, não escondido dentro do
+          card de tendência (que tem o próprio título pra disputar espaço).
+          Tamanho 1,5x o antigo (h-7 → h-10/h-11, texto xs → sm). */}
+      {!isNeverUsed && (
+        <div className="flex justify-end">
+          <ToggleGroup
+            type="single"
+            value={period}
+            onValueChange={(v) => v && setPeriod(v as PeriodInfo)}
+            className="bg-muted p-1.5 rounded-xl"
+          >
+            <ToggleGroupItem
+              value="7d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              7d
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="30d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              30d
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="90d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              90d
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      )}
+
       {isLoading ? (
         <>
           <div className="flex items-center gap-10">
@@ -110,12 +144,7 @@ export default function Index() {
             </div>
           )}
           <KpiCards data={data.kpis} period={period} />
-          <TrendChart
-            data={data.chartData}
-            categories={data.categories}
-            period={period}
-            onPeriodChange={setPeriod}
-          />
+          <TrendChart data={data.chartData} categories={data.categories} />
           <TemasFeedback
             restauranteId={usuario?.restaurante_id ?? null}
             dias={getPeriodDates(period).days}
