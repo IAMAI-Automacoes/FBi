@@ -1131,7 +1131,10 @@ export default function Garcons() {
                     const cor = corPorIndice(i)
                     const total = qrs[g.id]?.total_scans ?? 0
                     const marcado = selecionados.has(g.id)
-                    const regrasDele = regrasDoGarcom(g.id)
+                    // Regra arquivada (paga há mais de 24h) some daqui também,
+                    // não só de dentro do painel de detalhes — senão a barra de
+                    // progresso "concluída" ficava pra sempre na lista principal.
+                    const regrasDele = regrasDoGarcom(g.id).filter((r) => !foiArquivada(r, g))
                     return (
                       <li key={g.id}>
                         {/* `div` + `role="button"`, não um `<button>` — precisa
