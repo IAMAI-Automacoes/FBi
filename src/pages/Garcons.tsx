@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ListChecks, Pencil, X,
+  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
@@ -78,6 +78,20 @@ function rotuloRegra(r: RegraBonificacao): string {
   return r.nome.trim() || `${r.meta_escaneamentos} QRs por ${FREQUENCIA_CURTA[r.frequencia]}`
 }
 
+/** Rótulo de campo do formulário de regra — mesmo desenho do popup de ação
+ *  (`RotuloCampo` em `TaskModal.tsx`): caixa alta pequena com um ícone à
+ *  frente, em vez de um `<Label>` pelado. */
+function RotuloCampo({
+  children, icone: Icone, htmlFor,
+}: { children: React.ReactNode; icone: React.ElementType; htmlFor?: string }) {
+  return (
+    <Label htmlFor={htmlFor} className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700">
+      <Icone className="h-3.5 w-3.5 text-gray-400" />
+      {children}
+    </Label>
+  )
+}
+
 function avancarPeriodo(inicio: Date, frequencia: Frequencia): Date {
   if (frequencia === 'semanal') return addDays(inicio, 7)
   if (frequencia === 'trimestral') return addMonths(inicio, 3)
@@ -105,6 +119,16 @@ function corPorIndice(i: number) {
   return CORES_AVATAR[i % CORES_AVATAR.length]
 }
 
+/** Altura e cor do bloco de cada posição do pódio — ouro, prata e bronze
+ *  (aproximados: o Tailwind não tem essas cores prontas). A altura decrescente
+ *  é o que faz o conjunto ler como pódio mesmo sem escrever "1º/2º/3º" em
+ *  lugar nenhum: o número já mora dentro do próprio bloco. */
+const PODIO_CONFIG: Record<1 | 2 | 3, { altura: string; bloco: string; numero: string }> = {
+  1: { altura: 'h-28', bloco: 'bg-amber-400', numero: 'text-amber-900' },
+  2: { altura: 'h-20', bloco: 'bg-slate-300', numero: 'text-slate-700' },
+  3: { altura: 'h-16', bloco: 'bg-orange-400', numero: 'text-orange-900' },
+}
+
 /** Cor única da barrinha de progresso de uma regra — o texto ao lado (quantos
  *  já foi, quantos falta, se já foi pago) já diz o estado; a barra só mostra
  *  o quanto andou. */
@@ -115,10 +139,20 @@ const COR_BARRA_REGRA = 'bg-blue-500'
  *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
  *  (só o arredondamento/padding muda conforme o contexto). */
 const CLASSE_BOTAO_BAIXAR =
-  'gap-1.5 bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 text-sm font-medium text-white ' +
+  'gap-1.5 bg-slate-900 bg-gradient-to-b from-slate-800 to-slate-950 text-sm font-medium text-white ' +
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-  'hover:from-gray-700 hover:to-gray-900 active:shadow-none active:from-gray-900 active:to-gray-900 ' +
+  'hover:from-slate-700 hover:to-slate-900 active:shadow-none active:from-slate-900 active:to-slate-900 ' +
   'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
+
+/** Mesma construção do "baixar" (degradê + luz no topo + sombra baixa, pra
+ *  ter volume de botão de verdade em vez de um retângulo de cor chapada) —
+ *  só que em azul, porque o preto azulado ali em cima já significa "baixar";
+ *  usar a mesma cor pra "criar" faria as duas ações parecerem uma coisa só
+ *  lado a lado na barra. */
+const CLASSE_BOTAO_NOVO =
+  'bg-blue-600 bg-gradient-to-b from-blue-500 to-blue-700 text-white ' +
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(16,24,40,0.20)] ' +
+  'hover:from-blue-400 hover:to-blue-600 active:shadow-none active:from-blue-600 active:to-blue-600'
 
 /** Só dígitos, formatado como telefone BR enquanto a pessoa digita — nunca
  *  deixa passar letra nem símbolo que não seja da própria formatação. Fixo
@@ -462,7 +496,6 @@ export default function Garcons() {
   const ranking = [...garcons].sort((a, b) => (qrs[b.id]?.total_scans ?? 0) - (qrs[a.id]?.total_scans ?? 0))
   const maiorScans = ranking.length ? qrs[ranking[0].id]?.total_scans ?? 0 : 0
   const temAberturas = maiorScans > 0
-  const medalha = ['🥇', '🥈', '🥉']
   const regrasAtivas = regras.filter((r) => r.ativa && r.periodo_inicio && r.meta_escaneamentos > 0)
 
   if (loading) {
@@ -482,61 +515,106 @@ export default function Garcons() {
         </TabsList>
 
         {/* Ranking */}
-        <TabsContent value="ranking" className="mt-0">
-          <Card>
-            <CardContent className="p-5 sm:p-6">
-              {ranking.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">Nenhum garçom cadastrado ainda.</p>
-              ) : !temAberturas ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  Ainda não há aberturas registradas. Baixe os QR Codes na aba <b>Equipe</b> e distribua.
-                </p>
-              ) : (
-                <>
-                  <p className="mb-4 text-sm text-muted-foreground">
+        <TabsContent value="ranking" className="mt-0 space-y-4">
+          {ranking.length === 0 ? (
+            <Card><CardContent className="p-5 sm:p-6">
+              <p className="py-12 text-center text-sm text-muted-foreground">Nenhum garçom cadastrado ainda.</p>
+            </CardContent></Card>
+          ) : !temAberturas ? (
+            <Card><CardContent className="p-5 sm:p-6">
+              <p className="py-12 text-center text-sm text-muted-foreground">
+                Ainda não há aberturas registradas. Baixe os QR Codes na aba <b>Equipe</b> e distribua.
+              </p>
+            </CardContent></Card>
+          ) : (
+            <>
+              <Card>
+                <CardContent className="p-5 sm:p-6">
+                  <p className="mb-6 text-sm text-muted-foreground">
                     Quem mais fez os clientes escanearem o QR Code.
                   </p>
-                  <ul className="space-y-1">
-                    {ranking.map((g, i) => {
+                  <div className="flex items-end justify-center gap-3 sm:gap-6">
+                    {[1, 0, 2].map((idx) => {
+                      const g = ranking[idx]
+                      if (!g) return null
+                      const posicao = (idx + 1) as 1 | 2 | 3
                       const scans = qrs[g.id]?.total_scans ?? 0
-                      const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
-                      const cor = corPorIndice(i)
+                      const cor = corPorIndice(idx)
+                      const config = PODIO_CONFIG[posicao]
                       return (
-                        <li
-                          key={g.id}
-                          className={cn('flex items-center gap-3 rounded-lg px-3 py-3', i === 0 && 'bg-amber-50/70')}
-                        >
-                          <span className="w-6 shrink-0 text-center text-sm font-bold text-muted-foreground">
-                            {i < 3 ? medalha[i] : i + 1}
-                          </span>
+                        <div key={g.id} className="flex flex-col items-center">
                           <span
                             className={cn(
-                              'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                              'flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold',
                               cor.bg, cor.text,
                             )}
                           >
                             {getIniciais(g.nome_garcon)}
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="truncate text-sm font-medium text-gray-900">{g.nome_garcon}</span>
-                              <span className="shrink-0 text-sm font-bold text-gray-900">
-                                {scans}
-                                <span className="ml-1 text-xs font-normal text-muted-foreground">aberturas</span>
-                              </span>
-                            </div>
-                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                          <p className="mt-2 max-w-[92px] truncate text-center text-sm font-semibold text-gray-900">
+                            {g.nome_garcon}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {scans} abertura{scans === 1 ? '' : 's'}
+                          </p>
+                          <div className={cn('mt-2 w-20 rounded-t-lg', config.altura, config.bloco)}>
+                            <div className={cn('flex h-8 items-center justify-center text-lg font-bold', config.numero)}>
+                              {posicao}
                             </div>
                           </div>
-                        </li>
+                        </div>
                       )
                     })}
-                  </ul>
-                </>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Do 4º em diante é só lista — o pódio já contou a história de
+                  quem chegou na frente; daqui pra baixo o que importa é achar
+                  o nome, e a colocação é só o número mesmo. */}
+              {ranking.length > 3 && (
+                <Card>
+                  <CardContent className="p-2">
+                    <ul className="divide-y divide-border">
+                      {ranking.slice(3).map((g, i) => {
+                        const posicao = i + 4
+                        const scans = qrs[g.id]?.total_scans ?? 0
+                        const pct = maiorScans > 0 ? Math.round((scans / maiorScans) * 100) : 0
+                        const cor = corPorIndice(posicao - 1)
+                        return (
+                          <li key={g.id} className="flex items-center gap-3 px-4 py-3.5">
+                            <span className="w-6 shrink-0 text-center text-sm font-bold text-muted-foreground">
+                              {posicao}
+                            </span>
+                            <span
+                              className={cn(
+                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                cor.bg, cor.text,
+                              )}
+                            >
+                              {getIniciais(g.nome_garcon)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="truncate text-sm font-medium text-gray-900">{g.nome_garcon}</span>
+                                <span className="shrink-0 text-sm font-bold text-gray-900">
+                                  {scans}
+                                  <span className="ml-1 text-xs font-normal text-muted-foreground">aberturas</span>
+                                </span>
+                              </div>
+                              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* Equipe */}
@@ -563,7 +641,7 @@ export default function Garcons() {
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={abrirCriar}
-                className="h-7 gap-1 rounded-full bg-emerald-600 px-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+                className={cn('h-7 gap-1 rounded-full px-2.5 text-sm', CLASSE_BOTAO_NOVO)}
               >
                 <Plus className="h-3.5 w-3.5" /> Novo garçom
               </Button>
@@ -650,7 +728,7 @@ export default function Garcons() {
                           onClick={() => (selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id))}
                           className={cn(
                             'flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors',
-                            marcado ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50',
+                            marcado ? 'bg-blue-100 hover:bg-blue-200' : 'hover:bg-gray-50',
                           )}
                         >
                           {selecionando && (
@@ -934,47 +1012,64 @@ export default function Garcons() {
         </SheetContent>
       </Sheet>
 
-      {/* Regras de bonificação — lista, ou o formulário de uma regra */}
+      {/* Regras de bonificação — lista, ou o formulário de uma regra. Mesmo
+          desenho do popup de ação (TaskModal.tsx): fundo mais claro atrás
+          (o dono continua vendo a equipe por trás do popup, em vez do quadro
+          inteiro apagado), cabeçalho fixo + miolo rolável + rodapé fixo, e
+          os botões primario/neutro em vez de um azul-e-fantasma padrão. */}
       <Dialog
         open={regrasAbertas}
         onOpenChange={(open) => { setRegrasAbertas(open); if (!open) setRegraForm(null) }}
       >
-        <DialogContent className="sm:max-w-[440px]">
+        <DialogContent
+          classNameOverlay="bg-black/25 backdrop-blur-[1px]"
+          className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]"
+        >
           {!regraForm ? (
             <>
-              <DialogHeader>
-                <DialogTitle>Bonificação por escaneamentos</DialogTitle>
+              <DialogHeader className="shrink-0 px-5 pb-1 pt-5 text-left">
+                <DialogTitle className="text-base font-semibold leading-snug">
+                  Bonificação por escaneamentos
+                </DialogTitle>
               </DialogHeader>
-              {regras.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nenhuma regra criada ainda.
-                </p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {regras.map((r) => (
-                    <li key={r.id} className="flex items-center gap-3 py-2.5">
-                      <button type="button" onClick={() => setRegraForm({ ...r })} className="min-w-0 flex-1 text-left">
-                        <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
-                          {rotuloRegra(r)}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {FREQUENCIA_LABEL[r.frequencia]}{r.premio ? ` · ${r.premio}` : ''}
-                        </p>
-                      </button>
-                      <Switch checked={r.ativa} onCheckedChange={() => alternarAtivaRegra(r)} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <DialogFooter className="sm:justify-start">
-                <Button variant="outline" onClick={() => setRegraForm(novaRegraVazia())} className="w-full sm:w-auto">
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
+                {regras.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Nenhuma regra criada ainda.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {regras.map((r) => (
+                      <li key={r.id} className="flex items-center gap-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setRegraForm({ ...r })}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className={cn('truncate text-sm font-medium', r.ativa ? 'text-gray-900' : 'text-muted-foreground')}>
+                            {rotuloRegra(r)}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {FREQUENCIA_LABEL[r.frequencia]}{r.premio ? ` · ${r.premio}` : ''}
+                          </p>
+                        </button>
+                        <Switch checked={r.ativa} onCheckedChange={() => alternarAtivaRegra(r)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <DialogFooter className="shrink-0 gap-1 border-t bg-white p-4 sm:justify-end sm:space-x-0">
+                <Button variant="primario" size="forma" onClick={() => setRegraForm(novaRegraVazia())}>
                   <Plus className="h-4 w-4 mr-1.5" /> Nova regra
                 </Button>
               </DialogFooter>
             </>
           ) : (
             <>
-              <DialogHeader>
+              <DialogHeader className="shrink-0 px-5 pb-1 pt-5 text-left">
                 <button
                   type="button"
                   onClick={() => setRegraForm(null)}
@@ -982,85 +1077,92 @@ export default function Garcons() {
                 >
                   <ChevronLeft className="h-3.5 w-3.5" /> Regras
                 </button>
-                <DialogTitle>{regraForm.id ? 'Editar regra' : 'Nova regra'}</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-snug">
+                  {regraForm.id ? 'Editar regra' : 'Nova regra'}
+                </DialogTitle>
               </DialogHeader>
 
-              <div className="grid gap-4 py-1">
-                <div className="space-y-1.5">
-                  <Label htmlFor="regra-nome">Nome (opcional)</Label>
-                  <Input
-                    id="regra-nome"
-                    value={regraForm.nome}
-                    onChange={(e) => setRegraForm({ ...regraForm, nome: e.target.value })}
-                    placeholder="Ex.: Meta do mês"
-                  />
-                </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3">
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <RotuloCampo icone={Tag} htmlFor="regra-nome">Nome (opcional)</RotuloCampo>
+                    <Input
+                      id="regra-nome"
+                      value={regraForm.nome}
+                      onChange={(e) => setRegraForm({ ...regraForm, nome: e.target.value })}
+                      placeholder="Ex.: Meta do mês"
+                      className="h-10"
+                    />
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="regra-meta">Meta de escaneamentos</Label>
-                    <div className="relative">
-                      <Input
-                        id="regra-meta"
-                        type="number"
-                        min={1}
-                        value={regraForm.meta_escaneamentos}
-                        onChange={(e) => setRegraForm({
-                          ...regraForm, meta_escaneamentos: Math.max(0, Number(e.target.value) || 0),
-                        })}
-                        className="pr-10"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                        QRs
-                      </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2 min-w-0">
+                      <RotuloCampo icone={Target} htmlFor="regra-meta">Meta de escaneamentos</RotuloCampo>
+                      <div className="relative">
+                        <Input
+                          id="regra-meta"
+                          type="number"
+                          min={1}
+                          value={regraForm.meta_escaneamentos}
+                          onChange={(e) => setRegraForm({
+                            ...regraForm, meta_escaneamentos: Math.max(0, Number(e.target.value) || 0),
+                          })}
+                          className="h-10 pr-10"
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                          QRs
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <RotuloCampo icone={CalendarClock}>Frequência</RotuloCampo>
+                      <Select
+                        value={regraForm.frequencia}
+                        onValueChange={(v) => setRegraForm({ ...regraForm, frequencia: v as Frequencia })}
+                      >
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(FREQUENCIA_LABEL) as Frequencia[]).map((f) => (
+                            <SelectItem key={f} value={f}>{FREQUENCIA_LABEL[f]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Frequência</Label>
-                    <Select
-                      value={regraForm.frequencia}
-                      onValueChange={(v) => setRegraForm({ ...regraForm, frequencia: v as Frequencia })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(FREQUENCIA_LABEL) as Frequencia[]).map((f) => (
-                          <SelectItem key={f} value={f}>{FREQUENCIA_LABEL[f]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+
+                  <div className="space-y-2">
+                    <RotuloCampo icone={Gift} htmlFor="regra-premio">Prêmio</RotuloCampo>
+                    <Input
+                      id="regra-premio"
+                      value={regraForm.premio}
+                      onChange={(e) => setRegraForm({ ...regraForm, premio: e.target.value })}
+                      placeholder="Ex.: R$ 100,00"
+                      className="h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-3.5">
+                    <label htmlFor="regra-renovar" className="flex cursor-pointer items-center justify-between gap-3">
+                      <span className="text-sm text-gray-700">Renovar automaticamente ao fim do período</span>
+                      <Switch
+                        id="regra-renovar"
+                        checked={regraForm.renovar_automatico}
+                        onCheckedChange={(v) => setRegraForm({ ...regraForm, renovar_automatico: v })}
+                      />
+                    </label>
+                    <label htmlFor="regra-ativa" className="flex cursor-pointer items-center justify-between gap-3">
+                      <span className="text-sm text-gray-700">Regra ativa</span>
+                      <Switch
+                        id="regra-ativa"
+                        checked={regraForm.ativa}
+                        onCheckedChange={(v) => setRegraForm({ ...regraForm, ativa: v })}
+                      />
+                    </label>
                   </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="regra-premio">Prêmio</Label>
-                  <Input
-                    id="regra-premio"
-                    value={regraForm.premio}
-                    onChange={(e) => setRegraForm({ ...regraForm, premio: e.target.value })}
-                    placeholder="Ex.: R$ 100,00"
-                  />
-                </div>
-
-                <label htmlFor="regra-renovar" className="flex cursor-pointer items-center justify-between">
-                  <span className="text-sm text-gray-600">Renovar automaticamente ao fim do período</span>
-                  <Switch
-                    id="regra-renovar"
-                    checked={regraForm.renovar_automatico}
-                    onCheckedChange={(v) => setRegraForm({ ...regraForm, renovar_automatico: v })}
-                  />
-                </label>
-
-                <label htmlFor="regra-ativa" className="flex cursor-pointer items-center justify-between">
-                  <span className="text-sm text-gray-600">Regra ativa</span>
-                  <Switch
-                    id="regra-ativa"
-                    checked={regraForm.ativa}
-                    onCheckedChange={(v) => setRegraForm({ ...regraForm, ativa: v })}
-                  />
-                </label>
               </div>
 
-              <DialogFooter className="sm:justify-between">
+              <DialogFooter className="shrink-0 gap-1 border-t bg-white p-4 sm:justify-between sm:space-x-0">
                 {regraForm.id ? (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -1079,7 +1181,7 @@ export default function Garcons() {
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => { excluirRegra(regraForm.id); setRegraForm(null) }}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          className="bg-red-600 text-white hover:bg-red-700"
                         >
                           Excluir
                         </AlertDialogAction>
@@ -1087,9 +1189,14 @@ export default function Garcons() {
                     </AlertDialogContent>
                   </AlertDialog>
                 ) : <div />}
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setRegraForm(null)}>Cancelar</Button>
-                  <Button onClick={salvarRegraForm} disabled={salvandoRegra || regraForm.meta_escaneamentos <= 0}>
+                <div className="flex gap-1">
+                  <Button variant="neutro" size="forma" onClick={() => setRegraForm(null)}>Cancelar</Button>
+                  <Button
+                    variant="primario"
+                    size="forma"
+                    onClick={salvarRegraForm}
+                    disabled={salvandoRegra || regraForm.meta_escaneamentos <= 0}
+                  >
                     {salvandoRegra && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                     Salvar
                   </Button>
