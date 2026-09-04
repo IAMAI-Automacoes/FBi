@@ -137,11 +137,16 @@ const COR_BARRA_REGRA = 'bg-blue-500'
 /** A mesma pílula escura em degradê do botão de "Baixar" de Relatórios —
  *  compartilhada entre o botão normal (dividido, com dropdown) e o "Baixar
  *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
- *  (só o arredondamento/padding muda conforme o contexto). */
+ *  (só o arredondamento/padding muda conforme o contexto).
+ *
+ *  `slate-900`/`slate-950` (o tom mais escuro da paleta) são escuros demais
+ *  pro azul aparecer em repouso — só ficava visível no `hover`, mais claro.
+ *  Um degrau mais claro (`slate-700`→`slate-900`) deixa o preto azulado
+ *  perceptível sempre, não só ao passar o mouse. */
 const CLASSE_BOTAO_BAIXAR =
-  'gap-1.5 bg-slate-900 bg-gradient-to-b from-slate-800 to-slate-950 text-sm font-medium text-white ' +
+  'gap-1.5 bg-slate-800 bg-gradient-to-b from-slate-700 to-slate-900 text-sm font-medium text-white ' +
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-  'hover:from-slate-700 hover:to-slate-900 active:shadow-none active:from-slate-900 active:to-slate-900 ' +
+  'hover:from-slate-600 hover:to-slate-800 active:shadow-none active:from-slate-800 active:to-slate-800 ' +
   'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
 
 /** Mesma construção do "baixar" (degradê + luz no topo + sombra baixa, pra
