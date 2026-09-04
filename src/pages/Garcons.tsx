@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Trash2, Download, FileDown, Loader2, Settings2, Check, ChevronLeft, ChevronRight, ChevronDown,
-  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift, User, Users, Phone,
+  ListChecks, Pencil, X, Tag, Target, CalendarClock, Gift, User, Users, Phone, Archive,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
@@ -233,6 +233,19 @@ const COR_BARRA_REGRA = 'bg-blue-500'
  *  melhor como "regra rendendo" do que mais um azul genérico. */
 const CLASSE_SWITCH_REGRA = 'data-[state=checked]:bg-emerald-600'
 
+/** Mesmo verde dos switches, agora nos checkboxes de "quem participa" —
+ *  o padrão (`bg-primary`, azul) ia introduzir uma segunda cor de "marcado"
+ *  na mesma regra, sem motivo. */
+const CLASSE_CHECKBOX_REGRA =
+  'border-gray-300 data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600'
+
+/** Botão de "marcar como pago" — verde clarinho com check, tanto dentro do
+ *  painel do garçom quanto direto na lista da Equipe. Um `outline` cinza
+ *  não dizia "isso é dinheiro, é bom clicar aqui"; verde com check é a
+ *  mesma linguagem do resto do app pra "meta batida"/"tudo certo". */
+const CLASSE_BOTAO_PAGAR =
+  'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 hover:text-emerald-800'
+
 /** A mesma pílula escura em degradê do botão de "Baixar" de Relatórios —
  *  compartilhada entre o botão normal (dividido, com dropdown) e o "Baixar
  *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
@@ -331,6 +344,12 @@ export default function Garcons() {
   // uma cópia desatualizada depois de salvar; `garcomAtual` é derivado toda
   // renderização a partir da lista viva.
   const [detalheId, setDetalheId] = useState<number | null>(null)
+  /** Painel do garçom mostrando a lista de arquivadas em vez do conteúdo
+   *  normal — reseta sozinho quando o painel muda de garçom ou fecha, senão
+   *  reabrir noutro garçom (ou o mesmo, depois) reaproveitaria o estado de
+   *  navegação de antes. */
+  const [mostrandoArquivadas, setMostrandoArquivadas] = useState(false)
+  useEffect(() => { setMostrandoArquivadas(false) }, [detalheId])
 
   const [regras, setRegras] = useState<RegraBonificacao[]>([])
   /** Painel de regras aberto? */
@@ -763,6 +782,18 @@ export default function Garcons() {
   /** Regras ativas que valem PRA ESTE garçom (respeita participantes). */
   const regrasDoGarcom = (garcomId: number) => regrasAtivas.filter((r) => garcomParticipaDaRegra(r, garcomId))
 
+  /** Regra concluída e paga há mais de 24h — some da vista normal do painel
+   *  do garçom e vai pro histórico de "Arquivadas". Só isso conta pro
+   *  relógio: uma regra ainda pendente, ou batida mas não paga, nunca
+   *  arquiva sozinha — fica visível até alguém resolver ela. */
+  const foiArquivada = (regra: RegraBonificacao, g: Garcom): boolean => {
+    const scans = scansPorRegra[regra.id]?.[g.id] ?? 0
+    if (scans < regra.meta_escaneamentos) return false
+    const pagamento = pagamentoDeRegra(g.bonus_pagamentos, regra.id)
+    if (!pagamento || !regraEstaPaga(pagamento, regra)) return false
+    return Date.now() - new Date(pagamento.pago_em).getTime() > 24 * 3600_000
+  }
+
   /** Tem pelo menos uma regra batida e ainda não paga? Usado tanto pra
    *  ordenar a lista da Equipe (quem precisa pagar primeiro) quanto pro
    *  numerozinho da barra lateral. */
@@ -1079,6 +1110,7 @@ export default function Garcons() {
                         <div
                           role="button"
                           tabIndex={0}
+                          data-linha-garcom
                           onClick={() => (selecionando ? alternarSelecionado(g.id) : setDetalheId(g.id))}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -1134,7 +1166,7 @@ export default function Garcons() {
                                           <Button
                                             size="sm"
                                             variant="outline"
-                                            className="h-5 px-1.5 text-[10px]"
+                                            className={cn('h-5 px-1.5 text-[10px]', CLASSE_BOTAO_PAGAR)}
                                             disabled={pagando === chave}
                                             onClick={(e) => { e.stopPropagation(); pagarBonus(g, regra) }}
                                           >
@@ -1245,6 +1277,13 @@ export default function Garcons() {
           className="w-full sm:max-w-md p-0 flex flex-col h-full overflow-hidden border-l-2 border-gray-300 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.15)]"
           // Só leitura — não tem o que perder clicando fora. Fecha normal,
           // igual a um popover: nenhum dado dele fica pendente de salvar.
+          // Exceto clicar em OUTRA linha da lista: aí o painel deve trocar
+          // pro garçom clicado, não só fechar (o fechamento "comeria" o
+          // clique da linha, que dispara logo depois — sem isto, trocar de
+          // garçom direto exigia dois cliques).
+          onPointerDownOutside={(e) => {
+            if ((e.target as HTMLElement).closest('[data-linha-garcom]')) e.preventDefault()
+          }}
         >
           {garcomAtual && (
             <>
@@ -1268,171 +1307,229 @@ export default function Garcons() {
                 </div>
               </SheetHeader>
 
-              <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4 space-y-6">
-                <div>
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Telefone</p>
-                  <p className="text-sm text-gray-800">
-                    {garcomAtual.telefone || <span className="text-gray-400 italic">Sem telefone cadastrado</span>}
-                  </p>
-                </div>
+              {(() => {
+                const regrasBonif = regrasDoGarcom(garcomAtual.id)
+                const regrasVisiveisAqui = regrasBonif.filter((r) => !foiArquivada(r, garcomAtual))
+                const regrasArquivadasAqui = regrasBonif.filter((r) => foiArquivada(r, garcomAtual))
 
-                <div>
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Aberturas do QR</p>
-                  {/* Os três períodos-padrão em destaque — são os mesmos que
-                      uma regra de bonificação pode usar (semanal/mensal/
-                      trimestral), então é a pergunta que o dono realmente
-                      faz aqui: "como ele anda NESTE período". O total
-                      acumulado nunca zera e não responde essa pergunta, por
-                      isso vira uma linha pequena embaixo, não a primeira
-                      coisa que se lê. */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
-                      <p className="text-2xl font-bold text-gray-900">{scansEstaSemana[garcomAtual.id] ?? 0}</p>
-                      <p className="text-[11px] text-muted-foreground">esta semana</p>
+                // Arquivadas troca o conteúdo do painel inteiro por só a
+                // lista arquivada — pedido explícito ("some com as coisas
+                // do popup e mostra só a lista"), não uma seção a mais
+                // dentro do mesmo painel.
+                if (mostrandoArquivadas) {
+                  return (
+                    <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setMostrandoArquivadas(false)}
+                        className="mb-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-gray-700"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" /> Voltar
+                      </button>
+                      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">
+                        Regras arquivadas
+                      </p>
+                      {regrasArquivadasAqui.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhuma regra arquivada ainda.</p>
+                      ) : (
+                        <ul className="divide-y divide-border">
+                          {regrasArquivadasAqui.map((regra) => {
+                            const pagamento = pagamentoDeRegra(garcomAtual.bonus_pagamentos, regra.id)
+                            return (
+                              <li key={regra.id} className="py-3">
+                                <p className="text-sm font-medium text-gray-800">{rotuloRegra(regra)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {regra.premio ? `${regra.premio} · ` : ''}
+                                  pago em {pagamento ? format(new Date(pagamento.pago_em), 'dd/MM/yyyy') : '—'}
+                                </p>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
                     </div>
-                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
-                      <p className="text-2xl font-bold text-gray-900">{scansEsteMes[garcomAtual.id] ?? 0}</p>
-                      <p className="text-[11px] text-muted-foreground">este mês</p>
-                    </div>
-                    <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
-                      <p className="text-2xl font-bold text-gray-900">{scansEsteTrimestre[garcomAtual.id] ?? 0}</p>
-                      <p className="text-[11px] text-muted-foreground">este trimestre</p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {qrs[garcomAtual.id]?.total_scans ?? 0} no total, desde sempre
-                  </p>
-                </div>
+                  )
+                }
 
-                <div>
-                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Bonificação</p>
-                  {regrasDoGarcom(garcomAtual.id).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma regra ativa pra ele. Configure em "Bonificação", na tela de Equipe.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {regrasDoGarcom(garcomAtual.id).map((regra) => {
-                        const scans = scansPorRegra[regra.id]?.[garcomAtual.id] ?? 0
-                        const meta = regra.meta_escaneamentos
-                        const pct = Math.min(100, Math.round((scans / meta) * 100))
-                        const atingiu = scans >= meta
-                        const pagamento = pagamentoDeRegra(garcomAtual.bonus_pagamentos, regra.id)
-                        const pago = regraEstaPaga(pagamento, regra)
-                        const chave = `${garcomAtual.id}:${regra.id}`
+                return (
+                  <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4 space-y-6">
+                    <div>
+                      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Telefone</p>
+                      <p className="text-sm text-gray-800">
+                        {garcomAtual.telefone || <span className="text-gray-400 italic">Sem telefone cadastrado</span>}
+                      </p>
+                    </div>
 
-                        return (
-                          <div key={regra.id}>
-                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                              <p className="text-sm font-semibold text-gray-800">
-                                {rotuloRegra(regra)}
-                                {atingiu && pago && (
-                                  <span className="ml-1.5 font-normal text-gray-400">
-                                    · pago{pagamento ? ` em ${format(new Date(pagamento.pago_em), 'dd/MM')}` : ''}
+                    <div>
+                      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Aberturas do QR</p>
+                      {/* Os três períodos-padrão em destaque — são os mesmos que
+                          uma regra de bonificação pode usar (semanal/mensal/
+                          trimestral), então é a pergunta que o dono realmente
+                          faz aqui: "como ele anda NESTE período". O total
+                          acumulado nunca zera e não responde essa pergunta, por
+                          isso vira uma linha pequena embaixo, não a primeira
+                          coisa que se lê. */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
+                          <p className="text-2xl font-bold text-gray-900">{scansEstaSemana[garcomAtual.id] ?? 0}</p>
+                          <p className="text-[11px] text-muted-foreground">esta semana</p>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
+                          <p className="text-2xl font-bold text-gray-900">{scansEsteMes[garcomAtual.id] ?? 0}</p>
+                          <p className="text-[11px] text-muted-foreground">este mês</p>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 px-2 py-2.5 text-center">
+                          <p className="text-2xl font-bold text-gray-900">{scansEsteTrimestre[garcomAtual.id] ?? 0}</p>
+                          <p className="text-[11px] text-muted-foreground">este trimestre</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {qrs[garcomAtual.id]?.total_scans ?? 0} no total, desde sempre
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Bonificação</p>
+                        {regrasArquivadasAqui.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setMostrandoArquivadas(true)}
+                            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-gray-700"
+                          >
+                            <Archive className="h-3 w-3" /> Arquivadas ({regrasArquivadasAqui.length})
+                          </button>
+                        )}
+                      </div>
+                      {regrasVisiveisAqui.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Nenhuma regra ativa pra ele. Configure em "Bonificação", na tela de Equipe.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          {regrasVisiveisAqui.map((regra) => {
+                            const scans = scansPorRegra[regra.id]?.[garcomAtual.id] ?? 0
+                            const meta = regra.meta_escaneamentos
+                            const pct = Math.min(100, Math.round((scans / meta) * 100))
+                            const atingiu = scans >= meta
+                            const pagamento = pagamentoDeRegra(garcomAtual.bonus_pagamentos, regra.id)
+                            const pago = regraEstaPaga(pagamento, regra)
+                            const chave = `${garcomAtual.id}:${regra.id}`
+
+                            return (
+                              <div key={regra.id}>
+                                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                                  <p className="text-sm font-semibold text-gray-800">
+                                    {rotuloRegra(regra)}
+                                    {atingiu && pago && (
+                                      <span className="ml-1.5 font-normal text-gray-400">
+                                        · pago{pagamento ? ` em ${format(new Date(pagamento.pago_em), 'dd/MM')}` : ''}
+                                      </span>
+                                    )}
+                                  </p>
+                                  {atingiu && !pago && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={cn('h-6 px-2 text-[11px]', CLASSE_BOTAO_PAGAR)}
+                                      disabled={pagando === chave}
+                                      onClick={() => pagarBonus(garcomAtual, regra)}
+                                    >
+                                      {pagando === chave
+                                        ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                        : <Check className="h-3 w-3 mr-1" />}
+                                      Marcar como pago
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-500">
+                                  <span>{scans} de {meta} feitos</span>
+                                  <span>
+                                    {pago
+                                      ? '100% concluído'
+                                      : atingiu
+                                        ? `meta batida${regra.premio ? ` — ${regra.premio}` : ''}`
+                                        : `faltam ${meta - scans}`}
                                   </span>
-                                )}
-                              </p>
-                              {atingiu && !pago && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 px-2 text-[11px]"
-                                  disabled={pagando === chave}
-                                  onClick={() => pagarBonus(garcomAtual, regra)}
-                                >
-                                  {pagando === chave
-                                    ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                    : <Check className="h-3 w-3 mr-1" />}
-                                  Marcar como pago
-                                </Button>
-                              )}
-                            </div>
-                            <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-500">
-                              <span>{scans} de {meta} feitos</span>
-                              <span>
-                                {pago
-                                  ? '100% concluído'
-                                  : atingiu
-                                    ? `meta batida${regra.premio ? ` — ${regra.premio}` : ''}`
-                                    : `faltam ${meta - scans}`}
-                              </span>
-                            </div>
-                            <div className="mt-1.5 h-3 w-full overflow-hidden bg-gray-200">
-                              <div className={cn('h-full', COR_BARRA_REGRA)} style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        )
-                      })}
+                                </div>
+                                <div className="mt-1.5 h-3 w-full overflow-hidden bg-gray-200">
+                                  <div className={cn('h-full', COR_BARRA_REGRA)} style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Mesmo botão de "baixar" do resto da página — baixar só o
-                    QR deste garçom sem precisar entrar no modo de seleção da
-                    Equipe pra marcar um só. Editar/excluir continuam como
-                    ícones, do outro lado. */}
-                <div className="flex items-center justify-between gap-2 border-t pt-4">
-                  <Button
-                    onClick={() => baixarPdf([garcomAtual.id])}
-                    disabled={baixando}
-                    className={cn('h-9 gap-1.5 rounded-full px-3.5 text-sm', CLASSE_BOTAO_BAIXAR)}
-                  >
-                    {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                    Baixar QR Code
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => abrirEditar(garcomAtual)}
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Editar garçom"
-                          className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                        >
-                          <Pencil className="h-[18px] w-[18px]" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Editar</TooltipContent>
-                    </Tooltip>
-
-                    <AlertDialog>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertDialogTrigger asChild>
+                    {/* Mesmo botão de "baixar" do resto da página — baixar só o
+                        QR deste garçom sem precisar entrar no modo de seleção da
+                        Equipe pra marcar um só. Editar/excluir continuam como
+                        ícones, do outro lado. */}
+                    <div className="flex items-center justify-between gap-2 border-t pt-4">
+                      <Button
+                        onClick={() => baixarPdf([garcomAtual.id])}
+                        disabled={baixando}
+                        className={cn('h-9 gap-1.5 rounded-full px-3.5 text-sm', CLASSE_BOTAO_BAIXAR)}
+                      >
+                        {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        Baixar QR Code
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
                             <Button
+                              onClick={() => abrirEditar(garcomAtual)}
                               variant="ghost"
                               size="icon"
-                              aria-label="Excluir garçom"
-                              className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              aria-label="Editar garçom"
+                              className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                             >
-                              <Trash2 className="h-[18px] w-[18px]" />
+                              <Pencil className="h-[18px] w-[18px]" />
                             </Button>
-                          </AlertDialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">Excluir</TooltipContent>
-                      </Tooltip>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            O QR Code dele sai junto. Não dá para desfazer.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => remover(garcomAtual.id)}
-                            className="bg-red-600 text-white hover:bg-red-700"
-                          >
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Editar</TooltipContent>
+                        </Tooltip>
+
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Excluir garçom"
+                                  className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-[18px] w-[18px]" />
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Excluir</TooltipContent>
+                          </Tooltip>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir {garcomAtual.nome_garcon}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                O QR Code dele sai junto. Não dá para desfazer.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => remover(garcomAtual.id)}
+                                className="bg-red-600 text-white hover:bg-red-700"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )
+              })()}
             </>
           )}
         </SheetContent>
@@ -1484,6 +1581,7 @@ export default function Garcons() {
                             direto na lista), e excluir agora também. */}
                         <button
                           type="button"
+                          data-linha-regra
                           onClick={() => setDetalheRegraId(r.id)}
                           className="min-w-0 flex-1 text-left"
                         >
@@ -1712,6 +1810,7 @@ export default function Garcons() {
                                 <Checkbox
                                   id={`regra-participante-${g.id}`}
                                   checked={marcado}
+                                  className={CLASSE_CHECKBOX_REGRA}
                                   onCheckedChange={(v) => {
                                     const atual = regraForm.garcons_participantes!
                                     setRegraForm({
@@ -1846,7 +1945,12 @@ export default function Garcons() {
           // Só leitura — clicar fora (na lista, ou no fundo do Dialog de
           // regras logo atrás) fecha normal e volta pra lista. O Dialog em
           // si continua protegido (não fecha sozinho por causa disto: ver
-          // comentário no `onPointerDownOutside` dele, acima).
+          // comentário no `onPointerDownOutside` dele, acima). Clicar numa
+          // OUTRA regra da lista troca pra ela em vez de só fechar — mesmo
+          // motivo do painel do garçom, ver comentário lá.
+          onPointerDownOutside={(e) => {
+            if ((e.target as HTMLElement).closest('[data-linha-regra]')) e.preventDefault()
+          }}
         >
           {regraDetalhe && (
             <>
