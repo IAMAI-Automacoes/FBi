@@ -473,24 +473,35 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Botão miúdo: arte própria no lugar da cor/textura */}
+                    {/* Arte própria, no lugar da cor/textura. Ocupa a largura
+                        toda da coluna: é uma área de soltar arquivo, e alvo de
+                        clique pequeno é o que mais atrapalha no celular. */}
                     <div className="mt-3">
                       {cfgImagem ? (
-                        <div className="flex items-center gap-2">
-                          <img src={cfgImagem} alt="Arte enviada" className="h-9 w-9 rounded-md border object-cover" />
-                          <span className="text-[11px] text-gray-500 leading-tight flex-1">Arte própria em uso</span>
+                        <div className="flex items-center gap-2.5 rounded-lg border border-gray-200 p-2">
+                          <img src={cfgImagem} alt="Arte enviada" className="h-11 w-11 rounded-md border object-cover" />
+                          <span className="flex-1 text-[11px] leading-tight text-gray-600">Arte própria em uso</span>
                           <button
                             onClick={removerImagem}
                             title="Remover arte"
-                            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                           >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-4 w-4" />
                           </button>
                         </div>
                       ) : (
-                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50">
-                          {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageUp className="h-3 w-3" />}
-                          {uploading ? 'Enviando…' : 'Subir arte'}
+                        <label className="flex w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center transition-colors hover:border-[#C2622C]/60 hover:bg-[#C2622C]/5">
+                          {uploading ? (
+                            <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
+                          ) : (
+                            <ImageUp className="h-5 w-5 text-[#C2622C]" />
+                          )}
+                          <span className="text-[12px] font-semibold text-gray-700">
+                            {uploading ? 'Enviando…' : 'Subir arte'}
+                          </span>
+                          <span className="text-[10px] leading-tight text-gray-500">
+                            Você ajusta o recorte no formato do celular
+                          </span>
                           <input
                             type="file"
                             accept="image/*"
@@ -605,7 +616,6 @@ export default function QRCodes() {
           onConfirm={enviarImagem}
           onCancel={() => setCropFile(null)}
           title="Ajuste a sua arte"
-          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o que aparece na tela do celular."
         />
       )}
     </div>

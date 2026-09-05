@@ -674,7 +674,7 @@ export default function Onboarding() {
           outputWidth={800}
           outputHeight={800}
           title="Ajuste o logotipo"
-          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o logotipo mostrado."
+          instructions="Arraste ou dê zoom para ajustar o logotipo."
         />
       )}
     </div>

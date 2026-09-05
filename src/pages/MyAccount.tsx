@@ -497,7 +497,7 @@ export default function MyAccount() {
           outputHeight={800}
           shape="circle"
           title="Ajuste a foto de perfil"
-          instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro do círculo é a foto mostrada."
+          instructions="Arraste ou dê zoom para ajustar a foto."
         />
       )}
     </div>
