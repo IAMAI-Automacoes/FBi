@@ -127,7 +127,10 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 58, W - 150, 33)
 
   // ── Cartão branco do QR (sem borda colorida) ──
-  const card = { x: 130, y: 402, w: 460, h: 460, r: 40 }
+  // O `y` centra o cartão no espaço que sobra entre a frase de incentivo e o
+  // rodapé. Ele subia até 402 quando havia duas linhas de instrução embaixo;
+  // sem elas, manter o valor antigo deixaria um vão morto no pé do cartaz.
+  const card = { x: 130, y: 440, w: 460, h: 460, r: 40 }
   ctx.save()
   ctx.shadowColor = 'rgba(23,23,23,0.16)'
   ctx.shadowBlur = 42
@@ -178,14 +181,6 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     ctx.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
   }
 
-  // ── Instrução abaixo do cartão ──
-  ctx.fillStyle = t.tinta
-  ctx.font = 'bold 27px sans-serif'
-  ctx.fillText('Aponte a câmera do celular', cx, card.y + card.h + 66)
-  ctx.fillStyle = t.suave
-  ctx.font = '21px sans-serif'
-  ctx.fillText('e toque no link que aparecer na tela', cx, card.y + card.h + 100)
-
   // ── Rodapé: crédito do produto ──
   ctx.fillStyle = t.suave
   ctx.globalAlpha = 0.85
@@ -217,42 +212,42 @@ function pintarFundo(ctx: CanvasRenderingContext2D, t: QrTema, W: number, H: num
   ctx.rect(0, 0, W, H)
   ctx.clip()
 
+  const diag = Math.hypot(W, H)
+  const inclinar = (graus: number) => {
+    ctx.translate(W / 2, H / 2)
+    ctx.rotate((graus * Math.PI) / 180)
+    ctx.translate(-W / 2, -H / 2)
+  }
+
   if (t.textura === 'madeira') {
     // Duas frequências, como no CSS: o grão fino e a junta larga das tábuas.
-    ctx.translate(W / 2, H / 2)
-    ctx.rotate((3 * Math.PI) / 180)
-    ctx.translate(-W / 2, -H / 2)
-    const diag = Math.hypot(W, H)
-    for (let x = -diag; x < diag; x += 9) {
-      ctx.fillStyle = 'rgba(120,82,44,0.14)'
-      ctx.fillRect(x, -diag, 2, diag * 2)
-    }
-    for (let x = -diag; x < diag; x += 27) {
-      ctx.fillStyle = 'rgba(96,64,32,0.10)'
-      ctx.fillRect(x, -diag, 1, diag * 2)
-    }
+    inclinar(3)
+    ctx.fillStyle = t.veio
+    for (let x = -diag; x < diag; x += 9) ctx.fillRect(x, -diag, 2, diag * 2)
+    for (let x = -diag; x < diag; x += 27) ctx.fillRect(x, -diag, 1, diag * 2)
   } else if (t.textura === 'marmore') {
     const brilho = ctx.createRadialGradient(W * 0.25, H * 0.15, 0, W * 0.25, H * 0.15, W * 1.2)
-    brilho.addColorStop(0, 'rgba(255,255,255,0.75)')
+    brilho.addColorStop(0, t.escuro ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.75)')
     brilho.addColorStop(0.6, 'rgba(255,255,255,0)')
     ctx.fillStyle = brilho
     ctx.fillRect(0, 0, W, H)
 
     // Veias irregulares: uma curva larga e outra fina cruzando em ângulos
     // diferentes. Mármore listrado denuncia que é gerado.
-    ctx.strokeStyle = 'rgba(120,120,114,0.26)'
+    ctx.strokeStyle = t.veio
     ctx.lineWidth = 9
     ctx.beginPath()
     ctx.moveTo(-40, H * 0.72)
     ctx.bezierCurveTo(W * 0.3, H * 0.5, W * 0.45, H * 0.34, W + 40, H * 0.06)
     ctx.stroke()
 
-    ctx.strokeStyle = 'rgba(120,120,114,0.18)'
+    ctx.globalAlpha = 0.7
     ctx.lineWidth = 5
     ctx.beginPath()
     ctx.moveTo(-40, H * 0.95)
     ctx.bezierCurveTo(W * 0.42, H * 0.8, W * 0.5, H * 0.66, W + 40, H * 0.44)
     ctx.stroke()
+    ctx.globalAlpha = 1
   } else if (t.textura === 'ardosia') {
     const brilho = ctx.createRadialGradient(W * 0.3, H * 0.1, 0, W * 0.3, H * 0.1, W * 1.3)
     brilho.addColorStop(0, 'rgba(255,255,255,0.10)')
@@ -260,12 +255,35 @@ function pintarFundo(ctx: CanvasRenderingContext2D, t: QrTema, W: number, H: num
     ctx.fillStyle = brilho
     ctx.fillRect(0, 0, W, H)
 
-    ctx.translate(W / 2, H / 2)
-    ctx.rotate((35 * Math.PI) / 180)
-    ctx.translate(-W / 2, -H / 2)
-    const diag = Math.hypot(W, H)
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'
+    inclinar(35)
+    ctx.fillStyle = t.veio
     for (let x = -diag; x < diag; x += 11) ctx.fillRect(x, -diag, 3, diag * 2)
+  } else if (t.textura === 'concreto') {
+    const brilho = ctx.createRadialGradient(W * 0.3, H * 0.1, 0, W * 0.3, H * 0.1, W * 1.2)
+    brilho.addColorStop(0, 'rgba(255,255,255,0.35)')
+    brilho.addColorStop(0.6, 'rgba(255,255,255,0)')
+    ctx.fillStyle = brilho
+    ctx.fillRect(0, 0, W, H)
+
+    // Manchas de cura do cimento. As posições vêm de uma sequência fixa, e não
+    // de Math.random, porque a prévia da tela e o PNG baixado são dois desenhos
+    // separados do mesmo tema — com aleatório eles sairiam diferentes.
+    const manchas: [number, number, number][] = [
+      [0.22, 0.28, 0.30], [0.74, 0.18, 0.26], [0.58, 0.72, 0.34],
+      [0.14, 0.82, 0.22], [0.86, 0.60, 0.24], [0.40, 0.46, 0.28],
+    ]
+    for (const [mx, my, mr] of manchas) {
+      const g2 = ctx.createRadialGradient(W * mx, H * my, 0, W * mx, H * my, W * mr)
+      g2.addColorStop(0, t.veio)
+      g2.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = g2
+      ctx.fillRect(0, 0, W, H)
+    }
+  } else if (t.textura === 'linho') {
+    // Trama: dois pentes cruzados em 90°, é o que lê como tecido.
+    ctx.fillStyle = t.veio
+    for (let y = 0; y < H; y += 5) ctx.fillRect(0, y, W, 1)
+    for (let x = 0; x < W; x += 5) ctx.fillRect(x, 0, 1, H)
   }
 
   ctx.restore()

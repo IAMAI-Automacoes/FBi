@@ -10,11 +10,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImageUp, Check, Palette, Info, Search, X } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
-import { LandingView } from '@/components/LandingView'
 import { ImageCropper } from '@/components/ImageCropper'
 import { toast } from 'sonner'
 
@@ -49,7 +48,6 @@ export default function QRCodes() {
   const [restaurantName, setRestaurantName] = useState('Restaurante')
   const [loading, setLoading] = useState(true)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
 
   // Config da página que o cliente abre ao escanear
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
@@ -67,8 +65,8 @@ export default function QRCodes() {
   // Métricas
   const [metricas, setMetricas] = useState<{ dia7: number; dia30: number; barras: { label: string; n: number }[] }>({ dia7: 0, dia30: 0, barras: [] })
   const [aba, setAba] = useState('config')
-  const [verPagina, setVerPagina] = useState(false)
-  const [numero, setNumero] = useState<string | null>(null)
+  /** A roda de cores só aparece quando o dono pede — ver o botão que a abre. */
+  const [mostrarRoda, setMostrarRoda] = useState(false)
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
@@ -91,14 +89,13 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem')
+          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem')
           .eq('auth_user_id', userData.user.id)
           .single()
 
         restauranteId = config?.id ?? null
         setRestauranteId(config?.id ?? null)
         if (config?.nome_restaurante) setRestaurantName(config.nome_restaurante)
-        setNumero(config?.numero_whatsapp ?? null)
         // Só continua em 'estilo' se foi EXPLICITAMENTE salvo assim antes
         // (restaurante configurado antes da opção sair do ar) — qualquer
         // outro caso (nunca configurou, ou já era 'upload') cai em 'upload'.
@@ -426,23 +423,7 @@ export default function QRCodes() {
                   <div>
                     <p className="text-[13px] font-semibold text-gray-700 mb-3">Paleta de Cores</p>
 
-                    {/* Roda de cores: matiz na volta, saturação do centro pra borda */}
-                    <div className="flex justify-center">
-                      <div
-                        onClick={pegarDaRoda}
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Escolher uma cor personalizada na roda"
-                        title="Clique para escolher uma cor personalizada"
-                        className="h-[74px] w-[74px] cursor-crosshair rounded-full ring-1 ring-black/10 shadow-inner transition-transform hover:scale-105"
-                        style={{
-                          background:
-                            'radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 68%), conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
-                        }}
-                      />
-                    </div>
-
-                    <div className="mt-3.5 grid grid-cols-6 gap-1.5">
+                    <div className="grid grid-cols-6 gap-1.5">
                       {QR_CORES.map((t) => (
                         <button
                           key={t.id}
@@ -470,34 +451,65 @@ export default function QRCodes() {
                           )}
                         </button>
                       ))}
+                    </div>
 
-                      {/* Seletor livre: o hex vira o próprio id do tema */}
-                      <label
-                        title="Cor personalizada"
-                        className={cn(
-                          'relative aspect-[1/1] cursor-pointer rounded-[7px] ring-1 ring-black/10 transition-all',
-                          personalizada ? 'ring-2 ring-gray-900 ring-offset-2' : 'hover:scale-110',
-                        )}
-                        style={{
-                          background: personalizada
-                            ? cfgEstilo
-                            : 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
-                        }}
-                      >
-                        <input
-                          type="color"
-                          value={personalizada ? cfgEstilo : '#c2622c'}
-                          onChange={(e) => setCfgEstilo(e.target.value)}
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        />
-                      </label>
+                    {/* Cor livre.
+                        Fechada, é só um botão redondo pequeno — não escolhe cor
+                        nenhuma, só anuncia que existe mais. Aberta, a roda toma
+                        o lugar dele: matiz na volta, saturação do centro para a
+                        borda, que é exatamente o que o gradiente desenha. */}
+                    <div className="mt-3.5">
+                      {mostrarRoda ? (
+                        <div className="relative flex justify-center">
+                          <div
+                            onClick={pegarDaRoda}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Escolher uma cor na roda"
+                            className="h-[132px] w-[132px] cursor-crosshair rounded-full shadow-inner ring-1 ring-black/10"
+                            style={{
+                              background:
+                                'radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%), conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+                            }}
+                          />
+                          <button
+                            onClick={() => setMostrarRoda(false)}
+                            title="Fechar a roda de cores"
+                            className="absolute right-0 top-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setMostrarRoda(true)}
+                          title="Escolher outra cor"
+                          className={cn(
+                            'flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50',
+                            personalizada && 'text-gray-900',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'h-6 w-6 rounded-full ring-1 ring-black/15',
+                              personalizada && 'ring-2 ring-gray-900',
+                            )}
+                            style={{
+                              background: personalizada
+                                ? cfgEstilo
+                                : 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+                            }}
+                          />
+                          {personalizada ? cfgEstilo.toUpperCase() : 'Outra cor'}
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {/* ── Texturas Neutras ── */}
                   <div>
                     <p className="text-[13px] font-semibold text-gray-700 mb-3">Texturas Neutras</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       {QR_TEXTURAS.map((t) => (
                         <button
                           key={t.id}
@@ -520,7 +532,7 @@ export default function QRCodes() {
                               </span>
                             )}
                           </span>
-                          <span className="block px-1 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                          <span className="block px-1 py-1.5 text-[9px] font-medium leading-tight text-gray-600">
                             {t.nome}
                           </span>
                         </button>
@@ -573,13 +585,6 @@ export default function QRCodes() {
                   <p className="mt-1 text-[11px] text-muted-foreground">{cfgMensagem.length}/120</p>
                 </div>
 
-                <Button
-                  onClick={() => previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                  className="w-full gap-2 rounded-lg bg-[#C2622C] py-5 text-[15px] font-semibold text-white shadow-sm hover:bg-[#AA5525]"
-                >
-                  <Search className="h-4 w-4" /> Visualizar Prévia de Impressão
-                </Button>
-
                 <Button onClick={salvarCfg} disabled={savingCfg} variant="outline" className="w-full">
                   {savingCfg ? 'Salvando…' : 'Salvar tema'}
                 </Button>
@@ -587,18 +592,8 @@ export default function QRCodes() {
             </Card>
 
             {/* ───────── Prévia: o display de mesa ───────── */}
-            <div ref={previewRef} className="flex flex-col">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-gray-800">
-                  Pré-visualização de Impressão (Display de Mesa A5)
-                </h2>
-                <button
-                  onClick={() => setVerPagina((v) => !v)}
-                  className="shrink-0 text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline"
-                >
-                  {verPagina ? 'Ver o display' : 'Ver a página do cliente'}
-                </button>
-              </div>
+            <div className="flex flex-col">
+              <h2 className="mb-3 text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
 
               {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
                   ser percebida na hora, e não só dentro da plaquinha. */}
@@ -606,61 +601,63 @@ export default function QRCodes() {
                 className="flex flex-1 items-center justify-center rounded-xl border border-gray-200 p-8 transition-[background] duration-500"
                 style={{ background: `linear-gradient(160deg, ${tema.fundo[0]}22, ${tema.fundo[1]}44)` }}
               >
-                {/* Display acrílico — canvas SEMPRE montado, senão o download quebra */}
-                <div className={cn('w-full max-w-[280px]', verPagina && 'hidden')}>
-                  <div className="relative">
-                    {/* Chapa de acrílico: a moldura transparente em volta do cartaz.
-                        A borda larga embaixo é o que dá a leitura de "display de
-                        mesa" — sem ela o cartaz parece só uma imagem flutuando. */}
-                    <div className="relative rounded-[10px] bg-white/40 px-[9px] pb-[26px] pt-[9px] shadow-[0_18px_38px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/80 backdrop-blur-[2px]">
+                {/* Display acrílico de mesa.
+                    A leve rotação em Y é o que faz ler como OBJETO em cima de
+                    uma mesa, e não como uma imagem colada na tela: sem ela, a
+                    chapa transparente e o bloco de madeira viram dois
+                    retângulos empilhados. */}
+                <div className="w-full max-w-[290px]" style={{ perspective: '1300px' }}>
+                  <div
+                    className="relative"
+                    style={{ transform: 'rotateY(-10deg) rotateX(2deg)', transformStyle: 'preserve-3d' }}
+                  >
+                    {/* Chapa de acrílico. O preenchimento é quase transparente
+                        de propósito: acrílico se enxerga pela ARESTA e pelo
+                        reflexo, não por uma moldura branca. Com opacidade alta
+                        a chapa vira um passe-partout de papel. O canvas fica
+                        SEMPRE montado — é dele que saem o PNG e o PDF. */}
+                    <div
+                      className="relative rounded-[6px] px-[10px] pb-[46px] pt-[10px] shadow-[0_24px_46px_-14px_rgba(0,0,0,0.45)] ring-1 ring-white/60"
+                      style={{
+                        background:
+                          'linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.06) 42%, rgba(255,255,255,0.24))',
+                      }}
+                    >
                       <canvas
                         ref={canvasRef}
                         width={POSTER_W}
                         height={POSTER_H}
-                        className="block h-auto w-full rounded-[3px] shadow-sm"
+                        className="block h-auto w-full rounded-[2px] shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
                       />
                       {/* Reflexo diagonal e aresta viva da chapa */}
-                      <div className="pointer-events-none absolute inset-0 rounded-[10px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
-                      <div className="pointer-events-none absolute inset-0 rounded-[10px] ring-1 ring-inset ring-black/10" />
+                      <div className="pointer-events-none absolute inset-0 rounded-[6px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
+                      <div className="pointer-events-none absolute inset-0 rounded-[6px] ring-1 ring-inset ring-white/70" />
                     </div>
 
-                    {/* Base de madeira: bloco em que a chapa encaixa */}
-                    <div className="relative mx-auto -mt-[10px] h-[30px] w-[84%]">
-                      <div className="absolute inset-0 rounded-[5px] bg-gradient-to-b from-[#E0BA8B] via-[#C08F5C] to-[#8E6034] shadow-[0_12px_20px_-8px_rgba(0,0,0,0.55)]" />
-                      {/* Rasgo onde a chapa entra */}
-                      <div className="absolute inset-x-[10%] top-[5px] h-[4px] rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]" />
-                      {/* Quina iluminada da frente do bloco */}
-                      <div className="absolute inset-x-0 bottom-0 h-[7px] rounded-b-[5px] bg-black/10" />
+                    {/* Base de madeira. Ancorada no PÉ da chapa e um pouco mais
+                        larga que ela: é o que faz a chapa parecer encaixada no
+                        bloco em vez de apoiada em cima dele. Sobram ~12px de
+                        acrílico transparente entre o cartaz e a madeira. */}
+                    <div className="absolute inset-x-[-3%] bottom-0 h-[34px]">
+                      <div className="absolute inset-0 rounded-[5px] bg-gradient-to-b from-[#EEDAB8] via-[#D8B98D] to-[#AC8757] shadow-[0_14px_22px_-10px_rgba(0,0,0,0.5)]" />
+                      <div
+                        className="absolute inset-0 rounded-[5px] opacity-40"
+                        style={{
+                          background:
+                            'repeating-linear-gradient(90deg, rgba(146,104,62,0.24) 0 1px, rgba(0,0,0,0) 1px 7px)',
+                        }}
+                      />
+                      {/* Face de cima do bloco, pegando a luz */}
+                      <div className="absolute inset-x-0 top-0 h-[4px] rounded-t-[5px] bg-white/40" />
                     </div>
-
-                    {/* Sombra projetada na mesa */}
-                    <div className="mx-auto mt-2.5 h-2.5 w-[70%] rounded-[50%] bg-black/20 blur-[7px]" />
                   </div>
 
-                  <p className="mt-4 text-center text-[12px] text-gray-500">
+                  {/* Sombra projetada na mesa */}
+                  <div className="mx-auto mt-3 h-3 w-[82%] rounded-[50%] bg-black/20 blur-[9px]" />
+
+                  <p className="mt-5 text-center text-[12px] text-gray-500">
                     É esta arte que sai no PNG e no PDF do botão “Baixar”.
                   </p>
-                </div>
-
-                {/* Página que o cliente abre ao escanear */}
-                <div className={cn('flex flex-col items-center gap-3', !verPagina && 'hidden')}>
-                  <div className="h-[500px] w-[248px] overflow-hidden rounded-[2.4rem] border-[9px] border-slate-800 bg-black shadow-xl">
-                    <LandingView
-                      preview
-                      restauranteNome={restaurantName}
-                      modo={cfgModo}
-                      imagem={cfgImagem}
-                      estilo={cfgEstilo}
-                      mensagem={cfgMensagem}
-                      whatsapp={numero}
-                    />
-                  </div>
-                  <button
-                    className="flex items-center gap-1 text-sm text-primary hover:underline"
-                    onClick={() => window.open(landingUrl(qrData.slug), '_blank')}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" /> Abrir página real
-                  </button>
                 </div>
               </div>
             </div>
