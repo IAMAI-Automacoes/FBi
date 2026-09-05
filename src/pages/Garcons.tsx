@@ -308,7 +308,7 @@ async function posterCanvas(url: string, nome: string, temaId: string, tagline: 
 export default function Garcons() {
   /** Controlada (não `defaultValue`) pra poder trocar de aba pelo código —
    *  clicar num garçom no Ranking leva pra Equipe com o painel dele aberto. */
-  const [aba, setAba] = useState<'ranking' | 'equipe'>('ranking')
+  const [aba, setAba] = useState<'ranking' | 'equipe'>('equipe')
 
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
@@ -860,8 +860,8 @@ export default function Garcons() {
         className="w-full"
       >
         <TabsList className="mb-6">
-          <TabsTrigger value="ranking">Ranking</TabsTrigger>
           <TabsTrigger value="equipe">Equipe</TabsTrigger>
+          <TabsTrigger value="ranking">Ranking</TabsTrigger>
         </TabsList>
 
         {/* Ranking */}
