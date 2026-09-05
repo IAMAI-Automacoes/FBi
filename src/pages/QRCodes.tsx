@@ -383,7 +383,7 @@ export default function QRCodes() {
             <Card className="border-gray-200">
               <CardHeader className="pb-5">
                 <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
-                  A. Tema do QR Code Impresso (Display de Mesa)
+                  Tema do QR Code Impresso
                 </CardTitle>
                 <CardDescription className="text-[13px] leading-relaxed">
                   Escolha uma cor sólida ou textura simples para a base do display físico que vai na mesa.
@@ -583,10 +583,6 @@ export default function QRCodes() {
 
                   {/* Sombra projetada na mesa */}
                   <div className="mx-auto mt-3 h-3 w-[82%] rounded-[50%] bg-black/20 blur-[9px]" />
-
-                  <p className="mt-5 text-center text-[12px] text-gray-500">
-                    É esta arte que sai no PNG e no PDF do botão “Baixar”.
-                  </p>
                 </div>
               </div>
             </div>

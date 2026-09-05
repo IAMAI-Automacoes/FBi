@@ -157,12 +157,13 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
             'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
         }}
       >
-        {/* Miolo branco com o "+": é o anel que mostra que a escolha é livre. */}
-        <span
-          className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[15px] font-light leading-none text-gray-600 shadow-sm"
-          style={{ background: valor ?? '#fff', color: valor ? 'transparent' : undefined }}
-        >
-          {valor ? '' : '+'}
+        {/* Miolo branco com o "+". Não recebe a cor escolhida de propósito: o
+            botão é a PORTA para escolher, não o lugar que mostra a escolha —
+            quem mostra é o quadradinho marcado na paleta e a própria prévia.
+            Pintado com a cor atual ele viraria só mais um quadradinho da
+            paleta, e o convite de "tem mais cor aqui" some. */}
+        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white text-[15px] font-light leading-none text-gray-600 shadow-sm">
+          +
         </span>
       </button>
 
