@@ -10,9 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImageUp, Check, ArrowRight, ArrowLeft, Palette, MessageSquare, Info } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ExternalLink, ImageUp, Check, Palette, Info, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { QR_TEMAS, getTema } from '@/lib/qr-temas'
+import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
 import { LandingView } from '@/components/LandingView'
 import { ImageCropper } from '@/components/ImageCropper'
@@ -33,11 +33,23 @@ function gerarSlug(n = 8) {
   return s
 }
 
+/** HSL → '#rrggbb'. Usado só pela roda de cores. */
+function hslParaHex(h: number, s: number, l: number): string {
+  const a = (s / 100) * Math.min(l / 100, 1 - l / 100)
+  const canal = (n: number) => {
+    const k = (n + h / 30) % 12
+    const cor = l / 100 - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))
+    return Math.round(255 * cor).toString(16).padStart(2, '0')
+  }
+  return `#${canal(0)}${canal(8)}${canal(4)}`
+}
+
 export default function QRCodes() {
   const [qrData, setQrData] = useState<QrData | null>(null)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
   const [loading, setLoading] = useState(true)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
 
   // Config da página que o cliente abre ao escanear
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
@@ -45,7 +57,7 @@ export default function QRCodes() {
   // hoje pra não quebrar quem já tinha essa escolha salva de antes (ver
   // fallback em `loadData`). Configuração nova sempre nasce em 'upload'.
   const [cfgModo, setCfgModo] = useState<'estilo' | 'upload'>('upload')
-  const [cfgEstilo, setCfgEstilo] = useState('classico')
+  const [cfgEstilo, setCfgEstilo] = useState('branco')
   const [cfgImagem, setCfgImagem] = useState<string | null>(null)
   const [cfgMensagem, setCfgMensagem] = useState('')
   const [savingCfg, setSavingCfg] = useState(false)
@@ -55,11 +67,9 @@ export default function QRCodes() {
   // Métricas
   const [metricas, setMetricas] = useState<{ dia7: number; dia30: number; barras: { label: string; n: number }[] }>({ dia7: 0, dia30: 0, barras: [] })
   const [aba, setAba] = useState('config')
-  const [previewAba, setPreviewAba] = useState<'pagina' | 'qr'>('qr')
+  const [verPagina, setVerPagina] = useState(false)
   const [numero, setNumero] = useState<string | null>(null)
-  const [editando, setEditando] = useState(false)
-  const [passo, setPasso] = useState<1 | 2>(1)
-  const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'classico', imagem: null as string | null, mensagem: '' })
+  const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
     loadData()
@@ -94,17 +104,16 @@ export default function QRCodes() {
         // outro caso (nunca configurou, ou já era 'upload') cai em 'upload'.
         const modo = config?.qr_bg_modo === 'estilo' ? 'estilo' : 'upload'
         setCfgModo(modo)
-        setCfgEstilo(config?.qr_estilo ?? 'classico')
+        // Ids dos temas com foto antigos (`classico`, `moderno`...) não existem
+        // mais; `getTema` os resolve no padrão, e é esse id que passa a valer.
+        const estilo = getTema(config?.qr_estilo).id
+        setCfgEstilo(estilo)
         setCfgImagem(config?.qr_bg_imagem ?? null)
         setCfgMensagem(config?.qr_mensagem ?? '')
         cfgSalvoRef.current = {
-          modo, estilo: config?.qr_estilo ?? 'classico',
+          modo, estilo,
           imagem: config?.qr_bg_imagem ?? null, mensagem: config?.qr_mensagem ?? '',
         }
-        // Nunca configurou → já abre no modo edição (passo 1)
-        const jaConfigurou = !!(config?.qr_bg_modo || config?.qr_estilo || config?.qr_mensagem || config?.qr_bg_imagem)
-        setEditando(!jaConfigurou)
-        if (!jaConfigurou) { setPasso(1); setPreviewAba('qr') }
       }
 
       // Sem restaurante vinculado: não há QR Code a gerar — encerra sem erro
@@ -180,22 +189,12 @@ export default function QRCodes() {
         .eq('id', restauranteId)
       if (error) throw error
       cfgSalvoRef.current = { modo: cfgModo, estilo: cfgEstilo, imagem: cfgImagem, mensagem: cfgMensagem }
-      setEditando(false)
       toast.success('QR Code e página salvos!')
     } catch (err: any) {
       toast.error('Erro ao salvar', { description: err.message })
     } finally {
       setSavingCfg(false)
     }
-  }
-
-  const cancelarEdicao = () => {
-    const s = cfgSalvoRef.current
-    setCfgModo(s.modo as 'estilo' | 'upload')
-    setCfgEstilo(s.estilo)
-    setCfgImagem(s.imagem)
-    setCfgMensagem(s.mensagem)
-    setEditando(false)
   }
 
   // Recebe o blob já recortado no formato do celular (1080×1920) pelo ImageCropper
@@ -214,12 +213,19 @@ export default function QRCodes() {
         .update({ qr_bg_imagem: data.publicUrl, qr_bg_modo: 'upload' })
         .eq('id', restauranteId)
       setCropFile(null)
-      toast.success('Imagem de fundo enviada!')
+      toast.success('Arte enviada!')
     } catch (err: any) {
       toast.error('Erro no upload', { description: err.message })
     } finally {
       setUploading(false)
     }
+  }
+
+  const removerImagem = async () => {
+    if (!restauranteId) return
+    setCfgImagem(null)
+    await supabase.from('restaurantes').update({ qr_bg_imagem: null }).eq('id', restauranteId)
+    toast.success('Arte removida — o tema volta a valer.')
   }
 
   const drawCanvas = async () => {
@@ -271,6 +277,21 @@ export default function QRCodes() {
     }
   }
 
+  /**
+   * A roda de cores. O clique vira hex pela posição: ângulo = matiz, distância
+   * do centro = saturação — exatamente o que o `conic-gradient` + o brilho
+   * branco central desenham, então o que o dono vê é o que ele pega.
+   */
+  const pegarDaRoda = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const raio = r.width / 2
+    const dx = e.clientX - r.left - raio
+    const dy = e.clientY - r.top - raio
+    const dist = Math.min(Math.hypot(dx, dy) / raio, 1)
+    const graus = (Math.atan2(dy, dx) * 180) / Math.PI
+    setCfgEstilo(hslParaHex((graus + 450) % 360, dist * 100, 50))
+  }
+
   if (loading) {
     return (
       <div className="flex h-full w-full items-center justify-center p-8">
@@ -296,7 +317,8 @@ export default function QRCodes() {
   }
 
   const maxBar = Math.max(1, ...metricas.barras.map((b) => b.n))
-  const mostraQr = previewAba === 'qr'
+  const tema = getTema(cfgEstilo)
+  const personalizada = ehCorPersonalizada(cfgEstilo)
 
   return (
     <div className="flex-1">
@@ -386,205 +408,260 @@ export default function QRCodes() {
 
         {/* ── PERSONALIZAR ── */}
         <TabsContent value="config" className="mt-0">
-          <div className="grid gap-6 md:grid-cols-2">
-            {editando ? (
-            <Card>
-              <CardHeader className="pb-4">
-                {/* Trilho dos 2 passos */}
-                <div className="flex items-center gap-2 mb-3">
-                  {[1, 2].map((n) => (
-                    <div key={n} className="flex items-center gap-2 flex-1">
-                      <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-bold shrink-0',
-                        passo >= n ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
-                        {passo > n ? <Check className="h-4 w-4" /> : n}
-                      </div>
-                      <div className={cn('h-1 flex-1 rounded-full', passo > n ? 'bg-primary' : 'bg-muted')} />
-                    </div>
-                  ))}
-                </div>
-                <CardTitle className="flex items-center gap-2">
-                  {passo === 1 ? <><Palette className="h-5 w-5 text-primary" /> Escolha o tema</> : <><MessageSquare className="h-5 w-5 text-primary" /> Mensagem e página</>}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* ───────── A. Tema do display impresso ───────── */}
+            <Card className="border-gray-200">
+              <CardHeader className="pb-5">
+                <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
+                  A. Tema do QR Code Impresso (Display de Mesa)
                 </CardTitle>
-                <CardDescription>
-                  {passo === 1
-                    ? 'Define a arte do QR impresso e o visual da página que abre ao escanear.'
-                    : 'A frase que o cliente vê e, se quiser, uma foto própria de fundo.'}
+                <CardDescription className="text-[13px] leading-relaxed">
+                  Escolha uma cor sólida ou textura simples para a base do display físico que vai na mesa.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5">
-                {passo === 1 ? (
-                  /* ── PASSO 1: tema (miniaturas com foto) ── */
-                  <>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {QR_TEMAS.map((t) => {
-                        const sel = cfgEstilo === t.id
-                        return (
-                          <button
-                            key={t.id}
-                            onClick={() => setCfgEstilo(t.id)}
-                            className={cn('group relative aspect-[3/4] overflow-hidden rounded-xl ring-2 transition-all',
-                              sel ? 'ring-primary ring-offset-2' : 'ring-transparent hover:ring-primary/40')}
+
+              <CardContent className="space-y-6">
+                <div className="grid gap-7 sm:grid-cols-2">
+                  {/* ── Paleta de Cores ── */}
+                  <div>
+                    <p className="text-[13px] font-semibold text-gray-700 mb-3">Paleta de Cores</p>
+
+                    {/* Roda de cores: matiz na volta, saturação do centro pra borda */}
+                    <div className="flex justify-center">
+                      <div
+                        onClick={pegarDaRoda}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Escolher uma cor personalizada na roda"
+                        title="Clique para escolher uma cor personalizada"
+                        className="h-[74px] w-[74px] cursor-crosshair rounded-full ring-1 ring-black/10 shadow-inner transition-transform hover:scale-105"
+                        style={{
+                          background:
+                            'radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 68%), conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+                        }}
+                      />
+                    </div>
+
+                    <div className="mt-3.5 grid grid-cols-6 gap-1.5">
+                      {QR_CORES.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setCfgEstilo(t.id)}
+                          title={t.nome}
+                          aria-label={t.nome}
+                          aria-pressed={cfgEstilo === t.id}
+                          className={cn(
+                            // `aspect-[1/1]` e não `aspect-square`: o projeto usa o plugin
+                            // legado @tailwindcss/aspect-ratio, que troca a escala nomeada e
+                            // faz `aspect-square` NÃO ser gerado — o quadradinho vira um
+                            // risco de 0px de altura. Valor arbitrário passa pelo core.
+                            'relative aspect-[1/1] rounded-[7px] ring-1 ring-black/10 transition-all',
+                            cfgEstilo === t.id
+                              ? 'ring-2 ring-gray-900 ring-offset-2'
+                              : 'hover:scale-110 hover:ring-black/25',
+                          )}
+                          style={{ background: fundoCss(t) }}
+                        >
+                          {cfgEstilo === t.id && (
+                            <Check
+                              className="absolute inset-0 m-auto h-3.5 w-3.5"
+                              style={{ color: t.escuro ? '#fff' : '#1a1a1a' }}
+                            />
+                          )}
+                        </button>
+                      ))}
+
+                      {/* Seletor livre: o hex vira o próprio id do tema */}
+                      <label
+                        title="Cor personalizada"
+                        className={cn(
+                          'relative aspect-[1/1] cursor-pointer rounded-[7px] ring-1 ring-black/10 transition-all',
+                          personalizada ? 'ring-2 ring-gray-900 ring-offset-2' : 'hover:scale-110',
+                        )}
+                        style={{
+                          background: personalizada
+                            ? cfgEstilo
+                            : 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+                        }}
+                      >
+                        <input
+                          type="color"
+                          value={personalizada ? cfgEstilo : '#c2622c'}
+                          onChange={(e) => setCfgEstilo(e.target.value)}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* ── Texturas Neutras ── */}
+                  <div>
+                    <p className="text-[13px] font-semibold text-gray-700 mb-3">Texturas Neutras</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {QR_TEXTURAS.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setCfgEstilo(t.id)}
+                          aria-pressed={cfgEstilo === t.id}
+                          className={cn(
+                            'group overflow-hidden rounded-lg border-2 bg-white transition-all',
+                            cfgEstilo === t.id
+                              ? 'border-[#C2622C] shadow-sm'
+                              : 'border-gray-200 hover:border-gray-300',
+                          )}
+                        >
+                          <span
+                            className="relative block aspect-[4/5] w-full"
+                            style={{ background: fundoCss(t) }}
                           >
-                            <img src={t.foto} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                            {sel && (
-                              <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary shadow">
-                                <Check className="h-3.5 w-3.5 text-white" />
+                            {cfgEstilo === t.id && (
+                              <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#C2622C] shadow">
+                                <Check className="h-2.5 w-2.5 text-white" />
                               </span>
                             )}
-                            <span className="absolute inset-x-0 bottom-1.5 text-center text-[11px] font-semibold text-white drop-shadow">{t.nome}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      <Button variant="ghost" onClick={cancelarEdicao} className="text-muted-foreground">Cancelar</Button>
-                      <Button onClick={() => { setPasso(2); setPreviewAba('pagina') }} size="lg" className="gap-1.5 px-7 rounded-full shadow-md">
-                        Próximo <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  /* ── PASSO 2: mensagem + página ── */
-                  <>
-                    <div>
-                      <label className="text-[13px] font-medium mb-1.5 block">Mensagem para o cliente</label>
-                      <textarea
-                        value={cfgMensagem}
-                        onChange={(e) => setCfgMensagem(e.target.value)}
-                        rows={2}
-                        maxLength={120}
-                        placeholder="Ex: É rapidinho! Conte como foi sua experiência."
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                      <p className="text-[11px] text-muted-foreground mt-1">{cfgMensagem.length}/120</p>
+                          </span>
+                          <span className="block px-1 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                            {t.nome}
+                          </span>
+                        </button>
+                      ))}
                     </div>
 
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-[13px] font-medium">Fundo da página do cliente</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">Suba a sua própria foto de fundo.</p>
-                      </div>
-                      <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-[12px] text-blue-800">
-                        Você ajusta o recorte (arrastar e zoom) no formato do celular. A gente só adiciona o botão do WhatsApp por cima.
-                      </div>
-
+                    {/* Botão miúdo: arte própria no lugar da cor/textura */}
+                    <div className="mt-3">
                       {cfgImagem ? (
-                        <div className="space-y-2">
-                          <img src={cfgImagem} alt="Fundo" className="w-full max-h-56 object-contain rounded-lg border bg-slate-50" />
-                          <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer rounded-lg border px-3 py-2 hover:bg-muted">
-                            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
-                            {uploading ? 'Enviando…' : 'Trocar imagem'}
-                            <input type="file" accept="image/*" className="hidden"
-                              onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }} />
-                          </label>
+                        <div className="flex items-center gap-2">
+                          <img src={cfgImagem} alt="Arte enviada" className="h-9 w-9 rounded-md border object-cover" />
+                          <span className="text-[11px] text-gray-500 leading-tight flex-1">Arte própria em uso</span>
+                          <button
+                            onClick={removerImagem}
+                            title="Remover arte"
+                            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       ) : (
-                        <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-8 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
-                          {uploading ? (
-                            <Loader2 className="h-7 w-7 animate-spin text-primary" />
-                          ) : (
-                            <ImageUp className="h-7 w-7 text-primary" />
-                          )}
-                          <span className="text-sm font-semibold">{uploading ? 'Enviando…' : 'Enviar imagem'}</span>
-                          <span className="text-[11px] text-muted-foreground">PNG, JPG ou WEBP</span>
-                          <input type="file" accept="image/*" className="hidden"
-                            onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }} />
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50">
+                          {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageUp className="h-3 w-3" />}
+                          {uploading ? 'Enviando…' : 'Subir arte'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }}
+                          />
                         </label>
                       )}
                     </div>
-
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      <Button variant="ghost" onClick={() => { setPasso(1); setPreviewAba('qr') }} className="gap-1.5 text-muted-foreground">
-                        <ArrowLeft className="h-4 w-4" /> Voltar
-                      </Button>
-                      <Button onClick={salvarCfg} disabled={savingCfg} size="lg" className="px-7 rounded-full shadow-md">
-                        {savingCfg ? 'Salvando…' : 'Salvar'}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Seu QR Code está pronto</CardTitle>
-                <CardDescription>Baixe pelo botão “Baixar” acima e imprima para as mesas.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-[13px] text-emerald-800 flex items-start gap-2">
-                  <Check className="h-4 w-4 mt-0.5 shrink-0" />
-                  QR e página configurados. Cada garçom tem o seu próprio QR na aba <b>Garçons</b>.
+                  </div>
                 </div>
-                <dl className="text-sm divide-y divide-border rounded-lg border">
-                  <div className="flex items-center justify-between px-3 py-2.5">
-                    <dt className="text-muted-foreground">Tema</dt>
-                    <dd className="flex items-center gap-2 font-medium">
-                      <img src={getTema(cfgEstilo).foto} alt="" className="h-6 w-6 rounded object-cover" />
-                      {getTema(cfgEstilo).nome}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between px-3 py-2.5">
-                    <dt className="text-muted-foreground">Fundo da página</dt>
-                    <dd className="font-medium">{cfgModo === 'upload' ? 'Imagem própria' : 'Foto do tema'}</dd>
-                  </div>
-                  <div className="flex justify-between px-3 py-2.5">
-                    <dt className="text-muted-foreground">Mensagem</dt>
-                    <dd className="font-medium max-w-[55%] truncate">{cfgMensagem.trim() || 'Padrão'}</dd>
-                  </div>
-                </dl>
-                <Button onClick={() => { setEditando(true); setPasso(1); setPreviewAba('qr') }} variant="outline" className="w-full gap-2">
-                  <Palette className="h-4 w-4" /> Personalizar
+
+                {/* Frase impressa no cartaz e repetida na página do cliente */}
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                    Mensagem para o cliente
+                  </label>
+                  <textarea
+                    value={cfgMensagem}
+                    onChange={(e) => setCfgMensagem(e.target.value)}
+                    rows={2}
+                    maxLength={120}
+                    placeholder="Ex: É rapidinho! Conte como foi sua experiência."
+                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">{cfgMensagem.length}/120</p>
+                </div>
+
+                <Button
+                  onClick={() => previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                  className="w-full gap-2 rounded-lg bg-[#C2622C] py-5 text-[15px] font-semibold text-white shadow-sm hover:bg-[#AA5525]"
+                >
+                  <Search className="h-4 w-4" /> Visualizar Prévia de Impressão
+                </Button>
+
+                <Button onClick={salvarCfg} disabled={savingCfg} variant="outline" className="w-full">
+                  {savingCfg ? 'Salvando…' : 'Salvar tema'}
                 </Button>
               </CardContent>
             </Card>
-            )}
 
-            {/* Preview: alterna entre QR impresso e a página do cliente */}
-            <div className="flex flex-col items-center gap-4 rounded-xl border bg-slate-50/50 p-6">
-              <div className="inline-flex rounded-lg bg-white border p-1 text-sm shadow-sm">
+            {/* ───────── Prévia: o display de mesa ───────── */}
+            <div ref={previewRef} className="flex flex-col">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-[15px] font-semibold text-gray-800">
+                  Pré-visualização de Impressão (Display de Mesa A5)
+                </h2>
                 <button
-                  onClick={() => setPreviewAba('qr')}
-                  className={cn('px-3.5 py-1.5 rounded-md font-medium transition-colors', mostraQr ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                  onClick={() => setVerPagina((v) => !v)}
+                  className="shrink-0 text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline"
                 >
-                  QR impresso
-                </button>
-                <button
-                  onClick={() => setPreviewAba('pagina')}
-                  className={cn('px-3.5 py-1.5 rounded-md font-medium transition-colors', !mostraQr ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
-                >
-                  Página do cliente
+                  {verPagina ? 'Ver o display' : 'Ver a página do cliente'}
                 </button>
               </div>
 
-              {/* Página (celular) */}
-              <div className={cn('flex flex-col items-center gap-3', !mostraQr ? '' : 'hidden')}>
-                <div className="w-[248px] h-[500px] rounded-[2.4rem] border-[9px] border-slate-800 bg-black overflow-hidden shadow-xl">
-                  <LandingView
-                    preview
-                    restauranteNome={restaurantName}
-                    modo={cfgModo}
-                    imagem={cfgImagem}
-                    estilo={cfgEstilo}
-                    mensagem={cfgMensagem}
-                    whatsapp={numero}
-                  />
-                </div>
-                <button
-                  className="text-sm text-primary hover:underline flex items-center gap-1"
-                  onClick={() => window.open(landingUrl(qrData.slug), '_blank')}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Abrir página real
-                </button>
-              </div>
+              {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
+                  ser percebida na hora, e não só dentro da plaquinha. */}
+              <div
+                className="flex flex-1 items-center justify-center rounded-xl border border-gray-200 p-8 transition-[background] duration-500"
+                style={{ background: `linear-gradient(160deg, ${tema.fundo[0]}22, ${tema.fundo[1]}44)` }}
+              >
+                {/* Display acrílico — canvas SEMPRE montado, senão o download quebra */}
+                <div className={cn('w-full max-w-[280px]', verPagina && 'hidden')}>
+                  <div className="relative">
+                    {/* Chapa de acrílico: a moldura transparente em volta do cartaz.
+                        A borda larga embaixo é o que dá a leitura de "display de
+                        mesa" — sem ela o cartaz parece só uma imagem flutuando. */}
+                    <div className="relative rounded-[10px] bg-white/40 px-[9px] pb-[26px] pt-[9px] shadow-[0_18px_38px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/80 backdrop-blur-[2px]">
+                      <canvas
+                        ref={canvasRef}
+                        width={POSTER_W}
+                        height={POSTER_H}
+                        className="block h-auto w-full rounded-[3px] shadow-sm"
+                      />
+                      {/* Reflexo diagonal e aresta viva da chapa */}
+                      <div className="pointer-events-none absolute inset-0 rounded-[10px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
+                      <div className="pointer-events-none absolute inset-0 rounded-[10px] ring-1 ring-inset ring-black/10" />
+                    </div>
 
-              {/* QR impresso (canvas sempre montado para desenho/download) */}
-              <div className={cn('flex flex-col items-center gap-3', mostraQr ? '' : 'hidden')}>
-                <div className="w-full max-w-[300px] overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
-                  <canvas ref={canvasRef} width={POSTER_W} height={POSTER_H} className="h-auto w-full object-contain" />
+                    {/* Base de madeira: bloco em que a chapa encaixa */}
+                    <div className="relative mx-auto -mt-[10px] h-[30px] w-[84%]">
+                      <div className="absolute inset-0 rounded-[5px] bg-gradient-to-b from-[#E0BA8B] via-[#C08F5C] to-[#8E6034] shadow-[0_12px_20px_-8px_rgba(0,0,0,0.55)]" />
+                      {/* Rasgo onde a chapa entra */}
+                      <div className="absolute inset-x-[10%] top-[5px] h-[4px] rounded-full bg-black/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]" />
+                      {/* Quina iluminada da frente do bloco */}
+                      <div className="absolute inset-x-0 bottom-0 h-[7px] rounded-b-[5px] bg-black/10" />
+                    </div>
+
+                    {/* Sombra projetada na mesa */}
+                    <div className="mx-auto mt-2.5 h-2.5 w-[70%] rounded-[50%] bg-black/20 blur-[7px]" />
+                  </div>
+
+                  <p className="mt-4 text-center text-[12px] text-gray-500">
+                    É esta arte que sai no PNG e no PDF do botão “Baixar”.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">Arte do QR para impressão</p>
+
+                {/* Página que o cliente abre ao escanear */}
+                <div className={cn('flex flex-col items-center gap-3', !verPagina && 'hidden')}>
+                  <div className="h-[500px] w-[248px] overflow-hidden rounded-[2.4rem] border-[9px] border-slate-800 bg-black shadow-xl">
+                    <LandingView
+                      preview
+                      restauranteNome={restaurantName}
+                      modo={cfgModo}
+                      imagem={cfgImagem}
+                      estilo={cfgEstilo}
+                      mensagem={cfgMensagem}
+                      whatsapp={numero}
+                    />
+                  </div>
+                  <button
+                    className="flex items-center gap-1 text-sm text-primary hover:underline"
+                    onClick={() => window.open(landingUrl(qrData.slug), '_blank')}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Abrir página real
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -597,7 +674,7 @@ export default function QRCodes() {
           salvando={uploading}
           onConfirm={enviarImagem}
           onCancel={() => setCropFile(null)}
-          title="Ajuste o fundo da página"
+          title="Ajuste a sua arte"
           instructions="Arraste para posicionar e dê zoom com a roda do mouse (ou o controle abaixo). O que ficar dentro da moldura é o que aparece na tela do celular."
         />
       )}

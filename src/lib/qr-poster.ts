@@ -1,6 +1,6 @@
 import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
-import { getTema } from '@/lib/qr-temas'
+import { getTema, type QrTema } from '@/lib/qr-temas'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -90,12 +90,8 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const t = getTema(opts.temaId)
   const cx = W / 2
 
-  // ── Fundo (gradiente suave e claro do tema) ──
-  const g = ctx.createLinearGradient(0, 0, 0, H)
-  g.addColorStop(0, t.posterBg[0])
-  g.addColorStop(1, t.posterBg[1])
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, W, H)
+  // ── Fundo: cor sólida ou textura neutra do tema ──
+  pintarFundo(ctx, t, W, H)
 
   // Brilho suave da cor de acento no topo (profundidade, sem poluir)
   const glow = ctx.createRadialGradient(cx, 40, 20, cx, 40, 520)
@@ -115,7 +111,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.restore()
 
   // ── Nome do restaurante (fonte adaptativa: nomes longos não invadem o QR) ──
-  ctx.fillStyle = t.posterTinta
+  ctx.fillStyle = t.tinta
   const tamNome = opts.nome.length > 22 ? 38 : opts.nome.length > 15 ? 46 : 52
   ctx.font = `bold ${tamNome}px Georgia, serif`
   const yTitulo = wrapText(ctx, opts.nome, cx, 196, W - 110, tamNome + 10)
@@ -126,7 +122,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.fill()
 
   // ── Frase de incentivo ──
-  ctx.fillStyle = t.posterSuave
+  ctx.fillStyle = t.suave
   ctx.font = '25px sans-serif'
   wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 58, W - 150, 33)
 
@@ -183,19 +179,96 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   }
 
   // ── Instrução abaixo do cartão ──
-  ctx.fillStyle = t.posterTinta
+  ctx.fillStyle = t.tinta
   ctx.font = 'bold 27px sans-serif'
   ctx.fillText('Aponte a câmera do celular', cx, card.y + card.h + 66)
-  ctx.fillStyle = t.posterSuave
+  ctx.fillStyle = t.suave
   ctx.font = '21px sans-serif'
   ctx.fillText('e toque no link que aparecer na tela', cx, card.y + card.h + 100)
 
   // ── Rodapé: crédito do produto ──
-  ctx.fillStyle = t.posterSuave
+  ctx.fillStyle = t.suave
   ctx.globalAlpha = 0.85
   ctx.font = '18px sans-serif'
   espacado(ctx, 'FEITO COM EASY FEED', cx, H - 40, 3)
   ctx.globalAlpha = 1
+}
+
+/**
+ * Pinta o fundo do cartaz: o gradiente do tema e, quando é textura, o desenho
+ * por cima.
+ *
+ * É o gêmeo em canvas de `fundoCss` (qr-temas.ts) — o mesmo tema aparece no
+ * quadradinho da paleta e na página do cliente via CSS, e aqui via canvas,
+ * porque o cartaz precisa virar PNG/PDF para impressão. Mantê-los parecidos é
+ * o que faz a prévia da tela corresponder ao que sai na gráfica.
+ */
+function pintarFundo(ctx: CanvasRenderingContext2D, t: QrTema, W: number, H: number): void {
+  const g = ctx.createLinearGradient(0, 0, W * 0.35, H)
+  g.addColorStop(0, t.fundo[0])
+  g.addColorStop(1, t.fundo[1])
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, W, H)
+
+  if (!t.textura) return
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, W, H)
+  ctx.clip()
+
+  if (t.textura === 'madeira') {
+    // Duas frequências, como no CSS: o grão fino e a junta larga das tábuas.
+    ctx.translate(W / 2, H / 2)
+    ctx.rotate((3 * Math.PI) / 180)
+    ctx.translate(-W / 2, -H / 2)
+    const diag = Math.hypot(W, H)
+    for (let x = -diag; x < diag; x += 9) {
+      ctx.fillStyle = 'rgba(120,82,44,0.14)'
+      ctx.fillRect(x, -diag, 2, diag * 2)
+    }
+    for (let x = -diag; x < diag; x += 27) {
+      ctx.fillStyle = 'rgba(96,64,32,0.10)'
+      ctx.fillRect(x, -diag, 1, diag * 2)
+    }
+  } else if (t.textura === 'marmore') {
+    const brilho = ctx.createRadialGradient(W * 0.25, H * 0.15, 0, W * 0.25, H * 0.15, W * 1.2)
+    brilho.addColorStop(0, 'rgba(255,255,255,0.75)')
+    brilho.addColorStop(0.6, 'rgba(255,255,255,0)')
+    ctx.fillStyle = brilho
+    ctx.fillRect(0, 0, W, H)
+
+    // Veias irregulares: uma curva larga e outra fina cruzando em ângulos
+    // diferentes. Mármore listrado denuncia que é gerado.
+    ctx.strokeStyle = 'rgba(120,120,114,0.26)'
+    ctx.lineWidth = 9
+    ctx.beginPath()
+    ctx.moveTo(-40, H * 0.72)
+    ctx.bezierCurveTo(W * 0.3, H * 0.5, W * 0.45, H * 0.34, W + 40, H * 0.06)
+    ctx.stroke()
+
+    ctx.strokeStyle = 'rgba(120,120,114,0.18)'
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.moveTo(-40, H * 0.95)
+    ctx.bezierCurveTo(W * 0.42, H * 0.8, W * 0.5, H * 0.66, W + 40, H * 0.44)
+    ctx.stroke()
+  } else if (t.textura === 'ardosia') {
+    const brilho = ctx.createRadialGradient(W * 0.3, H * 0.1, 0, W * 0.3, H * 0.1, W * 1.3)
+    brilho.addColorStop(0, 'rgba(255,255,255,0.10)')
+    brilho.addColorStop(0.55, 'rgba(255,255,255,0)')
+    ctx.fillStyle = brilho
+    ctx.fillRect(0, 0, W, H)
+
+    ctx.translate(W / 2, H / 2)
+    ctx.rotate((35 * Math.PI) / 180)
+    ctx.translate(-W / 2, -H / 2)
+    const diag = Math.hypot(W, H)
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'
+    for (let x = -diag; x < diag; x += 11) ctx.fillRect(x, -diag, 3, diag * 2)
+  }
+
+  ctx.restore()
 }
 
 /** Escreve um texto com espaçamento entre letras (canvas não tem letter-spacing nativo confiável). */
