@@ -115,8 +115,19 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
     onChange(hex)
   }
 
+  /**
+   * O "#" é do campo, não do dono: quem digita cola `C2622C` e o campo se
+   * encarrega do resto.
+   *
+   * O caso que exige cuidado é apagar tudo. Recolocar o "#" sempre — inclusive
+   * quando sobrou só ele — prende um caractere que não se consegue deletar: o
+   * dono aperta backspace, o "#" volta na hora, e limpar o campo para digitar
+   * outro código vira impossível. Por isso, campo vazio (ou só com o "#")
+   * continua vazio, e o prefixo só reaparece quando há algo para prefixar.
+   */
   const digitarHex = (texto: string) => {
-    const t = texto.startsWith('#') ? texto : `#${texto}`
+    const limpo = texto.trim().replace(/^#+/, '')
+    const t = limpo === '' ? '' : `#${limpo}`
     setRascunho(t)
     if (HEX.test(t)) {
       setHsv(hexParaHsv(t))
@@ -211,7 +222,9 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
               aria-label="Código da cor em hexadecimal"
               className={cn(
                 'w-full bg-transparent font-mono text-[13px] uppercase outline-none',
-                !HEX.test(rascunho) && 'text-red-600',
+                // Campo vazio é meio de digitar, não erro — só marca em
+                // vermelho o que já tem conteúdo e ainda não é um hex válido.
+                rascunho !== '' && !HEX.test(rascunho) && 'text-red-600',
               )}
             />
             {temContaGotas && (
