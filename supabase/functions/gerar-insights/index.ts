@@ -35,7 +35,9 @@ import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, buscarMemorias, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
-import { agruparEmAssuntos, selecionarParaAvaliar, type Assunto, type PontoBruto } from '../_shared/assuntos.ts'
+import {
+  agruparEmAssuntos, chaveDoAssunto, selecionarParaAvaliar, type Assunto, type PontoBruto,
+} from '../_shared/assuntos.ts'
 import {
   assuntoElegivelPorNota,
   consolidarNota,
@@ -859,6 +861,23 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       }
     }
 
+    // ---- ESTÁGIO 3b: feedbacks invalidados por exclusão manual, pra religar ----
+    //
+    // Um assunto que já teve insight excluído pelo dono não pode gerar insight
+    // sozinho de novo (por isso `feedbacks_para_geracao`/`feedbacks_livres` os
+    // exclui do agrupamento acima) — mas se ele voltar por conta de feedback
+    // NOVO e válido, o relato antigo entra junto: é o que mantém alcançável
+    // pelo motor de resposta o cliente que reclamou daquela vez. Ver
+    // `20260902000000_feedback_invalidado_por_exclusao.sql`.
+    //
+    // Buscado uma vez só, fora do loop de assuntos: mesmo restaurante para
+    // todos os aprovados desta rodada.
+    const { data: invalidados } = await db
+      .from('feedbacks_restaurante')
+      .select('id, origem_id, tema_id, categoria, sentimento, created_at')
+      .eq('restaurante_id', restauranteId)
+      .not('invalidado_em', 'is', null)
+
     // ---- ESTÁGIO 4: substituir e gravar ----
     // Só agora os antigos saem de cena, com o substituto pronto na mão. Precisa
     // vir ANTES do insert: o trigger de vínculo usa `coalesce(usado_por_insight_id,
@@ -947,6 +966,25 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
         })),
       )
       if (erroVinculo) console.error(`[${assunto.chave}] falha ao vincular:`, erroVinculo)
+
+      // Do mesmo assunto, mas invalidados por uma exclusão manual anterior —
+      // não dispararam esta rodada (excluídos de `feedbacks_livres`), mas o
+      // insight que nasce agora sobre o mesmo assunto os representa também.
+      // `chaveDoAssunto` usa a MESMA regra de agrupamento do estágio 0, então
+      // a comparação é exata, não uma aproximação por categoria.
+      const reaproveitados = (invalidados ?? []).filter((p) => chaveDoAssunto(p) === assunto.chave)
+      if (reaproveitados.length > 0) {
+        const { error: erroReaproveitar } = await db.from('insight_feedback').insert(
+          reaproveitados.map((p) => ({
+            insight_id: novo.id,
+            feedback_restaurante_id: p.id,
+            feedback_original_id: p.origem_id,
+            restaurante_id: restauranteId,
+            origem: 'reaproveitado',
+          })),
+        )
+        if (erroReaproveitar) console.error(`[${assunto.chave}] falha ao reaproveitar:`, erroReaproveitar)
+      }
 
       gravados++
     }

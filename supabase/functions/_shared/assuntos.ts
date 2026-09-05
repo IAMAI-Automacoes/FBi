@@ -82,6 +82,21 @@ function ehNegativo(sentimento: string | null): boolean {
   return (sentimento || '').toLowerCase().includes('negativ')
 }
 
+/**
+ * A identidade de um assunto — `tema:<uuid>|neg` ou `categoria:<nome>|pos` —
+ * extraída pra fora de `agruparEmAssuntos` porque `gerar-insights` precisa da
+ * MESMA regra em outro lugar: ao criar um insight novo, ela é usada pra achar,
+ * entre os feedbacks já invalidados por uma exclusão manual anterior, quais
+ * eram do mesmo assunto — esses entram no vínculo do insight novo junto com
+ * os que dispararam a rodada (ver `20260902000000_feedback_invalidado_por_exclusao.sql`).
+ * Uma função só, usada nos dois lugares, garante que a comparação de chave
+ * nunca diverge por um dos dois lados ter sido ajustado sozinho.
+ */
+export function chaveDoAssunto(p: Pick<PontoBruto, 'tema_id' | 'categoria' | 'sentimento'>): string {
+  const base = p.tema_id ? `tema:${p.tema_id}` : `categoria:${p.categoria ?? 'Outros'}`
+  return `${base}|${ehNegativo(p.sentimento) ? 'neg' : 'pos'}`
+}
+
 function diasDesde(iso: string, agora: Date): number {
   const t = new Date(iso).getTime()
   if (!Number.isFinite(t)) return 999
@@ -105,7 +120,6 @@ export function agruparEmAssuntos(
   const grupos = new Map<string, PontoBruto[]>()
   for (const p of pontos) {
     if (!textoDoPonto(p)) continue // ponto sem texto não sustenta nada
-    const base = p.tema_id ? `tema:${p.tema_id}` : `categoria:${p.categoria ?? 'Outros'}`
     // Queixa e elogio do mesmo tema são assuntos DIFERENTES.
     //
     // Sem esta separação, o tema "Ambiente" juntava "o ambiente era ruim" com
@@ -114,7 +128,7 @@ export function agruparEmAssuntos(
     // — quem ELOGIOU entraria na contagem de pessoas que sustenta o limiar da
     // QUEIXA. Nos dados reais isso dava 8 pessoas a um assunto onde só 2
     // haviam reclamado.
-    const chave = `${base}|${ehNegativo(p.sentimento) ? 'neg' : 'pos'}`
+    const chave = chaveDoAssunto(p)
     const atual = grupos.get(chave)
     if (atual) atual.push(p)
     else grupos.set(chave, [p])
