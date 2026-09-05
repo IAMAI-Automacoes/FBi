@@ -975,7 +975,17 @@ export default function Garcons() {
                       achar o nome, e a colocação é só o número mesmo. */}
                   {ranking.length > 3 && (
                     <Card>
-                      <CardContent className="p-2">
+                      {/* `sm:p-2` também, não só `p-2` — o CardContent já vem
+                          com `sm:p-8 sm:pt-0` embutido, e em telas ≥640px
+                          essa classe com prefixo de breakpoint ganha de um
+                          `p-2` sem prefixo (mesmo vindo depois no className),
+                          porque o CSS gerado pro breakpoint fica numa
+                          media query que o navegador aplica por cima. Sem
+                          repetir o prefixo aqui, sobrava ~32px de padding
+                          embaixo/nas laterais que o `sm:pt-0` não zera (só
+                          zera o topo), e por isso parecia uma borda mais
+                          grossa embaixo do que em cima. */}
+                      <CardContent className="p-2 sm:p-2">
                         <ul className="divide-y divide-border">
                           {ranking.slice(3).map((g, i) => {
                             const posicao = i + 4
@@ -1124,7 +1134,11 @@ export default function Garcons() {
             </CardContent></Card>
           ) : (
             <Card>
-              <CardContent className="p-0">
+              {/* `sm:p-0` também — mesmo motivo do card do Ranking logo
+                  acima: sem repetir o prefixo, o `sm:p-8 sm:pt-0` embutido
+                  no CardContent ganhava do `p-0` em telas ≥640px, deixando
+                  ~32px de padding fantasma embaixo e nas laterais. */}
+              <CardContent className="p-0 sm:p-0">
                 <ul className="divide-y divide-border">
                   {garconsEquipe.map((g) => {
                     const i = garcons.findIndex((x) => x.id === g.id)
