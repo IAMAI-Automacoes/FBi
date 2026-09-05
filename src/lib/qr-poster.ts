@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
 import { getTema, pintarTextura, type QrTema } from '@/lib/qr-temas'
-import { fonteDoElemento, type ElementoCartaz } from '@/lib/cartaz-elementos'
+import { fonteDoElemento, garantirFontesCarregadas, type ElementoCartaz } from '@/lib/cartaz-elementos'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -117,6 +117,8 @@ export interface PosterOpts {
   temaId?: string | null
   /** Textos e logo que o dono posicionou. Ver `cartaz-elementos.ts`. */
   elementos?: ElementoCartaz[]
+  /** Texto em edicao: e medido, mas nao pintado (o campo sobreposto o mostra). */
+  editandoId?: string
 }
 
 /** Caixa de um elemento no canvas, em pixels do cartaz. Alimenta o editor. */
@@ -154,7 +156,12 @@ async function desenharElementos(
   t: QrTema,
   W: number,
   H: number,
+  editandoId?: string,
 ): Promise<CaixaElemento[]> {
+  // Sem esta espera o canvas escreve na fonte de reserva sem avisar, e o PNG
+  // que vai pra grafica sai com outra tipografia. Ver `cartaz-elementos.ts`.
+  await garantirFontesCarregadas(elementos)
+
   const caixas: CaixaElemento[] = []
 
   for (const el of elementos) {
@@ -187,7 +194,12 @@ async function desenharElementos(
     let larguraMax = 0
     linhas.forEach((linha, i) => {
       larguraMax = Math.max(larguraMax, ctx.measureText(linha).width)
-      ctx.fillText(linha, cx, cy - alturaTotal / 2 + alturaLinha * (i + 0.5))
+      // Em edição o texto NÃO é pintado: quem o mostra é o campo sobreposto na
+      // prévia. Pintar os dois deixaria o texto dobrado e fora de registro a
+      // cada tecla. A caixa continua sendo medida, e é ela que posiciona o campo.
+      if (el.id !== editandoId) {
+        ctx.fillText(linha, cx, cy - alturaTotal / 2 + alturaLinha * (i + 0.5))
+      }
     })
     ctx.restore()
 
@@ -309,7 +321,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
   // que a sobreposição estraga o cartaz de verdade.
   return opts.elementos?.length
-    ? await desenharElementos(ctx, opts.elementos, t, W, H)
+    ? await desenharElementos(ctx, opts.elementos, t, W, H, opts.editandoId)
     : []
 }
 

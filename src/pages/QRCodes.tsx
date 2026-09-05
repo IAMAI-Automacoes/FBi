@@ -10,12 +10,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, type CaixaElemento } from '@/lib/qr-poster'
-import { lerElementos, novaLogo, novoTexto, type ElementoCartaz } from '@/lib/cartaz-elementos'
-import { EditorCartaz } from '@/components/EditorCartaz'
+import { fonteCss, lerElementos, novaLogo, novoTexto, type ElementoCartaz } from '@/lib/cartaz-elementos'
+import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
 import { toast } from 'sonner'
@@ -63,6 +63,9 @@ export default function QRCodes() {
   const [selecionado, setSelecionado] = useState<string | null>(null)
   const [caixas, setCaixas] = useState<CaixaElemento[]>([])
   const [enviandoLogo, setEnviandoLogo] = useState(false)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  /** Largura da prévia em pixels de tela — converte o corpo do cartaz pro campo. */
+  const [larguraPreview, setLarguraPreview] = useState(0)
   const camadaRef = useRef<HTMLDivElement>(null)
 
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
@@ -76,7 +79,24 @@ export default function QRCodes() {
       drawCanvas()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, elementos])
+  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, elementos, editandoId])
+
+  /**
+   * Largura real da prévia na tela.
+   *
+   * O corpo da fonte é guardado em pixels do cartaz (720 de largura), e o campo
+   * de edição vive na tela, onde a prévia tem ~300px. Sem essa medida a letra
+   * digitada sairia num tamanho e a desenhada em outro.
+   */
+  useEffect(() => {
+    const camada = camadaRef.current
+    if (!camada || typeof ResizeObserver === 'undefined') return
+    const medir = () => setLarguraPreview(camada.getBoundingClientRect().width)
+    medir()
+    const observador = new ResizeObserver(medir)
+    observador.observe(camada)
+    return () => observador.disconnect()
+  }, [qrData])
 
   const loadData = async () => {
     try {
@@ -318,6 +338,7 @@ export default function QRCodes() {
           tagline: cfgMensagem,
           temaId: cfgEstilo,
           elementos,
+          editandoId: editandoId ?? undefined,
         }),
       )
     } catch (err) {
@@ -386,6 +407,8 @@ export default function QRCodes() {
   const maxBar = Math.max(1, ...metricas.barras.map((b) => b.n))
   const tema = getTema(cfgEstilo)
   const personalizada = ehCorPersonalizada(cfgEstilo)
+  const elementoSelecionado = elementos.find((e) => e.id === selecionado) ?? null
+  const temLogo = elementos.some((e) => e.tipo === 'logo')
 
   return (
     <div className="flex-1">
@@ -627,17 +650,6 @@ export default function QRCodes() {
                   <p className="mt-1 text-[11px] text-muted-foreground">{cfgMensagem.length}/120</p>
                 </div>
 
-                <EditorCartaz
-                  elementos={elementos}
-                  selecionado={selecionado}
-                  enviandoLogo={enviandoLogo}
-                  onSelecionar={setSelecionado}
-                  onAlterar={alterarElemento}
-                  onRemover={removerElemento}
-                  onAdicionarTexto={adicionarTexto}
-                  onEscolherLogo={enviarLogo}
-                />
-
                 <Button onClick={salvarCfg} disabled={savingCfg} variant="outline" className="w-full">
                   {savingCfg ? 'Salvando…' : 'Salvar tema'}
                 </Button>
@@ -645,8 +657,45 @@ export default function QRCodes() {
             </Card>
 
             {/* ───────── Prévia: o display de mesa ───────── */}
-            <div className="flex flex-col">
-              <h2 className="mb-3 text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
+            <div className="flex w-[330px] max-w-full flex-col">
+              <h2 className="mb-2 text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
+
+              {/* A barra do elemento e os botões de adicionar ficam JUNTO da
+                  prévia: é nela que o elemento é posicionado e digitado, e ter
+                  o controle no outro lado da tela obrigava a ir e voltar com o
+                  olho a cada ajuste. */}
+              {elementoSelecionado && (
+                <BarraElemento
+                  elemento={elementoSelecionado}
+                  onAlterar={alterarElemento}
+                  onRemover={removerElemento}
+                />
+              )}
+
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={adicionarTexto}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                >
+                  <Type className="h-3.5 w-3.5" /> Texto
+                </button>
+
+                {/* Some quando já existe uma logo: o cartaz comporta uma marca
+                    só, e um segundo botão só levaria a duas logos sobrepostas. */}
+                {!temLogo && (
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
+                    {enviandoLogo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                    {enviandoLogo ? 'Enviando…' : 'Logo'}
+                    <input
+                      type="file"
+                      accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) enviarLogo(f); e.target.value = '' }}
+                    />
+                  </label>
+                )}
+              </div>
 
               {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
                   ser percebida na hora, e não só dentro da plaquinha. */}
@@ -700,29 +749,81 @@ export default function QRCodes() {
                           className="block h-auto w-full rounded-[2px] shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
                           onPointerDown={() => setSelecionado(null)}
                         />
-                        {caixas.map((c) => (
-                          <div
-                            key={c.id}
-                            onPointerDown={arrastarElemento(c.id)}
-                            role="button"
-                            tabIndex={0}
-                            aria-label="Mover o elemento"
-                            className={cn(
-                              'absolute cursor-move touch-none rounded-[2px] transition-colors',
-                              selecionado === c.id
-                                ? 'ring-2 ring-[#C2622C] ring-offset-1'
-                                : 'hover:ring-2 hover:ring-[#C2622C]/45',
-                            )}
-                            style={{
-                              // Margem de 6px do cartaz pra alvo de texto fino
-                              // ainda dar pra pegar com o dedo.
-                              left: `${((c.x - 6) / POSTER_W) * 100}%`,
-                              top: `${((c.y - 6) / POSTER_H) * 100}%`,
-                              width: `${((c.w + 12) / POSTER_W) * 100}%`,
-                              height: `${((c.h + 12) / POSTER_H) * 100}%`,
-                            }}
-                          />
-                        ))}
+                        {caixas.map((c) => {
+                          const el = elementos.find((e) => e.id === c.id)
+                          if (!el) return null
+                          const emEdicao = editandoId === c.id
+                          // Margem de 6px do cartaz: alvo de texto fino ainda
+                          // precisa dar pra pegar com o dedo.
+                          const moldura = {
+                            left: `${((c.x - 6) / POSTER_W) * 100}%`,
+                            top: `${((c.y - 6) / POSTER_H) * 100}%`,
+                            width: `${((c.w + 12) / POSTER_W) * 100}%`,
+                            height: `${((c.h + 12) / POSTER_H) * 100}%`,
+                          }
+
+                          return (
+                            <div
+                              key={c.id}
+                              className={cn(
+                                'group absolute rounded-[2px] transition-colors',
+                                selecionado === c.id
+                                  ? 'ring-2 ring-[#C2622C] ring-offset-1'
+                                  : 'hover:ring-2 hover:ring-[#C2622C]/45',
+                              )}
+                              style={moldura}
+                            >
+                              {emEdicao && el.tipo === 'texto' ? (
+                                /* O texto se digita AQUI, sobre o cartaz. O
+                                   canvas deixa de pintá-lo enquanto isso (ver
+                                   `editandoId` em qr-poster), senão apareceria
+                                   dobrado. O corpo é convertido de pixel de
+                                   cartaz para pixel de tela pela largura real
+                                   da prévia — sem isso a letra do campo não
+                                   bate com a desenhada. */
+                                <textarea
+                                  autoFocus
+                                  value={el.texto}
+                                  onChange={(e) => alterarElemento(el.id, { texto: e.target.value })}
+                                  onBlur={() => setEditandoId(null)}
+                                  onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
+                                  className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center leading-[1.2] outline-none"
+                                  style={{
+                                    fontFamily: fonteCss(el.fonte),
+                                    fontSize: (el.tamanho * larguraPreview) / POSTER_W || 12,
+                                    fontWeight: el.negrito ? 700 : 400,
+                                    fontStyle: el.italico ? 'italic' : 'normal',
+                                    color: el.cor ?? tema.tinta,
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  onPointerDown={arrastarElemento(c.id)}
+                                  onDoubleClick={() => { if (el.tipo === 'texto') setEditandoId(c.id) }}
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-label={el.tipo === 'texto' ? 'Mover o texto (dois cliques para editar)' : 'Mover a logo'}
+                                  className="h-full w-full cursor-move touch-none"
+                                />
+                              )}
+
+                              {/* Excluir no hover — some junto com o elemento */}
+                              <button
+                                type="button"
+                                onClick={() => removerElemento(c.id)}
+                                aria-label="Excluir o elemento"
+                                title="Excluir"
+                                className={cn(
+                                  'absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white',
+                                  'group-hover:flex',
+                                  selecionado === c.id && 'flex',
+                                )}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )
+                        })}
                       </div>
                       {/* Reflexo diagonal e aresta viva da chapa */}
                       <div className="pointer-events-none absolute inset-0 rounded-[6px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
