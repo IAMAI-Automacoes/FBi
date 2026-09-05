@@ -162,7 +162,7 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
         title="Escolher outra cor"
         aria-label="Escolher outra cor"
         aria-expanded={aberto}
-        className="relative flex h-8 w-8 items-center justify-center rounded-full transition-transform hover:scale-105"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full transition-transform hover:scale-105"
         style={{
           background:
             'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
@@ -173,13 +173,13 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
             quem mostra é o quadradinho marcado na paleta e a própria prévia.
             Pintado com a cor atual ele viraria só mais um quadradinho da
             paleta, e o convite de "tem mais cor aqui" some. */}
-        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white text-[15px] font-light leading-none text-gray-600 shadow-sm">
+        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white text-[19px] font-light leading-none text-gray-600 shadow-sm">
           +
         </span>
       </button>
 
       {aberto && (
-        <div className="absolute left-0 top-10 z-50 w-[236px] rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+        <div className="absolute left-0 top-[52px] z-50 w-[236px] rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
           {/* Saturação no eixo X, brilho no Y — as duas camadas por cima da cor
               pura do matiz atual são o que desenha isso. */}
           <div

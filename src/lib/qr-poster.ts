@@ -15,6 +15,48 @@ function carregarImg(src: string, crossOrigin = false): Promise<HTMLImageElement
   })
 }
 
+/**
+ * Cache do QR (por URL) e da logo.
+ *
+ * Existe por causa de um piscar, não por micro-otimização. `desenharPoster`
+ * LIMPA o canvas na primeira linha e só desenha o QR e a logo depois de dois
+ * `await` — gerar o QR e carregar as imagens. Enquanto esses await não voltam,
+ * o navegador tem uma janela para pintar, e pinta o cartaz sem QR e sem logo.
+ *
+ * Numa troca de tema isolada ninguém percebe. Arrastando no seletor de cor, que
+ * redesenha a cada movimento do mouse, vira um pisca-pisca em cima justamente
+ * dos dois elementos que NÃO mudaram — o QR depende só da URL e a logo é sempre
+ * a mesma.
+ *
+ * Com o cache, da segunda chamada em diante os dois `await` resolvem em
+ * microtask, antes do próximo paint: o limpar e o redesenhar caem no mesmo
+ * quadro e o piscar some.
+ */
+const cacheQr = new Map<string, Promise<HTMLImageElement>>()
+let cacheLogo: Promise<HTMLImageElement> | null = null
+
+function qrDaUrl(url: string): Promise<HTMLImageElement> {
+  const emCache = cacheQr.get(url)
+  if (emCache) return emCache
+
+  const p = QRCode.toDataURL(url, {
+    errorCorrectionLevel: 'H',
+    margin: 1,
+    width: 560,
+    color: { dark: '#171717ff', light: '#ffffffff' },
+  })
+    .then((dataUrl: string) => carregarImg(dataUrl))
+    .catch(() => carregarImg(''))
+
+  cacheQr.set(url, p)
+  return p
+}
+
+function logoDoProduto(): Promise<HTMLImageElement> {
+  if (!cacheLogo) cacheLogo = carregarImg(easyFeedIcon)
+  return cacheLogo
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -136,19 +178,11 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.restore()
 
   // ── QR (gerado localmente, correção alta p/ caber a logo no centro) ──
-  const dataUrl = await QRCode.toDataURL(opts.url, {
-    errorCorrectionLevel: 'H',
-    margin: 1,
-    width: 560,
-    color: { dark: '#171717ff', light: '#ffffffff' },
-  }).catch(() => '')
   const qs = 372
   const qx = card.x + (card.w - qs) / 2
   const qy = card.y + (card.h - qs) / 2
-  if (dataUrl) {
-    const qr = await carregarImg(dataUrl)
-    ctx.drawImage(qr, qx, qy, qs, qs)
-  }
+  const qr = await qrDaUrl(opts.url)
+  if (qr.width > 1) ctx.drawImage(qr, qx, qy, qs, qs)
 
   // ── Quadrado central com a logo do Easy Feed (não é mais um círculo) ──
   const plate = 104
@@ -161,7 +195,7 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.restore()
-  const logo = await carregarImg(easyFeedIcon)
+  const logo = await logoDoProduto()
   if (logo && logo.width > 1) {
     // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
     const pad = 6

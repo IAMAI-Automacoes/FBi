@@ -430,8 +430,9 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Cor livre, fora da paleta pronta */}
-                    <div className="mt-3">
+                    {/* Cor livre, fora da paleta pronta. O respiro maior é para
+                        o botão não ler como a 13ª cor da grade acima. */}
+                    <div className="mt-6">
                       <SeletorCor
                         valor={personalizada ? cfgEstilo : null}
                         onChange={setCfgEstilo}
