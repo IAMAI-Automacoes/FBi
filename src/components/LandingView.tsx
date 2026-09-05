@@ -60,8 +60,11 @@ export function LandingView({
     <a href={waLink} style={botaoStyle}>{Icone} Dar meu feedback</a>
   )
 
+  // O tamanho pedido ao gerador é o de uma tela de celular, e não o padrão do
+  // selo da paleta: a textura cobre a tela inteira, e ampliar um selo pequeno
+  // para ~800px de altura borra o material todo.
   return (
-    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden', background: fundoCss(tema), fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
+    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden', background: fundoCss(tema, 420, 760), fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
       {sobreFoto && (
         <>
           <img src={imagem!} alt="" style={{ position: 'absolute', inset: 0, height: '100%', width: '100%', objectFit: 'cover' }} />

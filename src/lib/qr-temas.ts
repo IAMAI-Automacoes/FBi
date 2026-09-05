@@ -1,34 +1,39 @@
 // Tema do QR Code impresso e da página que o cliente abre ao escanear.
 //
 // O modelo anterior era "6 fotos profissionais": cada tema trazia uma foto de
-// ambiente (salão, café, sushi...) que virava o fundo da página do cliente, e
-// uma paleta derivada dela para o cartaz impresso. Foi trocado pelo que o dono
-// de fato escolhe quando manda imprimir um display de mesa: uma COR SÓLIDA ou
-// uma TEXTURA NEUTRA (madeira, mármore, ardósia, concreto, linho).
+// ambiente que virava o fundo da página do cliente, e uma paleta derivada dela
+// para o cartaz. Foi trocado pelo que o dono de fato escolhe quando manda
+// imprimir um display de mesa: uma COR SÓLIDA ou um MATERIAL.
 //
-// A troca resolve dois problemas de uma vez. O primeiro é de impressão: foto
-// de ambiente em display A5 sai suja, chapada e cara em tinta — cor plana e
-// textura discreta imprimem bem em qualquer gráfica. O segundo é de coerência:
-// como não há mais imagem para baixar, o MESMO tema serve ao cartaz e à página
-// do cliente sem carregar arquivo nenhum, e a cor personalizada do dono passa a
-// caber no modelo (ver `getTema`, que aceita um hex como id).
+// A troca resolve dois problemas. O de impressão: foto de ambiente em display
+// A5 sai suja e cara em tinta, enquanto cor plana e material discreto imprimem
+// bem em qualquer gráfica. E o de coerência: sem imagem para baixar, o mesmo
+// tema serve ao cartaz e à página do cliente, e a cor personalizada do dono
+// passa a caber no modelo (ver `getTema`, que aceita um hex como id).
+//
+// As texturas não são imagem nem gradiente listrado: são geradas por ruído
+// procedural em `texturas.ts` — o porquê está no cabeçalho de lá.
+
+import { pintarTextura, texturaCss, type EstiloTextura, type PaletaMaterial } from '@/lib/texturas'
+
+export type { EstiloTextura, PaletaMaterial }
+export { pintarTextura }
 
 export type TipoTema = 'cor' | 'textura'
-export type EstiloTextura = 'madeira' | 'marmore' | 'ardosia' | 'concreto' | 'linho'
 
 export interface QrTema {
   id: string
   nome: string
   tipo: TipoTema
-  /** Gradiente do fundo. Cor sólida usa dois tons quase iguais — só profundidade. */
+  /** Par de tons do tema. Serve de gradiente na cor sólida e de amostra do material. */
   fundo: [string, string]
-  /** Qual desenho é pintado por cima do gradiente. `null` em cor sólida. */
+  /** Qual material é desenhado. `null` em cor sólida. */
   textura: EstiloTextura | null
-  /** Cor do desenho da textura: o veio da madeira, a veia do mármore, a trama do linho. */
-  veio: string
+  /** Cores do material. `null` em cor sólida. */
+  material: PaletaMaterial | null
   /** Fundo escuro o bastante para o texto precisar ser claro. */
   escuro: boolean
-  /** Cor de marca do cartaz: rótulo do topo e traço de destaque. */
+  /** Cor de marca do cartaz: rótulo do topo. */
   acento: string
   /** Texto sobre a cor de acento. */
   acentoTexto: string
@@ -75,11 +80,9 @@ function temaDeCor(id: string, nome: string, hex: string): QrTema {
     tipo: 'cor',
     fundo: [mexerNoTom(hex, escuro ? 0.06 : 0.035), mexerNoTom(hex, -0.05)],
     textura: null,
-    veio: 'transparent',
+    material: null,
     escuro,
-    // Sobre fundo escuro a marca é o branco quente; sobre claro, um âmbar que
-    // não briga com nenhuma das cores da paleta.
-    acento: escuro ? '#E8D9C3' : '#B45309',
+    acento: escuro ? '#E8D9C3' : '#8A6A45',
     acentoTexto: escuro ? '#1A1A1A' : '#FFFFFF',
     tinta: escuro ? '#FFFFFF' : '#241E18',
     suave: escuro ? 'rgba(255,255,255,0.72)' : 'rgba(36,30,24,0.62)',
@@ -87,141 +90,85 @@ function temaDeCor(id: string, nome: string, hex: string): QrTema {
 }
 
 /**
- * A paleta pronta que a tela mostra em "Paleta de Cores".
+ * A paleta pronta.
  *
- * São 12, em duas fileiras de seis, e a ordem é a regra: a primeira fileira vai
- * dos claros aos neutros, a segunda dos quentes aos escuros. Um dono escolhendo
- * a cor de um display de mesa quase sempre quer "algo claro e discreto" ou
- * "algo escuro e sóbrio" — agrupar por essa intenção acha mais rápido do que
- * uma grade em ordem de matiz.
+ * Duas fileiras com papéis distintos: a primeira vai do branco ao neutro
+ * terroso, a segunda dos terrosos aos profundos. É a divisão que a escolha real
+ * do dono segue — ou ele quer algo discreto que suma na mesa, ou algo escuro
+ * que se imponha —, e ela acha mais rápido que uma grade em ordem de matiz.
+ *
+ * Os tons saem dos lançamentos de cor de 2026 do setor (khaki terroso, ocre
+ * suave, eucalipto, jade esfumaçado, umbra com carvão) porque display de mesa
+ * fica dentro de um salão decorado: a cor precisa combinar com madeira, pedra e
+ * tecido, não competir com eles.
+ *
+ * Todos são dessaturados de propósito. Cor saturada é o que mais estoura na
+ * conversão para CMYK — o laranja vivo que a tela mostra volta da gráfica
+ * apagado e sujo —, e um tom quebrado imprime igual ao que se viu na tela.
  */
 export const QR_CORES: QrTema[] = [
   temaDeCor('branco', 'Branco', '#FFFFFF'),
-  temaDeCor('marfim', 'Marfim', '#F6F1E7'),
-  temaDeCor('areia', 'Areia', '#E8D9BE'),
-  temaDeCor('nevoa', 'Névoa', '#CBD5DC'),
-  temaDeCor('cinza', 'Cinza', '#A9B0B6'),
-  temaDeCor('grafite', 'Grafite', '#4A5157'),
-  temaDeCor('terracota', 'Terracota', '#C2622C'),
-  temaDeCor('caramelo', 'Caramelo', '#C08A55'),
-  temaDeCor('oliva', 'Oliva', '#6B7551'),
-  temaDeCor('musgo', 'Musgo', '#40513B'),
-  temaDeCor('petroleo', 'Petróleo', '#2C4048'),
-  temaDeCor('carvao', 'Carvão', '#1B1B1B'),
+  temaDeCor('marfim', 'Marfim', '#F5F0E6'),
+  temaDeCor('aveia', 'Aveia', '#E6DAC3'),
+  temaDeCor('nevoa', 'Névoa', '#D3D7D4'),
+  temaDeCor('greige', 'Greige', '#B3A899'),
+  temaDeCor('caqui', 'Caqui', '#A89B7E'),
+  temaDeCor('terracota', 'Terracota', '#B8623A'),
+  temaDeCor('caramelo', 'Caramelo', '#A9703F'),
+  temaDeCor('eucalipto', 'Eucalipto', '#6E7F6A'),
+  temaDeCor('jade', 'Jade Fumê', '#4A6560'),
+  temaDeCor('petroleo', 'Azul Profundo', '#2E4055'),
+  temaDeCor('umbra', 'Umbra', '#33302C'),
 ]
 
+function temaDeMaterial(
+  id: string,
+  nome: string,
+  textura: EstiloTextura,
+  material: PaletaMaterial,
+  escuro: boolean,
+): QrTema {
+  return {
+    id,
+    nome,
+    tipo: 'textura',
+    fundo: [material.luz, material.fundo],
+    textura,
+    material,
+    escuro,
+    acento: escuro ? '#EADFCB' : '#7A5C3A',
+    acentoTexto: escuro ? '#1F1B16' : '#FFFFFF',
+    tinta: escuro ? '#FFFFFF' : '#241E18',
+    suave: escuro ? 'rgba(255,255,255,0.74)' : 'rgba(36,30,24,0.62)',
+  }
+}
+
 /**
- * As texturas neutras.
+ * Os oito materiais.
  *
- * Cada material aparece num par claro/escuro, porque a escolha real do dono é
- * "madeira, mas combinando com o meu salão" — e um salão escuro com uma única
- * madeira clara disponível acaba escolhendo cor sólida.
+ * São os que de fato revestem salão de restaurante — madeira, pedra, concreto
+ * queimado e tecido —, cada família num par claro/escuro. O par importa: a
+ * escolha do dono é "madeira, mas combinando com o meu salão", e um salão
+ * escuro com só uma madeira clara disponível acaba desistindo e indo para cor
+ * sólida.
  */
 export const QR_TEXTURAS: QrTema[] = [
-  {
-    id: 'madeira-clara',
-    nome: 'Madeira Clara',
-    tipo: 'textura',
-    fundo: ['#E8CBA4', '#D2A97A'],
-    textura: 'madeira',
-    veio: 'rgba(120,82,44,0.16)',
-    escuro: false,
-    acento: '#8C5A2B',
-    acentoTexto: '#FFFFFF',
-    tinta: '#3A2A19',
-    suave: 'rgba(58,42,25,0.65)',
-  },
-  {
-    id: 'madeira-escura',
-    nome: 'Madeira Escura',
-    tipo: 'textura',
-    fundo: ['#8A5F3A', '#4E3320'],
-    textura: 'madeira',
-    veio: 'rgba(38,22,10,0.34)',
-    escuro: true,
-    acento: '#E9CFA9',
-    acentoTexto: '#3A2413',
-    tinta: '#FFFFFF',
-    suave: 'rgba(255,255,255,0.74)',
-  },
-  {
-    id: 'marmore-neutro',
-    nome: 'Mármore Neutro',
-    tipo: 'textura',
-    fundo: ['#FBFBFA', '#E4E3E0'],
-    textura: 'marmore',
-    veio: 'rgba(120,120,114,0.26)',
-    escuro: false,
-    acento: '#6B6B63',
-    acentoTexto: '#FFFFFF',
-    tinta: '#22221F',
-    suave: 'rgba(34,34,31,0.6)',
-  },
-  {
-    id: 'marmore-grafite',
-    nome: 'Mármore Grafite',
-    tipo: 'textura',
-    fundo: ['#45484D', '#26282C'],
-    textura: 'marmore',
-    veio: 'rgba(228,232,238,0.34)',
-    escuro: true,
-    acento: '#E4E8EE',
-    acentoTexto: '#26282C',
-    tinta: '#FFFFFF',
-    suave: 'rgba(255,255,255,0.74)',
-  },
-  {
-    id: 'ardosia',
-    nome: 'Ardósia',
-    tipo: 'textura',
-    fundo: ['#474F56', '#2A3036'],
-    textura: 'ardosia',
-    veio: 'rgba(255,255,255,0.05)',
-    escuro: true,
-    acento: '#D8DEE4',
-    acentoTexto: '#1A1F24',
-    tinta: '#FFFFFF',
-    suave: 'rgba(255,255,255,0.72)',
-  },
-  {
-    id: 'ardosia-azul',
-    nome: 'Ardósia Azul',
-    tipo: 'textura',
-    fundo: ['#7A8C99', '#4A5A66'],
-    textura: 'ardosia',
-    veio: 'rgba(255,255,255,0.08)',
-    escuro: true,
-    acento: '#EAF1F6',
-    acentoTexto: '#2C3A44',
-    tinta: '#FFFFFF',
-    suave: 'rgba(255,255,255,0.76)',
-  },
-  {
-    id: 'concreto',
-    nome: 'Concreto',
-    tipo: 'textura',
-    fundo: ['#D2D0CB', '#A9A7A1'],
-    textura: 'concreto',
-    veio: 'rgba(86,84,80,0.16)',
-    escuro: false,
-    acento: '#5C5A55',
-    acentoTexto: '#FFFFFF',
-    tinta: '#26251F',
-    suave: 'rgba(38,37,31,0.62)',
-  },
-  {
-    id: 'linho',
-    nome: 'Linho',
-    tipo: 'textura',
-    fundo: ['#EFE7DA', '#D5C9B6'],
-    textura: 'linho',
-    veio: 'rgba(140,122,96,0.18)',
-    escuro: false,
-    acento: '#8A6F4A',
-    acentoTexto: '#FFFFFF',
-    tinta: '#2E2721',
-    suave: 'rgba(46,39,33,0.62)',
-  },
+  temaDeMaterial('carvalho', 'Carvalho', 'madeira',
+    { fundo: '#B08453', base: '#DFC098', luz: '#F2E0C6' }, false),
+  temaDeMaterial('nogueira', 'Nogueira', 'madeira',
+    { fundo: '#33200F', base: '#6B4526', luz: '#94663A' }, true),
+  temaDeMaterial('carrara', 'Mármore Carrara', 'marmore',
+    { fundo: '#D8D6D1', base: '#F2F1EE', luz: '#FCFCFB', veia: '#8E8E88' }, false),
+  temaDeMaterial('marquina', 'Mármore Negro', 'marmore',
+    { fundo: '#111113', base: '#232326', luz: '#35363C', veia: '#DCD9D1' }, true),
+  temaDeMaterial('ardosia', 'Ardósia', 'ardosia',
+    { fundo: '#1E2327', base: '#3A4248', luz: '#525C64' }, true),
+  temaDeMaterial('travertino', 'Travertino', 'travertino',
+    { fundo: '#AC9270', base: '#D9C6A8', luz: '#F0E4CE' }, false),
+  temaDeMaterial('concreto', 'Concreto', 'concreto',
+    { fundo: '#87857F', base: '#B4B2AD', luz: '#D4D2CD' }, false),
+  temaDeMaterial('linho', 'Linho', 'linho',
+    { fundo: '#BFAE92', base: '#E3D7C1', luz: '#F5EEE0' }, false),
 ]
 
 export const QR_TEMAS: QrTema[] = [...QR_CORES, ...QR_TEXTURAS]
@@ -238,10 +185,10 @@ export function ehCorPersonalizada(id?: string | null): boolean {
 /**
  * Resolve o id salvo em `restaurantes.qr_estilo`.
  *
- * Três casos, nesta ordem: um tema da lista; uma cor personalizada, que o dono
- * escolheu na roda de cores e que é guardada como o hex puro (por isso não
- * precisou de coluna nova); ou um id que não existe mais — os antigos
- * `classico`, `moderno`, `rustico`... dos temas com foto — que cai no padrão.
+ * Três casos, nesta ordem: um tema da lista; uma cor personalizada, guardada
+ * como o hex puro (por isso não precisou de coluna nova); ou um id que não
+ * existe mais — os antigos `classico`, `moderno`, `madeira-clara`... — que cai
+ * no padrão.
  */
 export function getTema(id?: string | null): QrTema {
   const achado = QR_TEMAS.find((t) => t.id === id)
@@ -253,61 +200,17 @@ export function getTema(id?: string | null): QrTema {
 /**
  * O fundo do tema como valor CSS `background`.
  *
- * Existe porque o mesmo tema é pintado em três lugares que não compartilham
- * runtime: o quadradinho da paleta (React), a página do cliente (`LandingView`,
- * que roda também no bundle leve sem Tailwind) e o cartaz (canvas, que tem o
- * seu próprio pintor em `qr-poster.ts`). Os dois primeiros usam esta string.
+ * Serve os dois consumidores que desenham por CSS: o selo da paleta e a página
+ * do cliente (`LandingView`, que roda também no bundle leve, sem Tailwind). O
+ * cartaz não passa por aqui — ele pinta a textura direto no canvas, em
+ * `qr-poster.ts`, na resolução da impressão.
  */
-export function fundoCss(tema: QrTema): string {
+export function fundoCss(tema: QrTema, w?: number, h?: number): string {
   const base = `linear-gradient(160deg, ${tema.fundo[0]}, ${tema.fundo[1]})`
-  const v = tema.veio
+  if (!tema.textura || !tema.material) return base
 
-  switch (tema.textura) {
-    case 'madeira':
-      // Duas frequências de veio: a fina dá o grão, a larga dá as tábuas.
-      return [
-        `repeating-linear-gradient(93deg, ${v} 0 2px, rgba(0,0,0,0) 2px 9px)`,
-        `repeating-linear-gradient(93deg, ${v} 0 1px, rgba(0,0,0,0) 1px 27px)`,
-        base,
-      ].join(', ')
-
-    case 'marmore':
-      // Duas "veias" em ângulos diferentes: mármore é irregular, não listrado.
-      return [
-        `linear-gradient(115deg, rgba(0,0,0,0) 45%, ${v} 47.5%, rgba(0,0,0,0) 50%)`,
-        `linear-gradient(97deg, rgba(0,0,0,0) 67%, ${v} 69.5%, rgba(0,0,0,0) 73%)`,
-        `radial-gradient(120% 90% at 25% 15%, ${tema.escuro ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.75)'}, rgba(0,0,0,0) 60%)`,
-        base,
-      ].join(', ')
-
-    case 'ardosia':
-      // Ardósia é lascada em diagonal: risco claro fino, bem baixo contraste.
-      return [
-        `repeating-linear-gradient(125deg, ${v} 0 3px, rgba(0,0,0,0) 3px 11px)`,
-        'radial-gradient(130% 100% at 30% 10%, rgba(255,255,255,0.10), rgba(0,0,0,0) 55%)',
-        base,
-      ].join(', ')
-
-    case 'concreto':
-      // Manchas de cura do cimento: bolhas moles em posições irregulares.
-      return [
-        `radial-gradient(30% 24% at 22% 28%, ${v}, rgba(0,0,0,0) 70%)`,
-        `radial-gradient(26% 20% at 74% 18%, ${v}, rgba(0,0,0,0) 70%)`,
-        `radial-gradient(34% 26% at 58% 72%, ${v}, rgba(0,0,0,0) 70%)`,
-        `radial-gradient(22% 18% at 14% 82%, ${v}, rgba(0,0,0,0) 70%)`,
-        'radial-gradient(120% 90% at 30% 10%, rgba(255,255,255,0.35), rgba(0,0,0,0) 60%)',
-        base,
-      ].join(', ')
-
-    case 'linho':
-      // Trama: dois pentes cruzados em 90°, é o que lê como tecido.
-      return [
-        `repeating-linear-gradient(0deg, ${v} 0 1px, rgba(0,0,0,0) 1px 5px)`,
-        `repeating-linear-gradient(90deg, ${v} 0 1px, rgba(0,0,0,0) 1px 5px)`,
-        base,
-      ].join(', ')
-
-    default:
-      return base
-  }
+  const url = texturaCss(tema.id, tema.textura, tema.material, w, h)
+  // Sem canvas (ou antes da hidratação), o par de tons do material já entrega
+  // uma aproximação decente em vez de um buraco.
+  return url ? `${url} center/cover no-repeat, ${base}` : base
 }

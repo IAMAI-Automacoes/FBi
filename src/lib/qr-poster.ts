@@ -1,6 +1,6 @@
 import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
-import { getTema, type QrTema } from '@/lib/qr-temas'
+import { getTema, pintarTextura, type QrTema } from '@/lib/qr-temas'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -219,103 +219,29 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
 }
 
 /**
- * Pinta o fundo do cartaz: o gradiente do tema e, quando é textura, o desenho
- * por cima.
+ * Pinta o fundo do cartaz: cor sólida do tema, ou o material desenhado na
+ * resolução da impressão.
  *
- * É o gêmeo em canvas de `fundoCss` (qr-temas.ts) — o mesmo tema aparece no
- * quadradinho da paleta e na página do cliente via CSS, e aqui via canvas,
- * porque o cartaz precisa virar PNG/PDF para impressão. Mantê-los parecidos é
- * o que faz a prévia da tela corresponder ao que sai na gráfica.
+ * É o gêmeo em canvas de `fundoCss` (qr-temas.ts). Os dois chamam o MESMO
+ * gerador de textura, e é isso que faz o selo da paleta, a página do cliente e
+ * o PNG que vai para a gráfica mostrarem o mesmo material — antes cada um
+ * tinha o seu desenho e eles só se pareciam.
+ *
+ * Aqui a textura é gerada no tamanho cheio do cartaz, e não escalada a partir
+ * de um selo: ampliar um tile pequeno para 720×1080 borra o grão exatamente no
+ * lugar onde a impressão tem resolução de sobra para mostrá-lo.
  */
 function pintarFundo(ctx: CanvasRenderingContext2D, t: QrTema, W: number, H: number): void {
+  if (t.textura && t.material) {
+    pintarTextura(ctx, t.textura, t.material, W, H)
+    return
+  }
+
   const g = ctx.createLinearGradient(0, 0, W * 0.35, H)
   g.addColorStop(0, t.fundo[0])
   g.addColorStop(1, t.fundo[1])
   ctx.fillStyle = g
   ctx.fillRect(0, 0, W, H)
-
-  if (!t.textura) return
-
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(0, 0, W, H)
-  ctx.clip()
-
-  const diag = Math.hypot(W, H)
-  const inclinar = (graus: number) => {
-    ctx.translate(W / 2, H / 2)
-    ctx.rotate((graus * Math.PI) / 180)
-    ctx.translate(-W / 2, -H / 2)
-  }
-
-  if (t.textura === 'madeira') {
-    // Duas frequências, como no CSS: o grão fino e a junta larga das tábuas.
-    inclinar(3)
-    ctx.fillStyle = t.veio
-    for (let x = -diag; x < diag; x += 9) ctx.fillRect(x, -diag, 2, diag * 2)
-    for (let x = -diag; x < diag; x += 27) ctx.fillRect(x, -diag, 1, diag * 2)
-  } else if (t.textura === 'marmore') {
-    const brilho = ctx.createRadialGradient(W * 0.25, H * 0.15, 0, W * 0.25, H * 0.15, W * 1.2)
-    brilho.addColorStop(0, t.escuro ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.75)')
-    brilho.addColorStop(0.6, 'rgba(255,255,255,0)')
-    ctx.fillStyle = brilho
-    ctx.fillRect(0, 0, W, H)
-
-    // Veias irregulares: uma curva larga e outra fina cruzando em ângulos
-    // diferentes. Mármore listrado denuncia que é gerado.
-    ctx.strokeStyle = t.veio
-    ctx.lineWidth = 9
-    ctx.beginPath()
-    ctx.moveTo(-40, H * 0.72)
-    ctx.bezierCurveTo(W * 0.3, H * 0.5, W * 0.45, H * 0.34, W + 40, H * 0.06)
-    ctx.stroke()
-
-    ctx.globalAlpha = 0.7
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.moveTo(-40, H * 0.95)
-    ctx.bezierCurveTo(W * 0.42, H * 0.8, W * 0.5, H * 0.66, W + 40, H * 0.44)
-    ctx.stroke()
-    ctx.globalAlpha = 1
-  } else if (t.textura === 'ardosia') {
-    const brilho = ctx.createRadialGradient(W * 0.3, H * 0.1, 0, W * 0.3, H * 0.1, W * 1.3)
-    brilho.addColorStop(0, 'rgba(255,255,255,0.10)')
-    brilho.addColorStop(0.55, 'rgba(255,255,255,0)')
-    ctx.fillStyle = brilho
-    ctx.fillRect(0, 0, W, H)
-
-    inclinar(35)
-    ctx.fillStyle = t.veio
-    for (let x = -diag; x < diag; x += 11) ctx.fillRect(x, -diag, 3, diag * 2)
-  } else if (t.textura === 'concreto') {
-    const brilho = ctx.createRadialGradient(W * 0.3, H * 0.1, 0, W * 0.3, H * 0.1, W * 1.2)
-    brilho.addColorStop(0, 'rgba(255,255,255,0.35)')
-    brilho.addColorStop(0.6, 'rgba(255,255,255,0)')
-    ctx.fillStyle = brilho
-    ctx.fillRect(0, 0, W, H)
-
-    // Manchas de cura do cimento. As posições vêm de uma sequência fixa, e não
-    // de Math.random, porque a prévia da tela e o PNG baixado são dois desenhos
-    // separados do mesmo tema — com aleatório eles sairiam diferentes.
-    const manchas: [number, number, number][] = [
-      [0.22, 0.28, 0.30], [0.74, 0.18, 0.26], [0.58, 0.72, 0.34],
-      [0.14, 0.82, 0.22], [0.86, 0.60, 0.24], [0.40, 0.46, 0.28],
-    ]
-    for (const [mx, my, mr] of manchas) {
-      const g2 = ctx.createRadialGradient(W * mx, H * my, 0, W * mx, H * my, W * mr)
-      g2.addColorStop(0, t.veio)
-      g2.addColorStop(1, 'rgba(0,0,0,0)')
-      ctx.fillStyle = g2
-      ctx.fillRect(0, 0, W, H)
-    }
-  } else if (t.textura === 'linho') {
-    // Trama: dois pentes cruzados em 90°, é o que lê como tecido.
-    ctx.fillStyle = t.veio
-    for (let y = 0; y < H; y += 5) ctx.fillRect(0, y, W, 1)
-    for (let x = 0; x < W; x += 5) ctx.fillRect(x, 0, 1, H)
-  }
-
-  ctx.restore()
 }
 
 /** Escreve um texto com espaçamento entre letras (canvas não tem letter-spacing nativo confiável). */
