@@ -1,6 +1,7 @@
 import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
 import { getTema, pintarTextura, type QrTema } from '@/lib/qr-temas'
+import { fonteDoElemento, type ElementoCartaz } from '@/lib/cartaz-elementos'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -114,6 +115,92 @@ export interface PosterOpts {
   nome: string
   tagline?: string
   temaId?: string | null
+  /** Textos e logo que o dono posicionou. Ver `cartaz-elementos.ts`. */
+  elementos?: ElementoCartaz[]
+}
+
+/** Caixa de um elemento no canvas, em pixels do cartaz. Alimenta o editor. */
+export interface CaixaElemento {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * Imagens de logo do dono, memorizadas por URL.
+ *
+ * Mesmo motivo do cache do QR: sem ele, cada redesenho recarrega a imagem e o
+ * cartaz aparece sem a logo durante o carregamento — o piscar que já custou uma
+ * correção. `crossOrigin` é obrigatório: a logo vem do storage do Supabase, e
+ * desenhar imagem de outra origem sem ele CONTAMINA o canvas, fazendo o
+ * download de PNG/PDF falhar com erro de segurança.
+ */
+const cacheLogoDono = new Map<string, Promise<HTMLImageElement>>()
+
+function logoDoDono(url: string): Promise<HTMLImageElement> {
+  const pronto = cacheLogoDono.get(url)
+  if (pronto) return pronto
+  const p = carregarImg(url, true)
+  cacheLogoDono.set(url, p)
+  return p
+}
+
+/** Desenha os elementos do dono e devolve onde cada um ficou. */
+async function desenharElementos(
+  ctx: CanvasRenderingContext2D,
+  elementos: ElementoCartaz[],
+  t: QrTema,
+  W: number,
+  H: number,
+): Promise<CaixaElemento[]> {
+  const caixas: CaixaElemento[] = []
+
+  for (const el of elementos) {
+    const cx = el.x * W
+    const cy = el.y * H
+
+    if (el.tipo === 'logo') {
+      if (!el.url) continue
+      const img = await logoDoDono(el.url)
+      if (!img || img.width < 1) continue
+      const w = el.escala * W
+      const h = (img.height / img.width) * w
+      ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
+      caixas.push({ id: el.id, x: cx - w / 2, y: cy - h / 2, w, h })
+      continue
+    }
+
+    const texto = el.texto.trim()
+    if (!texto) continue
+
+    ctx.save()
+    ctx.font = fonteDoElemento(el)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = el.cor ?? t.tinta
+
+    const linhas = texto.split('\n')
+    const alturaLinha = el.tamanho * 1.2
+    const alturaTotal = alturaLinha * linhas.length
+    let larguraMax = 0
+    linhas.forEach((linha, i) => {
+      larguraMax = Math.max(larguraMax, ctx.measureText(linha).width)
+      ctx.fillText(linha, cx, cy - alturaTotal / 2 + alturaLinha * (i + 0.5))
+    })
+    ctx.restore()
+
+    caixas.push({
+      id: el.id,
+      x: cx - larguraMax / 2,
+      y: cy - alturaTotal / 2,
+      w: larguraMax,
+      h: alturaTotal,
+    })
+  }
+
+  return caixas
 }
 
 /**
@@ -122,11 +209,11 @@ export interface PosterOpts {
  * cartão branco (sem borda colorida) e um quadradinho com a logo no centro.
  * O QR é gerado localmente (lib `qrcode`), sem depender de API externa.
  */
-export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts): Promise<void> {
+export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts): Promise<CaixaElemento[]> {
   canvas.width = POSTER_W
   canvas.height = POSTER_H
   const ctx = canvas.getContext('2d')
-  if (!ctx) return
+  if (!ctx) return []
   const W = POSTER_W
   const H = POSTER_H
   const t = getTema(opts.temaId)
@@ -216,6 +303,14 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.font = '18px sans-serif'
   espacado(ctx, 'FEITO COM EASY FEED', cx, H - 40, 3)
   ctx.globalAlpha = 1
+
+  // Os elementos do dono vão POR CIMA de tudo, inclusive do QR: quem posiciona
+  // é ele, e travar a sobreposição aqui seria decidir por ele. O editor avisa
+  // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
+  // que a sobreposição estraga o cartaz de verdade.
+  return opts.elementos?.length
+    ? await desenharElementos(ctx, opts.elementos, t, W, H)
+    : []
 }
 
 /**

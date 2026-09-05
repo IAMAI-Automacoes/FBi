@@ -13,7 +13,9 @@ import { jsPDF } from 'jspdf'
 import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
-import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
+import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, type CaixaElemento } from '@/lib/qr-poster'
+import { lerElementos, novaLogo, novoTexto, type ElementoCartaz } from '@/lib/cartaz-elementos'
+import { EditorCartaz } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
 import { toast } from 'sonner'
@@ -55,6 +57,14 @@ export default function QRCodes() {
   // Métricas
   const [metricas, setMetricas] = useState<{ dia7: number; dia30: number; barras: { label: string; n: number }[] }>({ dia7: 0, dia30: 0, barras: [] })
   const [aba, setAba] = useState('config')
+
+  // Elementos livres do cartaz (textos e logo do dono)
+  const [elementos, setElementos] = useState<ElementoCartaz[]>([])
+  const [selecionado, setSelecionado] = useState<string | null>(null)
+  const [caixas, setCaixas] = useState<CaixaElemento[]>([])
+  const [enviandoLogo, setEnviandoLogo] = useState(false)
+  const camadaRef = useRef<HTMLDivElement>(null)
+
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
@@ -66,7 +76,7 @@ export default function QRCodes() {
       drawCanvas()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem])
+  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, elementos])
 
   const loadData = async () => {
     try {
@@ -77,7 +87,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem')
+          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_elementos')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -95,6 +105,7 @@ export default function QRCodes() {
         setCfgEstilo(estilo)
         setCfgImagem(config?.qr_bg_imagem ?? null)
         setCfgMensagem(config?.qr_mensagem ?? '')
+        setElementos(lerElementos(config?.qr_elementos))
         cfgSalvoRef.current = {
           modo, estilo,
           imagem: config?.qr_bg_imagem ?? null, mensagem: config?.qr_mensagem ?? '',
@@ -170,6 +181,7 @@ export default function QRCodes() {
           qr_estilo: cfgEstilo,
           qr_bg_imagem: cfgImagem,
           qr_mensagem: cfgMensagem.trim() || null,
+          qr_elementos: elementos,
         })
         .eq('id', restauranteId)
       if (error) throw error
@@ -213,16 +225,101 @@ export default function QRCodes() {
     toast.success('Arte removida — o tema volta a valer.')
   }
 
+  // ── Elementos livres do cartaz ──
+
+  const alterarElemento = (id: string, campos: Partial<ElementoCartaz>) => {
+    setElementos((prev) => prev.map((el) => (el.id === id ? { ...el, ...campos } : el)))
+  }
+
+  const removerElemento = (id: string) => {
+    setElementos((prev) => prev.filter((el) => el.id !== id))
+    setSelecionado((atual) => (atual === id ? null : atual))
+  }
+
+  const adicionarTexto = () => {
+    const novo = novoTexto()
+    setElementos((prev) => [...prev, novo])
+    setSelecionado(novo.id)
+  }
+
+  /**
+   * A logo do dono sobe SEM passar pelo recorte, ao contrário da arte de fundo.
+   * Recortar logo é destrutivo — o corte come a margem da marca — e o recorte
+   * exporta JPEG, que não guarda transparência: a logo cairia no cartaz dentro
+   * de um retângulo branco. Aqui o arquivo vai como está e quem ajusta o
+   * tamanho é o controle do editor.
+   */
+  const enviarLogo = async (arquivo: File) => {
+    if (!restauranteId) return
+    setEnviandoLogo(true)
+    try {
+      const ext = arquivo.name.split('.').pop()?.toLowerCase() || 'png'
+      const caminho = `${restauranteId}/logo-${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('qr-fundos')
+        .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type || 'image/png' })
+      if (error) throw error
+      const { data } = supabase.storage.from('qr-fundos').getPublicUrl(caminho)
+      const nova = novaLogo(data.publicUrl)
+      setElementos((prev) => [...prev, nova])
+      setSelecionado(nova.id)
+      toast.success('Logo adicionada — arraste na prévia para posicionar.')
+    } catch (err: any) {
+      toast.error('Erro ao enviar a logo', { description: err.message })
+    } finally {
+      setEnviandoLogo(false)
+    }
+  }
+
+  /**
+   * Arrasto do elemento sobre a prévia.
+   *
+   * O deslocamento é medido em FRAÇÃO da camada, e não em pixel: a prévia é
+   * exibida bem menor que o cartaz de 720×1080, então pixel de tela e pixel de
+   * cartaz não são a mesma coisa — e a fração vale nos dois.
+   */
+  const arrastarElemento = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    setSelecionado(id)
+
+    const camada = camadaRef.current
+    const el = elementos.find((x) => x.id === id)
+    if (!camada || !el) return
+
+    const area = camada.getBoundingClientRect()
+    const alvo = e.currentTarget
+    alvo.setPointerCapture(e.pointerId)
+    const inicio = { px: e.clientX, py: e.clientY, x: el.x, y: el.y }
+
+    const mover = (ev: PointerEvent) => {
+      const nx = inicio.x + (ev.clientX - inicio.px) / area.width
+      const ny = inicio.y + (ev.clientY - inicio.py) / area.height
+      alterarElemento(id, {
+        x: Math.min(1, Math.max(0, nx)),
+        y: Math.min(1, Math.max(0, ny)),
+      })
+    }
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover)
+      alvo.removeEventListener('pointerup', soltar)
+    }
+    alvo.addEventListener('pointermove', mover)
+    alvo.addEventListener('pointerup', soltar)
+  }
+
   const drawCanvas = async () => {
     const canvas = canvasRef.current
     if (!canvas || !qrData) return
     try {
-      await desenharPoster(canvas, {
-        url: landingUrl(qrData.slug),
-        nome: restaurantName,
-        tagline: cfgMensagem,
-        temaId: cfgEstilo,
-      })
+      setCaixas(
+        await desenharPoster(canvas, {
+          url: landingUrl(qrData.slug),
+          nome: restaurantName,
+          tagline: cfgMensagem,
+          temaId: cfgEstilo,
+          elementos,
+        }),
+      )
     } catch (err) {
       // Antes uma falha aqui deixava o canvas em branco sem avisar nada —
       // nenhum try/catch, então a promise rejeitada só sumia no console
@@ -530,6 +627,17 @@ export default function QRCodes() {
                   <p className="mt-1 text-[11px] text-muted-foreground">{cfgMensagem.length}/120</p>
                 </div>
 
+                <EditorCartaz
+                  elementos={elementos}
+                  selecionado={selecionado}
+                  enviandoLogo={enviandoLogo}
+                  onSelecionar={setSelecionado}
+                  onAlterar={alterarElemento}
+                  onRemover={removerElemento}
+                  onAdicionarTexto={adicionarTexto}
+                  onEscolherLogo={enviarLogo}
+                />
+
                 <Button onClick={salvarCfg} disabled={savingCfg} variant="outline" className="w-full">
                   {savingCfg ? 'Salvando…' : 'Salvar tema'}
                 </Button>
@@ -555,9 +663,18 @@ export default function QRCodes() {
                     plaquinha agora que a caixa em volta encolheu. `max-w-full`
                     só entra em tela estreita demais, pra não vazar. */}
                 <div className="w-[290px] max-w-full" style={{ perspective: '1300px' }}>
+                  {/* Com um elemento selecionado a plaquinha fica RETA.
+                      A inclinação em 3D deforma o mapeamento do arrasto — o
+                      retângulo que o navegador reporta é a caixa alinhada aos
+                      eixos, não o trapézio que se vê —, então arrastar sairia
+                      deslocado. Sem seleção ela volta a inclinar, que é como o
+                      display fica de verdade em cima da mesa. */}
                   <div
-                    className="relative"
-                    style={{ transform: 'rotateY(-10deg) rotateX(2deg)', transformStyle: 'preserve-3d' }}
+                    className="relative transition-transform duration-300"
+                    style={{
+                      transform: selecionado ? 'none' : 'rotateY(-10deg) rotateX(2deg)',
+                      transformStyle: 'preserve-3d',
+                    }}
                   >
                     {/* Chapa de acrílico. O preenchimento é quase transparente
                         de propósito: acrílico se enxerga pela ARESTA e pelo
@@ -571,12 +688,42 @@ export default function QRCodes() {
                           'linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.06) 42%, rgba(255,255,255,0.24))',
                       }}
                     >
-                      <canvas
-                        ref={canvasRef}
-                        width={POSTER_W}
-                        height={POSTER_H}
-                        className="block h-auto w-full rounded-[2px] shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
-                      />
+                      {/* Camada de arraste, exatamente sobre o canvas: as
+                          caixas vêm de `desenharPoster`, medidas no MESMO
+                          desenho, então o alvo cai onde o elemento está —
+                          estimar a largura do texto aqui daria alvo torto. */}
+                      <div ref={camadaRef} className="relative">
+                        <canvas
+                          ref={canvasRef}
+                          width={POSTER_W}
+                          height={POSTER_H}
+                          className="block h-auto w-full rounded-[2px] shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
+                          onPointerDown={() => setSelecionado(null)}
+                        />
+                        {caixas.map((c) => (
+                          <div
+                            key={c.id}
+                            onPointerDown={arrastarElemento(c.id)}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Mover o elemento"
+                            className={cn(
+                              'absolute cursor-move touch-none rounded-[2px] transition-colors',
+                              selecionado === c.id
+                                ? 'ring-2 ring-[#C2622C] ring-offset-1'
+                                : 'hover:ring-2 hover:ring-[#C2622C]/45',
+                            )}
+                            style={{
+                              // Margem de 6px do cartaz pra alvo de texto fino
+                              // ainda dar pra pegar com o dedo.
+                              left: `${((c.x - 6) / POSTER_W) * 100}%`,
+                              top: `${((c.y - 6) / POSTER_H) * 100}%`,
+                              width: `${((c.w + 12) / POSTER_W) * 100}%`,
+                              height: `${((c.h + 12) / POSTER_H) * 100}%`,
+                            }}
+                          />
+                        ))}
+                      </div>
                       {/* Reflexo diagonal e aresta viva da chapa */}
                       <div className="pointer-events-none absolute inset-0 rounded-[6px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
                       <div className="pointer-events-none absolute inset-0 rounded-[6px] ring-1 ring-inset ring-white/70" />
