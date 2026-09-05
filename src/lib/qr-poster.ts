@@ -116,15 +116,10 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.font = `bold ${tamNome}px Georgia, serif`
   const yTitulo = wrapText(ctx, opts.nome, cx, 196, W - 110, tamNome + 10)
 
-  // Traço curto de destaque
-  ctx.fillStyle = t.acento
-  roundRect(ctx, cx - 34, yTitulo + 10, 68, 5, 2.5)
-  ctx.fill()
-
   // ── Frase de incentivo ──
   ctx.fillStyle = t.suave
   ctx.font = '25px sans-serif'
-  wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 58, W - 150, 33)
+  wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 44, W - 150, 33)
 
   // ── Cartão branco do QR (sem borda colorida) ──
   // O `y` centra o cartão no espaço que sobra entre a frase de incentivo e o

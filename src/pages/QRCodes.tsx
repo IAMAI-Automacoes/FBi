@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
 import { ImageCropper } from '@/components/ImageCropper'
+import { SeletorCor } from '@/components/SeletorCor'
 import { toast } from 'sonner'
 
 interface QrData {
@@ -30,17 +31,6 @@ function gerarSlug(n = 8) {
   let s = ''
   for (let i = 0; i < n; i++) s += SLUG_CHARS[Math.floor(Math.random() * SLUG_CHARS.length)]
   return s
-}
-
-/** HSL → '#rrggbb'. Usado só pela roda de cores. */
-function hslParaHex(h: number, s: number, l: number): string {
-  const a = (s / 100) * Math.min(l / 100, 1 - l / 100)
-  const canal = (n: number) => {
-    const k = (n + h / 30) % 12
-    const cor = l / 100 - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))
-    return Math.round(255 * cor).toString(16).padStart(2, '0')
-  }
-  return `#${canal(0)}${canal(8)}${canal(4)}`
 }
 
 export default function QRCodes() {
@@ -65,8 +55,6 @@ export default function QRCodes() {
   // Métricas
   const [metricas, setMetricas] = useState<{ dia7: number; dia30: number; barras: { label: string; n: number }[] }>({ dia7: 0, dia30: 0, barras: [] })
   const [aba, setAba] = useState('config')
-  /** A roda de cores só aparece quando o dono pede — ver o botão que a abre. */
-  const [mostrarRoda, setMostrarRoda] = useState(false)
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
@@ -274,21 +262,6 @@ export default function QRCodes() {
     }
   }
 
-  /**
-   * A roda de cores. O clique vira hex pela posição: ângulo = matiz, distância
-   * do centro = saturação — exatamente o que o `conic-gradient` + o brilho
-   * branco central desenham, então o que o dono vê é o que ele pega.
-   */
-  const pegarDaRoda = (e: React.MouseEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    const raio = r.width / 2
-    const dx = e.clientX - r.left - raio
-    const dy = e.clientY - r.top - raio
-    const dist = Math.min(Math.hypot(dx, dy) / raio, 1)
-    const graus = (Math.atan2(dy, dx) * 180) / Math.PI
-    setCfgEstilo(hslParaHex((graus + 450) % 360, dist * 100, 50))
-  }
-
   if (loading) {
     return (
       <div className="flex h-full w-full items-center justify-center p-8">
@@ -453,56 +426,12 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Cor livre.
-                        Fechada, é só um botão redondo pequeno — não escolhe cor
-                        nenhuma, só anuncia que existe mais. Aberta, a roda toma
-                        o lugar dele: matiz na volta, saturação do centro para a
-                        borda, que é exatamente o que o gradiente desenha. */}
-                    <div className="mt-3.5">
-                      {mostrarRoda ? (
-                        <div className="relative flex justify-center">
-                          <div
-                            onClick={pegarDaRoda}
-                            role="button"
-                            tabIndex={0}
-                            aria-label="Escolher uma cor na roda"
-                            className="h-[132px] w-[132px] cursor-crosshair rounded-full shadow-inner ring-1 ring-black/10"
-                            style={{
-                              background:
-                                'radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%), conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
-                            }}
-                          />
-                          <button
-                            onClick={() => setMostrarRoda(false)}
-                            title="Fechar a roda de cores"
-                            className="absolute right-0 top-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setMostrarRoda(true)}
-                          title="Escolher outra cor"
-                          className={cn(
-                            'flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50',
-                            personalizada && 'text-gray-900',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'h-6 w-6 rounded-full ring-1 ring-black/15',
-                              personalizada && 'ring-2 ring-gray-900',
-                            )}
-                            style={{
-                              background: personalizada
-                                ? cfgEstilo
-                                : 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
-                            }}
-                          />
-                          {personalizada ? cfgEstilo.toUpperCase() : 'Outra cor'}
-                        </button>
-                      )}
+                    {/* Cor livre, fora da paleta pronta */}
+                    <div className="mt-3">
+                      <SeletorCor
+                        valor={personalizada ? cfgEstilo : null}
+                        onChange={setCfgEstilo}
+                      />
                     </div>
                   </div>
 
