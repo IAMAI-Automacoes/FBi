@@ -378,7 +378,11 @@ export default function QRCodes() {
 
         {/* ── PERSONALIZAR ── */}
         <TabsContent value="config" className="mt-0">
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* A coluna da prévia é dimensionada pelo CONTEÚDO (`auto`), não por
+              metade da tela: a plaquinha tem largura fixa, então numa grade
+              50/50 sobrava uma faixa vazia grande dos dois lados dela — espaço
+              que a configuração, essa sim cheia de controles, aproveita melhor. */}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
             {/* ───────── A. Tema do display impresso ───────── */}
             <Card className="border-gray-200">
               <CardHeader className="pb-5">
@@ -527,7 +531,7 @@ export default function QRCodes() {
               {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
                   ser percebida na hora, e não só dentro da plaquinha. */}
               <div
-                className="flex flex-1 items-center justify-center rounded-xl border border-gray-200 p-8 transition-[background] duration-500"
+                className="flex items-center justify-center rounded-xl border border-gray-200 p-5 transition-[background] duration-500"
                 style={{ background: `linear-gradient(160deg, ${tema.fundo[0]}22, ${tema.fundo[1]}44)` }}
               >
                 {/* Display acrílico de mesa.
@@ -535,7 +539,10 @@ export default function QRCodes() {
                     uma mesa, e não como uma imagem colada na tela: sem ela, a
                     chapa transparente e o bloco de madeira viram dois
                     retângulos empilhados. */}
-                <div className="w-full max-w-[290px]" style={{ perspective: '1300px' }}>
+                {/* Largura fixa, e não `w-full`: é ela que segura o tamanho da
+                    plaquinha agora que a caixa em volta encolheu. `max-w-full`
+                    só entra em tela estreita demais, pra não vazar. */}
+                <div className="w-[290px] max-w-full" style={{ perspective: '1300px' }}>
                   <div
                     className="relative"
                     style={{ transform: 'rotateY(-10deg) rotateX(2deg)', transformStyle: 'preserve-3d' }}
