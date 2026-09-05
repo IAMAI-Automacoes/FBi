@@ -29,47 +29,57 @@
  *
  * Contaminação não é risco aqui: a saída é uma decisão de vínculo, não prosa.
  *
- * ## A exceção: vínculo com INSIGHT reescreve o insight
+ * ## O vínculo, seja com AÇÃO ou INSIGHT, reescreve o texto do destino
  *
- * Ligar um feedback a uma AÇÃO não muda a ação — o plano já foi escrito e a
- * equipe já está tocando; um relato a mais é confirmação, não instrução nova.
+ * Um insight é um texto que afirma representar um conjunto de feedbacks, e o
+ * dono decide prioridade lendo esse texto. Uma ação é a mesma promessa, só que
+ * já em execução pela equipe. Grudar um relato novo embaixo de qualquer um dos
+ * dois sem tocar no texto produz uma mentira silenciosa: o card diz "3
+ * clientes reclamaram do tempero" e por baixo há um quarto ponto dizendo que
+ * passou mal — o número sobe, a urgência não, e a leitura do dono fica errada
+ * exatamente no caso que mais importa.
  *
- * Com INSIGHT é diferente. O insight é um texto que afirma representar um
- * conjunto de feedbacks, e o dono decide prioridade lendo esse texto. Grudar um
- * relato novo embaixo dele sem tocar no texto produz uma mentira silenciosa: o
- * card diz "3 clientes reclamaram do tempero" e por baixo há um quarto ponto
- * dizendo que passou mal — o número sobe, a urgência não, e a leitura do dono
- * fica errada exatamente no caso que mais importa.
+ * Por isso os dois pagam uma SEGUNDA chamada de IA depois do vínculo gravado.
+ * Essa chamada relê TODOS os feedbacks já ligados ao destino — não só o novo —
+ * e reescreve título, descrição/plano e prioridade para englobar o conjunto
+ * inteiro, nunca para substituir pelo último relato. Ela roda nos dois
+ * caminhos de decisão (atalho por tema e escolha da IA), porque o problema é
+ * do vínculo, não de como ele foi decidido.
  *
- * Por isso o vínculo a insight paga uma SEGUNDA chamada de IA, que reescreve
- * título, descrição e prioridade para englobar o feedback novo. Ela roda nos
- * dois caminhos (atalho por tema e decisão da IA), porque o problema é do
- * vínculo, não de como ele foi decidido.
+ * O que muda entre os dois: no insight, categoria e assunto_chave nunca são
+ * tocados pela IA — são a identidade do agrupamento. Na ação, além disso,
+ * status também não é tocado — é o progresso real da equipe (PENDENTE,
+ * EM_ANDAMENTO...), e só quem executa deve mudá-lo, nunca uma reescrita de
+ * texto.
  *
  * O custo é aceitável porque o caso é raro: a maioria esmagadora dos feedbacks
- * termina em "livre" ou gruda numa ação. E a chamada é FALHA-SEGURA — se ela
- * quebrar, o vínculo já está gravado e o insight fica com o texto antigo, que é
- * exatamente o estado anterior a esta mudança.
+ * termina em "livre", e da minoria que gruda em algo, a maior parte é só mais
+ * um caso do que o texto já cobria — a IA recebe essa instrução e repete os
+ * campos sem mudar nada. E a chamada é FALHA-SEGURA — se ela quebrar, o
+ * vínculo já está gravado e o texto fica como estava antes.
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
+import { planoParaPrompt } from '../_shared/texto-plano.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
+const AGENTE_ABSORCAO_ACAO = 'absorvedor_acao'
 
 /** Acima disto a decisão vira ruído: manda para a IA em vez de adivinhar. */
 const MAX_CANDIDATOS = 8
 
 /**
- * Quantos pontos já ligados ao insight vão no prompt de absorção.
+ * Quantos pontos já ligados ao destino (insight ou ação) vão no prompt de
+ * absorção.
  *
- * A reescrita precisa saber o que o insight JÁ cobre, senão o modelo reescreve
- * o texto em cima só do feedback novo e o insight encolhe para o último relato
- * que chegou — o oposto de englobar. Um teto existe porque insight campeão
- * acumula dezenas de pontos e o prompt não pode crescer sem limite.
+ * A reescrita precisa saber o que o destino JÁ cobre, senão o modelo reescreve
+ * o texto em cima só do feedback novo e ele encolhe para o último relato que
+ * chegou — o oposto de englobar. Um teto existe porque um insight ou ação
+ * campeã acumula dezenas de pontos e o prompt não pode crescer sem limite.
  */
 const MAX_PONTOS_CONTEXTO = 12
 
@@ -168,6 +178,64 @@ const SCHEMA_ABSORCAO = {
     motivo: { type: 'string', description: 'Uma frase curta explicando a mudanca, ou por que nada mudou.' },
   },
   required: ['titulo', 'descricao', 'prioridade'],
+}
+
+const PROMPT_ABSORCAO_ACAO =
+  `Um feedback novo de cliente acabou de ser ligado a uma acao que a equipe do restaurante ja esta executando. Seu trabalho e conferir se o titulo e o plano da acao ainda cobrem tudo que ela trata agora — e ajustar o que for preciso para incluir o feedback novo, sem jogar fora o que ja estava certo.
+
+## A acao, como esta hoje
+Titulo: {titulo}
+Status: {status}
+Plano:
+{plano}
+Prioridade: {prioridade}
+Categoria: {categoria}
+
+## Os feedbacks que ela ja cobria
+{pontos}
+
+## O feedback que acabou de entrar
+"{texto}"
+Sentimento: {sentimento}
+
+## Sua tarefa
+Devolva titulo_acao, plano_detalhado e prioridade que continuem valendo para o
+conjunto INTEIRO — os feedbacks antigos E o novo.
+
+Regras:
+- A equipe pode ja estar executando este plano. NAO reescreva do zero: parta
+  sempre do que ja esta escrito.
+- Se o feedback novo e so mais um caso do problema que o plano ja ataca, repita
+  titulo_acao e plano_detalhado exatamente como estao. Isso e o mais comum —
+  nao mude so para mudar.
+- Se o feedback novo trouxer um aspecto que o plano ainda nao cobre (ex.: o
+  plano fala de demora na cozinha e o feedback novo fala de mesa suja no mesmo
+  atendimento), ACRESCENTE um passo ao plano existente. Nunca apague nem
+  reescreva um passo que ja resolvia os relatos antigos so para caber o novo.
+- PRIORIDADE SO SOBE, nunca desce. Um relato a mais nunca torna o problema
+  menos grave, mesmo que ele seja brando: os relatos graves anteriores
+  continuam existindo. A ordem e OBSERVACAO < IMPORTANTE < URGENTE.
+- Suba para URGENTE quando o feedback novo trouxer algo que o plano atual nao
+  cobre e que muda o tamanho do problema: passar mal, corpo estranho na
+  comida, risco a saude, cobranca indevida, discriminacao ou falta de higiene.
+- Titulo: curto e especifico, no maximo 10 palavras.
+- Escreva em portugues do Brasil, na mesma voz do texto atual.
+
+Chame registrar_absorcao_acao.`
+
+const SCHEMA_ABSORCAO_ACAO = {
+  type: 'object',
+  properties: {
+    titulo_acao: { type: 'string', description: 'Titulo que continua cobrindo o conjunto inteiro.' },
+    plano_detalhado: { type: 'string', description: 'Plano ajustado, preservando o que ja estava certo.' },
+    prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
+    mudou: {
+      type: 'boolean',
+      description: 'true se algum dos campos precisou mesmo mudar para incluir o feedback novo.',
+    },
+    motivo: { type: 'string', description: 'Uma frase curta explicando a mudanca, ou por que nada mudou.' },
+  },
+  required: ['titulo_acao', 'plano_detalhado', 'prioridade'],
 }
 
 /** Ordem oficial da escala. Índice maior = mais grave. */
@@ -300,8 +368,8 @@ Deno.serve(async (req: Request) => {
           .limit(1)
 
         if (acaoDoTema && acaoDoTema.length > 0) {
-          await ligarAAcao(db, fb, acaoDoTema[0].id)
-          return json({ status: 'ligado', destino: 'acao', id: acaoDoTema[0].id, via: 'tema' })
+          const abs = await ligarAAcao(db, fb, acaoDoTema[0].id, texto)
+          return json({ status: 'ligado', destino: 'acao', id: acaoDoTema[0].id, via: 'tema', absorcao: abs })
         }
       }
 
@@ -383,8 +451,15 @@ Deno.serve(async (req: Request) => {
       // deno-lint-ignore no-explicit-any
       const valida = acoesCat.find((a: any) => String(a.id) === String(decisao.id))
       if (valida) {
-        await ligarAAcao(db, fb, valida.id)
-        return json({ status: 'ligado', destino: 'acao', id: valida.id, via: 'ia', motivo: decisao.motivo })
+        const abs = await ligarAAcao(db, fb, valida.id, texto)
+        return json({
+          status: 'ligado',
+          destino: 'acao',
+          id: valida.id,
+          via: 'ia',
+          motivo: decisao.motivo,
+          absorcao: abs,
+        })
       }
     }
     if (decisao.destino === 'insight') {
@@ -566,12 +641,152 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
 }
 
 // deno-lint-ignore no-explicit-any
-async function ligarAAcao(db: Db, fb: any, acaoId: number) {
+async function ligarAAcao(db: Db, fb: any, acaoId: number, texto: string) {
   const { error } = await db.from('feedback_acao').insert({
     acao_id: acaoId,
     feedback_restaurante_id: fb.id,
     feedback_original_id: fb.origem_id,
     restaurante_id: fb.restaurante_id,
   })
-  if (error) console.error('Falha ao ligar à ação:', error)
+  // `acoes_operacionais.feedbacks_relacionados`/arrays espelhados, se existirem,
+  // são recalculados por trigger em `feedback_acao` — mesma lógica do contador
+  // de insight (migration 20260827030000). Nada a atualizar aqui na mão.
+  if (error) {
+    console.error('Falha ao ligar à ação:', error)
+    // Sem vínculo não há o que absorver: reescrever a ação aqui afirmaria que
+    // ela cobre um feedback que ninguém consegue enxergar por baixo dela.
+    return { absorvido: false as const, motivo: 'vinculo falhou' }
+  }
+
+  return await absorverNaAcao(db, fb, acaoId, texto)
+}
+
+/**
+ * Reescreve a ação para que ela passe a cobrir também o feedback recém
+ * ligado, preservando o que já estava escrito. Ver o cabeçalho do arquivo
+ * para o porquê de isto existir — é o mesmo motivo da absorção de insight,
+ * só que para um texto que a equipe já pode estar executando.
+ *
+ * Falha-segura em todos os caminhos: sem crédito, agente desligado, IA fora do
+ * ar ou resposta inválida, a ação fica com o texto que já tinha. O vínculo
+ * (que é a parte que o cliente sente, porque é ele que faz o aviso de
+ * conclusão chegar) já está gravado antes de esta função ser chamada.
+ */
+// deno-lint-ignore no-explicit-any
+async function absorverNaAcao(db: Db, fb: any, acaoId: number, texto: string) {
+  try {
+    const { data: acao } = await db
+      .from('acoes_operacionais')
+      .select('id, titulo_acao, plano_detalhado, prioridade, categoria, status')
+      .eq('id', acaoId)
+      .maybeSingle()
+
+    if (!acao) return { absorvido: false as const, motivo: 'acao sumiu' }
+
+    const params = await paramsDoAgente(db, AGENTE_ABSORCAO_ACAO, { max_tokens: 900 })
+    if (!params) return { absorvido: false as const, motivo: 'agente desativado' }
+
+    // Os pontos que a ação já cobria, para o modelo reescrever em cima do
+    // conjunto e não só do último relato. O feedback novo é excluído pela
+    // mesma razão da absorção de insight: listá-lo duas vezes dá a ele peso
+    // dobrado justamente na decisão que precisa tratá-lo como mais um.
+    const { data: vinculos } = await db
+      .from('feedback_acao')
+      .select('feedback_restaurante_id')
+      .eq('acao_id', acaoId)
+      .neq('feedback_restaurante_id', fb.id)
+      .limit(MAX_PONTOS_CONTEXTO)
+
+    // deno-lint-ignore no-explicit-any
+    const ids = (vinculos ?? []).map((v: any) => v.feedback_restaurante_id).filter(Boolean)
+    let pontos: string[] = []
+    if (ids.length > 0) {
+      const { data: textos } = await db
+        .from('feedbacks_restaurante')
+        .select('texto_original, resumo')
+        .in('id', ids)
+      pontos = (textos ?? [])
+        // deno-lint-ignore no-explicit-any
+        .map((t: any) => (t.texto_original || t.resumo || '').trim())
+        .filter(Boolean)
+        .map((t: string) => `- "${t.slice(0, 300)}"`)
+    }
+
+    const planoAtual = planoParaPrompt(acao.plano_detalhado)
+
+    const prompts = await carregarPrompts(db)
+    const prompt = montarPrompt(prompts, 'ef_absorver_acao', PROMPT_ABSORCAO_ACAO, {
+      titulo: acao.titulo_acao ?? '(sem titulo)',
+      status: acao.status ?? '?',
+      plano: planoAtual || '(sem plano)',
+      prioridade: acao.prioridade ?? 'OBSERVACAO',
+      categoria: acao.categoria ?? '?',
+      pontos: pontos.length ? pontos.join('\n') : '(nenhum registrado)',
+      texto,
+      sentimento: fb.sentimento ?? '?',
+    })
+
+    const { result } = await chamarIA(db, {
+      messages: [{ role: 'user', content: prompt }],
+      params,
+      origem: 'vincular-feedback:absorcao-acao',
+      restauranteId: fb.restaurante_id,
+      agenteId: AGENTE_ABSORCAO_ACAO,
+      calculadora: false,
+      saida: {
+        nome: 'registrar_absorcao_acao',
+        descricao: 'Registra a acao reescrita para cobrir o feedback novo.',
+        schema: SCHEMA_ABSORCAO_ACAO,
+      },
+    })
+
+    const r = (result ?? {}) as {
+      titulo_acao?: string
+      plano_detalhado?: string
+      prioridade?: string
+      motivo?: string
+    }
+
+    // ---- O que a IA pode e o que ela não pode mudar ----
+    //
+    // `categoria` não está aqui pelo mesmo motivo da absorção de insight: o
+    // filtro da tela conta feedback por categoria, e deixar a IA mexer faria o
+    // número parar de bater com a ação listada.
+    //
+    // `status` também não: é o progresso real da equipe (PENDENTE,
+    // EM_ANDAMENTO, CONCLUIDO...). Só quem executa deve mudá-lo — uma
+    // reescrita de texto não pode reabrir nem concluir uma ação sozinha.
+    // deno-lint-ignore no-explicit-any
+    const patch: Record<string, any> = {}
+
+    const titulo = (r.titulo_acao ?? '').trim()
+    if (titulo && titulo !== acao.titulo_acao) patch.titulo_acao = titulo
+
+    const plano = (r.plano_detalhado ?? '').trim()
+    if (plano && plano !== planoAtual) patch.plano_detalhado = plano
+
+    // Prioridade é CLICADA no máximo, nunca no que a IA devolveu — mesma
+    // salvaguarda da absorção de insight, pelo mesmo motivo: um prompt pede,
+    // não garante, e um rebaixamento aqui apagaria da vista a ação urgente que
+    // a equipe mais precisa tocar primeiro.
+    const atual = ESCALA_PRIORIDADE.indexOf(acao.prioridade ?? 'OBSERVACAO')
+    const proposta = ESCALA_PRIORIDADE.indexOf((r.prioridade ?? '').toUpperCase())
+    if (proposta > atual && proposta >= 0) patch.prioridade = ESCALA_PRIORIDADE[proposta]
+
+    if (Object.keys(patch).length === 0) {
+      return { absorvido: false as const, motivo: r.motivo ?? 'nada a mudar' }
+    }
+
+    const { error } = await db.from('acoes_operacionais').update(patch).eq('id', acaoId)
+    if (error) {
+      console.error('Falha ao absorver na ação:', error)
+      return { absorvido: false as const, motivo: 'update falhou' }
+    }
+
+    return { absorvido: true as const, campos: Object.keys(patch), motivo: r.motivo }
+  } catch (err) {
+    if (err instanceof ErroCota) return { absorvido: false as const, motivo: 'sem credito' }
+    console.error('Falha na absorção da ação:', err)
+    return { absorvido: false as const, motivo: 'erro na IA' }
+  }
 }
