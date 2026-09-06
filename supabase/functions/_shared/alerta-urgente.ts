@@ -221,6 +221,20 @@ async function confirmarComIa(
  *
  * O payload leva as credenciais do WhatsApp do próprio restaurante porque cada
  * um tem a sua instância — o n8n é o carteiro, não o dono do cadastro.
+ *
+ * ## Dois destinos, um obrigatório e um de apoio
+ *
+ * `N8N_ALERTA_URGENTE` é a URL de produção (`/webhook/...`) — o fluxo que de
+ * fato manda a mensagem, e o único que decide `enviado_em`/`erro`.
+ *
+ * `N8N_ALERTA_URGENTE_TESTE` é a URL de teste do n8n (`/webhook-test/...`),
+ * que só responde enquanto o workflow está aberto no editor com "Listen for
+ * test event" ativo. Ela dispara em paralelo, PARA APOIAR o desenvolvimento
+ * do fluxo — dá pra ver o payload chegando ao vivo no editor sem esperar o
+ * disparo de produção. Por isso uma falha nela vira só um aviso no log: o
+ * caso comum (editor fechado, "Listen" não clicado) é 404, e isso não pode
+ * contaminar `erro`, que a tela usa para explicar por que o DONO não recebeu
+ * o aviso de verdade.
  */
 async function dispararWebhook(
   db: Db,
@@ -231,8 +245,10 @@ async function dispararWebhook(
     await db.from('alerta_urgente').update(campos).eq('id', dados.alerta_id)
   }
 
-  const url = Deno.env.get('N8N_ALERTA_URGENTE')
-  if (!url) {
+  const urlProducao = Deno.env.get('N8N_ALERTA_URGENTE')
+  const urlTeste = Deno.env.get('N8N_ALERTA_URGENTE_TESTE')
+
+  if (!urlProducao) {
     await marcar({ erro: 'N8N_ALERTA_URGENTE não configurada' })
     console.warn('N8N_ALERTA_URGENTE não configurada; alerta registrado sem envio')
     return false
@@ -251,29 +267,39 @@ async function dispararWebhook(
     return false
   }
 
-  try {
-    const resposta = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...dados,
-        restaurante_id: restauranteId,
-        nome_restaurante: r.nome_restaurante,
-        whatsapp_dono: r.whatsapp_dono,
-        whatsapp_token: r.whatsapp_token,
-        whatsapp_base_url: r.whatsapp_base_url,
-        numero_whatsapp: r.numero_whatsapp,
-      }),
-    })
+  const payload = JSON.stringify({
+    ...dados,
+    restaurante_id: restauranteId,
+    nome_restaurante: r.nome_restaurante,
+    whatsapp_dono: r.whatsapp_dono,
+    whatsapp_token: r.whatsapp_token,
+    whatsapp_base_url: r.whatsapp_base_url,
+    numero_whatsapp: r.numero_whatsapp,
+  })
 
-    if (!resposta.ok) {
-      await marcar({ erro: `n8n respondeu ${resposta.status}` })
-      return false
-    }
-    await marcar({ enviado_em: new Date().toISOString(), erro: null })
-    return true
-  } catch (err) {
-    await marcar({ erro: err instanceof Error ? err.message : String(err) })
+  const chamar = (url: string) =>
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload })
+
+  // Em paralelo, e cada um com seu próprio catch: o teste nunca pode atrasar
+  // nem derrubar o disparo de produção, e vice-versa.
+  const [producao] = await Promise.all([
+    chamar(urlProducao)
+      .then((resposta) => ({ ok: resposta.ok, status: resposta.status }))
+      .catch((err) => ({ ok: false, status: 0, erro: err instanceof Error ? err.message : String(err) })),
+    urlTeste
+      ? chamar(urlTeste)
+          .then((resposta) => {
+            if (!resposta.ok) console.warn(`[alerta-urgente] webhook de TESTE respondeu ${resposta.status}`)
+          })
+          .catch((err) => console.warn('[alerta-urgente] webhook de TESTE falhou:', err))
+      : Promise.resolve(),
+  ])
+
+  if (!producao.ok) {
+    const motivo = 'erro' in producao ? producao.erro : `n8n respondeu ${producao.status}`
+    await marcar({ erro: motivo })
     return false
   }
+  await marcar({ enviado_em: new Date().toISOString(), erro: null })
+  return true
 }
