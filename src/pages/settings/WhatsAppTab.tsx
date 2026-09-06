@@ -249,7 +249,7 @@ export function WhatsAppTab({
  * telefones diferentes, e misturá-los faria o aviso urgente chegar na caixa de
  * entrada do atendimento, junto com tudo o mais.
  */
-function NumeroDoDono({ restauranteId }: { restauranteId: number | null }) {
+export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }) {
   const { toast } = useToast()
   const [numero, setNumero] = useState('')
   const [salvo, setSalvo] = useState('')

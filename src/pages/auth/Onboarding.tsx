@@ -41,7 +41,7 @@ import {
   ImagePlus,
 } from 'lucide-react'
 import { getIniciais } from '@/lib/iniciais'
-import { WhatsAppTab } from '@/pages/settings/WhatsAppTab'
+import { WhatsAppTab, NumeroDoDono } from '@/pages/settings/WhatsAppTab'
 
 interface OnboardingData {
   restaurante_nome: string
@@ -557,6 +557,14 @@ export default function Onboarding() {
               <p className="text-xs text-gray-500 mt-4 text-center">
                 Conecte o WhatsApp para concluir o onboarding — é por ele que os feedbacks chegam.
               </p>
+              {/* Opcional de propósito: não entra em `validarStep`, então não
+                  trava o onboarding. Fica aqui (e também depois, em
+                  Configurações → WhatsApp) porque é a mesma tela que já fala
+                  de WhatsApp e feedback — perguntar de novo em outro lugar só
+                  faria o dono decorar dois formulários em vez de um. */}
+              <div className="mt-6">
+                <NumeroDoDono restauranteId={usuario?.restaurante_id ?? null} />
+              </div>
             </div>
           )}
 

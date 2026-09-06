@@ -148,14 +148,37 @@ export async function talvezAlertarDono(
       }
     }
 
+    // Os OUTROS pontos da mesma mensagem — o dono vê o relato inteiro, não só
+    // a frase isolada que disparou o alerta. "A comida demorou, o garçom foi
+    // grosso e passei mal" vira 3 pontos em `feedbacks_restaurante`; sem isto
+    // o n8n só enxergaria "passei mal", e a mensagem pro dono perderia o
+    // resto da reclamação.
+    const { data: irmaos } = await db
+      .from('feedbacks_restaurante')
+      .select('id, categoria, sentimento, texto_original, resumo')
+      .eq('origem_id', fb.origem_id)
+      .order('id', { ascending: true })
+
+    // deno-lint-ignore no-explicit-any
+    const feedbacksSeparados = (irmaos ?? [])
+      .map((p: any) => ({
+        id: p.id,
+        categoria: p.categoria,
+        sentimento: p.sentimento,
+        texto: String(p.texto_original || p.resumo || '').trim(),
+        urgente: p.id === fb.id,
+      }))
+      .filter((p) => p.texto)
+
     const enviado = await dispararWebhook(db, fb.restaurante_id, {
       alerta_id: reserva.id,
-      resumo: triagem.resumo || 'Feedback grave recebido.',
-      termos,
-      texto_original: textoOriginal,
-      trecho: texto,
-      telefone_cliente: original?.telefone_cliente ?? null,
       recebido_em: original?.created_at ?? new Date().toISOString(),
+      motivo: triagem.resumo || 'Feedback grave recebido.',
+      termos_detectados: termos,
+      telefone_cliente: original?.telefone_cliente ?? null,
+      texto_original: textoOriginal,
+      trecho_urgente: texto,
+      feedbacks_separados: feedbacksSeparados,
     })
 
     return { urgente: true, motivo: triagem.resumo || triagem.motivo, enviado }
@@ -217,10 +240,30 @@ async function confirmarComIa(
 }
 
 /**
- * Manda para o n8n tudo o que ele precisa para enviar a mensagem.
+ * Manda para o n8n tudo o que ele precisa para montar e enviar a mensagem —
+ * de propósito, sem exigir nenhuma consulta a mais do lado do n8n. Formato:
  *
- * O payload leva as credenciais do WhatsApp do próprio restaurante porque cada
- * um tem a sua instância — o n8n é o carteiro, não o dono do cadastro.
+ *   {
+ *     alerta_id, restaurante_id, nome_restaurante, recebido_em,
+ *     motivo,                    // 1 frase pronta pra ir no corpo da mensagem
+ *     termos_detectados: string[],
+ *
+ *     telefone_cliente,          // quem relatou — pra eventual retorno
+ *     texto_original,            // a mensagem INTEIRA que o cliente mandou
+ *     trecho_urgente,            // só o pedaço que disparou o alerta
+ *     feedbacks_separados: [     // TODOS os pontos da mesma mensagem, não só o urgente
+ *       { id, categoria, sentimento, texto, urgente: boolean },
+ *       ...
+ *     ],
+ *
+ *     whatsapp_dono,             // PARA ONDE a mensagem de alerta vai
+ *     numero_whatsapp,           // instância que já fala com o CLIENTE (contexto)
+ *     whatsapp_token,            // credenciais dessa instância (uazapi)
+ *     whatsapp_base_url,
+ *   }
+ *
+ * As credenciais do WhatsApp são as do PRÓPRIO restaurante — cada um tem a sua
+ * instância, o n8n é o carteiro, não o dono do cadastro.
  *
  * ## Dois destinos, um obrigatório e um de apoio
  *
