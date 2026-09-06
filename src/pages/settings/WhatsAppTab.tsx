@@ -278,7 +278,14 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
     setSalvando(true)
     // Só dígitos: o n8n monta o destino com este valor, e máscara digitada à
     // mão ("(11) 99999-9999") viraria um número inválido lá na ponta.
-    const limpo = numero.replace(/\D/g, '')
+    //
+    // O prefixo 55 é adicionado se faltar — mesma regra de `qr-redirect` e
+    // `qr-landing` (que preparam o "Dar meu feedback" do cliente). Sem ele, o
+    // dono digitando só DDD+número (o que quase todo mundo faz, de cabeça)
+    // salvaria um número que a API do WhatsApp não entrega: sem country code
+    // ela não sabe que é um número brasileiro.
+    const digitos = numero.replace(/\D/g, '')
+    const limpo = digitos && !digitos.startsWith('55') ? `55${digitos}` : digitos
     const { error } = await supabase
       .from('restaurantes')
       .update({ whatsapp_dono: limpo || null })
