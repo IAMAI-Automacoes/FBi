@@ -169,3 +169,41 @@ export async function contarFeedbacksPorCategoria(
   }
   return contagem
 }
+
+/**
+ * Quantos feedbacks negativos (puro ou misto, ex.: "Positivo e Negativo")
+ * chegaram desde a última vez que o dono abriu a aba Feedbacks.
+ *
+ * O corte por substring — e não por igualdade com "Negativo" — é a mesma
+ * leitura usada no resto do produto (ver `assuntos.ts`): "Positivo e
+ * Negativo" conta como queixa, porque o cliente relatou um problema mesmo
+ * tendo elogiado outra coisa na mesma mensagem. O numerozinho da barra
+ * lateral segue essa regra para não subestimar o que precisa de atenção.
+ */
+export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<number> {
+  const { data: rest } = await supabase
+    .from('restaurantes')
+    .select('feedbacks_visto_em')
+    .eq('id', restauranteId)
+    .maybeSingle()
+
+  const desde = rest?.feedbacks_visto_em ?? new Date(0).toISOString()
+
+  const { count, error } = await supabase
+    .from('feedbacks_originais')
+    .select('id', { count: 'exact', head: true })
+    .eq('restaurante_id', restauranteId)
+    .gt('created_at', desde)
+    .ilike('sentimento', '%negativ%')
+
+  if (error) return 0
+  return count ?? 0
+}
+
+/** Marca a aba Feedbacks como vista agora — zera o numerozinho na barra lateral. */
+export async function marcarFeedbacksVistos(restauranteId: number): Promise<void> {
+  await supabase
+    .from('restaurantes')
+    .update({ feedbacks_visto_em: new Date().toISOString() })
+    .eq('id', restauranteId)
+}

@@ -1111,20 +1111,17 @@ export default function Garcons() {
                   </DropdownMenu>
                 </div>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Bonificação"
-                    onClick={() => setRegrasAbertas(true)}
-                    className="h-9 w-9"
-                  >
-                    <Settings2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Bonificação</TooltipContent>
-              </Tooltip>
+              {/* Texto visível, mas continua "ghost" (sem preenchimento nem
+                  cor de marca): é uma ação secundária de configuração, não
+                  compete com "Novo garçom"/"Baixar QRCodes" — que são os dois
+                  botões cheios e coloridos desta barra. */}
+              <Button
+                variant="ghost"
+                onClick={() => setRegrasAbertas(true)}
+                className="h-9 gap-1.5 px-3"
+              >
+                <Settings2 className="h-4 w-4" /> Bonificação
+              </Button>
             </div>
           )}
 

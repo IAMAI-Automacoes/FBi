@@ -25,6 +25,7 @@ import { usePermissoes } from '@/hooks/use-permissoes'
 import { useAuth } from '@/hooks/use-auth'
 import { buscarTotalNaoLidasCliente } from '@/lib/queries/sugestoes'
 import { contarGarconsPendentes } from '@/lib/queries/bonificacao-garcons'
+import { contarFeedbacksNaoLidos, marcarFeedbacksVistos } from '@/lib/queries/feedbacks'
 import { supabase } from '@/lib/supabase/client'
 
 const navigation = [
@@ -44,6 +45,7 @@ export function AppSidebar() {
   const { usuario } = useAuth()
 
   const isSugestoesActive = location.pathname === '/sugestoes'
+  const isFeedbacksActive = location.pathname === '/feedbacks'
 
   // Badge de mensagens não lidas do suporte (novas + editadas)
   const [naoLidas, setNaoLidas] = useState(0)
@@ -89,6 +91,34 @@ export function AppSidebar() {
       .subscribe()
     return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
   }, [restauranteId])
+
+  // Numerozinho de "chegou feedback negativo" — conta desde a última vez que
+  // a aba Feedbacks foi aberta (`restaurantes.feedbacks_visto_em`). Ao
+  // contrário do badge de Garçons (que só some quando o bônus é pago), este é
+  // notificação pura: visitar a página já resolve, então zera e marca como
+  // visto no banco assim que a rota fica ativa.
+  const [feedbacksNaoLidos, setFeedbacksNaoLidos] = useState(0)
+  useEffect(() => {
+    if (!restauranteId) { setFeedbacksNaoLidos(0); return }
+    const atualizar = () => contarFeedbacksNaoLidos(restauranteId).then(setFeedbacksNaoLidos).catch(() => {})
+    atualizar()
+    const ch = supabase
+      .channel('sidebar-feedbacks-nao-lidos')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'feedbacks_originais', filter: `restaurante_id=eq.${restauranteId}` },
+        atualizar,
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [restauranteId])
+
+  useEffect(() => {
+    if (isFeedbacksActive && restauranteId) {
+      setFeedbacksNaoLidos(0)
+      marcarFeedbacksVistos(restauranteId)
+    }
+  }, [isFeedbacksActive, restauranteId])
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-border bg-white text-sidebar-foreground">
@@ -142,6 +172,14 @@ export function AppSidebar() {
                       {item.name === 'Garçons' && pendentes > 0 && (
                         <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
                           {pendentes > 99 ? '99+' : pendentes}
+                        </span>
+                      )}
+                      {/* "Chegou feedback negativo" — notificação pura: some
+                          assim que a rota fica ativa (efeito acima zera e
+                          marca como visto no banco). */}
+                      {item.name === 'Feedbacks' && feedbacksNaoLidos > 0 && (
+                        <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                          {feedbacksNaoLidos > 99 ? '99+' : feedbacksNaoLidos}
                         </span>
                       )}
                     </Link>
