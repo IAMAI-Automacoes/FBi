@@ -64,6 +64,7 @@ import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { planoParaPrompt } from '../_shared/texto-plano.ts'
+import { talvezAlertarDono } from '../_shared/alerta-urgente.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
@@ -304,6 +305,19 @@ Deno.serve(async (req: Request) => {
     const texto = (fb.texto_original || fb.resumo || '').trim()
     if (!texto) return json({ status: 'sem_texto' })
 
+    // Triagem de urgencia ANTES de decidir o vinculo.
+    //
+    // Vem antes porque as duas coisas sao independentes e a urgencia nao pode
+    // ficar refem do caminho de vinculo: um feedback grave que se liga a uma
+    // acao existente, ou que cai em "livre", precisa avisar o dono do mesmo
+    // jeito. E e AGUARDADA, ao contrario do disparo de insights: perder um
+    // aviso de intoxicacao porque a funcao encerrou antes da hora e o tipo de
+    // falha que nao aparece em log nenhum e custa o cliente.
+    const alerta = await talvezAlertarDono(db, fb, texto)
+    if (alerta.urgente) {
+      console.log(`[urgente] feedback ${fb.id}: ${alerta.motivo} (enviado=${alerta.enviado ?? false})`)
+    }
+
     // ---- Candidatos: ações abertas e insights vivos ----
     const [{ data: acoes }, { data: insights }] = await Promise.all([
       db.from('acoes_operacionais')
@@ -369,7 +383,7 @@ Deno.serve(async (req: Request) => {
 
         if (acaoDoTema && acaoDoTema.length > 0) {
           const abs = await ligarAAcao(db, fb, acaoDoTema[0].id, texto)
-          return json({ status: 'ligado', destino: 'acao', id: acaoDoTema[0].id, via: 'tema', absorcao: abs })
+          return json({ status: 'ligado', destino: 'acao', id: acaoDoTema[0].id, via: 'tema', absorcao: abs, alerta })
         }
       }
 
@@ -378,7 +392,7 @@ Deno.serve(async (req: Request) => {
       const vivo = (doTema ?? []).find((i: any) => i.ativo && !i.deletado_em)
       if (vivo) {
         const abs = await ligarAoInsight(db, fb, vivo.id, texto)
-        return json({ status: 'ligado', destino: 'insight', id: vivo.id, via: 'tema', absorcao: abs })
+        return json({ status: 'ligado', destino: 'insight', id: vivo.id, via: 'tema', absorcao: abs, alerta })
       }
     }
     // ---- 2. Sem candidato da mesma categoria: fica livre, sem gastar IA ----
@@ -389,7 +403,7 @@ Deno.serve(async (req: Request) => {
 
     if (acoesCat.length === 0 && insightsCat.length === 0) {
       await talvezGerarInsights(db, fb.restaurante_id)
-      return json({ status: 'livre', motivo: 'nenhum candidato na categoria' })
+      return json({ status: 'livre', motivo: 'nenhum candidato na categoria', alerta })
     }
 
     // ---- 3. Ambíguo: uma chamada de IA ----
@@ -397,7 +411,7 @@ Deno.serve(async (req: Request) => {
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 400 })
     if (!params) {
       await talvezGerarInsights(db, fb.restaurante_id)
-      return json({ status: 'livre', motivo: 'agente desativado' })
+      return json({ status: 'livre', motivo: 'agente desativado', alerta })
     }
 
     const prompt = montarPrompt(prompts, 'ef_vincular_feedback', PROMPT, {
@@ -439,11 +453,11 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       if (err instanceof ErroCota) {
         await talvezGerarInsights(db, fb.restaurante_id)
-        return json({ status: 'livre', motivo: 'sem credito' })
+        return json({ status: 'livre', motivo: 'sem credito', alerta })
       }
       console.error('Falha ao decidir vinculo:', err)
       await talvezGerarInsights(db, fb.restaurante_id)
-      return json({ status: 'livre', motivo: 'erro na IA' })
+      return json({ status: 'livre', motivo: 'erro na IA', alerta })
     }
 
     // A IA pode devolver id que não estava na lista — só passa o que ela viu.
@@ -459,6 +473,7 @@ Deno.serve(async (req: Request) => {
           via: 'ia',
           motivo: decisao.motivo,
           absorcao: abs,
+          alerta,
         })
       }
     }
@@ -474,12 +489,13 @@ Deno.serve(async (req: Request) => {
           via: 'ia',
           motivo: decisao.motivo,
           absorcao: abs,
+          alerta,
         })
       }
     }
 
     await talvezGerarInsights(db, fb.restaurante_id)
-    return json({ status: 'livre', motivo: decisao.motivo ?? 'nenhum candidato serve' })
+    return json({ status: 'livre', motivo: decisao.motivo ?? 'nenhum candidato serve', alerta })
   } catch (err) {
     // deno-lint-ignore no-explicit-any
     const e = err as any
