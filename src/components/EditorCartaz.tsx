@@ -7,12 +7,10 @@
  * próprio elemento, sobre o cartaz.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Bold, Italic, Trash2, Minus, Plus, ChevronDown, RotateCw, Contrast, Maximize2 } from 'lucide-react'
+import { Bold, Italic, Trash2, Minus, Plus, ChevronDown, RotateCw, Contrast } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SeletorCor } from '@/components/SeletorCor'
 import {
-  ESCALA_MAX,
-  ESCALA_MIN,
   FONTES,
   GRUPOS_DE_FONTE,
   TAMANHO_MAX,
@@ -80,6 +78,94 @@ function EscolhaDeFonte({ valor, onChange }: { valor: string; onChange: (id: str
               ))}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Botão que abre um painelzinho com barra + número — o mesmo par de sempre:
+ * a barra pra procurar o valor arrastando, o número pra cravar o exato e pra
+ * repetir o mesmo em outra imagem.
+ *
+ * Vale um painel, e não os controles soltos na barra, porque são ajustes que
+ * se usam de vez em quando: soltos, cada um comia a largura toda e empurrava
+ * o resto da barra pra baixo.
+ */
+function ControleEmPainel({
+  rotulo,
+  icone,
+  valor,
+  min,
+  max,
+  sufixo = '',
+  aoMudar,
+}: {
+  rotulo: string
+  icone: React.ReactNode
+  valor: number
+  min: number
+  max: number
+  sufixo?: string
+  aoMudar: (n: number) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const caixa = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const fora = (e: MouseEvent) => {
+      if (!caixa.current?.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', fora)
+    return () => document.removeEventListener('mousedown', fora)
+  }, [aberto])
+
+  return (
+    <div ref={caixa} className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        aria-expanded={aberto}
+        aria-label={rotulo}
+        title={rotulo}
+        className={cn(
+          'flex h-8 items-center gap-1 rounded-md border px-2 text-[12px]',
+          aberto ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+        )}
+      >
+        {icone}
+        <span className="tabular-nums">{valor}{sufixo}</span>
+      </button>
+
+      {aberto && (
+        <div className="absolute left-0 top-9 z-50 w-[230px] rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+          <p className="mb-2 text-[13px] font-medium text-gray-700">{rotulo}</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={1}
+              value={valor}
+              onChange={(e) => aoMudar(Number(e.target.value))}
+              className="min-w-0 flex-1 accent-[#8B3DFF]"
+              aria-label={rotulo}
+            />
+            <input
+              type="number"
+              min={min}
+              max={max}
+              value={valor}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                if (Number.isFinite(n)) aoMudar(Math.min(max, Math.max(min, n)))
+              }}
+              className="h-8 w-[54px] rounded-md border border-gray-200 px-1.5 text-center text-[12px] tabular-nums text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#8B3DFF]/25"
+              aria-label={`${rotulo} em número`}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -167,69 +253,29 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
           )}
         </>
       ) : (
-        /* Edição da imagem no próprio cartaz: tamanho, giro e opacidade.
-           São os três ajustes que resolvem o que chega de foto de celular —
-           grande demais, torta, e opaca demais pra servir de marca-d'água. */
-        <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 px-1">
-          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
-            <Maximize2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <input
-              type="range"
-              min={ESCALA_MIN}
-              max={ESCALA_MAX}
-              step={0.01}
-              value={elemento.escala}
-              onChange={(e) => onAlterar(elemento.id, { escala: Number(e.target.value) })}
-              className="min-w-0 flex-1"
-              aria-label="Tamanho da imagem"
-              title="Tamanho"
-            />
-          </label>
+        /* Tamanho e giro saíram daqui: o tamanho se faz puxando as alças no
+           próprio cartaz, e o giro pela argola embaixo do elemento. Barrinha
+           na barra pra fazer o que o gesto direto já faz era controle
+           duplicado — e ocupava a largura toda. */
+        <div className="flex flex-1 flex-wrap items-center gap-1.5 px-1">
+          <ControleEmPainel
+            rotulo="Transparência"
+            icone={<Contrast className="h-3.5 w-3.5" />}
+            valor={Math.round((elemento.opacidade ?? 1) * 100)}
+            min={0}
+            max={100}
+            aoMudar={(n) => onAlterar(elemento.id, { opacidade: Math.min(1, Math.max(0.05, n / 100)) })}
+          />
 
-          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
-            <RotateCw className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <input
-              type="range"
-              min={-180}
-              max={180}
-              step={1}
-              value={elemento.rotacao ?? 0}
-              onChange={(e) => onAlterar(elemento.id, { rotacao: Number(e.target.value) })}
-              className="min-w-0 flex-1"
-              aria-label="Girar a imagem"
-              title="Girar"
-            />
-            <span className="w-[38px] text-right text-[11px] tabular-nums text-gray-500">
-              {Math.round(elemento.rotacao ?? 0)}°
-            </span>
-          </label>
-
-          {/* Opacidade em número, de 0 a 100: dá pra digitar o valor exato,
-              rolar a rodinha em cima e usar as setas. Barrinha é boa pra
-              procurar um valor, ruim pra repetir o mesmo em três imagens. */}
-          <label className="flex items-center gap-1.5" title="Opacidade (0 a 100)">
-            <Contrast className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              value={Math.round((elemento.opacidade ?? 1) * 100)}
-              onChange={(e) => {
-                const n = Number(e.target.value)
-                if (!Number.isFinite(n)) return
-                onAlterar(elemento.id, { opacidade: Math.min(1, Math.max(0.05, n / 100)) })
-              }}
-              onWheel={(e) => {
-                const atual = Math.round((elemento.opacidade ?? 1) * 100)
-                const novo = Math.min(100, Math.max(5, atual + (e.deltaY < 0 ? 5 : -5)))
-                onAlterar(elemento.id, { opacidade: novo / 100 })
-              }}
-              className="h-8 w-[58px] rounded-md border border-gray-200 bg-white px-1.5 text-center text-[12px] tabular-nums text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
-              aria-label="Opacidade da imagem, de 0 a 100"
-            />
-            <span className="text-[11px] text-gray-400">%</span>
-          </label>
+          <ControleEmPainel
+            rotulo="Girar"
+            sufixo="°"
+            icone={<RotateCw className="h-3.5 w-3.5" />}
+            valor={Math.round(elemento.rotacao ?? 0)}
+            min={-180}
+            max={180}
+            aoMudar={(n) => onAlterar(elemento.id, { rotacao: Math.min(180, Math.max(-180, n)) })}
+          />
 
           {/* Volta ao estado de recém-subida sem precisar excluir e subir de
               novo — que é o que se faz quando não existe um "desfazer". */}

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus, Plus } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus, Plus, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
@@ -608,6 +608,51 @@ export default function QRCodes() {
   }
 
   /** As 8 alças em volta do elemento selecionado. */
+  /**
+   * Girar arrastando a argola pendurada embaixo do elemento.
+   *
+   * O ângulo é medido do CENTRO do elemento até o dedo, e o que entra no
+   * estado é a diferença desde onde o arrasto começou — assim a figura
+   * acompanha a mão em vez de dar um salto no primeiro movimento.
+   */
+  const girarElemento = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setSelecionado(id)
+
+    const camada = camadaRef.current
+    const caixa = caixas.find((c) => c.id === id)
+    const el = elementos.find((x) => x.id === id)
+    if (!camada || !caixa || !el) return
+
+    const area = camada.getBoundingClientRect()
+    const centro = {
+      x: area.left + ((caixa.x + caixa.w / 2) / POSTER_W) * area.width,
+      y: area.top + ((caixa.y + caixa.h / 2) / POSTER_H) * area.height,
+    }
+    const anguloDe = (px: number, py: number) => (Math.atan2(py - centro.y, px - centro.x) * 180) / Math.PI
+    const inicial = anguloDe(e.clientX, e.clientY)
+    const rotacaoInicial = el.rotacao ?? 0
+
+    const alvo = e.currentTarget
+    alvo.setPointerCapture(e.pointerId)
+    const mover = (ev: PointerEvent) => {
+      let nova = rotacaoInicial + (anguloDe(ev.clientX, ev.clientY) - inicial)
+      // Segurando Shift, trava de 15 em 15 graus — é como se endireita uma
+      // foto torta sem ficar caçando o zero.
+      if (ev.shiftKey) nova = Math.round(nova / 15) * 15
+      while (nova > 180) nova -= 360
+      while (nova < -180) nova += 360
+      alterarElemento(id, { rotacao: nova })
+    }
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover)
+      alvo.removeEventListener('pointerup', soltar)
+    }
+    alvo.addEventListener('pointermove', mover)
+    alvo.addEventListener('pointerup', soltar)
+  }
+
   const drawCanvas = async () => {
     const canvas = canvasRef.current
     if (!canvas || !qrData) return
@@ -1236,6 +1281,24 @@ export default function QRCodes() {
                               {/* Cantos crescem proporcional; lados esticam o
                                   texto e cortam/esticam a imagem. */}
                               {selecionado === c.id && !emEdicao && <Alcas id={c.id} aoPegar={redimensionar} />}
+
+                              {/* Argola de girar, pendurada embaixo — só na
+                                  imagem, porque é o único elemento que o
+                                  desenho sabe girar. Pôr no texto seria um
+                                  controle que não faz nada. */}
+                              {selecionado === c.id && el.tipo === 'logo' && (
+                                <div
+                                  onPointerDown={girarElemento(c.id)}
+                                  role="button"
+                                  tabIndex={-1}
+                                  aria-label="Girar a imagem (segure Shift para travar de 15 em 15 graus)"
+                                  title="Girar (Shift trava de 15 em 15)"
+                                  className="absolute left-1/2 flex h-6 w-6 -translate-x-1/2 cursor-grab touch-none items-center justify-center rounded-full border border-gray-300 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]"
+                                  style={{ bottom: -34 }}
+                                >
+                                  <RotateCw className="h-3 w-3 text-gray-600" />
+                                </div>
+                              )}
                             </div>
                           )
                         })}
