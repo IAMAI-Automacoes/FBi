@@ -94,10 +94,31 @@ export interface ElementoCartaz {
   italico: boolean
   /** `null` = usa a tinta do tema, que já contrasta com o fundo escolhido. */
   cor: string | null
+  /**
+   * Esticar em cada eixo, para TEXTO (1 = sem esticar).
+   *
+   * Puxar um canto muda o corpo da fonte — o texto cresce inteiro. Puxar um
+   * lado estica só naquele sentido, que é como se faz letra condensada ou
+   * alargada num editor de verdade. São coisas diferentes e por isso moram em
+   * campos diferentes: mexer no corpo aqui deformaria a fonte.
+   */
+  esticarX: number
+  esticarY: number
   // ── imagem ──
   url: string | null
   /** Largura da imagem, em fração da largura do cartaz. */
   escala: number
+  /** Altura em fração da ALTURA do cartaz. Ausente = mantém a proporção
+   *  natural do arquivo (o caso de sempre, até alguém puxar um lado). */
+  escalaY: number | null
+  /**
+   * Pedaço do arquivo que aparece, em fração do próprio arquivo.
+   *
+   * É o que faz puxar um lado pra dentro RECORTAR em vez de espremer: o
+   * quadro encolhe e a parte de fora fica de fora, como numa ferramenta de
+   * corte. Puxar pra fora não mexe aqui — aí a imagem estica mesmo.
+   */
+  recorte: { x: number; y: number; w: number; h: number }
   /** Giro em graus (-180..180). Foto tirada torta se endireita aqui. */
   rotacao: number
   /** 0.05..1. Deixa a imagem virar marca-d'água sobre o fundo. */
@@ -314,6 +335,9 @@ export interface EstiloTexto {
    */
   x?: number
   y?: number
+  /** Esticado pelos lados, igual a um texto livre (1 = sem esticar). */
+  esticarX?: number
+  esticarY?: number
 }
 
 export type EstilosDosTextos = Record<string, EstiloTexto>
@@ -334,6 +358,8 @@ export function lerEstiloDosTextos(bruto: unknown): EstilosDosTextos {
     if (typeof o.cor === 'string' && /^#[0-9a-f]{6}$/i.test(o.cor)) estilo.cor = o.cor
     if (Number.isFinite(Number(o.x))) estilo.x = Math.min(1, Math.max(0, Number(o.x)))
     if (Number.isFinite(Number(o.y))) estilo.y = Math.min(1, Math.max(0, Number(o.y)))
+    if (Number.isFinite(Number(o.esticarX))) estilo.esticarX = Math.min(5, Math.max(0.2, Number(o.esticarX)))
+    if (Number.isFinite(Number(o.esticarY))) estilo.esticarY = Math.min(5, Math.max(0.2, Number(o.esticarY)))
     saida[chave] = estilo
   }
   return saida
@@ -368,8 +394,12 @@ export function novoTexto(existentes: ElementoCartaz[] = []): ElementoCartaz {
     negrito: false,
     italico: false,
     cor: null,
+    esticarX: 1,
+    esticarY: 1,
     url: null,
     escala: 0.3,
+    escalaY: null,
+    recorte: { x: 0, y: 0, w: 1, h: 1 },
     rotacao: 0,
     opacidade: 1,
   }
@@ -393,6 +423,22 @@ export function novaLogo(url: string, existentes: ElementoCartaz[] = []): Elemen
  * campo faltando ou vir com número fora da faixa. Desenhar direto o que vier
  * dali é como o cartaz quebra — daí cada campo cair num padrão conhecido.
  */
+/** Recorte válido: dentro do arquivo e nunca de área zero. */
+function lerRecorte(bruto: unknown): { x: number; y: number; w: number; h: number } {
+  const cheio = { x: 0, y: 0, w: 1, h: 1 }
+  if (!bruto || typeof bruto !== 'object') return cheio
+  const o = bruto as Record<string, unknown>
+  const num = (v: unknown, padrao: number) => (Number.isFinite(Number(v)) ? Number(v) : padrao)
+  const x = Math.min(0.95, Math.max(0, num(o.x, 0)))
+  const y = Math.min(0.95, Math.max(0, num(o.y, 0)))
+  return {
+    x,
+    y,
+    w: Math.min(1 - x, Math.max(0.05, num(o.w, 1))),
+    h: Math.min(1 - y, Math.max(0.05, num(o.h, 1))),
+  }
+}
+
 export function lerElementos(bruto: unknown): ElementoCartaz[] {
   if (!Array.isArray(bruto)) return []
   const limitar = (v: unknown, min: number, max: number, padrao: number) => {
@@ -418,7 +464,11 @@ export function lerElementos(bruto: unknown): ElementoCartaz[] {
       italico: o.italico === true,
       cor: typeof o.cor === 'string' && /^#[0-9a-f]{6}$/i.test(o.cor) ? o.cor : null,
       url: typeof o.url === 'string' ? o.url : null,
+      esticarX: limitar(o.esticarX, 0.2, 5, 1),
+      esticarY: limitar(o.esticarY, 0.2, 5, 1),
       escala: limitar(o.escala, ESCALA_MIN, ESCALA_MAX, 0.28),
+      escalaY: Number.isFinite(Number(o.escalaY)) ? limitar(o.escalaY, 0.02, 1.5, 0.2) : null,
+      recorte: lerRecorte(o.recorte),
       rotacao: limitar(o.rotacao, -180, 180, 0),
       opacidade: limitar(o.opacidade, 0.05, 1, 1),
     }]

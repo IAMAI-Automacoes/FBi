@@ -20,6 +20,7 @@ const GARCONS = [
 ]
 
 function Banco() {
+  const [msgCampo, setMsgCampo] = useState('Oi')
   const [pronto, setPronto] = useState(false)
   const [caixas, setCaixas] = useState<any[]>([])
 
@@ -61,10 +62,14 @@ function Banco() {
         Textos próprios
       </button>
       <button data-teste="mensagem-quebrada" onClick={() => gerar([2], { mensagem: 'Linha um\nLinha dois' })}>Mensagem com Enter</button>
+      <button data-teste="esticar-rotulo" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { esticarX: 2.5 } } })}>Esticar rótulo</button>
       <button data-teste="rotulo-movido" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { x: 0.2, y: 0.8 } } })}>Rótulo movido</button>
       <button data-teste="estilo-proprio" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { fonte: 'pacifico', tamanho: 40, negrito: false, italico: true, cor: '#B22222' }, [ID_TITULO]: { fonte: 'bebas', tamanho: 70, cor: '#0000FF' } } })}>Estilo próprio</button>
       <button data-teste="sem-mensagem" onClick={() => gerar([2], { mensagem: '' })}>Sem mensagem</button>
       <button data-teste="sem-rotulo" onClick={() => gerar([2], { rotulo: '' })}>Sem rótulo</button>
+      <textarea data-teste="campo-mensagem" value={msgCampo} rows={2} maxLength={120} onChange={(e) => setMsgCampo(e.target.value)} />
+      <button data-teste="usar-campo" onClick={() => gerar([2], { mensagem: msgCampo })}>Usar o campo</button>
+      <pre data-teste="valor-campo">{JSON.stringify(msgCampo)}</pre>
       <pre data-teste="caixas">{JSON.stringify(caixas.map((c) => c.id))}</pre>
       <pre data-teste="pronto">{String(pronto)}</pre>
       <pre data-teste="esperado">{JSON.stringify(GARCONS.map((g) => ({ id: g.id, url: landingUrl(g.slug) })))}</pre>

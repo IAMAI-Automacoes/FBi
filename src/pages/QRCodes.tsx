@@ -15,7 +15,7 @@ import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, C
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
-import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { ESCALA_MAX, ESCALA_MIN, FONTES, TAMANHO_MAX, TAMANHO_MIN, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -390,6 +390,8 @@ export default function QRCodes() {
       italico: e.italico ?? false,
       cor: e.cor ?? padrao.cor,
       corPropria: e.cor ?? null,
+      esticarX: e.esticarX ?? 1,
+      esticarY: e.esticarY ?? 1,
     }
   }
 
@@ -457,8 +459,12 @@ export default function QRCodes() {
       negrito: f.estilo.negrito,
       italico: f.estilo.italico,
       cor: f.estilo.corPropria,
+      esticarX: f.estilo.esticarX,
+      esticarY: f.estilo.esticarY,
       url: null,
       escala: 0.3,
+      escalaY: null,
+      recorte: { x: 0, y: 0, w: 1, h: 1 },
       rotacao: 0,
       opacidade: 1,
     }
@@ -473,8 +479,149 @@ export default function QRCodes() {
     if (campos.negrito !== undefined) estilo.negrito = campos.negrito
     if (campos.italico !== undefined) estilo.italico = campos.italico
     if ('cor' in campos) estilo.cor = campos.cor
+    if (campos.esticarX !== undefined) estilo.esticarX = campos.esticarX
+    if (campos.esticarY !== undefined) estilo.esticarY = campos.esticarY
     setCfgEstilos((p) => ({ ...p, [id]: estilo }))
   }
+
+  /**
+   * Puxar as bordas de um elemento na plaquinha.
+   *
+   * Canto = proporcional (o elemento inteiro cresce). Lado = só naquele
+   * sentido: texto estica, e imagem CORTA quando puxada pra dentro e estica
+   * quando puxada pra fora — é o que se espera de uma ferramenta de imagem, e
+   * espremer a foto pra caber seria o resultado errado.
+   */
+  const redimensionar = (id: string, ancora: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setSelecionado(id)
+
+    const camada = camadaRef.current
+    const caixa = caixas.find((c) => c.id === id)
+    if (!camada || !caixa) return
+
+    const fixo = textosFixos[id]
+    const el = elementos.find((x) => x.id === id)
+    const area = camada.getBoundingClientRect()
+    const alvo = e.currentTarget
+    alvo.setPointerCapture(e.pointerId)
+
+    // Tudo em pixels do CARTAZ: a prévia é menor que ele, e misturar as duas
+    // réguas faz o elemento crescer numa velocidade e a alça em outra.
+    const porPixelX = POSTER_W / area.width
+    const porPixelY = POSTER_H / area.height
+    const inicio = {
+      px: e.clientX,
+      py: e.clientY,
+      w: caixa.w,
+      h: caixa.h,
+      tamanho: fixo ? fixo.estilo.tamanho : (el?.tamanho ?? 40),
+      esticarX: el?.esticarX ?? 1,
+      esticarY: el?.esticarY ?? 1,
+      escala: el?.escala ?? 0.3,
+      escalaY: el?.escalaY ?? null,
+      recorte: el?.recorte ?? { x: 0, y: 0, w: 1, h: 1 },
+    }
+    const oeste = ancora.includes('o')
+    const norte = ancora.includes('n')
+    const canto = ancora.length === 2
+
+    const mover = (ev: PointerEvent) => {
+      const dx = (ev.clientX - inicio.px) * porPixelX * (oeste ? -1 : 1)
+      const dy = (ev.clientY - inicio.py) * porPixelY * (norte ? -1 : 1)
+
+      if (canto) {
+        // Proporcional: o eixo que mais andou manda, pra diagonal não travar.
+        const fator = Math.max(0.2, 1 + (Math.abs(dx) > Math.abs(dy) ? dx / inicio.w : dy / inicio.h))
+        if (fixo) {
+          alterarTextoFixo(id, { tamanho: Math.round(Math.min(TAMANHO_MAX, Math.max(TAMANHO_MIN, inicio.tamanho * fator))) })
+        } else if (el?.tipo === 'texto') {
+          alterarElemento(id, { tamanho: Math.round(Math.min(TAMANHO_MAX, Math.max(TAMANHO_MIN, inicio.tamanho * fator))) })
+        } else if (el) {
+          alterarElemento(id, {
+            escala: Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, inicio.escala * fator)),
+            escalaY: inicio.escalaY != null ? inicio.escalaY * fator : null,
+          })
+        }
+        return
+      }
+
+      const horizontal = ancora === 'l' || ancora === 'o'
+      if (fixo || el?.tipo === 'texto') {
+        const base = horizontal ? inicio.esticarX : inicio.esticarY
+        const medida = horizontal ? inicio.w : inicio.h
+        const novo = Math.min(5, Math.max(0.2, base * (1 + (horizontal ? dx : dy) / Math.max(1, medida))))
+        const campos = horizontal ? { esticarX: novo } : { esticarY: novo }
+        if (fixo) alterarTextoFixo(id, campos)
+        else alterarElemento(id, campos)
+        return
+      }
+      if (!el) return
+
+      // Imagem. Crescer estica naquele sentido; encolher corta o pedaço que
+      // saiu, mantendo o resto do mesmo tamanho na tela.
+      const delta = horizontal ? dx : dy
+      const medida = horizontal ? inicio.w : inicio.h
+      const proporcao = Math.max(0.1, 1 + delta / Math.max(1, medida))
+      const rec = { ...inicio.recorte }
+      if (delta < 0) {
+        const sobra = horizontal ? inicio.recorte.w * proporcao : inicio.recorte.h * proporcao
+        if (horizontal) {
+          rec.w = Math.max(0.05, sobra)
+          if (oeste) rec.x = Math.min(0.95, inicio.recorte.x + (inicio.recorte.w - rec.w))
+        } else {
+          rec.h = Math.max(0.05, sobra)
+          if (norte) rec.y = Math.min(0.95, inicio.recorte.y + (inicio.recorte.h - rec.h))
+        }
+      }
+      const alturaAtual = inicio.escalaY ?? inicio.h / POSTER_H
+      alterarElemento(id, {
+        recorte: rec,
+        escala: horizontal
+          ? Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, inicio.escala * proporcao))
+          : inicio.escala,
+        escalaY: horizontal ? alturaAtual : Math.max(0.02, alturaAtual * proporcao),
+      })
+    }
+
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover)
+      alvo.removeEventListener('pointerup', soltar)
+    }
+    alvo.addEventListener('pointermove', mover)
+    alvo.addEventListener('pointerup', soltar)
+  }
+
+  /** As 8 alças em volta do elemento selecionado. */
+  const Alcas = ({ id }: { id: string }) => (
+    <>
+      {(['no', 'ne', 'so', 'se', 'n', 's', 'l', 'o'] as const).map((a) => {
+        const canto = a.length === 2
+        const posicao: React.CSSProperties = {
+          left: a.includes('o') ? -5 : a.includes('l') ? undefined : '50%',
+          right: a.includes('l') ? -5 : undefined,
+          top: a.includes('n') ? -5 : a.includes('s') ? undefined : '50%',
+          bottom: a.includes('s') ? -5 : undefined,
+          transform: `translate(${a === 'n' || a === 's' ? '-50%' : '0'}, ${a === 'l' || a === 'o' ? '-50%' : '0'})`,
+          cursor: canto
+            ? (a === 'no' || a === 'se' ? 'nwse-resize' : 'nesw-resize')
+            : (a === 'n' || a === 's' ? 'ns-resize' : 'ew-resize'),
+        }
+        return (
+          <div
+            key={a}
+            onPointerDown={redimensionar(id, a)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Redimensionar"
+            className="absolute h-2.5 w-2.5 touch-none rounded-[2px] border border-gray-900 bg-white shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+            style={posicao}
+          />
+        )
+      })}
+    </>
+  )
 
   const drawCanvas = async () => {
     const canvas = canvasRef.current
@@ -831,7 +978,7 @@ export default function QRCodes() {
             </Card>
 
             {/* ───────── Prévia: o display de mesa ───────── */}
-            <div className="flex w-[392px] max-w-full flex-col">
+            <div className="flex w-[452px] max-w-full flex-col">
               {/* Adicionar fica no CABEÇALHO, longe da plaquinha: é uma ação
                   que se faz uma vez, e ocupando o espaço logo acima do cartaz
                   empurrava pra baixo a barra de propriedades — que é o
@@ -908,7 +1055,7 @@ export default function QRCodes() {
                 {/* Largura fixa, e não `w-full`: é ela que segura o tamanho da
                     plaquinha agora que a caixa em volta encolheu. `max-w-full`
                     só entra em tela estreita demais, pra não vazar. */}
-                <div className="w-[348px] max-w-full" style={{ perspective: '1300px' }}>
+                <div className="w-[408px] max-w-full" style={{ perspective: '1300px' }}>
                   {/* Com um elemento selecionado a plaquinha fica RETA.
                       A inclinação em 3D deforma o mapeamento do arrasto — o
                       retângulo que o navegador reporta é a caixa alinhada aos
@@ -970,7 +1117,7 @@ export default function QRCodes() {
                                 key={c.id}
                                 className={cn(
                                   'group absolute rounded-[2px] transition-colors',
-                                  emEdicao ? 'ring-2 ring-[#C2622C] ring-offset-1' : 'hover:ring-2 hover:ring-[#C2622C]/45',
+                                  emEdicao ? 'ring-2 ring-white shadow-[0_0_0_3px_rgba(17,17,17,0.85)]' : 'hover:ring-2 hover:ring-white hover:shadow-[0_0_0_3px_rgba(17,17,17,0.55)]',
                                 )}
                                 style={molduraFixa}
                               >
@@ -1015,11 +1162,13 @@ export default function QRCodes() {
                                   />
                                 )}
 
+                                {selecionado === c.id && !emEdicao && <Alcas id={c.id} />}
+
                                 {fixo.podeExcluir && (
                                   <button
                                     type="button"
                                     onClick={() => { fixo.alterar(''); setEditandoId(null) }}
-                                    aria-label="Tirar a mensagem do cartaz"
+                                    aria-label="Tirar do cartaz"
                                     title="Tirar do cartaz"
                                     className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex"
                                   >
@@ -1045,8 +1194,8 @@ export default function QRCodes() {
                               className={cn(
                                 'group absolute rounded-[2px] transition-colors',
                                 selecionado === c.id
-                                  ? 'ring-2 ring-[#C2622C] ring-offset-1'
-                                  : 'hover:ring-2 hover:ring-[#C2622C]/45',
+                                  ? 'ring-2 ring-white shadow-[0_0_0_3px_rgba(17,17,17,0.85)]'
+                                  : 'hover:ring-2 hover:ring-white hover:shadow-[0_0_0_3px_rgba(17,17,17,0.55)]',
                               )}
                               style={moldura}
                             >
@@ -1098,6 +1247,10 @@ export default function QRCodes() {
                               >
                                 <X className="h-3 w-3" />
                               </button>
+
+                              {/* Cantos crescem proporcional; lados esticam o
+                                  texto e cortam/esticam a imagem. */}
+                              {selecionado === c.id && !emEdicao && <Alcas id={c.id} />}
                             </div>
                           )
                         })}

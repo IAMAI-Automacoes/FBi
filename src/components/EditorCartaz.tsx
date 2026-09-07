@@ -204,19 +204,31 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
             </span>
           </label>
 
-          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
+          {/* Opacidade em número, de 0 a 100: dá pra digitar o valor exato,
+              rolar a rodinha em cima e usar as setas. Barrinha é boa pra
+              procurar um valor, ruim pra repetir o mesmo em três imagens. */}
+          <label className="flex items-center gap-1.5" title="Opacidade (0 a 100)">
             <Contrast className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             <input
-              type="range"
-              min={0.05}
-              max={1}
-              step={0.05}
-              value={elemento.opacidade ?? 1}
-              onChange={(e) => onAlterar(elemento.id, { opacidade: Number(e.target.value) })}
-              className="min-w-0 flex-1"
-              aria-label="Opacidade da imagem"
-              title="Opacidade"
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round((elemento.opacidade ?? 1) * 100)}
+              onChange={(e) => {
+                const n = Number(e.target.value)
+                if (!Number.isFinite(n)) return
+                onAlterar(elemento.id, { opacidade: Math.min(1, Math.max(0.05, n / 100)) })
+              }}
+              onWheel={(e) => {
+                const atual = Math.round((elemento.opacidade ?? 1) * 100)
+                const novo = Math.min(100, Math.max(5, atual + (e.deltaY < 0 ? 5 : -5)))
+                onAlterar(elemento.id, { opacidade: novo / 100 })
+              }}
+              className="h-8 w-[58px] rounded-md border border-gray-200 bg-white px-1.5 text-center text-[12px] tabular-nums text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
+              aria-label="Opacidade da imagem, de 0 a 100"
             />
+            <span className="text-[11px] text-gray-400">%</span>
           </label>
 
           {/* Volta ao estado de recém-subida sem precisar excluir e subir de

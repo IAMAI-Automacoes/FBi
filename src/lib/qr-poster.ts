@@ -236,8 +236,20 @@ async function desenharElementos(
       if (!el.url) continue
       const img = await logoDoDono(el.url)
       if (!img || img.width < 1) continue
+      const rec = el.recorte ?? { x: 0, y: 0, w: 1, h: 1 }
       const w = el.escala * W
-      const h = (img.height / img.width) * w
+      // Sem altura própria, a proporção é a do PEDAÇO visível do arquivo — o
+      // que mantém a imagem sem deformar depois de um recorte.
+      const h = el.escalaY != null
+        ? el.escalaY * H
+        : ((img.height * rec.h) / (img.width * rec.w)) * w
+      // Origem no arquivo: é o recorte que faz puxar o lado pra dentro cortar
+      // a imagem em vez de espremê-la.
+      const fx = rec.x * img.width
+      const fy = rec.y * img.height
+      const fw = rec.w * img.width
+      const fh = rec.h * img.height
+
       const giro = ((el.rotacao ?? 0) * Math.PI) / 180
       ctx.save()
       ctx.globalAlpha = el.opacidade ?? 1
@@ -246,9 +258,9 @@ async function desenharElementos(
       if (giro) {
         ctx.translate(cx, cy)
         ctx.rotate(giro)
-        ctx.drawImage(img, -w / 2, -h / 2, w, h)
+        ctx.drawImage(img, fx, fy, fw, fh, -w / 2, -h / 2, w, h)
       } else {
-        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
+        ctx.drawImage(img, fx, fy, fw, fh, cx - w / 2, cy - h / 2, w, h)
       }
       ctx.restore()
       // A caixa de arraste continua alinhada aos eixos: é a área que o
@@ -274,24 +286,32 @@ async function desenharElementos(
     const linhas = texto.split('\n')
     const alturaLinha = el.tamanho * 1.2
     const alturaTotal = alturaLinha * linhas.length
+    const ex = el.esticarX ?? 1
+    const ey = el.esticarY ?? 1
     let larguraMax = 0
+    linhas.forEach((linha) => { larguraMax = Math.max(larguraMax, ctx.measureText(linha).width) })
+
+    // Esticar é do CANVAS, não da fonte: `scale` deforma a letra no eixo
+    // pedido (condensada/alargada). Mudar o corpo faria o texto crescer
+    // inteiro, que é o que o canto já faz.
+    ctx.translate(cx, cy)
+    ctx.scale(ex, ey)
     linhas.forEach((linha, i) => {
-      larguraMax = Math.max(larguraMax, ctx.measureText(linha).width)
       // Em edição o texto NÃO é pintado: quem o mostra é o campo sobreposto na
       // prévia. Pintar os dois deixaria o texto dobrado e fora de registro a
       // cada tecla. A caixa continua sendo medida, e é ela que posiciona o campo.
       if (el.id !== editandoId) {
-        ctx.fillText(linha, cx, cy - alturaTotal / 2 + alturaLinha * (i + 0.5))
+        ctx.fillText(linha, 0, -alturaTotal / 2 + alturaLinha * (i + 0.5))
       }
     })
     ctx.restore()
 
     caixas.push({
       id: el.id,
-      x: cx - larguraMax / 2,
-      y: cy - alturaTotal / 2,
-      w: larguraMax,
-      h: alturaTotal,
+      x: cx - (larguraMax * ex) / 2,
+      y: cy - (alturaTotal * ey) / 2,
+      w: larguraMax * ex,
+      h: alturaTotal * ey,
     })
   }
 
@@ -348,6 +368,11 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     return { css: `${italico}${negrito ? 'bold ' : ''}${tamanho}px ${familia}`, tamanho }
   }
   const corFixa = (id: string, padrao: string) => opts.estilos?.[id]?.cor ?? padrao
+  /** Quanto o dono esticou aquele texto por cada lado (1 = nada). */
+  const esticoDe = (id: string) => ({
+    x: opts.estilos?.[id]?.esticarX ?? 1,
+    y: opts.estilos?.[id]?.esticarY ?? 1,
+  })
   /** Onde o texto fixo está: onde o dono arrastou, ou o lugar padrão dele. */
   const ondeFica = (id: string, xPadrao: number, yPadrao: number) => {
     const e = opts.estilos?.[id]
@@ -358,17 +383,23 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   if (rotulo) {
     const f = fonteFixa(ID_ROTULO, 24, 'sans-serif', true)
     const onde = ondeFica(ID_ROTULO, cx, 132)
+    const est = esticoDe(ID_ROTULO)
     ctx.fillStyle = corFixa(ID_ROTULO, t.acento)
     ctx.font = f.css
+    // Esticar é `scale` no canvas, e por isso o texto é desenhado a partir da
+    // origem transladada: com coordenada absoluta, a escala moveria o texto
+    // junto em vez de só deformá-lo.
     ctx.save()
-    const larguraRotulo = espacado(ctx, rotulo, onde.x, onde.y, 6, opts.editandoId !== ID_ROTULO)
+    ctx.translate(onde.x, onde.y)
+    ctx.scale(est.x, est.y)
+    const larguraRotulo = espacado(ctx, rotulo, 0, 0, 6, opts.editandoId !== ID_ROTULO)
     ctx.restore()
     fixos.push({
       id: ID_ROTULO,
-      x: onde.x - larguraRotulo / 2,
-      y: onde.y - f.tamanho,
-      w: larguraRotulo,
-      h: f.tamanho + 8,
+      x: onde.x - (larguraRotulo * est.x) / 2,
+      y: onde.y - f.tamanho * est.y,
+      w: larguraRotulo * est.x,
+      h: (f.tamanho + 8) * est.y,
     })
   }
 
@@ -379,29 +410,42 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.fillStyle = corFixa(ID_TITULO, t.tinta)
   ctx.font = fTitulo.css
   const ondeTitulo = ondeFica(ID_TITULO, cx, rotulo ? 196 : 172)
-  const medidaTitulo = wrapText(ctx, titulo, ondeTitulo.x, ondeTitulo.y, W - 110, fTitulo.tamanho + 10, opts.editandoId !== ID_TITULO)
+  const estTitulo = esticoDe(ID_TITULO)
+  ctx.save()
+  ctx.translate(ondeTitulo.x, ondeTitulo.y)
+  ctx.scale(estTitulo.x, estTitulo.y)
+  const medidaTitulo = wrapText(ctx, titulo, 0, 0, (W - 110) / estTitulo.x, fTitulo.tamanho + 10, opts.editandoId !== ID_TITULO)
+  ctx.restore()
   fixos.push({
     id: ID_TITULO,
-    x: ondeTitulo.x - medidaTitulo.largura / 2,
-    y: ondeTitulo.y - fTitulo.tamanho,
-    w: medidaTitulo.largura,
-    h: medidaTitulo.altura,
+    x: ondeTitulo.x - (medidaTitulo.largura * estTitulo.x) / 2,
+    y: ondeTitulo.y - fTitulo.tamanho * estTitulo.y,
+    w: medidaTitulo.largura * estTitulo.x,
+    h: medidaTitulo.altura * estTitulo.y,
   })
 
   // ── Frase de incentivo ──
   const mensagem = (opts.tagline ?? MENSAGEM_PADRAO).trim()
   if (mensagem) {
     const fMsg = fonteFixa(ID_MENSAGEM, 25, 'sans-serif', false)
-    const ondeMsg = ondeFica(ID_MENSAGEM, cx, medidaTitulo.fim + 44)
+    // A mensagem desce a partir do FIM do título já esticado — senão, com o
+    // nome alargado, ela subiria por cima dele.
+    const fimTitulo = ondeTitulo.y + (medidaTitulo.fim - 0) * estTitulo.y
+    const ondeMsg = ondeFica(ID_MENSAGEM, cx, fimTitulo + 44)
+    const estMsg = esticoDe(ID_MENSAGEM)
     ctx.fillStyle = corFixa(ID_MENSAGEM, t.suave)
     ctx.font = fMsg.css
-    const medidaMsg = wrapText(ctx, mensagem, ondeMsg.x, ondeMsg.y, W - 150, fMsg.tamanho + 8, opts.editandoId !== ID_MENSAGEM)
+    ctx.save()
+    ctx.translate(ondeMsg.x, ondeMsg.y)
+    ctx.scale(estMsg.x, estMsg.y)
+    const medidaMsg = wrapText(ctx, mensagem, 0, 0, (W - 150) / estMsg.x, fMsg.tamanho + 8, opts.editandoId !== ID_MENSAGEM)
+    ctx.restore()
     fixos.push({
       id: ID_MENSAGEM,
-      x: ondeMsg.x - medidaMsg.largura / 2,
-      y: ondeMsg.y - fMsg.tamanho,
-      w: medidaMsg.largura,
-      h: medidaMsg.altura,
+      x: ondeMsg.x - (medidaMsg.largura * estMsg.x) / 2,
+      y: ondeMsg.y - fMsg.tamanho * estMsg.y,
+      w: medidaMsg.largura * estMsg.x,
+      h: medidaMsg.altura * estMsg.y,
     })
   }
 
