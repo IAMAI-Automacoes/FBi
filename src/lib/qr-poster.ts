@@ -115,6 +115,15 @@ export interface PosterOpts {
   nome: string
   tagline?: string
   temaId?: string | null
+  /**
+   * Nome do garçom dono deste QR. Some do cartaz quando não vier.
+   *
+   * Existe porque, na hora de IMPRIMIR, os cartazes de todos os garçons são
+   * visualmente idênticos — mesmo restaurante, mesmo tema, e o QR (a única
+   * coisa que muda) é ilegível a olho nu. Sem este nome, o dono recebe uma
+   * pilha de folhas iguais e não sabe qual entregar pra quem.
+   */
+  garcom?: string | null
   /** Textos e logo que o dono posicionou. Ver `cartaz-elementos.ts`. */
   elementos?: ElementoCartaz[]
   /** Texto em edicao: e medido, mas nao pintado (o campo sobreposto o mostra). */
@@ -307,6 +316,21 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     ctx.fillStyle = t.acento
     ctx.font = 'bold 16px sans-serif'
     ctx.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
+  }
+
+  // ── Nome do garçom, entre o QR e o crédito ──
+  //
+  // Fica no espaço vazio abaixo do cartão do QR, discreto: quem manda no
+  // cartaz continua sendo o restaurante (título) — isto aqui serve pra
+  // separar uma pilha de impressões idênticas e saber de quem é cada uma.
+  const garcom = opts.garcom?.trim()
+  if (garcom) {
+    ctx.fillStyle = t.acento
+    ctx.font = 'bold 22px sans-serif'
+    espacado(ctx, 'GARÇOM', cx, H - 128, 6)
+    ctx.fillStyle = t.tinta
+    ctx.font = 'bold 34px Georgia, serif'
+    ctx.fillText(garcom, cx, H - 86)
   }
 
   // ── Rodapé: crédito do produto ──

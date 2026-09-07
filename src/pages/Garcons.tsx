@@ -42,6 +42,9 @@ import { jsPDF } from 'jspdf'
 import { desenharPoster, landingUrl, baixarBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
 import { getIniciais, CORES_AVATAR } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
+import { nomeDeArquivoSeguro } from '@/lib/nome-arquivo'
+import { CampoTelefone } from '@/components/CampoTelefone'
+import { telefoneNacionalValido, formatarExibicaoTelefone } from '@/lib/telefone'
 
 interface Garcom {
   id: number
@@ -278,19 +281,6 @@ const CLASSE_BOTAO_NOVO =
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(16,24,40,0.20)] ' +
   'hover:from-blue-400 hover:to-blue-600 active:shadow-none active:from-blue-600 active:to-blue-600'
 
-/** Só dígitos, formatado como telefone BR enquanto a pessoa digita — nunca
- *  deixa passar letra nem símbolo que não seja da própria formatação. Fixo
- *  no DDD (2) + 4 dígitos até completar telefone fixo (10) e vira 9 dígitos
- *  (celular) daí em diante, até o limite de 11. */
-function formatarTelefone(valor: string): string {
-  const digitos = valor.replace(/\D/g, '').slice(0, 11)
-  if (!digitos) return ''
-  if (digitos.length <= 2) return `(${digitos}`
-  if (digitos.length <= 6) return `(${digitos.slice(0, 2)}) ${digitos.slice(2)}`
-  if (digitos.length <= 10) return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`
-  return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`
-}
-
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 function gerarSlug(n = 8) {
   let s = ''
@@ -298,12 +288,21 @@ function gerarSlug(n = 8) {
   return s
 }
 
-// Sem nome do garçom na imagem — o QR já é único por garçom
-async function posterCanvas(url: string, nome: string, temaId: string, tagline: string): Promise<HTMLCanvasElement> {
+/** Um cartaz. `nome` é o do RESTAURANTE (título) e `garcom` vai discreto no
+ *  pé — sem ele, uma pilha de impressões fica indistinguível, já que o QR é a
+ *  única coisa que muda entre elas e ninguém lê QR a olho nu. */
+async function posterCanvas(
+  url: string,
+  nome: string,
+  temaId: string,
+  tagline: string,
+  garcom: string,
+): Promise<HTMLCanvasElement> {
   const c = document.createElement('canvas')
-  await desenharPoster(c, { url, nome, temaId, tagline })
+  await desenharPoster(c, { url, nome, temaId, tagline, garcom })
   return c
 }
+
 
 export default function Garcons() {
   /** Controlada (não `defaultValue`) pra poder trocar de aba pelo código —
@@ -341,6 +340,9 @@ export default function Garcons() {
   const [formAberto, setFormAberto] = useState<'criar' | 'editar' | null>(null)
   const [formNome, setFormNome] = useState('')
   const [formTelefone, setFormTelefone] = useState('')
+  /** Quem o formulário está editando. Guardado aqui de propósito, e não
+   *  derivado do painel de detalhes — ver `abrirEditar`. */
+  const [editandoId, setEditandoId] = useState<number | null>(null)
   const [salvandoForm, setSalvandoForm] = useState(false)
   /** Só marca os campos vazios em vermelho depois da primeira tentativa de
    *  salvar — igual ao popup de ação (TaskModal.tsx). */
@@ -597,21 +599,31 @@ export default function Garcons() {
   }
 
   const abrirCriar = () => {
+    setEditandoId(null)
     setFormAberto('criar'); setFormNome(''); setFormTelefone(''); setTentouSalvarForm(false)
   }
   const abrirEditar = (g: Garcom) => {
     // Fecha o painel de detalhes junto — mesmo motivo do de regra: os dois
     // abertos ao mesmo tempo no canto direito da tela deixavam o formulário
     // com uma pontinha cortada atrás do painel.
+    //
+    // Por isso o formulário guarda o id que está editando em `editandoId`, e
+    // NÃO usa `garcomAtual`: `garcomAtual` sai de `detalheId`, que a linha
+    // abaixo acabou de zerar. Quem salvava olhando pra ele nunca achava o
+    // garçom e fechava sem gravar nada, calado.
     setDetalheId(null)
+    setEditandoId(g.id)
     setFormAberto('editar'); setFormNome(g.nome_garcon); setFormTelefone(g.telefone ?? ''); setTentouSalvarForm(false)
   }
 
   const salvarForm = async () => {
     setTentouSalvarForm(true)
     const nome = formNome.trim()
-    const telefone = formTelefone.trim()
-    if (!nome || !telefone) return
+    // `formTelefone` já é o valor canônico ("55" + DDD + número), entregue
+    // pelo `CampoTelefone` — mesma convenção do número do dono, em
+    // `src/lib/telefone.ts`.
+    const telefone = formTelefone
+    if (!nome || !telefoneNacionalValido(telefone)) return
     setSalvandoForm(true)
     try {
       if (formAberto === 'criar') {
@@ -624,14 +636,19 @@ export default function Garcons() {
         if (error) throw error
         setGarcons((p) => [...p, { ...(data as any), bonus_pagamentos: (data as any).bonus_pagamentos ?? {} }])
         toast.success('Garçom adicionado.')
-      } else if (formAberto === 'editar' && garcomAtual) {
+      } else if (formAberto === 'editar' && editandoId) {
         const { error } = await supabase
           .from('garcons')
           .update({ nome_garcon: nome, telefone })
-          .eq('id', garcomAtual.id)
+          .eq('id', editandoId)
         if (error) throw error
-        setGarcons((p) => p.map((g) => (g.id === garcomAtual.id ? { ...g, nome_garcon: nome, telefone } : g)))
+        setGarcons((p) => p.map((g) => (g.id === editandoId ? { ...g, nome_garcon: nome, telefone } : g)))
         toast.success('Dados salvos.')
+      } else {
+        // Nenhum caminho de gravação serviu. Antes isso acontecia calado (o
+        // popup fechava como se tivesse salvado); agora aparece, porque
+        // "salvei e não foi" é o pior jeito de um formulário falhar.
+        throw new Error('não foi possível identificar o garçom que está sendo editado')
       }
       setFormAberto(null)
     } catch (e: any) {
@@ -666,11 +683,17 @@ export default function Garcons() {
       for (let i = 0; i < ativos.length; i++) {
         const g = ativos[i]
         const slug = await ensureQr(g.id)
-        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg)
+        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, g.nome_garcon)
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas, 'PNG', x, y, w, h)
       }
-      baixarBlob(pdf.output('blob'), `qrcodes-garcons-${restaurantName.replace(/\s+/g, '-').toLowerCase()}.pdf`)
+      // Um garçom só: o arquivo leva o nome dele. Baixar o QR do Rogério e
+      // receber "qrcodes-garcons-camelo.pdf" não diz de quem é — e com vários
+      // downloads na pasta, um sobrescreve o outro.
+      const nomeArquivo = ativos.length === 1
+        ? `qrcode-${nomeDeArquivoSeguro(ativos[0].nome_garcon)}.pdf`
+        : `qrcodes-garcons-${nomeDeArquivoSeguro(restaurantName)}.pdf`
+      baixarBlob(pdf.output('blob'), nomeArquivo)
       toast.success('PDF baixado!')
     } catch (e: any) {
       toast.error('Erro ao gerar PDF', { description: e.message })
@@ -1283,23 +1306,20 @@ export default function Garcons() {
             </div>
             <div className="space-y-2">
               <RotuloCampo icone={Phone} htmlFor="form-telefone">Telefone</RotuloCampo>
-              <Input
+              <CampoTelefone
                 id="form-telefone"
-                type="tel"
-                inputMode="numeric"
                 value={formTelefone}
-                onChange={(e) => setFormTelefone(formatarTelefone(e.target.value))}
+                onChange={setFormTelefone}
                 onKeyDown={(e) => { if (e.key === 'Enter') salvarForm() }}
-                placeholder="(11) 99999-9999"
                 className={cn(
                   'h-10',
-                  tentouSalvarForm && !formTelefone.trim() && 'border-red-400 focus-visible:ring-red-400',
+                  tentouSalvarForm && !telefoneNacionalValido(formTelefone) && 'border-red-400 focus-within:ring-red-400',
                 )}
               />
             </div>
 
-            {tentouSalvarForm && (!formNome.trim() || !formTelefone.trim()) && (
-              <p className="text-sm text-red-600">Preencha nome e telefone para continuar.</p>
+            {tentouSalvarForm && (!formNome.trim() || !telefoneNacionalValido(formTelefone)) && (
+              <p className="text-sm text-red-600">Preencha nome e um telefone completo (com DDD) para continuar.</p>
             )}
           </div>
 
@@ -1425,7 +1445,9 @@ export default function Garcons() {
                     <div>
                       <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Telefone</p>
                       <p className="text-sm text-gray-800">
-                        {garcomAtual.telefone || <span className="text-gray-400 italic">Sem telefone cadastrado</span>}
+                        {garcomAtual.telefone
+                          ? formatarExibicaoTelefone(garcomAtual.telefone)
+                          : <span className="text-gray-400 italic">Sem telefone cadastrado</span>}
                       </p>
                     </div>
 
