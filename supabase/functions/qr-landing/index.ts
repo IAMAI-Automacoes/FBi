@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { talvezAvisarGarcom } from '../_shared/aviso-garcom.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,6 +69,12 @@ Deno.serve(async (req: Request) => {
       admin.from('qr_scans').insert({ qr_code_id: qr.id, user_agent: req.headers.get('user-agent') || 'unknown', ip_hash: ipHash }),
       admin.from('qr_codes').update({ total_scans: (qr.total_scans || 0) + 1 }).eq('id', qr.id),
     ])
+
+    // Fire-and-forget: vê se essa abertura bateu algum marco de bonificação
+    // do garçom dono do QR e avisa via n8n. Nunca pode atrasar a página de
+    // quem escaneou, nem derrubá-la se falhar.
+    talvezAvisarGarcom(admin, { id: qr.id, garcom_id: qr.garcom_id, restaurante_id: qr.restaurante_id })
+      .catch((e) => console.error('[qr-landing] falha ao avaliar bonificação do garçom:', e))
 
     const clean = (rest.numero_whatsapp ?? '').replace(/\D/g, '')
     const whatsapp = clean ? (clean.startsWith('55') ? clean : `55${clean}`) : null
