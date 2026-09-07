@@ -9,7 +9,7 @@
  */
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { desenharPoster, landingUrl, POSTER_W, POSTER_H } from '@/lib/qr-poster'
+import { desenharPoster, landingUrl, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO } from '@/lib/qr-poster'
 
 /** Mesma forma dos dados reais: garçom -> slug do QR dele. */
 const GARCONS = [
@@ -26,7 +26,7 @@ function Banco() {
   /** Espelha o laço de `baixarPdf`: sequencial, um cartaz por garçom. */
   const gerar = async (
     ids: number[],
-    extra: { temaId?: string; rotulo?: string | null; titulo?: string; mensagem?: string } = {},
+    extra: { temaId?: string; rotulo?: string | null; titulo?: string; mensagem?: string; estilos?: any } = {},
   ) => {
     setPronto(false)
     const alvos = GARCONS.filter((g) => ids.includes(g.id))
@@ -40,6 +40,7 @@ function Banco() {
         rotulo: extra.rotulo,
         temaId: extra.temaId ?? 'branco',
         tagline: extra.mensagem ?? 'Conte como foi sua experiência',
+        estilos: extra.estilos,
         garcom: g.nome,
       })
       setCaixas(cx)
@@ -59,6 +60,7 @@ function Banco() {
       <button data-teste="textos-proprios" onClick={() => gerar([2], { rotulo: 'Bar & Boteco', titulo: 'Seu Zé' })}>
         Textos próprios
       </button>
+      <button data-teste="estilo-proprio" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { fonte: 'pacifico', tamanho: 40, negrito: false, italico: true, cor: '#B22222' }, [ID_TITULO]: { fonte: 'bebas', tamanho: 70, cor: '#0000FF' } } })}>Estilo próprio</button>
       <button data-teste="sem-mensagem" onClick={() => gerar([2], { mensagem: '' })}>Sem mensagem</button>
       <button data-teste="sem-rotulo" onClick={() => gerar([2], { rotulo: '' })}>Sem rótulo</button>
       <pre data-teste="caixas">{JSON.stringify(caixas.map((c) => c.id))}</pre>

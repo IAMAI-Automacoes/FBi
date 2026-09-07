@@ -90,9 +90,11 @@ interface Props {
   elemento: ElementoCartaz
   onAlterar: (id: string, campos: Partial<ElementoCartaz>) => void
   onRemover: (id: string) => void
+  /** `false` esconde o excluir — o nome do restaurante não sai do cartaz. */
+  podeRemover?: boolean
 }
 
-export function BarraElemento({ elemento, onAlterar, onRemover }: Props) {
+export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = true }: Props) {
   const botao = 'flex h-8 items-center justify-center rounded-md border px-2'
 
   return (
@@ -179,6 +181,7 @@ export function BarraElemento({ elemento, onAlterar, onRemover }: Props) {
         </div>
       )}
 
+      {podeRemover && (
       <button
         type="button"
         onClick={() => onRemover(elemento.id)}
@@ -188,6 +191,7 @@ export function BarraElemento({ elemento, onAlterar, onRemover }: Props) {
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { easyFeedIcon } from '@/assets/brand'
 import { getTema, pintarTextura, type QrTema } from '@/lib/qr-temas'
-import { fonteDoElemento, garantirFontesCarregadas, type ElementoCartaz } from '@/lib/cartaz-elementos'
+import { fonteCss, type EstilosDosTextos, fonteDoElemento, garantirFontesCarregadas, type ElementoCartaz } from '@/lib/cartaz-elementos'
 
 export const POSTER_W = 720
 export const POSTER_H = 1080
@@ -137,6 +137,9 @@ export interface PosterOpts {
   rotulo?: string | null
   tagline?: string
   temaId?: string | null
+  /** Tipografia que o dono escolheu pros textos fixos, por id (ver
+   *  `ID_ROTULO`/`ID_TITULO`/`ID_MENSAGEM`). O que não vier usa o padrão. */
+  estilos?: EstilosDosTextos
   /**
    * Nome do garçom dono deste QR. Some do cartaz quando não vier.
    *
@@ -305,27 +308,40 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // editar o rótulo, o nome e a mensagem clicando neles no próprio cartaz.
   const fixos: CaixaElemento[] = []
 
+  /** Monta `ctx.font` juntando o padrão daquele texto com o que o dono mexeu. */
+  const fonteFixa = (id: string, tamanhoPadrao: number, familiaPadrao: string, negritoPadrao: boolean) => {
+    const e = opts.estilos?.[id] ?? {}
+    const tamanho = e.tamanho ?? tamanhoPadrao
+    const familia = e.fonte ? fonteCss(e.fonte) : familiaPadrao
+    const negrito = e.negrito ?? negritoPadrao
+    const italico = e.italico ? 'italic ' : ''
+    return { css: `${italico}${negrito ? 'bold ' : ''}${tamanho}px ${familia}`, tamanho }
+  }
+  const corFixa = (id: string, padrao: string) => opts.estilos?.[id]?.cor ?? padrao
+
   const rotulo = (opts.rotulo ?? 'RESTAURANTE').trim().toUpperCase()
   if (rotulo) {
-    ctx.fillStyle = t.acento
-    ctx.font = 'bold 24px sans-serif'
+    const f = fonteFixa(ID_ROTULO, 24, 'sans-serif', true)
+    ctx.fillStyle = corFixa(ID_ROTULO, t.acento)
+    ctx.font = f.css
     ctx.save()
     const larguraRotulo = espacado(ctx, rotulo, cx, 132, 6, opts.editandoId !== ID_ROTULO)
     ctx.restore()
-    fixos.push({ id: ID_ROTULO, x: cx - larguraRotulo / 2, y: 132 - 24, w: larguraRotulo, h: 32 })
+    fixos.push({ id: ID_ROTULO, x: cx - larguraRotulo / 2, y: 132 - f.tamanho, w: larguraRotulo, h: f.tamanho + 8 })
   }
 
   // ── Nome (fonte adaptativa: nomes longos não invadem o QR) ──
-  ctx.fillStyle = t.tinta
   const titulo = opts.nome.trim()
   const tamNome = titulo.length > 22 ? 38 : titulo.length > 15 ? 46 : 52
-  ctx.font = `bold ${tamNome}px Georgia, serif`
+  const fTitulo = fonteFixa(ID_TITULO, tamNome, 'Georgia, serif', true)
+  ctx.fillStyle = corFixa(ID_TITULO, t.tinta)
+  ctx.font = fTitulo.css
   const yBaseTitulo = rotulo ? 196 : 172
-  const medidaTitulo = wrapText(ctx, titulo, cx, yBaseTitulo, W - 110, tamNome + 10, opts.editandoId !== ID_TITULO)
+  const medidaTitulo = wrapText(ctx, titulo, cx, yBaseTitulo, W - 110, fTitulo.tamanho + 10, opts.editandoId !== ID_TITULO)
   fixos.push({
     id: ID_TITULO,
     x: cx - medidaTitulo.largura / 2,
-    y: yBaseTitulo - tamNome,
+    y: yBaseTitulo - fTitulo.tamanho,
     w: medidaTitulo.largura,
     h: medidaTitulo.altura,
   })
@@ -333,9 +349,10 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // ── Frase de incentivo ──
   const mensagem = (opts.tagline ?? MENSAGEM_PADRAO).trim()
   if (mensagem) {
-    ctx.fillStyle = t.suave
-    ctx.font = '25px sans-serif'
-    const medidaMsg = wrapText(ctx, mensagem, cx, medidaTitulo.fim + 44, W - 150, 33, opts.editandoId !== ID_MENSAGEM)
+    const fMsg = fonteFixa(ID_MENSAGEM, 25, 'sans-serif', false)
+    ctx.fillStyle = corFixa(ID_MENSAGEM, t.suave)
+    ctx.font = fMsg.css
+    const medidaMsg = wrapText(ctx, mensagem, cx, medidaTitulo.fim + 44, W - 150, fMsg.tamanho + 8, opts.editandoId !== ID_MENSAGEM)
     fixos.push({
       id: ID_MENSAGEM,
       x: cx - medidaMsg.largura / 2,

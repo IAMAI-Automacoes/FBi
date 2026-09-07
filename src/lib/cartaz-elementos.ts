@@ -287,6 +287,44 @@ export async function garantirFontesCarregadas(elementos: ElementoCartaz[]): Pro
   )
 }
 
+/**
+ * Estilo dos textos FIXOS do cartaz (rótulo, nome e mensagem).
+ *
+ * Eles não são elementos livres — a posição faz parte do desenho do cartaz —,
+ * mas ganham os mesmos controles de tipografia de um texto do dono. Cada
+ * campo é opcional: o que não vier usa o padrão do desenho, e é isso que faz
+ * um cartaz salvo antes disso continuar igual.
+ */
+export interface EstiloTexto {
+  fonte?: string
+  tamanho?: number
+  negrito?: boolean
+  italico?: boolean
+  /** `null`/ausente = a cor que o tema já dava àquele texto. */
+  cor?: string | null
+}
+
+export type EstilosDosTextos = Record<string, EstiloTexto>
+
+/** Sanitiza o jsonb do banco — mesmo cuidado de `lerElementos`. */
+export function lerEstiloDosTextos(bruto: unknown): EstilosDosTextos {
+  if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return {}
+  const saida: EstilosDosTextos = {}
+  for (const [chave, valor] of Object.entries(bruto as Record<string, unknown>)) {
+    if (!valor || typeof valor !== 'object') continue
+    const o = valor as Record<string, unknown>
+    const estilo: EstiloTexto = {}
+    if (FONTES.some((f) => f.id === o.fonte)) estilo.fonte = String(o.fonte)
+    const n = Number(o.tamanho)
+    if (Number.isFinite(n)) estilo.tamanho = Math.min(TAMANHO_MAX, Math.max(TAMANHO_MIN, n))
+    if (typeof o.negrito === 'boolean') estilo.negrito = o.negrito
+    if (typeof o.italico === 'boolean') estilo.italico = o.italico
+    if (typeof o.cor === 'string' && /^#[0-9a-f]{6}$/i.test(o.cor)) estilo.cor = o.cor
+    saida[chave] = estilo
+  }
+  return saida
+}
+
 /** A string de `ctx.font` de um elemento de texto. */
 export function fonteDoElemento(el: ElementoCartaz): string {
   const estilo = `${el.italico ? 'italic ' : ''}${el.negrito ? 'bold ' : ''}`

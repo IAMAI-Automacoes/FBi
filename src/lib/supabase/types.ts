@@ -1921,6 +1921,7 @@ export type Database = {
           qr_filtro: string | null
           qr_mensagem: string | null
           qr_rotulo: string | null
+          qr_textos_estilo: Json | null
           qr_titulo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -1966,6 +1967,7 @@ export type Database = {
           qr_filtro?: string | null
           qr_mensagem?: string | null
           qr_rotulo?: string | null
+          qr_textos_estilo?: Json | null
           qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2011,6 +2013,7 @@ export type Database = {
           qr_filtro?: string | null
           qr_mensagem?: string | null
           qr_rotulo?: string | null
+          qr_textos_estilo?: Json | null
           qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null

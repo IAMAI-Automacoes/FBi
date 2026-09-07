@@ -15,7 +15,7 @@ import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, C
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
-import { fonteCss, lerElementos, novaLogo, novoTexto, type ElementoCartaz } from '@/lib/cartaz-elementos'
+import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -54,6 +54,8 @@ export default function QRCodes() {
   // Textos do topo do cartaz. Vazio = usa o padrao (ver qr-poster.ts).
   const [cfgRotulo, setCfgRotulo] = useState('')
   const [cfgTitulo, setCfgTitulo] = useState('')
+  // Tipografia dos textos fixos, por id (ver qr_textos_estilo no banco).
+  const [cfgEstilos, setCfgEstilos] = useState<EstilosDosTextos>({})
   const [savingCfg, setSavingCfg] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
@@ -83,7 +85,7 @@ export default function QRCodes() {
       drawCanvas()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, elementos, editandoId])
+  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId])
 
   /**
    * Largura real da prévia na tela.
@@ -111,7 +113,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_elementos')
+          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -142,6 +144,7 @@ export default function QRCodes() {
         // placeholder mostra qual é.
         setCfgTitulo((config as any)?.qr_titulo ?? '')
         setElementos(lerElementos(config?.qr_elementos))
+        setCfgEstilos(lerEstiloDosTextos((config as any)?.qr_textos_estilo))
         cfgSalvoRef.current = {
           modo, estilo,
           imagem: config?.qr_bg_imagem ?? null, mensagem: config?.qr_mensagem ?? '',
@@ -225,6 +228,7 @@ export default function QRCodes() {
           qr_titulo: cfgTitulo.trim() || null,
           // A coluna é jsonb livre; o tipo gerado a descreve como `Json`, que
           // não aceita uma interface nomeada mesmo sendo serializável.
+          qr_textos_estilo: cfgEstilos as unknown as Json,
           qr_elementos: elementos as unknown as Json,
         })
         .eq('id', restauranteId)
@@ -360,53 +364,100 @@ export default function QRCodes() {
    * "não quero esta linha no cartaz".
    */
   const tema = getTema(cfgEstilo)
+
+  /** O estilo em vigor de um texto fixo: o que o dono mexeu, sobre o padrão. */
+  const estiloFixo = (id: string, padrao: { tamanho: number; fonteCssPadrao: string; negrito: boolean; cor: string }) => {
+    const e = cfgEstilos[id] ?? {}
+    return {
+      tamanho: e.tamanho ?? padrao.tamanho,
+      familia: e.fonte ? fonteCss(e.fonte) : padrao.fonteCssPadrao,
+      fonteId: e.fonte ?? null,
+      negrito: e.negrito ?? padrao.negrito,
+      italico: e.italico ?? false,
+      cor: e.cor ?? padrao.cor,
+      corPropria: e.cor ?? null,
+    }
+  }
+
+  const tituloVisivel = cfgTitulo || restaurantName
   const textosFixos: Record<string, {
     valor: string
     alterar: (v: string) => void
     podeExcluir: boolean
     rotuloAcessivel: string
-    tamanho: number
-    familia: string
-    negrito: boolean
-    cor: string
     maiuscula?: boolean
     espacado?: boolean
+    estilo: ReturnType<typeof estiloFixo>
   }> = {
     [ID_ROTULO]: {
       valor: cfgRotulo,
       alterar: setCfgRotulo,
-      podeExcluir: false,
+      // Apagar o rótulo é uma escolha legítima — o cartaz fica sem ele.
+      podeExcluir: true,
       rotuloAcessivel: 'o rótulo acima do nome',
-      tamanho: 24,
-      familia: 'sans-serif',
-      negrito: true,
-      cor: tema.acento,
       maiuscula: true,
       espacado: true,
+      estilo: estiloFixo(ID_ROTULO, { tamanho: 24, fonteCssPadrao: 'sans-serif', negrito: true, cor: tema.acento }),
     },
     [ID_TITULO]: {
       // Mostra o que ESTÁ no cartaz. Com o campo vazio (seguindo o cadastro),
       // editar aqui começa a partir do nome que se vê, não de um campo em
       // branco.
-      valor: cfgTitulo || restaurantName,
+      valor: tituloVisivel,
       alterar: setCfgTitulo,
+      // O único que não sai: cartaz sem nome do restaurante não é cartaz.
       podeExcluir: false,
       rotuloAcessivel: 'o nome no cartaz',
-      tamanho: (cfgTitulo || restaurantName).length > 22 ? 38 : (cfgTitulo || restaurantName).length > 15 ? 46 : 52,
-      familia: 'Georgia, serif',
-      negrito: true,
-      cor: tema.tinta,
+      estilo: estiloFixo(ID_TITULO, {
+        tamanho: tituloVisivel.length > 22 ? 38 : tituloVisivel.length > 15 ? 46 : 52,
+        fonteCssPadrao: 'Georgia, serif',
+        negrito: true,
+        cor: tema.tinta,
+      }),
     },
     [ID_MENSAGEM]: {
       valor: cfgMensagem,
       alterar: setCfgMensagem,
       podeExcluir: true,
       rotuloAcessivel: 'a mensagem para o cliente',
-      tamanho: 25,
-      familia: 'sans-serif',
-      negrito: false,
-      cor: tema.suave,
+      estilo: estiloFixo(ID_MENSAGEM, { tamanho: 25, fonteCssPadrao: 'sans-serif', negrito: false, cor: tema.suave }),
     },
+  }
+
+  /**
+   * Um texto fixo, vestido de `ElementoCartaz` pra caber na MESMA barra de
+   * propriedades dos textos livres. Sem isso seriam duas barras iguais com
+   * dois códigos — e a segunda sairia do lugar na primeira mudança.
+   */
+  const comoElemento = (id: string): ElementoCartaz | null => {
+    const f = textosFixos[id]
+    if (!f) return null
+    return {
+      id,
+      tipo: 'texto',
+      x: 0.5,
+      y: 0.5,
+      texto: f.valor,
+      fonte: f.estilo.fonteId ?? FONTES[0].id,
+      tamanho: f.estilo.tamanho,
+      negrito: f.estilo.negrito,
+      italico: f.estilo.italico,
+      cor: f.estilo.corPropria,
+      url: null,
+      escala: 0.3,
+    }
+  }
+
+  /** Aplica no estilo guardado o que a barra de propriedades mudou. */
+  const alterarTextoFixo = (id: string, campos: Partial<ElementoCartaz>) => {
+    if ('texto' in campos && typeof campos.texto === 'string') textosFixos[id]?.alterar(campos.texto)
+    const estilo: Record<string, unknown> = { ...(cfgEstilos[id] ?? {}) }
+    if (campos.fonte !== undefined) estilo.fonte = campos.fonte
+    if (campos.tamanho !== undefined) estilo.tamanho = campos.tamanho
+    if (campos.negrito !== undefined) estilo.negrito = campos.negrito
+    if (campos.italico !== undefined) estilo.italico = campos.italico
+    if ('cor' in campos) estilo.cor = campos.cor
+    setCfgEstilos((p) => ({ ...p, [id]: estilo }))
   }
 
   const drawCanvas = async () => {
@@ -421,6 +472,7 @@ export default function QRCodes() {
           nome: cfgTitulo.trim() || restaurantName,
           rotulo: cfgRotulo,
           tagline: cfgMensagem,
+          estilos: cfgEstilos,
           temaId: cfgEstilo,
           elementos,
           editandoId: editandoId ?? undefined,
@@ -727,41 +779,12 @@ export default function QRCodes() {
                   </div>
                 </div>
 
-                {/* Os textos do topo do cartaz. O logo e o "feito com Easy
-                    Feed" ficam de fora de propósito: são a marca do produto no
-                    material impresso. */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
-                      Rótulo
-                    </label>
-                    <input
-                      value={cfgRotulo}
-                      onChange={(e) => setCfgRotulo(e.target.value)}
-                      maxLength={22}
-                      placeholder="Sem rótulo"
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
-                    />
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Apague para não mostrar nenhum
-                    </p>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
-                      Nome no cartaz
-                    </label>
-                    <input
-                      value={cfgTitulo}
-                      onChange={(e) => setCfgTitulo(e.target.value)}
-                      maxLength={40}
-                      placeholder={restaurantName}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
-                    />
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Vazio usa o nome do cadastro
-                    </p>
-                  </div>
-                </div>
+                {/* Rótulo e nome NÃO têm campo aqui de propósito: editam-se
+                    clicando neles na plaquinha, com os mesmos controles de
+                    tipografia de qualquer outro texto. Um campo aqui seria um
+                    segundo lugar pra mexer na mesma coisa. A mensagem tem os
+                    dois caminhos porque é texto corrido, e digitar frase longa
+                    dentro da prévia pequena é ruim. */}
 
                 {/* Frase impressa no cartaz e repetida na página do cliente */}
                 <div>
@@ -798,6 +821,22 @@ export default function QRCodes() {
                   elemento={elementoSelecionado}
                   onAlterar={alterarElemento}
                   onRemover={removerElemento}
+                />
+              )}
+              {/* Mesma barra para os textos fixos: fonte, corpo, negrito,
+                  itálico e cor funcionam igual. Só o excluir muda — o nome do
+                  restaurante é o único que não sai do cartaz. */}
+              {selecionado && textosFixos[selecionado] && (
+                <BarraElemento
+                  elemento={comoElemento(selecionado)!}
+                  onAlterar={alterarTextoFixo}
+                  onRemover={(id) => {
+                    if (!textosFixos[id]?.podeExcluir) return
+                    textosFixos[id].alterar('')
+                    setSelecionado(null)
+                    setEditandoId(null)
+                  }}
+                  podeRemover={textosFixos[selecionado].podeExcluir}
                 />
               )}
 
@@ -915,20 +954,26 @@ export default function QRCodes() {
                                     onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
                                     className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center leading-[1.2] outline-none"
                                     style={{
-                                      fontFamily: fixo.familia,
-                                      fontSize: (fixo.tamanho * larguraPreview) / POSTER_W || 12,
-                                      fontWeight: fixo.negrito ? 700 : 400,
+                                      fontFamily: fixo.estilo.familia,
+                                      fontSize: (fixo.estilo.tamanho * larguraPreview) / POSTER_W || 12,
+                                      fontWeight: fixo.estilo.negrito ? 700 : 400,
+                                      fontStyle: fixo.estilo.italico ? 'italic' : 'normal',
                                       letterSpacing: fixo.espacado ? `${(6 * larguraPreview) / POSTER_W}px` : undefined,
                                       textTransform: fixo.maiuscula ? 'uppercase' : undefined,
-                                      color: fixo.cor,
+                                      color: fixo.estilo.cor,
                                     }}
                                   />
                                 ) : (
+                                  /* Um clique só: seleciona (a barra de
+                                     propriedades aparece) e já abre pra
+                                     digitar. Eram dois gestos diferentes pro
+                                     mesmo texto, e ninguém adivinha qual é
+                                     qual num cartaz. */
                                   <div
-                                    onClick={() => setEditandoId(c.id)}
+                                    onClick={() => { setSelecionado(c.id); setEditandoId(c.id) }}
                                     role="button"
                                     tabIndex={0}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') setEditandoId(c.id) }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { setSelecionado(c.id); setEditandoId(c.id) } }}
                                     aria-label={`Editar ${fixo.rotuloAcessivel}`}
                                     title={`Clique para editar: ${fixo.rotuloAcessivel}`}
                                     className="h-full w-full cursor-text"
