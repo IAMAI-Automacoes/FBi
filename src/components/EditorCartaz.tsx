@@ -7,7 +7,7 @@
  * próprio elemento, sobre o cartaz.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Bold, Italic, Trash2, Minus, Plus, ChevronDown } from 'lucide-react'
+import { Bold, Italic, Trash2, Minus, Plus, ChevronDown, RotateCw, Contrast, Maximize2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SeletorCor } from '@/components/SeletorCor'
 import {
@@ -152,6 +152,7 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
               uma cor livre — e dois seletores diferentes para isso ensinariam
               duas interfaces para o mesmo gesto. */}
           <SeletorCor
+            compacto
             valor={elemento.cor}
             onChange={(hex) => onAlterar(elemento.id, { cor: hex })}
           />
@@ -166,18 +167,67 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
           )}
         </>
       ) : (
-        <div className="flex flex-1 items-center gap-2 px-1">
-          <span className="text-[12px] text-gray-600">Tamanho da logo</span>
-          <input
-            type="range"
-            min={ESCALA_MIN}
-            max={ESCALA_MAX}
-            step={0.01}
-            value={elemento.escala}
-            onChange={(e) => onAlterar(elemento.id, { escala: Number(e.target.value) })}
-            className="min-w-0 flex-1"
-            aria-label="Tamanho da logo"
-          />
+        /* Edição da imagem no próprio cartaz: tamanho, giro e opacidade.
+           São os três ajustes que resolvem o que chega de foto de celular —
+           grande demais, torta, e opaca demais pra servir de marca-d'água. */
+        <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 px-1">
+          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
+            <Maximize2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <input
+              type="range"
+              min={ESCALA_MIN}
+              max={ESCALA_MAX}
+              step={0.01}
+              value={elemento.escala}
+              onChange={(e) => onAlterar(elemento.id, { escala: Number(e.target.value) })}
+              className="min-w-0 flex-1"
+              aria-label="Tamanho da imagem"
+              title="Tamanho"
+            />
+          </label>
+
+          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
+            <RotateCw className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <input
+              type="range"
+              min={-180}
+              max={180}
+              step={1}
+              value={elemento.rotacao ?? 0}
+              onChange={(e) => onAlterar(elemento.id, { rotacao: Number(e.target.value) })}
+              className="min-w-0 flex-1"
+              aria-label="Girar a imagem"
+              title="Girar"
+            />
+            <span className="w-[38px] text-right text-[11px] tabular-nums text-gray-500">
+              {Math.round(elemento.rotacao ?? 0)}°
+            </span>
+          </label>
+
+          <label className="flex min-w-[132px] flex-1 items-center gap-1.5">
+            <Contrast className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <input
+              type="range"
+              min={0.05}
+              max={1}
+              step={0.05}
+              value={elemento.opacidade ?? 1}
+              onChange={(e) => onAlterar(elemento.id, { opacidade: Number(e.target.value) })}
+              className="min-w-0 flex-1"
+              aria-label="Opacidade da imagem"
+              title="Opacidade"
+            />
+          </label>
+
+          {/* Volta ao estado de recém-subida sem precisar excluir e subir de
+              novo — que é o que se faz quando não existe um "desfazer". */}
+          <button
+            type="button"
+            onClick={() => onAlterar(elemento.id, { rotacao: 0, opacidade: 1, escala: 0.28 })}
+            className="text-[11px] text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline"
+          >
+            redefinir
+          </button>
         </div>
       )}
 

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
@@ -331,21 +331,35 @@ export default function QRCodes() {
     setSelecionado(id)
 
     const camada = camadaRef.current
+    if (!camada) return
+
+    // Texto fixo também se arrasta. A posição de onde ele parte é a que já
+    // estiver salva; na primeira vez, é o lugar padrão dele no desenho —
+    // medido da própria caixa devolvida por `desenharPoster`, e não chutado.
+    const fixo = textosFixos[id]
     const el = elementos.find((x) => x.id === id)
-    if (!camada || !el) return
+    if (!fixo && !el) return
+    const caixa = caixas.find((c) => c.id === id)
+    const partida = el
+      ? { x: el.x, y: el.y }
+      : {
+          x: cfgEstilos[id]?.x ?? (caixa ? (caixa.x + caixa.w / 2) / POSTER_W : 0.5),
+          y: cfgEstilos[id]?.y ?? (caixa ? (caixa.y + caixa.h) / POSTER_H : 0.5),
+        }
 
     const area = camada.getBoundingClientRect()
     const alvo = e.currentTarget
     alvo.setPointerCapture(e.pointerId)
-    const inicio = { px: e.clientX, py: e.clientY, x: el.x, y: el.y }
+    const inicio = { px: e.clientX, py: e.clientY, x: partida.x, y: partida.y }
 
     const mover = (ev: PointerEvent) => {
-      const nx = inicio.x + (ev.clientX - inicio.px) / area.width
-      const ny = inicio.y + (ev.clientY - inicio.py) / area.height
-      alterarElemento(id, {
-        x: Math.min(1, Math.max(0, nx)),
-        y: Math.min(1, Math.max(0, ny)),
-      })
+      const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
+      const ny = Math.min(1, Math.max(0, inicio.y + (ev.clientY - inicio.py) / area.height))
+      if (fixo) {
+        setCfgEstilos((p) => ({ ...p, [id]: { ...(p[id] ?? {}), x: nx, y: ny } }))
+        return
+      }
+      alterarElemento(id, { x: nx, y: ny })
     }
     const soltar = () => {
       alvo.removeEventListener('pointermove', mover)
@@ -445,6 +459,8 @@ export default function QRCodes() {
       cor: f.estilo.corPropria,
       url: null,
       escala: 0.3,
+      rotacao: 0,
+      opacidade: 1,
     }
   }
 
@@ -544,7 +560,6 @@ export default function QRCodes() {
   const maxBar = Math.max(1, ...metricas.barras.map((b) => b.n))
   const personalizada = ehCorPersonalizada(cfgEstilo)
   const elementoSelecionado = elementos.find((e) => e.id === selecionado) ?? null
-  const temLogo = elementos.some((e) => e.tipo === 'logo')
 
   return (
     <div className="flex-1">
@@ -734,14 +749,18 @@ export default function QRCodes() {
                         mesma grade. Como faixa larga separada, lia como outra
                         coisa — e quem estava escolhendo fundo não a via como
                         alternativa às texturas ao lado. */}
-                    {/* Deitado: ocupa duas colunas da grade e fica com a mesma
-                        altura de uma textura. Em pé competia visualmente com
-                        elas sendo outra coisa; deitado se lê como o que é —
-                        uma ação, no meio das opções de fundo. */}
+                    {/* O MESMO retângulo de um card de textura, só que deitado:
+                        largura de 1,25 coluna (a altura de um card lá de cima) e
+                        altura de 1 coluna (a largura dele). A coluna da grade
+                        vale (100% - 3 vãos) / 4, então dá pra escrever a medida
+                        exata em vez de chutar pixel. */}
                     <div className="mt-2 grid grid-cols-4 gap-2">
                       {cfgImagem ? (
-                        <div className="relative col-span-2 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
-                          <span className="relative block aspect-[8/5] w-full">
+                        <div
+                          className="relative col-span-2 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm"
+                          style={{ width: 'calc(((100% - 1.5rem) / 4) * 1.25)' }}
+                        >
+                          <span className="relative block aspect-[5/4] w-full">
                             <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
                             <button
                               onClick={removerImagem}
@@ -756,8 +775,11 @@ export default function QRCodes() {
                           </span>
                         </div>
                       ) : (
-                        <label className="group col-span-2 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
-                          <span className="flex aspect-[8/5] w-full items-center justify-center gap-1.5 bg-[#C2622C]/5">
+                        <label
+                          className="group col-span-2 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60"
+                          style={{ width: 'calc(((100% - 1.5rem) / 4) * 1.25)' }}
+                        >
+                          <span className="flex aspect-[5/4] w-full items-center justify-center bg-[#C2622C]/5">
                             {uploading ? (
                               <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
                             ) : (
@@ -810,12 +832,43 @@ export default function QRCodes() {
 
             {/* ───────── Prévia: o display de mesa ───────── */}
             <div className="flex w-[330px] max-w-full flex-col">
-              <h2 className="mb-2 text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
+              {/* Adicionar fica no CABEÇALHO, longe da plaquinha: é uma ação
+                  que se faz uma vez, e ocupando o espaço logo acima do cartaz
+                  empurrava pra baixo a barra de propriedades — que é o
+                  controle usado o tempo todo, e por isso é ela que merece
+                  estar colada na prévia. */}
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={adicionarTexto}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <Type className="h-3.5 w-3.5" /> Texto
+                  </button>
+                  {/* Sem limite de quantidade: logo, selo de prêmio e foto do
+                      prato são coisas diferentes, e cabiam todas. */}
+                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
+                    {enviandoLogo
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <><Plus className="h-3.5 w-3.5" /><ImagePlus className="h-3.5 w-3.5" /></>}
+                    {enviandoLogo ? 'Enviando…' : 'Imagem'}
+                    <input
+                      type="file"
+                      accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) enviarLogo(f); e.target.value = '' }}
+                    />
+                  </label>
+                </div>
+              </div>
 
-              {/* A barra do elemento e os botões de adicionar ficam JUNTO da
-                  prévia: é nela que o elemento é posicionado e digitado, e ter
-                  o controle no outro lado da tela obrigava a ir e voltar com o
-                  olho a cada ajuste. */}
+              {/* A barra de propriedades fica colada na prévia: é nela que o
+                  elemento é posicionado e digitado, e ter o controle no outro
+                  lado da tela obrigava a ir e voltar com o olho a cada
+                  ajuste. */}
               {elementoSelecionado && (
                 <BarraElemento
                   elemento={elementoSelecionado}
@@ -840,30 +893,6 @@ export default function QRCodes() {
                 />
               )}
 
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={adicionarTexto}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
-                >
-                  <Type className="h-3.5 w-3.5" /> Texto
-                </button>
-
-                {/* Some quando já existe uma logo: o cartaz comporta uma marca
-                    só, e um segundo botão só levaria a duas logos sobrepostas. */}
-                {!temLogo && (
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
-                    {enviandoLogo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-                    {enviandoLogo ? 'Enviando…' : 'Logo'}
-                    <input
-                      type="file"
-                      accept="image/png,image/svg+xml,image/webp,image/jpeg"
-                      className="hidden"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) enviarLogo(f); e.target.value = '' }}
-                    />
-                  </label>
-                )}
-              </div>
 
               {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
                   ser percebida na hora, e não só dentro da plaquinha. */}
@@ -970,13 +999,14 @@ export default function QRCodes() {
                                      mesmo texto, e ninguém adivinha qual é
                                      qual num cartaz. */
                                   <div
+                                    onPointerDown={arrastarElemento(c.id)}
                                     onClick={() => { setSelecionado(c.id); setEditandoId(c.id) }}
                                     role="button"
                                     tabIndex={0}
                                     onKeyDown={(e) => { if (e.key === 'Enter') { setSelecionado(c.id); setEditandoId(c.id) } }}
-                                    aria-label={`Editar ${fixo.rotuloAcessivel}`}
-                                    title={`Clique para editar: ${fixo.rotuloAcessivel}`}
-                                    className="h-full w-full cursor-text"
+                                    aria-label={`Mover ou editar ${fixo.rotuloAcessivel}`}
+                                    title={`Arraste para mover, clique para editar: ${fixo.rotuloAcessivel}`}
+                                    className="h-full w-full cursor-move touch-none"
                                   />
                                 )}
 

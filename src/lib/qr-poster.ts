@@ -227,8 +227,27 @@ async function desenharElementos(
       if (!img || img.width < 1) continue
       const w = el.escala * W
       const h = (img.height / img.width) * w
-      ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
-      caixas.push({ id: el.id, x: cx - w / 2, y: cy - h / 2, w, h })
+      const giro = ((el.rotacao ?? 0) * Math.PI) / 180
+      ctx.save()
+      ctx.globalAlpha = el.opacidade ?? 1
+      // Gira em torno do CENTRO da imagem: girar na origem do canvas jogaria
+      // a figura pra fora do cartaz em vez de virá-la no lugar.
+      if (giro) {
+        ctx.translate(cx, cy)
+        ctx.rotate(giro)
+        ctx.drawImage(img, -w / 2, -h / 2, w, h)
+      } else {
+        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h)
+      }
+      ctx.restore()
+      // A caixa de arraste continua alinhada aos eixos: é a área que o
+      // navegador consegue reportar, e girar o alvo junto deixaria o clique
+      // fora do lugar. Com giro, ela cresce pra caber a figura virada.
+      const cos = Math.abs(Math.cos(giro))
+      const sen = Math.abs(Math.sin(giro))
+      const cw = w * cos + h * sen
+      const ch = w * sen + h * cos
+      caixas.push({ id: el.id, x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch })
       continue
     }
 
@@ -318,16 +337,28 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     return { css: `${italico}${negrito ? 'bold ' : ''}${tamanho}px ${familia}`, tamanho }
   }
   const corFixa = (id: string, padrao: string) => opts.estilos?.[id]?.cor ?? padrao
+  /** Onde o texto fixo está: onde o dono arrastou, ou o lugar padrão dele. */
+  const ondeFica = (id: string, xPadrao: number, yPadrao: number) => {
+    const e = opts.estilos?.[id]
+    return { x: e?.x !== undefined ? e.x * W : xPadrao, y: e?.y !== undefined ? e.y * H : yPadrao }
+  }
 
   const rotulo = (opts.rotulo ?? 'RESTAURANTE').trim().toUpperCase()
   if (rotulo) {
     const f = fonteFixa(ID_ROTULO, 24, 'sans-serif', true)
+    const onde = ondeFica(ID_ROTULO, cx, 132)
     ctx.fillStyle = corFixa(ID_ROTULO, t.acento)
     ctx.font = f.css
     ctx.save()
-    const larguraRotulo = espacado(ctx, rotulo, cx, 132, 6, opts.editandoId !== ID_ROTULO)
+    const larguraRotulo = espacado(ctx, rotulo, onde.x, onde.y, 6, opts.editandoId !== ID_ROTULO)
     ctx.restore()
-    fixos.push({ id: ID_ROTULO, x: cx - larguraRotulo / 2, y: 132 - f.tamanho, w: larguraRotulo, h: f.tamanho + 8 })
+    fixos.push({
+      id: ID_ROTULO,
+      x: onde.x - larguraRotulo / 2,
+      y: onde.y - f.tamanho,
+      w: larguraRotulo,
+      h: f.tamanho + 8,
+    })
   }
 
   // ── Nome (fonte adaptativa: nomes longos não invadem o QR) ──
@@ -336,12 +367,12 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const fTitulo = fonteFixa(ID_TITULO, tamNome, 'Georgia, serif', true)
   ctx.fillStyle = corFixa(ID_TITULO, t.tinta)
   ctx.font = fTitulo.css
-  const yBaseTitulo = rotulo ? 196 : 172
-  const medidaTitulo = wrapText(ctx, titulo, cx, yBaseTitulo, W - 110, fTitulo.tamanho + 10, opts.editandoId !== ID_TITULO)
+  const ondeTitulo = ondeFica(ID_TITULO, cx, rotulo ? 196 : 172)
+  const medidaTitulo = wrapText(ctx, titulo, ondeTitulo.x, ondeTitulo.y, W - 110, fTitulo.tamanho + 10, opts.editandoId !== ID_TITULO)
   fixos.push({
     id: ID_TITULO,
-    x: cx - medidaTitulo.largura / 2,
-    y: yBaseTitulo - fTitulo.tamanho,
+    x: ondeTitulo.x - medidaTitulo.largura / 2,
+    y: ondeTitulo.y - fTitulo.tamanho,
     w: medidaTitulo.largura,
     h: medidaTitulo.altura,
   })
@@ -350,13 +381,14 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const mensagem = (opts.tagline ?? MENSAGEM_PADRAO).trim()
   if (mensagem) {
     const fMsg = fonteFixa(ID_MENSAGEM, 25, 'sans-serif', false)
+    const ondeMsg = ondeFica(ID_MENSAGEM, cx, medidaTitulo.fim + 44)
     ctx.fillStyle = corFixa(ID_MENSAGEM, t.suave)
     ctx.font = fMsg.css
-    const medidaMsg = wrapText(ctx, mensagem, cx, medidaTitulo.fim + 44, W - 150, fMsg.tamanho + 8, opts.editandoId !== ID_MENSAGEM)
+    const medidaMsg = wrapText(ctx, mensagem, ondeMsg.x, ondeMsg.y, W - 150, fMsg.tamanho + 8, opts.editandoId !== ID_MENSAGEM)
     fixos.push({
       id: ID_MENSAGEM,
-      x: cx - medidaMsg.largura / 2,
-      y: medidaTitulo.fim + 44 - 25,
+      x: ondeMsg.x - medidaMsg.largura / 2,
+      y: ondeMsg.y - fMsg.tamanho,
       w: medidaMsg.largura,
       h: medidaMsg.altura,
     })

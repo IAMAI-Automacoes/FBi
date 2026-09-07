@@ -60,6 +60,7 @@ function Banco() {
       <button data-teste="textos-proprios" onClick={() => gerar([2], { rotulo: 'Bar & Boteco', titulo: 'Seu Zé' })}>
         Textos próprios
       </button>
+      <button data-teste="rotulo-movido" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { x: 0.2, y: 0.8 } } })}>Rótulo movido</button>
       <button data-teste="estilo-proprio" onClick={() => gerar([2], { estilos: { [ID_ROTULO]: { fonte: 'pacifico', tamanho: 40, negrito: false, italico: true, cor: '#B22222' }, [ID_TITULO]: { fonte: 'bebas', tamanho: 70, cor: '#0000FF' } } })}>Estilo próprio</button>
       <button data-teste="sem-mensagem" onClick={() => gerar([2], { mensagem: '' })}>Sem mensagem</button>
       <button data-teste="sem-rotulo" onClick={() => gerar([2], { rotulo: '' })}>Sem rótulo</button>

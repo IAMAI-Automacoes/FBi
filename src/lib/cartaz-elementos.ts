@@ -94,10 +94,14 @@ export interface ElementoCartaz {
   italico: boolean
   /** `null` = usa a tinta do tema, que já contrasta com o fundo escolhido. */
   cor: string | null
-  // ── logo ──
+  // ── imagem ──
   url: string | null
-  /** Largura da logo, em fração da largura do cartaz. */
+  /** Largura da imagem, em fração da largura do cartaz. */
   escala: number
+  /** Giro em graus (-180..180). Foto tirada torta se endireita aqui. */
+  rotacao: number
+  /** 0.05..1. Deixa a imagem virar marca-d'água sobre o fundo. */
+  opacidade: number
 }
 
 /** Grupos do seletor: 50 fontes numa lista corrida é impossível de navegar. */
@@ -302,6 +306,14 @@ export interface EstiloTexto {
   italico?: boolean
   /** `null`/ausente = a cor que o tema já dava àquele texto. */
   cor?: string | null
+  /**
+   * Posição em FRAÇÃO do cartaz. Ausente = o lugar padrão do desenho.
+   *
+   * É o que faz o rótulo e a mensagem serem arrastáveis como qualquer texto
+   * adicionado — sem isso eles seriam "texto com estilo", mas ainda presos.
+   */
+  x?: number
+  y?: number
 }
 
 export type EstilosDosTextos = Record<string, EstiloTexto>
@@ -320,6 +332,8 @@ export function lerEstiloDosTextos(bruto: unknown): EstilosDosTextos {
     if (typeof o.negrito === 'boolean') estilo.negrito = o.negrito
     if (typeof o.italico === 'boolean') estilo.italico = o.italico
     if (typeof o.cor === 'string' && /^#[0-9a-f]{6}$/i.test(o.cor)) estilo.cor = o.cor
+    if (Number.isFinite(Number(o.x))) estilo.x = Math.min(1, Math.max(0, Number(o.x)))
+    if (Number.isFinite(Number(o.y))) estilo.y = Math.min(1, Math.max(0, Number(o.y)))
     saida[chave] = estilo
   }
   return saida
@@ -356,6 +370,8 @@ export function novoTexto(existentes: ElementoCartaz[] = []): ElementoCartaz {
     cor: null,
     url: null,
     escala: 0.3,
+    rotacao: 0,
+    opacidade: 1,
   }
 }
 
@@ -403,6 +419,8 @@ export function lerElementos(bruto: unknown): ElementoCartaz[] {
       cor: typeof o.cor === 'string' && /^#[0-9a-f]{6}$/i.test(o.cor) ? o.cor : null,
       url: typeof o.url === 'string' ? o.url : null,
       escala: limitar(o.escala, ESCALA_MIN, ESCALA_MAX, 0.28),
+      rotacao: limitar(o.rotacao, -180, 180, 0),
+      opacidade: limitar(o.opacidade, 0.05, 1, 1),
     }]
   })
 }

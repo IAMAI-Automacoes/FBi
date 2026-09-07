@@ -81,9 +81,11 @@ export interface SeletorCorProps {
   /** Hex escolhido, ou null quando a escolha atual é um tema da paleta pronta. */
   valor: string | null
   onChange: (hex: string) => void
+  /** Do tamanho de um botão de barra (32px), pra caber ao lado dos outros. */
+  compacto?: boolean
 }
 
-export function SeletorCor({ valor, onChange }: SeletorCorProps) {
+export function SeletorCor({ valor, onChange, compacto = false }: SeletorCorProps) {
   const [aberto, setAberto] = useState(false)
   const [hsv, setHsv] = useState(() => hexParaHsv(valor ?? '#C2622C'))
   const [rascunho, setRascunho] = useState(valor ?? '#C2622C')
@@ -162,7 +164,10 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
         title="Escolher outra cor"
         aria-label="Escolher outra cor"
         aria-expanded={aberto}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full transition-transform hover:scale-105"
+        className={cn(
+          'relative flex items-center justify-center rounded-full transition-transform hover:scale-105',
+          compacto ? 'h-8 w-8 ring-1 ring-gray-200' : 'h-11 w-11',
+        )}
         style={{
           background:
             'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
@@ -172,10 +177,16 @@ export function SeletorCor({ valor, onChange }: SeletorCorProps) {
             botão é a PORTA para escolher, não o lugar que mostra a escolha —
             quem mostra é o quadradinho marcado na paleta e a própria prévia.
             Pintado com a cor atual ele viraria só mais um quadradinho da
-            paleta, e o convite de "tem mais cor aqui" some. */}
-        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white text-[19px] font-light leading-none text-gray-600 shadow-sm">
-          +
-        </span>
+            paleta, e o convite de "tem mais cor aqui" some.
+
+            Na versão compacta o miolo sai: no tamanho de um botão de barra o
+            furo branco come quase toda a roda de cor, e o que sobra deixa de
+            se ler como cor. */}
+        {!compacto && (
+          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white text-[19px] font-light leading-none text-gray-600 shadow-sm">
+            +
+          </span>
+        )}
       </button>
 
       {aberto && (
