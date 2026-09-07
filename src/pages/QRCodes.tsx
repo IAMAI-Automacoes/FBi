@@ -15,7 +15,8 @@ import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, C
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
-import { ESCALA_MAX, ESCALA_MIN, FONTES, TAMANHO_MAX, TAMANHO_MIN, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -34,6 +35,65 @@ function gerarSlug(n = 8) {
   let s = ''
   for (let i = 0; i < n; i++) s += SLUG_CHARS[Math.floor(Math.random() * SLUG_CHARS.length)]
   return s
+}
+
+/** As oito posições de alça: quatro cantos e quatro lados. */
+const ANCORAS: Ancora[] = ['no', 'ne', 'so', 'se', 'n', 's', 'l', 'o']
+
+/**
+ * As alças em volta do elemento selecionado — mesmo desenho de um editor de
+ * arte: bolinha nos cantos (cresce proporcional) e barrinha nos lados (mexe
+ * só naquele sentido).
+ *
+ * Fica FORA do componente da página de propósito. Declarada lá dentro, cada
+ * render criava um tipo de componente novo, o React descartava o nó da alça e
+ * remontava outro — e o arrasto morria no primeiro movimento, porque o
+ * `pointermove` tinha ficado preso no nó que acabara de ser destruído. Era
+ * exatamente por isso que redimensionar "não funcionava".
+ */
+function Alcas({
+  id,
+  aoPegar,
+}: {
+  id: string
+  aoPegar: (id: string, ancora: Ancora) => (e: React.PointerEvent<HTMLDivElement>) => void
+}) {
+  return (
+    <>
+      {ANCORAS.map((a) => {
+        const canto = a.length === 2
+        const vertical = a === 'l' || a === 'o'
+        const estilo: React.CSSProperties = {
+          left: a.includes('o') ? -5 : a.includes('l') ? undefined : '50%',
+          right: a.includes('l') ? -5 : undefined,
+          top: a.includes('n') ? -5 : a.includes('s') ? undefined : '50%',
+          bottom: a.includes('s') ? -5 : undefined,
+          transform: `translate(${a === 'n' || a === 's' ? '-50%' : '0'}, ${vertical ? '-50%' : '0'})`,
+          cursor: canto
+            ? (a === 'no' || a === 'se' ? 'nwse-resize' : 'nesw-resize')
+            : (a === 'n' || a === 's' ? 'ns-resize' : 'ew-resize'),
+        }
+        return (
+          <div
+            key={a}
+            onPointerDown={aoPegar(id, a)}
+            role="button"
+            tabIndex={-1}
+            aria-label={canto ? 'Redimensionar proporcional' : 'Redimensionar neste sentido'}
+            className={cn(
+              'absolute touch-none border border-gray-300 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]',
+              canto && 'h-[11px] w-[11px] rounded-full',
+              // Barrinha comprida no sentido do lado que ela puxa: é o que
+              // deixa claro, sem legenda, que ali só cresce naquele eixo.
+              !canto && vertical && 'h-[22px] w-[7px] rounded-full',
+              !canto && !vertical && 'h-[7px] w-[22px] rounded-full',
+            )}
+            style={estilo}
+          />
+        )
+      })}
+    </>
+  )
 }
 
 export default function QRCodes() {
@@ -492,7 +552,7 @@ export default function QRCodes() {
    * quando puxada pra fora — é o que se espera de uma ferramenta de imagem, e
    * espremer a foto pra caber seria o resultado errado.
    */
-  const redimensionar = (id: string, ancora: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+  const redimensionar = (id: string, ancora: Ancora) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
     e.preventDefault()
     setSelecionado(id)
@@ -525,64 +585,18 @@ export default function QRCodes() {
     }
     const oeste = ancora.includes('o')
     const norte = ancora.includes('n')
-    const canto = ancora.length === 2
+
+    const ehTexto = Boolean(fixo) || el?.tipo === 'texto'
 
     const mover = (ev: PointerEvent) => {
+      // Sinal já corrigido pelo lado pego: daqui pra frente, positivo é
+      // sempre "crescer" — as regras em si moram em `redimensionar-cartaz`,
+      // testadas fora da tela.
       const dx = (ev.clientX - inicio.px) * porPixelX * (oeste ? -1 : 1)
       const dy = (ev.clientY - inicio.py) * porPixelY * (norte ? -1 : 1)
-
-      if (canto) {
-        // Proporcional: o eixo que mais andou manda, pra diagonal não travar.
-        const fator = Math.max(0.2, 1 + (Math.abs(dx) > Math.abs(dy) ? dx / inicio.w : dy / inicio.h))
-        if (fixo) {
-          alterarTextoFixo(id, { tamanho: Math.round(Math.min(TAMANHO_MAX, Math.max(TAMANHO_MIN, inicio.tamanho * fator))) })
-        } else if (el?.tipo === 'texto') {
-          alterarElemento(id, { tamanho: Math.round(Math.min(TAMANHO_MAX, Math.max(TAMANHO_MIN, inicio.tamanho * fator))) })
-        } else if (el) {
-          alterarElemento(id, {
-            escala: Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, inicio.escala * fator)),
-            escalaY: inicio.escalaY != null ? inicio.escalaY * fator : null,
-          })
-        }
-        return
-      }
-
-      const horizontal = ancora === 'l' || ancora === 'o'
-      if (fixo || el?.tipo === 'texto') {
-        const base = horizontal ? inicio.esticarX : inicio.esticarY
-        const medida = horizontal ? inicio.w : inicio.h
-        const novo = Math.min(5, Math.max(0.2, base * (1 + (horizontal ? dx : dy) / Math.max(1, medida))))
-        const campos = horizontal ? { esticarX: novo } : { esticarY: novo }
-        if (fixo) alterarTextoFixo(id, campos)
-        else alterarElemento(id, campos)
-        return
-      }
-      if (!el) return
-
-      // Imagem. Crescer estica naquele sentido; encolher corta o pedaço que
-      // saiu, mantendo o resto do mesmo tamanho na tela.
-      const delta = horizontal ? dx : dy
-      const medida = horizontal ? inicio.w : inicio.h
-      const proporcao = Math.max(0.1, 1 + delta / Math.max(1, medida))
-      const rec = { ...inicio.recorte }
-      if (delta < 0) {
-        const sobra = horizontal ? inicio.recorte.w * proporcao : inicio.recorte.h * proporcao
-        if (horizontal) {
-          rec.w = Math.max(0.05, sobra)
-          if (oeste) rec.x = Math.min(0.95, inicio.recorte.x + (inicio.recorte.w - rec.w))
-        } else {
-          rec.h = Math.max(0.05, sobra)
-          if (norte) rec.y = Math.min(0.95, inicio.recorte.y + (inicio.recorte.h - rec.h))
-        }
-      }
-      const alturaAtual = inicio.escalaY ?? inicio.h / POSTER_H
-      alterarElemento(id, {
-        recorte: rec,
-        escala: horizontal
-          ? Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, inicio.escala * proporcao))
-          : inicio.escala,
-        escalaY: horizontal ? alturaAtual : Math.max(0.02, alturaAtual * proporcao),
-      })
+      const mudanca = calcularRedimensionamento(ehTexto ? 'texto' : 'imagem', ancora as Ancora, inicio, dx, dy)
+      if (fixo) alterarTextoFixo(id, mudanca)
+      else alterarElemento(id, mudanca)
     }
 
     const soltar = () => {
@@ -594,35 +608,6 @@ export default function QRCodes() {
   }
 
   /** As 8 alças em volta do elemento selecionado. */
-  const Alcas = ({ id }: { id: string }) => (
-    <>
-      {(['no', 'ne', 'so', 'se', 'n', 's', 'l', 'o'] as const).map((a) => {
-        const canto = a.length === 2
-        const posicao: React.CSSProperties = {
-          left: a.includes('o') ? -5 : a.includes('l') ? undefined : '50%',
-          right: a.includes('l') ? -5 : undefined,
-          top: a.includes('n') ? -5 : a.includes('s') ? undefined : '50%',
-          bottom: a.includes('s') ? -5 : undefined,
-          transform: `translate(${a === 'n' || a === 's' ? '-50%' : '0'}, ${a === 'l' || a === 'o' ? '-50%' : '0'})`,
-          cursor: canto
-            ? (a === 'no' || a === 'se' ? 'nwse-resize' : 'nesw-resize')
-            : (a === 'n' || a === 's' ? 'ns-resize' : 'ew-resize'),
-        }
-        return (
-          <div
-            key={a}
-            onPointerDown={redimensionar(id, a)}
-            role="button"
-            tabIndex={-1}
-            aria-label="Redimensionar"
-            className="absolute h-2.5 w-2.5 touch-none rounded-[2px] border border-gray-900 bg-white shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
-            style={posicao}
-          />
-        )
-      })}
-    </>
-  )
-
   const drawCanvas = async () => {
     const canvas = canvasRef.current
     if (!canvas || !qrData) return
@@ -1117,7 +1102,7 @@ export default function QRCodes() {
                                 key={c.id}
                                 className={cn(
                                   'group absolute rounded-[2px] transition-colors',
-                                  emEdicao ? 'ring-2 ring-white shadow-[0_0_0_3px_rgba(17,17,17,0.85)]' : 'hover:ring-2 hover:ring-white hover:shadow-[0_0_0_3px_rgba(17,17,17,0.55)]',
+                                  emEdicao ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]' : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                                 )}
                                 style={molduraFixa}
                               >
@@ -1162,7 +1147,7 @@ export default function QRCodes() {
                                   />
                                 )}
 
-                                {selecionado === c.id && !emEdicao && <Alcas id={c.id} />}
+                                {selecionado === c.id && !emEdicao && <Alcas id={c.id} aoPegar={redimensionar} />}
 
                                 {fixo.podeExcluir && (
                                   <button
@@ -1194,8 +1179,8 @@ export default function QRCodes() {
                               className={cn(
                                 'group absolute rounded-[2px] transition-colors',
                                 selecionado === c.id
-                                  ? 'ring-2 ring-white shadow-[0_0_0_3px_rgba(17,17,17,0.85)]'
-                                  : 'hover:ring-2 hover:ring-white hover:shadow-[0_0_0_3px_rgba(17,17,17,0.55)]',
+                                  ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]'
+                                  : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                               )}
                               style={moldura}
                             >
@@ -1250,7 +1235,7 @@ export default function QRCodes() {
 
                               {/* Cantos crescem proporcional; lados esticam o
                                   texto e cortam/esticam a imagem. */}
-                              {selecionado === c.id && !emEdicao && <Alcas id={c.id} />}
+                              {selecionado === c.id && !emEdicao && <Alcas id={c.id} aoPegar={redimensionar} />}
                             </div>
                           )
                         })}
