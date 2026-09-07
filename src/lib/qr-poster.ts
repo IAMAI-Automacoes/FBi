@@ -87,19 +87,30 @@ function wrapText(
   lh: number,
   pintar = true,
 ): { fim: number; largura: number; altura: number } {
-  const palavras = text.split(' ')
-  let linha = ''
+  // Enter digitado pelo dono vale como quebra de linha: ele quebra onde
+  // quis, e a quebra automática por largura continua valendo DENTRO de cada
+  // pedaço. Sem isso, o "\n" viraria parte de uma palavra e a linha só
+  // quebraria onde a régua mandasse — o texto sairia diferente do que se vê
+  // no campo.
   const linhas: string[] = []
-  for (const p of palavras) {
-    const teste = linha ? `${linha} ${p}` : p
-    if (ctx.measureText(teste).width > maxW && linha) {
-      linhas.push(linha)
-      linha = p
-    } else {
-      linha = teste
+  for (const paragrafo of text.split('\n')) {
+    if (!paragrafo.trim()) {
+      // Linha em branco de propósito (dois Enters) é espaçamento.
+      linhas.push('')
+      continue
     }
+    let linha = ''
+    for (const p of paragrafo.split(' ')) {
+      const teste = linha ? `${linha} ${p}` : p
+      if (ctx.measureText(teste).width > maxW && linha) {
+        linhas.push(linha)
+        linha = p
+      } else {
+        linha = teste
+      }
+    }
+    if (linha) linhas.push(linha)
   }
-  if (linha) linhas.push(linha)
   if (pintar) linhas.forEach((l, i) => ctx.fillText(l, cx, y + i * lh))
   const largura = linhas.reduce((maior, l) => Math.max(maior, ctx.measureText(l).width), 0)
   return { fim: y + linhas.length * lh, largura, altura: Math.max(1, linhas.length) * lh }

@@ -831,7 +831,7 @@ export default function QRCodes() {
             </Card>
 
             {/* ───────── Prévia: o display de mesa ───────── */}
-            <div className="flex w-[330px] max-w-full flex-col">
+            <div className="flex w-[392px] max-w-full flex-col">
               {/* Adicionar fica no CABEÇALHO, longe da plaquinha: é uma ação
                   que se faz uma vez, e ocupando o espaço logo acima do cartaz
                   empurrava pra baixo a barra de propriedades — que é o
@@ -908,7 +908,7 @@ export default function QRCodes() {
                 {/* Largura fixa, e não `w-full`: é ela que segura o tamanho da
                     plaquinha agora que a caixa em volta encolheu. `max-w-full`
                     só entra em tela estreita demais, pra não vazar. */}
-                <div className="w-[290px] max-w-full" style={{ perspective: '1300px' }}>
+                <div className="w-[348px] max-w-full" style={{ perspective: '1300px' }}>
                   {/* Com um elemento selecionado a plaquinha fica RETA.
                       A inclinação em 3D deforma o mapeamento do arrasto — o
                       retângulo que o navegador reporta é a caixa alinhada aos
@@ -998,14 +998,19 @@ export default function QRCodes() {
                                      digitar. Eram dois gestos diferentes pro
                                      mesmo texto, e ninguém adivinha qual é
                                      qual num cartaz. */
+                                  /* Um clique seleciona (e já permite
+                                     arrastar); dois cliques entram no texto.
+                                     Mesmo gesto dos elementos livres — um
+                                     texto do cartaz não pode responder ao
+                                     clique de um jeito e outro de outro. */
                                   <div
                                     onPointerDown={arrastarElemento(c.id)}
-                                    onClick={() => { setSelecionado(c.id); setEditandoId(c.id) }}
+                                    onDoubleClick={() => setEditandoId(c.id)}
                                     role="button"
                                     tabIndex={0}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { setSelecionado(c.id); setEditandoId(c.id) } }}
-                                    aria-label={`Mover ou editar ${fixo.rotuloAcessivel}`}
-                                    title={`Arraste para mover, clique para editar: ${fixo.rotuloAcessivel}`}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setEditandoId(c.id) }}
+                                    aria-label={`Mover ${fixo.rotuloAcessivel} (dois cliques para editar)`}
+                                    title={`Arraste para mover, dois cliques para editar: ${fixo.rotuloAcessivel}`}
                                     className="h-full w-full cursor-move touch-none"
                                   />
                                 )}
