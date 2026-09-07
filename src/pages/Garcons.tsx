@@ -295,12 +295,12 @@ async function posterCanvas(
   url: string,
   nome: string,
   temaId: string,
-  tagline: string,
+  tagline: string | null,
   garcom: string,
   rotulo: string | null,
 ): Promise<HTMLCanvasElement> {
   const c = document.createElement('canvas')
-  await desenharPoster(c, { url, nome, temaId, tagline, garcom, rotulo })
+  await desenharPoster(c, { url, nome, temaId, tagline: tagline ?? undefined, garcom, rotulo })
   return c
 }
 
@@ -318,7 +318,8 @@ export default function Garcons() {
    *  alimentar a busca de escaneamentos filtrada por período do Ranking. */
   const [qrCodeIdParaGarcomState, setQrCodeIdParaGarcomState] = useState<Record<number, number>>({})
   const [posterTema, setPosterTema] = useState('classico')
-  const [posterMsg, setPosterMsg] = useState('')
+  // null = nunca configurada (usa o padrao do cartaz); '' = o dono tirou.
+  const [posterMsg, setPosterMsg] = useState<string | null>(null)
   // Textos editaveis do cartaz (ver qr-poster.ts). null = padrao.
   const [posterRotulo, setPosterRotulo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -404,7 +405,7 @@ export default function Garcons() {
     if (titulo) setRestaurantName(titulo)
     setPosterRotulo((r as any).qr_rotulo ?? null)
     setPosterTema(r.qr_estilo ?? 'classico')
-    setPosterMsg(r.qr_mensagem ?? '')
+    setPosterMsg(r.qr_mensagem ?? null)
 
     let listaRegras = (Array.isArray(r.config_bonificacao) ? r.config_bonificacao : []) as unknown as RegraBonificacao[]
 

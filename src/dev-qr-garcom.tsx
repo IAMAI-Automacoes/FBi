@@ -21,11 +21,12 @@ const GARCONS = [
 
 function Banco() {
   const [pronto, setPronto] = useState(false)
+  const [caixas, setCaixas] = useState<any[]>([])
 
   /** Espelha o laço de `baixarPdf`: sequencial, um cartaz por garçom. */
   const gerar = async (
     ids: number[],
-    extra: { temaId?: string; rotulo?: string | null; titulo?: string } = {},
+    extra: { temaId?: string; rotulo?: string | null; titulo?: string; mensagem?: string } = {},
   ) => {
     setPronto(false)
     const alvos = GARCONS.filter((g) => ids.includes(g.id))
@@ -33,14 +34,15 @@ function Banco() {
       const canvas = document.getElementById(`canvas-${g.id}`) as HTMLCanvasElement
       canvas.width = POSTER_W
       canvas.height = POSTER_H
-      await desenharPoster(canvas, {
+      const cx = await desenharPoster(canvas, {
         url: landingUrl(g.slug),
         nome: extra.titulo ?? 'Camelo',
         rotulo: extra.rotulo,
         temaId: extra.temaId ?? 'branco',
-        tagline: 'Conte como foi sua experiência',
+        tagline: extra.mensagem ?? 'Conte como foi sua experiência',
         garcom: g.nome,
       })
+      setCaixas(cx)
     }
     setPronto(true)
   }
@@ -57,7 +59,9 @@ function Banco() {
       <button data-teste="textos-proprios" onClick={() => gerar([2], { rotulo: 'Bar & Boteco', titulo: 'Seu Zé' })}>
         Textos próprios
       </button>
+      <button data-teste="sem-mensagem" onClick={() => gerar([2], { mensagem: '' })}>Sem mensagem</button>
       <button data-teste="sem-rotulo" onClick={() => gerar([2], { rotulo: '' })}>Sem rótulo</button>
+      <pre data-teste="caixas">{JSON.stringify(caixas.map((c) => c.id))}</pre>
       <pre data-teste="pronto">{String(pronto)}</pre>
       <pre data-teste="esperado">{JSON.stringify(GARCONS.map((g) => ({ id: g.id, url: landingUrl(g.slug) })))}</pre>
       {GARCONS.map((g) => (

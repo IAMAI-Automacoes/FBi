@@ -14,7 +14,7 @@ import { jsPDF } from 'jspdf'
 import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
-import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, type CaixaElemento } from '@/lib/qr-poster'
+import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
 import { fonteCss, lerElementos, novaLogo, novoTexto, type ElementoCartaz } from '@/lib/cartaz-elementos'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
@@ -128,7 +128,9 @@ export default function QRCodes() {
         const estilo = getTema(config?.qr_estilo).id
         setCfgEstilo(estilo)
         setCfgImagem(config?.qr_bg_imagem ?? null)
-        setCfgMensagem(config?.qr_mensagem ?? '')
+        // Mesma regra do rótulo: abre com o que ESTÁ no cartaz, pra apagar
+        // significar 'cartaz sem esta linha' e não 'nunca configurei'.
+        setCfgMensagem(config?.qr_mensagem ?? MENSAGEM_PADRAO)
         // O rótulo abre preenchido com o que ESTÁ no cartaz (o padrão, quando
         // nunca foi mexido). Assim apagar o campo tem um significado só e
         // óbvio: cartaz sem rótulo. Se abrisse vazio, "vazio" seria ao mesmo
@@ -214,7 +216,7 @@ export default function QRCodes() {
           qr_bg_modo: cfgModo,
           qr_estilo: cfgEstilo,
           qr_bg_imagem: cfgImagem,
-          qr_mensagem: cfgMensagem.trim() || null,
+          qr_mensagem: cfgMensagem.trim(),
           // Rótulo guarda string vazia quando apagado — é uma escolha ("sem
           // rótulo"), não ausência de configuração.
           qr_rotulo: cfgRotulo.trim(),
@@ -349,6 +351,64 @@ export default function QRCodes() {
     alvo.addEventListener('pointerup', soltar)
   }
 
+  /**
+   * Os três textos que já vinham no cartaz e agora se editam clicando neles.
+   *
+   * Não são elementos livres: não se arrastam (o lugar deles faz parte do
+   * desenho) e o rótulo e o nome não se excluem. A mensagem pode sair, e sai
+   * pelo mesmo "×" dos outros elementos — apagar o conteúdo é o que significa
+   * "não quero esta linha no cartaz".
+   */
+  const tema = getTema(cfgEstilo)
+  const textosFixos: Record<string, {
+    valor: string
+    alterar: (v: string) => void
+    podeExcluir: boolean
+    rotuloAcessivel: string
+    tamanho: number
+    familia: string
+    negrito: boolean
+    cor: string
+    maiuscula?: boolean
+    espacado?: boolean
+  }> = {
+    [ID_ROTULO]: {
+      valor: cfgRotulo,
+      alterar: setCfgRotulo,
+      podeExcluir: false,
+      rotuloAcessivel: 'o rótulo acima do nome',
+      tamanho: 24,
+      familia: 'sans-serif',
+      negrito: true,
+      cor: tema.acento,
+      maiuscula: true,
+      espacado: true,
+    },
+    [ID_TITULO]: {
+      // Mostra o que ESTÁ no cartaz. Com o campo vazio (seguindo o cadastro),
+      // editar aqui começa a partir do nome que se vê, não de um campo em
+      // branco.
+      valor: cfgTitulo || restaurantName,
+      alterar: setCfgTitulo,
+      podeExcluir: false,
+      rotuloAcessivel: 'o nome no cartaz',
+      tamanho: (cfgTitulo || restaurantName).length > 22 ? 38 : (cfgTitulo || restaurantName).length > 15 ? 46 : 52,
+      familia: 'Georgia, serif',
+      negrito: true,
+      cor: tema.tinta,
+    },
+    [ID_MENSAGEM]: {
+      valor: cfgMensagem,
+      alterar: setCfgMensagem,
+      podeExcluir: true,
+      rotuloAcessivel: 'a mensagem para o cliente',
+      tamanho: 25,
+      familia: 'sans-serif',
+      negrito: false,
+      cor: tema.suave,
+    },
+  }
+
   const drawCanvas = async () => {
     const canvas = canvasRef.current
     if (!canvas || !qrData) return
@@ -430,7 +490,6 @@ export default function QRCodes() {
   }
 
   const maxBar = Math.max(1, ...metricas.barras.map((b) => b.n))
-  const tema = getTema(cfgEstilo)
   const personalizada = ehCorPersonalizada(cfgEstilo)
   const elementoSelecionado = elementos.find((e) => e.id === selecionado) ?? null
   const temLogo = elementos.some((e) => e.tipo === 'logo')
@@ -623,10 +682,14 @@ export default function QRCodes() {
                         mesma grade. Como faixa larga separada, lia como outra
                         coisa — e quem estava escolhendo fundo não a via como
                         alternativa às texturas ao lado. */}
+                    {/* Deitado: ocupa duas colunas da grade e fica com a mesma
+                        altura de uma textura. Em pé competia visualmente com
+                        elas sendo outra coisa; deitado se lê como o que é —
+                        uma ação, no meio das opções de fundo. */}
                     <div className="mt-2 grid grid-cols-4 gap-2">
                       {cfgImagem ? (
-                        <div className="relative overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
-                          <span className="relative block aspect-[4/5] w-full">
+                        <div className="relative col-span-2 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
+                          <span className="relative block aspect-[8/5] w-full">
                             <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
                             <button
                               onClick={removerImagem}
@@ -641,8 +704,8 @@ export default function QRCodes() {
                           </span>
                         </div>
                       ) : (
-                        <label className="group cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
-                          <span className="flex aspect-[4/5] w-full items-center justify-center bg-[#C2622C]/5">
+                        <label className="group col-span-2 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
+                          <span className="flex aspect-[8/5] w-full items-center justify-center gap-1.5 bg-[#C2622C]/5">
                             {uploading ? (
                               <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
                             ) : (
@@ -816,9 +879,77 @@ export default function QRCodes() {
                           onPointerDown={() => setSelecionado(null)}
                         />
                         {caixas.map((c) => {
+                          const fixo = textosFixos[c.id]
                           const el = elementos.find((e) => e.id === c.id)
-                          if (!el) return null
+                          if (!fixo && !el) return null
                           const emEdicao = editandoId === c.id
+                          // Margem de 6px do cartaz: alvo de texto fino ainda
+                          // precisa dar pra pegar com o dedo.
+                          const molduraFixa = {
+                            left: `${((c.x - 6) / POSTER_W) * 100}%`,
+                            top: `${((c.y - 6) / POSTER_H) * 100}%`,
+                            width: `${((c.w + 12) / POSTER_W) * 100}%`,
+                            height: `${((c.h + 12) / POSTER_H) * 100}%`,
+                          }
+
+                          /* Rótulo, nome e mensagem: editam clicando no
+                             próprio cartaz, mas não se arrastam (o lugar
+                             deles é parte do desenho) e só a mensagem pode
+                             ser excluída — cartaz sem nome não existe. */
+                          if (fixo) {
+                            return (
+                              <div
+                                key={c.id}
+                                className={cn(
+                                  'group absolute rounded-[2px] transition-colors',
+                                  emEdicao ? 'ring-2 ring-[#C2622C] ring-offset-1' : 'hover:ring-2 hover:ring-[#C2622C]/45',
+                                )}
+                                style={molduraFixa}
+                              >
+                                {emEdicao ? (
+                                  <textarea
+                                    autoFocus
+                                    value={fixo.valor}
+                                    onChange={(e) => fixo.alterar(e.target.value)}
+                                    onBlur={() => setEditandoId(null)}
+                                    onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
+                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center leading-[1.2] outline-none"
+                                    style={{
+                                      fontFamily: fixo.familia,
+                                      fontSize: (fixo.tamanho * larguraPreview) / POSTER_W || 12,
+                                      fontWeight: fixo.negrito ? 700 : 400,
+                                      letterSpacing: fixo.espacado ? `${(6 * larguraPreview) / POSTER_W}px` : undefined,
+                                      textTransform: fixo.maiuscula ? 'uppercase' : undefined,
+                                      color: fixo.cor,
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    onClick={() => setEditandoId(c.id)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setEditandoId(c.id) }}
+                                    aria-label={`Editar ${fixo.rotuloAcessivel}`}
+                                    title={`Clique para editar: ${fixo.rotuloAcessivel}`}
+                                    className="h-full w-full cursor-text"
+                                  />
+                                )}
+
+                                {fixo.podeExcluir && (
+                                  <button
+                                    type="button"
+                                    onClick={() => { fixo.alterar(''); setEditandoId(null) }}
+                                    aria-label="Tirar a mensagem do cartaz"
+                                    title="Tirar do cartaz"
+                                    className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          }
+                          if (!el) return null
                           // Margem de 6px do cartaz: alvo de texto fino ainda
                           // precisa dar pra pegar com o dedo.
                           const moldura = {

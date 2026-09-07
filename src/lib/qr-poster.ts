@@ -68,7 +68,25 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, cx: number, y: number, maxW: number, lh: number): number {
+/**
+ * Quebra o texto na largura disponível e o escreve centralizado.
+ *
+ * Devolve também a MEDIDA do que escreveu, porque a camada de edição da tela
+ * precisa desenhar o alvo de clique exatamente onde a letra caiu — e estimar
+ * isso por fora, com outra fonte carregada, dava alvo torto.
+ *
+ * `pintar: false` mede sem escrever: é assim que um texto em edição some do
+ * canvas (o campo na tela é que o mostra) sem perder o próprio alvo.
+ */
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  y: number,
+  maxW: number,
+  lh: number,
+  pintar = true,
+): { fim: number; largura: number; altura: number } {
   const palavras = text.split(' ')
   let linha = ''
   const linhas: string[] = []
@@ -82,8 +100,9 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, cx: number, y: nu
     }
   }
   if (linha) linhas.push(linha)
-  linhas.forEach((l, i) => ctx.fillText(l, cx, y + i * lh))
-  return y + linhas.length * lh
+  if (pintar) linhas.forEach((l, i) => ctx.fillText(l, cx, y + i * lh))
+  const largura = linhas.reduce((maior, l) => Math.max(maior, ctx.measureText(l).width), 0)
+  return { fim: y + linhas.length * lh, largura, altura: Math.max(1, linhas.length) * lh }
 }
 
 /** URL que o QR aponta (página pública do site que conta aberturas). */
@@ -141,6 +160,25 @@ export interface CaixaElemento {
   w: number
   h: number
 }
+
+/**
+ * Ids dos textos FIXOS do cartaz (rótulo, nome e mensagem ao cliente).
+ *
+ * Eles não são elementos livres — não se arrastam, e o rótulo e o nome não se
+ * excluem —, mas entram na mesma lista de caixas que a tela usa pra montar os
+ * alvos de clique. É isso que permite editá-los clicando no próprio cartaz,
+ * em vez de só num campo do formulário ao lado.
+ *
+ * Começam com "__" pra nunca colidirem com o id de um elemento do dono, que
+ * vem de `Math.random().toString(36)`.
+ */
+export const ID_ROTULO = '__rotulo'
+export const ID_TITULO = '__titulo'
+export const ID_MENSAGEM = '__mensagem'
+
+/** Frase usada quando o dono nunca escreveu a dele. Vazia é escolha ("não
+ *  quero mensagem"); ausente é falta de configuração. */
+export const MENSAGEM_PADRAO = 'Escaneie e conte como foi sua experiência com a gente.'
 
 /**
  * Imagens de logo do dono, memorizadas por URL.
@@ -262,13 +300,19 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // "restaurante". `undefined`/`null` mantém o padrão; string vazia é uma
   // escolha legítima — cartaz sem rótulo nenhum —, e por isso o teste é de
   // nulidade, não de "caiu no falsy".
-  const rotulo = (opts.rotulo ?? 'RESTAURANTE').trim()
+  // As caixas dos textos FIXOS entram na mesma lista dos elementos livres: é
+  // ela que a tela usa pra saber onde está cada coisa, e é assim que dá pra
+  // editar o rótulo, o nome e a mensagem clicando neles no próprio cartaz.
+  const fixos: CaixaElemento[] = []
+
+  const rotulo = (opts.rotulo ?? 'RESTAURANTE').trim().toUpperCase()
   if (rotulo) {
     ctx.fillStyle = t.acento
     ctx.font = 'bold 24px sans-serif'
     ctx.save()
-    espacado(ctx, rotulo.toUpperCase(), cx, 132, 6)
+    const larguraRotulo = espacado(ctx, rotulo, cx, 132, 6, opts.editandoId !== ID_ROTULO)
     ctx.restore()
+    fixos.push({ id: ID_ROTULO, x: cx - larguraRotulo / 2, y: 132 - 24, w: larguraRotulo, h: 32 })
   }
 
   // ── Nome (fonte adaptativa: nomes longos não invadem o QR) ──
@@ -276,12 +320,30 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const titulo = opts.nome.trim()
   const tamNome = titulo.length > 22 ? 38 : titulo.length > 15 ? 46 : 52
   ctx.font = `bold ${tamNome}px Georgia, serif`
-  const yTitulo = wrapText(ctx, titulo, cx, rotulo ? 196 : 172, W - 110, tamNome + 10)
+  const yBaseTitulo = rotulo ? 196 : 172
+  const medidaTitulo = wrapText(ctx, titulo, cx, yBaseTitulo, W - 110, tamNome + 10, opts.editandoId !== ID_TITULO)
+  fixos.push({
+    id: ID_TITULO,
+    x: cx - medidaTitulo.largura / 2,
+    y: yBaseTitulo - tamNome,
+    w: medidaTitulo.largura,
+    h: medidaTitulo.altura,
+  })
 
   // ── Frase de incentivo ──
-  ctx.fillStyle = t.suave
-  ctx.font = '25px sans-serif'
-  wrapText(ctx, opts.tagline?.trim() || 'Escaneie e conte como foi sua experiência com a gente.', cx, yTitulo + 44, W - 150, 33)
+  const mensagem = (opts.tagline ?? MENSAGEM_PADRAO).trim()
+  if (mensagem) {
+    ctx.fillStyle = t.suave
+    ctx.font = '25px sans-serif'
+    const medidaMsg = wrapText(ctx, mensagem, cx, medidaTitulo.fim + 44, W - 150, 33, opts.editandoId !== ID_MENSAGEM)
+    fixos.push({
+      id: ID_MENSAGEM,
+      x: cx - medidaMsg.largura / 2,
+      y: medidaTitulo.fim + 44 - 25,
+      w: medidaMsg.largura,
+      h: medidaMsg.altura,
+    })
+  }
 
   // ── Cartão branco do QR (sem borda colorida) ──
   // O `y` centra o cartão no espaço que sobra entre a frase de incentivo e o
@@ -370,9 +432,10 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // é ele, e travar a sobreposição aqui seria decidir por ele. O editor avisa
   // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
   // que a sobreposição estraga o cartaz de verdade.
-  return opts.elementos?.length
+  const livres = opts.elementos?.length
     ? await desenharElementos(ctx, opts.elementos, t, W, H, opts.editandoId)
     : []
+  return [...fixos, ...livres]
 }
 
 /**
@@ -459,9 +522,19 @@ export function lerFundoAtras(
   }
 }
 
-function espacado(ctx: CanvasRenderingContext2D, texto: string, cx: number, y: number, sp: number) {
+/** Escreve com espaço extra entre as letras e devolve a largura total —
+ *  `pintar: false` só mede (ver `wrapText`). */
+function espacado(
+  ctx: CanvasRenderingContext2D,
+  texto: string,
+  cx: number,
+  y: number,
+  sp: number,
+  pintar = true,
+): number {
   const larguras = [...texto].map((ch) => ctx.measureText(ch).width + sp)
   const total = larguras.reduce((a, b) => a + b, 0) - sp
+  if (!pintar) return total
   let x = cx - total / 2
   const antes = ctx.textAlign
   ctx.textAlign = 'left'
@@ -470,6 +543,7 @@ function espacado(ctx: CanvasRenderingContext2D, texto: string, cx: number, y: n
     x += larguras[i]
   }
   ctx.textAlign = antes
+  return total
 }
 
 /** Converte '#rrggbb' + alpha (0..1) em 'rgba(...)'. */
