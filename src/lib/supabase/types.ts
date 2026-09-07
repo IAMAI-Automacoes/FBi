@@ -1920,6 +1920,8 @@ export type Database = {
           qr_estilo: string | null
           qr_filtro: string | null
           qr_mensagem: string | null
+          qr_rotulo: string | null
+          qr_titulo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           texto_banner: string | null
@@ -1963,6 +1965,8 @@ export type Database = {
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
+          qr_rotulo?: string | null
+          qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           texto_banner?: string | null
@@ -2006,6 +2010,8 @@ export type Database = {
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
+          qr_rotulo?: string | null
+          qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           texto_banner?: string | null

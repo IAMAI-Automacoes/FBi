@@ -1,11 +1,8 @@
 /**
- * Banco de teste do download de QR por garçom — página isolada, sem login,
- * pra provar num navegador de verdade que o cartaz gerado para cada garçom
- * codifica o QR DAQUELE garçom (e não o de outro, nem sempre o mesmo).
- *
- * Reproduz o laço exato do `baixarPdf` de `Garcons.tsx`: para cada garçom da
- * lista, pega o slug dele e desenha o cartaz com `landingUrl(slug)`. Depois o
- * Playwright lê cada canvas e DECODIFICA o QR, comparando com o esperado.
+ * Banco de teste do cartaz do QR — página isolada, sem login, pra dirigir o
+ * desenho num navegador de verdade (Playwright) e conferir coisas que só
+ * existem em pixel: qual QR foi codificado, qual texto foi escrito e de que
+ * cor saiu o crédito do produto sobre cada fundo.
  *
  * Não entra em build de produção: as entradas do build são só `index.html` e
  * `f.html` (ver vite.config.ts).
@@ -26,7 +23,10 @@ function Banco() {
   const [pronto, setPronto] = useState(false)
 
   /** Espelha o laço de `baixarPdf`: sequencial, um cartaz por garçom. */
-  const gerar = async (ids: number[]) => {
+  const gerar = async (
+    ids: number[],
+    extra: { temaId?: string; rotulo?: string | null; titulo?: string } = {},
+  ) => {
     setPronto(false)
     const alvos = GARCONS.filter((g) => ids.includes(g.id))
     for (const g of alvos) {
@@ -35,8 +35,9 @@ function Banco() {
       canvas.height = POSTER_H
       await desenharPoster(canvas, {
         url: landingUrl(g.slug),
-        nome: "Camelo",
-        temaId: 'classico',
+        nome: extra.titulo ?? 'Camelo',
+        rotulo: extra.rotulo,
+        temaId: extra.temaId ?? 'branco',
         tagline: 'Conte como foi sua experiência',
         garcom: g.nome,
       })
@@ -44,11 +45,19 @@ function Banco() {
     setPronto(true)
   }
 
+  const todos = GARCONS.map((g) => g.id)
+
   return (
     <div style={{ padding: 16, fontFamily: 'system-ui' }}>
-      <button data-teste="gerar-todos" onClick={() => gerar(GARCONS.map((g) => g.id))}>Baixar todos</button>
+      <button data-teste="gerar-todos" onClick={() => gerar(todos)}>Baixar todos</button>
       <button data-teste="gerar-um" onClick={() => gerar([4])}>Baixar só o Davi (popup)</button>
-      <button data-teste="gerar-selecionados" onClick={() => gerar([5, 6])}>Baixar selecionados (brenox + canario)</button>
+      <button data-teste="gerar-selecionados" onClick={() => gerar([5, 6])}>Baixar selecionados</button>
+      <button data-teste="tema-claro" onClick={() => gerar([2], { temaId: 'branco' })}>Tema claro</button>
+      <button data-teste="tema-escuro" onClick={() => gerar([2], { temaId: '#1A1A1A' })}>Tema escuro</button>
+      <button data-teste="textos-proprios" onClick={() => gerar([2], { rotulo: 'Bar & Boteco', titulo: 'Seu Zé' })}>
+        Textos próprios
+      </button>
+      <button data-teste="sem-rotulo" onClick={() => gerar([2], { rotulo: '' })}>Sem rótulo</button>
       <pre data-teste="pronto">{String(pronto)}</pre>
       <pre data-teste="esperado">{JSON.stringify(GARCONS.map((g) => ({ id: g.id, url: landingUrl(g.slug) })))}</pre>
       {GARCONS.map((g) => (

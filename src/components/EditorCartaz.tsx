@@ -14,6 +14,7 @@ import {
   ESCALA_MAX,
   ESCALA_MIN,
   FONTES,
+  GRUPOS_DE_FONTE,
   TAMANHO_MAX,
   TAMANHO_MIN,
   fonteCss,
@@ -53,21 +54,31 @@ function EscolhaDeFonte({ valor, onChange }: { valor: string; onChange: (id: str
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
       </button>
 
+      {/* Agrupado por gênero: são 50 famílias, e numa lista corrida quem
+          procura "uma manuscrita" teria que rolar tudo reconhecendo pela
+          aparência. O cabeçalho gruda no topo enquanto se rola o grupo. */}
       {aberto && (
-        <div className="absolute left-0 top-9 z-50 max-h-[280px] w-[200px] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-xl">
-          {FONTES.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => { onChange(f.id); setAberto(false) }}
-              className={cn(
-                'block w-full truncate px-3 py-1.5 text-left text-[15px] hover:bg-gray-50',
-                f.id === valor ? 'bg-[#C2622C]/10 text-[#8A431C]' : 'text-gray-800',
-              )}
-              style={{ fontFamily: fonteCss(f.id) }}
-            >
-              {f.nome}
-            </button>
+        <div className="absolute left-0 top-9 z-50 max-h-[320px] w-[220px] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-xl">
+          {GRUPOS_DE_FONTE.map((grupo) => (
+            <div key={grupo}>
+              <p className="sticky top-0 z-10 bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 backdrop-blur-sm">
+                {grupo}
+              </p>
+              {FONTES.filter((f) => f.grupo === grupo).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => { onChange(f.id); setAberto(false) }}
+                  className={cn(
+                    'block w-full truncate px-3 py-1.5 text-left text-[15px] hover:bg-gray-50',
+                    f.id === valor ? 'bg-[#C2622C]/10 text-[#8A431C]' : 'text-gray-800',
+                  )}
+                  style={{ fontFamily: fonteCss(f.id) }}
+                >
+                  {f.nome}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       )}

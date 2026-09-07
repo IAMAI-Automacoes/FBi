@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import type { Json } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -50,6 +51,9 @@ export default function QRCodes() {
   const [cfgEstilo, setCfgEstilo] = useState('branco')
   const [cfgImagem, setCfgImagem] = useState<string | null>(null)
   const [cfgMensagem, setCfgMensagem] = useState('')
+  // Textos do topo do cartaz. Vazio = usa o padrao (ver qr-poster.ts).
+  const [cfgRotulo, setCfgRotulo] = useState('')
+  const [cfgTitulo, setCfgTitulo] = useState('')
   const [savingCfg, setSavingCfg] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
@@ -79,7 +83,7 @@ export default function QRCodes() {
       drawCanvas()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, elementos, editandoId])
+  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, elementos, editandoId])
 
   /**
    * Largura real da prévia na tela.
@@ -107,7 +111,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_elementos')
+          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_elementos')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -125,6 +129,16 @@ export default function QRCodes() {
         setCfgEstilo(estilo)
         setCfgImagem(config?.qr_bg_imagem ?? null)
         setCfgMensagem(config?.qr_mensagem ?? '')
+        // O rótulo abre preenchido com o que ESTÁ no cartaz (o padrão, quando
+        // nunca foi mexido). Assim apagar o campo tem um significado só e
+        // óbvio: cartaz sem rótulo. Se abrisse vazio, "vazio" seria ao mesmo
+        // tempo "não mexi" e "quero sem" — e a prévia mostraria uma coisa
+        // enquanto o PDF imprimiria outra.
+        setCfgRotulo((config as any)?.qr_rotulo ?? 'RESTAURANTE')
+        // O título, ao contrário, não pode ficar vazio: cartaz sem nome não
+        // existe. Vazio aqui significa "usa o nome do cadastro", e o
+        // placeholder mostra qual é.
+        setCfgTitulo((config as any)?.qr_titulo ?? '')
         setElementos(lerElementos(config?.qr_elementos))
         cfgSalvoRef.current = {
           modo, estilo,
@@ -201,7 +215,15 @@ export default function QRCodes() {
           qr_estilo: cfgEstilo,
           qr_bg_imagem: cfgImagem,
           qr_mensagem: cfgMensagem.trim() || null,
-          qr_elementos: elementos,
+          // Rótulo guarda string vazia quando apagado — é uma escolha ("sem
+          // rótulo"), não ausência de configuração.
+          qr_rotulo: cfgRotulo.trim(),
+          // Título vazio volta a null: o cartaz passa a seguir o nome do
+          // cadastro de novo, inclusive se ele for renomeado depois.
+          qr_titulo: cfgTitulo.trim() || null,
+          // A coluna é jsonb livre; o tipo gerado a descreve como `Json`, que
+          // não aceita uma interface nomeada mesmo sendo serializável.
+          qr_elementos: elementos as unknown as Json,
         })
         .eq('id', restauranteId)
       if (error) throw error
@@ -257,7 +279,7 @@ export default function QRCodes() {
   }
 
   const adicionarTexto = () => {
-    const novo = novoTexto()
+    const novo = novoTexto(elementos)
     setElementos((prev) => [...prev, novo])
     setSelecionado(novo.id)
   }
@@ -280,7 +302,7 @@ export default function QRCodes() {
         .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type || 'image/png' })
       if (error) throw error
       const { data } = supabase.storage.from('qr-fundos').getPublicUrl(caminho)
-      const nova = novaLogo(data.publicUrl)
+      const nova = novaLogo(data.publicUrl, elementos)
       setElementos((prev) => [...prev, nova])
       setSelecionado(nova.id)
       toast.success('Logo adicionada — arraste na prévia para posicionar.')
@@ -334,7 +356,10 @@ export default function QRCodes() {
       setCaixas(
         await desenharPoster(canvas, {
           url: landingUrl(qrData.slug),
-          nome: restaurantName,
+          // Título e rótulo vazios caem no padrão (nome do cadastro e
+          // "RESTAURANTE"); rótulo em branco de propósito some do cartaz.
+          nome: cfgTitulo.trim() || restaurantName,
+          rotulo: cfgRotulo,
           tagline: cfgMensagem,
           temaId: cfgEstilo,
           elementos,
@@ -593,34 +618,39 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Arte própria, no lugar da cor/textura. Ocupa a largura
-                        toda da coluna: é uma área de soltar arquivo, e alvo de
-                        clique pequeno é o que mais atrapalha no celular. */}
-                    <div className="mt-3">
+                    {/* Arte própria: é uma OPÇÃO DE FUNDO como as outras, então
+                        tem o mesmo tamanho e a mesma forma de uma textura, na
+                        mesma grade. Como faixa larga separada, lia como outra
+                        coisa — e quem estava escolhendo fundo não a via como
+                        alternativa às texturas ao lado. */}
+                    <div className="mt-2 grid grid-cols-4 gap-2">
                       {cfgImagem ? (
-                        <div className="flex items-center gap-2.5 rounded-lg border border-gray-200 p-2">
-                          <img src={cfgImagem} alt="Arte enviada" className="h-11 w-11 rounded-md border object-cover" />
-                          <span className="flex-1 text-[11px] leading-tight text-gray-600">Arte própria em uso</span>
-                          <button
-                            onClick={removerImagem}
-                            title="Remover arte"
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                        <div className="relative overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
+                          <span className="relative block aspect-[4/5] w-full">
+                            <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
+                            <button
+                              onClick={removerImagem}
+                              title="Remover arte"
+                              className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                          <span className="block px-1 py-1.5 text-[9px] font-medium leading-tight text-gray-600">
+                            Arte própria
+                          </span>
                         </div>
                       ) : (
-                        <label className="flex w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center transition-colors hover:border-[#C2622C]/60 hover:bg-[#C2622C]/5">
-                          {uploading ? (
-                            <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
-                          ) : (
-                            <ImageUp className="h-5 w-5 text-[#C2622C]" />
-                          )}
-                          <span className="text-[12px] font-semibold text-gray-700">
-                            {uploading ? 'Enviando…' : 'Subir arte'}
+                        <label className="group cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
+                          <span className="flex aspect-[4/5] w-full items-center justify-center bg-[#C2622C]/5">
+                            {uploading ? (
+                              <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
+                            ) : (
+                              <ImageUp className="h-5 w-5 text-[#C2622C]" />
+                            )}
                           </span>
-                          <span className="text-[10px] leading-tight text-gray-500">
-                            Você ajusta o recorte no formato do celular
+                          <span className="block px-1 py-1.5 text-[9px] font-medium leading-tight text-gray-600">
+                            {uploading ? 'Enviando…' : 'Subir arte'}
                           </span>
                           <input
                             type="file"
@@ -631,6 +661,42 @@ export default function QRCodes() {
                         </label>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                {/* Os textos do topo do cartaz. O logo e o "feito com Easy
+                    Feed" ficam de fora de propósito: são a marca do produto no
+                    material impresso. */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                      Rótulo
+                    </label>
+                    <input
+                      value={cfgRotulo}
+                      onChange={(e) => setCfgRotulo(e.target.value)}
+                      maxLength={22}
+                      placeholder="Sem rótulo"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
+                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Apague para não mostrar nenhum
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                      Nome no cartaz
+                    </label>
+                    <input
+                      value={cfgTitulo}
+                      onChange={(e) => setCfgTitulo(e.target.value)}
+                      maxLength={40}
+                      placeholder={restaurantName}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
+                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Vazio usa o nome do cadastro
+                    </p>
                   </div>
                 </div>
 

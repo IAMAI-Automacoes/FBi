@@ -297,9 +297,10 @@ async function posterCanvas(
   temaId: string,
   tagline: string,
   garcom: string,
+  rotulo: string | null,
 ): Promise<HTMLCanvasElement> {
   const c = document.createElement('canvas')
-  await desenharPoster(c, { url, nome, temaId, tagline, garcom })
+  await desenharPoster(c, { url, nome, temaId, tagline, garcom, rotulo })
   return c
 }
 
@@ -318,6 +319,8 @@ export default function Garcons() {
   const [qrCodeIdParaGarcomState, setQrCodeIdParaGarcomState] = useState<Record<number, number>>({})
   const [posterTema, setPosterTema] = useState('classico')
   const [posterMsg, setPosterMsg] = useState('')
+  // Textos editaveis do cartaz (ver qr-poster.ts). null = padrao.
+  const [posterRotulo, setPosterRotulo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [baixando, setBaixando] = useState(false)
 
@@ -391,12 +394,15 @@ export default function Garcons() {
     if (!u?.user) { setLoading(false); return }
     const { data: r } = await supabase
       .from('restaurantes')
-      .select('id, nome_restaurante, qr_estilo, qr_mensagem, config_bonificacao')
+      .select('id, nome_restaurante, qr_estilo, qr_mensagem, qr_rotulo, qr_titulo, config_bonificacao')
       .eq('auth_user_id', u.user.id)
       .single()
     if (!r) { setLoading(false); return }
     setRestauranteId(r.id)
-    if (r.nome_restaurante) setRestaurantName(r.nome_restaurante)
+    //  manda no cartaz; o nome do cadastro e so o padrao dele.
+    const titulo = (r as any).qr_titulo?.trim() || r.nome_restaurante
+    if (titulo) setRestaurantName(titulo)
+    setPosterRotulo((r as any).qr_rotulo ?? null)
     setPosterTema(r.qr_estilo ?? 'classico')
     setPosterMsg(r.qr_mensagem ?? '')
 
@@ -683,7 +689,7 @@ export default function Garcons() {
       for (let i = 0; i < ativos.length; i++) {
         const g = ativos[i]
         const slug = await ensureQr(g.id)
-        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, g.nome_garcon)
+        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, g.nome_garcon, posterRotulo)
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas, 'PNG', x, y, w, h)
       }

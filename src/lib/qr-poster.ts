@@ -112,7 +112,10 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 
 export interface PosterOpts {
   url: string
+  /** O nome grande. Vem de `qr_titulo`, ou do nome do cadastro. */
   nome: string
+  /** Palavra pequena acima do nome. `undefined` = "RESTAURANTE"; `''` = nenhuma. */
+  rotulo?: string | null
   tagline?: string
   temaId?: string | null
   /**
@@ -253,18 +256,27 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
 
-  // ── Sobrenome/rótulo ──
-  ctx.fillStyle = t.acento
-  ctx.font = 'bold 24px sans-serif'
-  ctx.save()
-  espacado(ctx, 'RESTAURANTE', cx, 132, 6)
-  ctx.restore()
+  // ── Rótulo acima do nome ──
+  //
+  // Editável pelo dono (`qr_rotulo`): bar, padaria e cafeteria não se chamam
+  // "restaurante". `undefined`/`null` mantém o padrão; string vazia é uma
+  // escolha legítima — cartaz sem rótulo nenhum —, e por isso o teste é de
+  // nulidade, não de "caiu no falsy".
+  const rotulo = (opts.rotulo ?? 'RESTAURANTE').trim()
+  if (rotulo) {
+    ctx.fillStyle = t.acento
+    ctx.font = 'bold 24px sans-serif'
+    ctx.save()
+    espacado(ctx, rotulo.toUpperCase(), cx, 132, 6)
+    ctx.restore()
+  }
 
-  // ── Nome do restaurante (fonte adaptativa: nomes longos não invadem o QR) ──
+  // ── Nome (fonte adaptativa: nomes longos não invadem o QR) ──
   ctx.fillStyle = t.tinta
-  const tamNome = opts.nome.length > 22 ? 38 : opts.nome.length > 15 ? 46 : 52
+  const titulo = opts.nome.trim()
+  const tamNome = titulo.length > 22 ? 38 : titulo.length > 15 ? 46 : 52
   ctx.font = `bold ${tamNome}px Georgia, serif`
-  const yTitulo = wrapText(ctx, opts.nome, cx, 196, W - 110, tamNome + 10)
+  const yTitulo = wrapText(ctx, titulo, cx, rotulo ? 196 : 172, W - 110, tamNome + 10)
 
   // ── Frase de incentivo ──
   ctx.fillStyle = t.suave
@@ -334,10 +346,24 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   }
 
   // ── Rodapé: crédito do produto ──
-  ctx.fillStyle = t.suave
-  ctx.globalAlpha = 0.85
-  ctx.font = '18px sans-serif'
+  //
+  // A cor não vem do tema: vem do que EFETIVAMENTE está pintado atrás dele.
+  // Tema claro com arte escura por baixo (ou uma textura com manchas) apagava
+  // o crédito, e ele é a marca do produto no material impresso do cliente —
+  // não pode depender de sorte.
+  const leitura = lerFundoAtras(ctx, W * 0.2, H - 62, W * 0.6, 40)
+  ctx.fillStyle = leitura.tinta
+  ctx.globalAlpha = leitura.alpha
+  ctx.font = `${leitura.negrito ? 'bold ' : ''}18px sans-serif`
+  if (leitura.halo) {
+    // Fundo agitado (textura marcada, foto): um halo suave da cor oposta
+    // segura a leitura sem precisar engrossar demais a letra.
+    ctx.shadowColor = leitura.halo
+    ctx.shadowBlur = 6
+  }
   espacado(ctx, 'FEITO COM EASY FEED', cx, H - 40, 3)
+  ctx.shadowBlur = 0
+  ctx.shadowColor = 'transparent'
   ctx.globalAlpha = 1
 
   // Os elementos do dono vão POR CIMA de tudo, inclusive do QR: quem posiciona
@@ -376,6 +402,63 @@ function pintarFundo(ctx: CanvasRenderingContext2D, t: QrTema, W: number, H: num
 }
 
 /** Escreve um texto com espaçamento entre letras (canvas não tem letter-spacing nativo confiável). */
+/**
+ * Como escrever por cima do que já está pintado num pedaço do cartaz.
+ *
+ * Lê os pixels daquela área e decide três coisas:
+ *
+ * - **tinta**: clara sobre fundo escuro, escura sobre fundo claro. É a
+ *   luminância percebida (fórmula de Rec. 709 — o olho enxerga o verde bem
+ *   mais que o azul, então média simples de RGB erraria em fundos coloridos).
+ * - **negrito e halo**: só quando o fundo é AGITADO. Fundo liso não precisa
+ *   de reforço; textura marcada ou foto, sim — aí parte das letras cai sobre
+ *   claro e parte sobre escuro, e nenhuma cor sozinha resolve. O desvio dos
+ *   pixels é o que mede essa agitação.
+ * - **alpha**: num fundo liso o crédito fica discreto, como sempre foi; num
+ *   fundo difícil ele vai a 100% em vez de sumir.
+ *
+ * Nunca lança: se a leitura falhar (canvas contaminado por imagem de outra
+ * origem, por exemplo), devolve o padrão discreto de antes.
+ */
+export function lerFundoAtras(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  largura: number,
+  altura: number,
+): { tinta: string; halo: string | null; negrito: boolean; alpha: number } {
+  const padrao = { tinta: 'rgba(23,23,23,0.85)', halo: null, negrito: false, alpha: 0.85 }
+  try {
+    const dados = ctx.getImageData(Math.max(0, x), Math.max(0, y), Math.max(1, largura), Math.max(1, altura)).data
+    let soma = 0
+    let somaQuadrados = 0
+    let amostras = 0
+    // De 4 em 4 pixels: a conta é sobre uma faixa de ~17 mil pixels e a
+    // precisão extra não muda nenhuma das decisões abaixo.
+    for (let i = 0; i < dados.length; i += 16) {
+      const lum = (0.2126 * dados[i] + 0.7152 * dados[i + 1] + 0.0722 * dados[i + 2]) / 255
+      soma += lum
+      somaQuadrados += lum * lum
+      amostras++
+    }
+    if (!amostras) return padrao
+
+    const media = soma / amostras
+    const desvio = Math.sqrt(Math.max(0, somaQuadrados / amostras - media * media))
+    const fundoClaro = media > 0.55
+    const agitado = desvio > 0.12
+
+    return {
+      tinta: fundoClaro ? 'rgba(20,20,20,1)' : 'rgba(255,255,255,1)',
+      halo: agitado ? (fundoClaro ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)') : null,
+      negrito: agitado,
+      alpha: agitado ? 1 : 0.85,
+    }
+  } catch {
+    return padrao
+  }
+}
+
 function espacado(ctx: CanvasRenderingContext2D, texto: string, cx: number, y: number, sp: number) {
   const larguras = [...texto].map((ch) => ctx.measureText(ch).width + sp)
   const total = larguras.reduce((a, b) => a + b, 0) - sp

@@ -10,8 +10,73 @@
  * fora da página para sumirem.
  */
 
-/** Centro do cartaz: onde todo elemento novo nasce. */
-export const POSICAO_INICIAL = { x: 0.5, y: 0.5 }
+/**
+ * Onde um elemento novo nasce, em ordem de preferência.
+ *
+ * Nascer sempre no centro (como era antes) cai EM CIMA do QR, e o segundo
+ * elemento cai em cima do primeiro: toda vez que se adiciona algo, a primeira
+ * tarefa é arrastar aquilo pra fora de onde não devia estar.
+ *
+ * Estes são os vãos que sobram num cartaz sem nada adicionado, medidos no
+ * layout de `qr-poster.ts` (720×1080) e guardados em fração:
+ *
+ *   - faixa entre a mensagem ao cliente e o cartão do QR (y ≈ 330-440)
+ *   - faixa entre o cartão do QR e o rodapé do produto (y ≈ 900-1010)
+ *   - as duas margens laterais ao lado do cartão do QR (x < 130 e x > 590)
+ *   - os cantos de cima, antes do rótulo
+ *
+ * Do melhor pro pior: primeiro os vãos largos e centrais, depois os estreitos.
+ */
+/**
+ * Cada lugar fica a mais de `RAIO_OCUPADO` de todos os outros — senão dois
+ * lugares vizinhos se "ocupam" um ao outro e a lista perde entradas na
+ * prática (foi o que um teste pegou aqui: dois pontos a 0.05 de distância
+ * faziam o quarto elemento voltar pro lugar do primeiro).
+ */
+export const LUGARES_LIVRES: { x: number; y: number }[] = [
+  { x: 0.5, y: 0.36 },  // entre a mensagem ao cliente e o QR — o vão mais largo
+  { x: 0.5, y: 0.88 },  // entre o QR e o rodapé do produto
+  { x: 0.13, y: 0.62 }, // margem esquerda, na altura do QR
+  { x: 0.87, y: 0.62 }, // margem direita
+  { x: 0.13, y: 0.06 }, // canto superior esquerdo, antes do rótulo
+  { x: 0.87, y: 0.06 }, // canto superior direito
+  { x: 0.13, y: 0.45 }, // margem esquerda, mais alta
+  { x: 0.87, y: 0.45 },
+  { x: 0.13, y: 0.79 }, // margem esquerda, mais baixa
+  { x: 0.87, y: 0.79 },
+]
+
+/** Fallback quando todo lugar bom já está ocupado. */
+export const POSICAO_INICIAL = LUGARES_LIVRES[0]
+
+/** Perto o bastante pra considerar um lugar "ocupado" (em fração do cartaz). */
+const RAIO_OCUPADO = 0.07
+
+/**
+ * O primeiro lugar da lista que ninguém está usando.
+ *
+ * Se todos estiverem ocupados, desce em degraus a partir do último — assim o
+ * décimo primeiro elemento ainda aparece em algum lugar visível, e não
+ * exatamente embaixo de outro.
+ */
+export function proximaPosicaoLivre(existentes: { x: number; y: number }[]): { x: number; y: number } {
+  const ocupado = (lugar: { x: number; y: number }) =>
+    existentes.some((e) => Math.hypot(e.x - lugar.x, e.y - lugar.y) < RAIO_OCUPADO)
+
+  const livre = LUGARES_LIVRES.find((lugar) => !ocupado(lugar))
+  if (livre) return { ...livre }
+
+  // Acabaram os lugares bons: cai numa grade de três colunas na faixa livre de
+  // cima, descendo aos poucos. Nunca em cima do QR, e nunca duas vezes no
+  // mesmo ponto — a partir daqui quem organiza é o dono, arrastando.
+  const extra = Math.max(0, existentes.length - LUGARES_LIVRES.length)
+  const coluna = extra % 3
+  const linha = Math.floor(extra / 3)
+  return {
+    x: 0.25 + coluna * 0.25,
+    y: Math.min(0.93, 0.3 + linha * 0.03),
+  }
+}
 
 export interface ElementoCartaz {
   id: string
@@ -35,6 +100,19 @@ export interface ElementoCartaz {
   escala: number
 }
 
+/** Grupos do seletor: 50 fontes numa lista corrida é impossível de navegar. */
+export type GrupoFonte = 'Serifadas' | 'Sem serifa' | 'Impacto' | 'Manuscritas' | 'Monoespaçadas'
+
+export interface Fonte {
+  id: string
+  nome: string
+  /** Nome exato da família no Google Fonts — é o que monta a URL do CSS. */
+  familia: string
+  /** Pilha completa pro `ctx.font` e pro `font-family` do preview. */
+  css: string
+  grupo: GrupoFonte
+}
+
 /**
  * As fontes oferecidas — famílias de verdade, do Google Fonts.
  *
@@ -48,35 +126,93 @@ export interface ElementoCartaz {
  * que uma falha de rede degrade para algo parecido em vez de cair no serif
  * padrão do navegador.
  */
-export const FONTES: { id: string; nome: string; familia: string; css: string }[] = [
-  { id: 'playfair', nome: 'Playfair Display', familia: 'Playfair Display', css: '"Playfair Display", Georgia, serif' },
-  { id: 'cormorant', nome: 'Cormorant Garamond', familia: 'Cormorant Garamond', css: '"Cormorant Garamond", Garamond, serif' },
-  { id: 'lora', nome: 'Lora', familia: 'Lora', css: 'Lora, Georgia, serif' },
-  { id: 'montserrat', nome: 'Montserrat', familia: 'Montserrat', css: 'Montserrat, "Helvetica Neue", sans-serif' },
-  { id: 'poppins', nome: 'Poppins', familia: 'Poppins', css: 'Poppins, "Segoe UI", sans-serif' },
-  { id: 'oswald', nome: 'Oswald', familia: 'Oswald', css: 'Oswald, "Arial Narrow", sans-serif' },
-  { id: 'bebas', nome: 'Bebas Neue', familia: 'Bebas Neue', css: '"Bebas Neue", Impact, sans-serif' },
-  { id: 'anton', nome: 'Anton', familia: 'Anton', css: 'Anton, Impact, sans-serif' },
-  { id: 'dancing', nome: 'Dancing Script', familia: 'Dancing Script', css: '"Dancing Script", cursive' },
-  { id: 'pacifico', nome: 'Pacifico', familia: 'Pacifico', css: 'Pacifico, cursive' },
+export const FONTES: Fonte[] = [
+  // ── Serifadas ──
+  { id: 'playfair', nome: 'Playfair Display', familia: 'Playfair Display', css: '"Playfair Display", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'cormorant', nome: 'Cormorant Garamond', familia: 'Cormorant Garamond', css: '"Cormorant Garamond", Garamond, serif', grupo: 'Serifadas' },
+  { id: 'lora', nome: 'Lora', familia: 'Lora', css: 'Lora, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'merriweather', nome: 'Merriweather', familia: 'Merriweather', css: 'Merriweather, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'baskerville', nome: 'Libre Baskerville', familia: 'Libre Baskerville', css: '"Libre Baskerville", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'garamond', nome: 'EB Garamond', familia: 'EB Garamond', css: '"EB Garamond", Garamond, serif', grupo: 'Serifadas' },
+  { id: 'crimson', nome: 'Crimson Text', familia: 'Crimson Text', css: '"Crimson Text", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'ptserif', nome: 'PT Serif', familia: 'PT Serif', css: '"PT Serif", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'spectral', nome: 'Spectral', familia: 'Spectral', css: 'Spectral, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'domine', nome: 'Domine', familia: 'Domine', css: 'Domine, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'vollkorn', nome: 'Vollkorn', familia: 'Vollkorn', css: 'Vollkorn, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'bitter', nome: 'Bitter', familia: 'Bitter', css: 'Bitter, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'abril', nome: 'Abril Fatface', familia: 'Abril Fatface', css: '"Abril Fatface", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'prata', nome: 'Prata', familia: 'Prata', css: 'Prata, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'zilla', nome: 'Zilla Slab', familia: 'Zilla Slab', css: '"Zilla Slab", Georgia, serif', grupo: 'Serifadas' },
+  { id: 'arvo', nome: 'Arvo', familia: 'Arvo', css: 'Arvo, Georgia, serif', grupo: 'Serifadas' },
+  { id: 'rokkitt', nome: 'Rokkitt', familia: 'Rokkitt', css: 'Rokkitt, Georgia, serif', grupo: 'Serifadas' },
+
+  // ── Sem serifa ──
+  { id: 'montserrat', nome: 'Montserrat', familia: 'Montserrat', css: 'Montserrat, "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'poppins', nome: 'Poppins', familia: 'Poppins', css: 'Poppins, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'inter', nome: 'Inter', familia: 'Inter', css: 'Inter, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'raleway', nome: 'Raleway', familia: 'Raleway', css: 'Raleway, "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'worksans', nome: 'Work Sans', familia: 'Work Sans', css: '"Work Sans", "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'nunito', nome: 'Nunito', familia: 'Nunito', css: 'Nunito, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'rubik', nome: 'Rubik', familia: 'Rubik', css: 'Rubik, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'quicksand', nome: 'Quicksand', familia: 'Quicksand', css: 'Quicksand, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'josefin', nome: 'Josefin Sans', familia: 'Josefin Sans', css: '"Josefin Sans", "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'barlow', nome: 'Barlow', familia: 'Barlow', css: 'Barlow, "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'manrope', nome: 'Manrope', familia: 'Manrope', css: 'Manrope, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'dmsans', nome: 'DM Sans', familia: 'DM Sans', css: '"DM Sans", "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'karla', nome: 'Karla', familia: 'Karla', css: 'Karla, "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+  { id: 'mulish', nome: 'Mulish', familia: 'Mulish', css: 'Mulish, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'outfit', nome: 'Outfit', familia: 'Outfit', css: 'Outfit, "Segoe UI", sans-serif', grupo: 'Sem serifa' },
+  { id: 'lato', nome: 'Lato', familia: 'Lato', css: 'Lato, "Helvetica Neue", sans-serif', grupo: 'Sem serifa' },
+
+  // ── Impacto (condensadas e pesadas, pra título curto) ──
+  { id: 'oswald', nome: 'Oswald', familia: 'Oswald', css: 'Oswald, "Arial Narrow", sans-serif', grupo: 'Impacto' },
+  { id: 'bebas', nome: 'Bebas Neue', familia: 'Bebas Neue', css: '"Bebas Neue", Impact, sans-serif', grupo: 'Impacto' },
+  { id: 'anton', nome: 'Anton', familia: 'Anton', css: 'Anton, Impact, sans-serif', grupo: 'Impacto' },
+  { id: 'archivoblack', nome: 'Archivo Black', familia: 'Archivo Black', css: '"Archivo Black", Impact, sans-serif', grupo: 'Impacto' },
+  { id: 'fjalla', nome: 'Fjalla One', familia: 'Fjalla One', css: '"Fjalla One", "Arial Narrow", sans-serif', grupo: 'Impacto' },
+  { id: 'teko', nome: 'Teko', familia: 'Teko', css: 'Teko, "Arial Narrow", sans-serif', grupo: 'Impacto' },
+  { id: 'staatliches', nome: 'Staatliches', familia: 'Staatliches', css: 'Staatliches, Impact, sans-serif', grupo: 'Impacto' },
+
+  // ── Manuscritas ──
+  { id: 'dancing', nome: 'Dancing Script', familia: 'Dancing Script', css: '"Dancing Script", cursive', grupo: 'Manuscritas' },
+  { id: 'pacifico', nome: 'Pacifico', familia: 'Pacifico', css: 'Pacifico, cursive', grupo: 'Manuscritas' },
+  { id: 'greatvibes', nome: 'Great Vibes', familia: 'Great Vibes', css: '"Great Vibes", cursive', grupo: 'Manuscritas' },
+  { id: 'satisfy', nome: 'Satisfy', familia: 'Satisfy', css: 'Satisfy, cursive', grupo: 'Manuscritas' },
+  { id: 'caveat', nome: 'Caveat', familia: 'Caveat', css: 'Caveat, cursive', grupo: 'Manuscritas' },
+  { id: 'sacramento', nome: 'Sacramento', familia: 'Sacramento', css: 'Sacramento, cursive', grupo: 'Manuscritas' },
+  { id: 'lobster', nome: 'Lobster', familia: 'Lobster', css: 'Lobster, cursive', grupo: 'Manuscritas' },
+  { id: 'courgette', nome: 'Courgette', familia: 'Courgette', css: 'Courgette, cursive', grupo: 'Manuscritas' },
+
+  // ── Monoespaçadas ──
+  { id: 'spacemono', nome: 'Space Mono', familia: 'Space Mono', css: '"Space Mono", "Courier New", monospace', grupo: 'Monoespaçadas' },
+  { id: 'jetbrains', nome: 'JetBrains Mono', familia: 'JetBrains Mono', css: '"JetBrains Mono", "Courier New", monospace', grupo: 'Monoespaçadas' },
 ]
+
+/** Ordem em que os grupos aparecem no seletor. */
+export const GRUPOS_DE_FONTE: GrupoFonte[] = ['Serifadas', 'Sem serifa', 'Impacto', 'Manuscritas', 'Monoespaçadas']
 
 export function fonteCss(id: string): string {
   return (FONTES.find((f) => f.id === id) ?? FONTES[0]).css
 }
 
+/**
+ * A URL do CSS é MONTADA a partir de `FONTES`, nunca escrita à mão: com 50
+ * famílias, uma lista paralela sairia do lugar no primeiro acréscimo e a fonte
+ * escolhida cairia calada na reserva.
+ *
+ * O mesmo pedido de variações vai pra todas (regular, negrito, itálico e
+ * negrito-itálico). Pedir o que a família não tem é seguro — verificado contra
+ * a API: ela responde 200 e devolve só o que existe, em vez de recusar o
+ * pedido inteiro (Bebas Neue, por exemplo, volta só com o regular).
+ *
+ * O CSS é grande (~230 KB), mas são só as regras `@font-face`: o navegador
+ * baixa o arquivo de uma família apenas quando ela é de fato usada.
+ */
 const CSS_FONTES =
-  'https://fonts.googleapis.com/css2' +
-  '?family=Playfair+Display:ital,wght@0,400;0,700;1,400' +
-  '&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400' +
-  '&family=Lora:ital,wght@0,400;0,700;1,400' +
-  '&family=Montserrat:ital,wght@0,400;0,700;1,400' +
-  '&family=Poppins:ital,wght@0,400;0,700;1,400' +
-  '&family=Oswald:wght@400;700' +
-  '&family=Bebas+Neue' +
-  '&family=Anton' +
-  '&family=Dancing+Script:wght@400;700' +
-  '&family=Pacifico' +
+  'https://fonts.googleapis.com/css2?' +
+  FONTES.map(
+    (f) => `family=${encodeURIComponent(f.familia).replace(/%20/g, '+')}:ital,wght@0,400;0,700;1,400;1,700`,
+  ).join('&') +
   '&display=swap'
 
 /**
@@ -166,12 +302,14 @@ function novoId(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
-export function novoTexto(): ElementoCartaz {
+/** `existentes` decide onde o novo elemento nasce — ver `proximaPosicaoLivre`. */
+export function novoTexto(existentes: ElementoCartaz[] = []): ElementoCartaz {
+  const lugar = proximaPosicaoLivre(existentes)
   return {
     id: novoId(),
     tipo: 'texto',
-    x: POSICAO_INICIAL.x,
-    y: POSICAO_INICIAL.y,
+    x: lugar.x,
+    y: lugar.y,
     texto: 'Texto novo',
     fonte: 'playfair',
     tamanho: 40,
@@ -183,9 +321,9 @@ export function novoTexto(): ElementoCartaz {
   }
 }
 
-export function novaLogo(url: string): ElementoCartaz {
+export function novaLogo(url: string, existentes: ElementoCartaz[] = []): ElementoCartaz {
   return {
-    ...novoTexto(),
+    ...novoTexto(existentes),
     id: novoId(),
     tipo: 'logo',
     texto: '',
