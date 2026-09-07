@@ -5,6 +5,8 @@ import { MessageCircle, CheckCircle2, RefreshCw, Loader2, Smartphone, AlertTrian
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { CampoTelefone } from '@/components/CampoTelefone'
+import { telefoneNacionalValido } from '@/lib/telefone'
 
 interface EstadoWhats {
   hasInstance: boolean
@@ -253,6 +255,10 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
   const { toast } = useToast()
   const [numero, setNumero] = useState('')
   const [salvo, setSalvo] = useState('')
+  // "Tem algo escrito no campo?" — um número pela metade também vira `numero`
+  // vazio (DDD incompleto não é valor guardável), e sem isto "estou digitando"
+  // seria confundido com "quero remover o número".
+  const [temDigitos, setTemDigitos] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
 
@@ -266,8 +272,10 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
       .maybeSingle()
       .then(({ data }) => {
         if (!ativo) return
-        setNumero(data?.whatsapp_dono ?? '')
-        setSalvo(data?.whatsapp_dono ?? '')
+        const existente = data?.whatsapp_dono ?? ''
+        setNumero(existente)
+        setSalvo(existente)
+        setTemDigitos(Boolean(existente))
         setCarregando(false)
       })
     return () => { ativo = false }
@@ -275,29 +283,34 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
 
   const salvar = async () => {
     if (!restauranteId) return
-    setSalvando(true)
-    // Só dígitos: o n8n monta o destino com este valor, e máscara digitada à
-    // mão ("(11) 99999-9999") viraria um número inválido lá na ponta.
+    // Mesmo campo/mesma regra do telefone do garçom (`CampoTelefone`, em
+    // `src/lib/telefone.ts`): o "55" é fixo e o valor que chega aqui já vem
+    // canônico do onChange.
     //
-    // O prefixo 55 é adicionado se faltar — mesma regra de `qr-redirect` e
-    // `qr-landing` (que preparam o "Dar meu feedback" do cliente). Sem ele, o
-    // dono digitando só DDD+número (o que quase todo mundo faz, de cabeça)
-    // salvaria um número que a API do WhatsApp não entrega: sem country code
-    // ela não sabe que é um número brasileiro.
-    const digitos = numero.replace(/\D/g, '')
-    const limpo = digitos && !digitos.startsWith('55') ? `55${digitos}` : digitos
+    // Campo com algo escrito mas sem número válido (DDD ou telefone pela
+    // metade) é ERRO, nunca "remover" — senão uma edição interrompida no meio
+    // apagaria silenciosamente o número que já estava salvo.
+    if (temDigitos && !telefoneNacionalValido(numero)) {
+      toast({
+        title: 'Número inválido',
+        description: 'Confira o DDD e o número — precisa ter DDD + telefone completo.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSalvando(true)
     const { error } = await supabase
       .from('restaurantes')
-      .update({ whatsapp_dono: limpo || null })
+      .update({ whatsapp_dono: numero || null })
       .eq('id', restauranteId)
     setSalvando(false)
     if (error) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
       return
     }
-    setNumero(limpo)
-    setSalvo(limpo)
-    toast({ title: limpo ? 'Número salvo' : 'Número removido' })
+    setSalvo(numero)
+    toast({ title: numero ? 'Número salvo' : 'Número removido' })
   }
 
   if (carregando) return null
@@ -314,12 +327,10 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
+            <CampoTelefone
               value={numero}
-              onChange={(e) => setNumero(e.target.value)}
-              inputMode="tel"
-              placeholder="5511999999999"
-              className="h-9 w-[190px] rounded-md border border-gray-200 bg-white px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+              onChange={(valor, tem) => { setNumero(valor); setTemDigitos(tem) }}
+              className="h-9 w-[210px] rounded-md border-gray-200 bg-white px-2.5 text-sm focus-within:border-amber-300 focus-within:ring-amber-300"
             />
             <Button size="sm" onClick={salvar} disabled={salvando || numero === salvo}>
               {salvando ? 'Salvando…' : 'Salvar'}
