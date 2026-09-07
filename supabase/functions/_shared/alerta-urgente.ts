@@ -111,11 +111,24 @@ export async function talvezAlertarDono(
     // ── Etapa 2: a mensagem inteira e a confirmação da IA ──
     const { data: original } = await db
       .from('feedbacks_originais')
-      .select('id, texto_original, created_at, telefone_cliente')
+      .select('id, texto_original, created_at, telefone_cliente, contato_id')
       .eq('id', fb.origem_id)
       .maybeSingle()
 
     const textoOriginal = (original?.texto_original || texto).trim()
+
+    // Nome de verdade quando existir — a maioria dos contatos de WhatsApp não
+    // tem nome capturado, então isto é frequentemente null, e o n8n decide
+    // como tratar isso na mensagem (ex.: "Cliente" no lugar do nome).
+    let nomeCliente: string | null = null
+    if (original?.contato_id) {
+      const { data: contato } = await db
+        .from('contatos')
+        .select('nome')
+        .eq('id', original.contato_id)
+        .maybeSingle()
+      nomeCliente = contato?.nome?.trim() || null
+    }
 
     const triagem = await confirmarComIa(db, fb.restaurante_id, textoOriginal, texto, termos)
     if (!triagem.urgente) return { urgente: false, motivo: triagem.motivo }
@@ -170,18 +183,55 @@ export async function talvezAlertarDono(
       }))
       .filter((p) => p.texto)
 
+    const resumo = triagem.resumo || 'Feedback grave recebido.'
+
+    // Texto pronto pra mandar como está — o n8n não precisa montar nada pra
+    // já sair funcionando; pode trocar por um template próprio a qualquer
+    // momento, os campos brutos continuam todos no payload pra isso.
+    const mensagemSugerida = [
+      `Alerta urgente — ${resumo}`,
+      '',
+      `Cliente: ${nomeCliente ?? '(sem nome)'} — ${original?.telefone_cliente ?? '(sem telefone)'}`,
+      `Relato: "${texto}"`,
+    ].join('\n')
+
+    // Dispara os dois ao mesmo tempo, e nenhum espera o outro: o webhook do
+    // n8n é o que efetivamente avisa o dono, e a geração de insight é
+    // fire-and-forget (mesmo padrão de `talvezGerarInsights` em
+    // vincular-feedback) — pode levar dezenas de segundos, e não faz sentido
+    // atrasar a resposta desta função, muito menos o aviso, por causa dela.
+    //
+    // FORÇADA (force:true) porque o gatilho normal de geração só roda para
+    // feedbacks que sobram "livres" — e o feedback urgente pode ter sido
+    // absorvido por uma ação/insight já existente (não passa por lá) ou
+    // pode estar livre mas ainda não ter cruzado o limiar de acúmulo. Nos
+    // dois casos, "urgente" já justifica gerar agora, sem esperar: gravidade
+    // 4 sozinha já torna QUALQUER assunto elegível (é preciso 1 pessoa só).
+    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/gerar-insights`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+        'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
+      },
+      body: JSON.stringify({ restaurante_id: fb.restaurante_id, force: true }),
+    }).catch((e) => console.error('[alerta-urgente] falha ao forçar geração de insights:', e))
+
     const enviado = await dispararWebhook(db, fb.restaurante_id, {
       alerta_id: reserva.id,
       recebido_em: original?.created_at ?? new Date().toISOString(),
-      motivo: triagem.resumo || 'Feedback grave recebido.',
+      motivo: resumo,
+      gravidade: G,
       termos_detectados: termos,
+      nome_cliente: nomeCliente,
       telefone_cliente: original?.telefone_cliente ?? null,
       texto_original: textoOriginal,
       trecho_urgente: texto,
       feedbacks_separados: feedbacksSeparados,
+      mensagem_sugerida: mensagemSugerida,
     })
 
-    return { urgente: true, motivo: triagem.resumo || triagem.motivo, enviado }
+    return { urgente: true, motivo: resumo, enviado }
   } catch (err) {
     console.error('alerta-urgente:', err)
     return { urgente: false, motivo: 'erro na triagem' }
@@ -246,8 +296,11 @@ async function confirmarComIa(
  *   {
  *     alerta_id, restaurante_id, nome_restaurante, recebido_em,
  *     motivo,                    // 1 frase pronta pra ir no corpo da mensagem
+ *     gravidade,                 // 0-4, sempre 4 aqui (é o piso pra virar urgente)
  *     termos_detectados: string[],
+ *     mensagem_sugerida,         // texto PRONTO pra mandar como está, já montado
  *
+ *     nome_cliente,              // null quando o contato não tem nome salvo
  *     telefone_cliente,          // quem relatou — pra eventual retorno
  *     texto_original,            // a mensagem INTEIRA que o cliente mandou
  *     trecho_urgente,            // só o pedaço que disparou o alerta
@@ -261,6 +314,10 @@ async function confirmarComIa(
  *     whatsapp_token,            // credenciais dessa instância (uazapi)
  *     whatsapp_base_url,
  *   }
+ *
+ * Junto do disparo, esta função TAMBÉM força uma rodada de geração de
+ * insights pro restaurante (ver `talvezAlertarDono`) — não é parte do
+ * payload, mas acontece na mesma hora.
  *
  * As credenciais do WhatsApp são as do PRÓPRIO restaurante — cada um tem a sua
  * instância, o n8n é o carteiro, não o dono do cadastro.
