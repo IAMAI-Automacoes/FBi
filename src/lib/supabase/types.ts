@@ -238,6 +238,85 @@ export type Database = {
         }
         Relationships: []
       }
+      alerta_urgente: {
+        Row: {
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          feedback_original_id: string
+          feedback_restaurante_id: number | null
+          id: number
+          motivo: string | null
+          restaurante_id: number
+          termos: string[]
+        }
+        Insert: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          feedback_original_id: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          motivo?: string | null
+          restaurante_id: number
+          termos?: string[]
+        }
+        Update: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          feedback_original_id?: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          motivo?: string | null
+          restaurante_id?: number
+          termos?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "feedbacks_originais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "feedbacks_originais_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "fila_retorno_n8n"
+            referencedColumns: ["feedback_original_id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aviso_pendente: {
         Row: {
           acao_id: number
@@ -319,6 +398,57 @@ export type Database = {
           },
           {
             foreignKeyName: "aviso_pendente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonificacao_marco: {
+        Row: {
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          garcom_id: number
+          id: number
+          marco: number
+          periodo_inicio: string
+          regra_id: string
+          restaurante_id: number
+        }
+        Insert: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          garcom_id: number
+          id?: never
+          marco: number
+          periodo_inicio: string
+          regra_id: string
+          restaurante_id: number
+        }
+        Update: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          garcom_id?: number
+          id?: never
+          marco?: number
+          periodo_inicio?: string
+          regra_id?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonificacao_marco_garcom_id_fkey"
+            columns: ["garcom_id"]
+            isOneToOne: false
+            referencedRelation: "garcons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonificacao_marco_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
@@ -1770,6 +1900,7 @@ export type Database = {
           credito_ia_limite_usd: number
           detalhes: string | null
           excluida_em: string | null
+          feedbacks_visto_em: string
           frequencia_relatorios: string | null
           funcoes_config: Json | null
           ia_modo_acao: string
@@ -1785,6 +1916,7 @@ export type Database = {
           plano_ciclo: string | null
           qr_bg_imagem: string | null
           qr_bg_modo: string | null
+          qr_elementos: Json
           qr_estilo: string | null
           qr_filtro: string | null
           qr_mensagem: string | null
@@ -1796,6 +1928,7 @@ export type Database = {
           ultima_atualizacao_banner: string | null
           whatsapp_admin_token: string | null
           whatsapp_base_url: string | null
+          whatsapp_dono: string | null
           whatsapp_token: string | null
         }
         Insert: {
@@ -1810,6 +1943,7 @@ export type Database = {
           credito_ia_limite_usd?: number
           detalhes?: string | null
           excluida_em?: string | null
+          feedbacks_visto_em?: string
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           ia_modo_acao?: string
@@ -1825,6 +1959,7 @@ export type Database = {
           plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
+          qr_elementos?: Json
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
@@ -1836,6 +1971,7 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_dono?: string | null
           whatsapp_token?: string | null
         }
         Update: {
@@ -1850,6 +1986,7 @@ export type Database = {
           credito_ia_limite_usd?: number
           detalhes?: string | null
           excluida_em?: string | null
+          feedbacks_visto_em?: string
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           ia_modo_acao?: string
@@ -1865,6 +2002,7 @@ export type Database = {
           plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
+          qr_elementos?: Json
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
@@ -1876,6 +2014,7 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_dono?: string | null
           whatsapp_token?: string | null
         }
         Relationships: []
