@@ -38,6 +38,29 @@ function gerarSlug(n = 8) {
   return s
 }
 
+/**
+ * Onde a moldura de seleção fica na prévia, em porcentagem do cartaz.
+ *
+ * Vive fora do componente porque é usada de dois jeitos: pelo JSX, no render
+ * normal, e escrita direto no `style` do nó durante um arrasto — quando o
+ * React fica de fora (ver `gestoRef`). Ter uma conta só garante que os dois
+ * caminhos põem a moldura exatamente no mesmo lugar.
+ *
+ * Texto ganha 6px de folga (linha fina é alvo difícil de pegar com o dedo);
+ * imagem não ganha nada, senão parece que sobra imagem onde não tem.
+ */
+function estiloDaMoldura(c: CaixaElemento, folga: number) {
+  return {
+    left: `${((c.x - folga) / POSTER_W) * 100}%`,
+    top: `${((c.y - folga) / POSTER_H) * 100}%`,
+    width: `${((c.w + folga * 2) / POSTER_W) * 100}%`,
+    height: `${((c.h + folga * 2) / POSTER_H) * 100}%`,
+    // O quadro vira junto com a figura, no mesmo eixo e no mesmo centro do
+    // canvas. Sem isto ele ficava deitado enquanto a imagem girava dentro.
+    transform: c.rotacao ? `rotate(${c.rotacao}deg)` : '',
+  }
+}
+
 export default function QRCodes() {
   const [qrData, setQrData] = useState<QrData | null>(null)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
@@ -84,6 +107,31 @@ export default function QRCodes() {
   const desenhandoRef = useRef(false)
   const pendenteRef = useRef(false)
 
+  /**
+   * O arrasto em voo — e a razão de ele existir é o "delay" que se sentia ao
+   * mover, girar ou redimensionar.
+   *
+   * Cada movimento do dedo mudava o estado do React, e um `setState` aqui
+   * renderiza a PÁGINA inteira: as abas, as métricas, os quarenta seletores
+   * de cor e textura, a lista de fontes. Depois o canvas era redesenhado e o
+   * resultado voltava por outro `setState`, com mais um render. Dois renders
+   * da página cheia por movimento, e o dedo já estava adiante quando a figura
+   * chegava — exatamente o que não acontece ao arrastar uma ação entre
+   * colunas, onde o navegador só move um nó que já existe.
+   *
+   * Enquanto um gesto está em voo, o React fica FORA do caminho: o movimento
+   * escreve aqui, o canvas é redesenhado e a moldura é reposicionada direto
+   * no `style` do nó. O estado só recebe o valor final, no soltar — um render
+   * por gesto, em vez de um por pixel.
+   */
+  const gestoRef = useRef<{
+    elementos: ElementoCartaz[]
+    estilos: EstilosDosTextos
+    caixas: CaixaElemento[]
+  } | null>(null)
+  /** Os nós das molduras, por id, pra alcançá-los sem passar pelo React. */
+  const molduraRefs = useRef(new Map<string, HTMLDivElement>())
+
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
@@ -106,17 +154,83 @@ export default function QRCodes() {
       elementos,
       editandoId: editandoId ?? undefined,
     }
-    if (quadroRef.current != null) return
-    quadroRef.current = requestAnimationFrame(() => {
-      quadroRef.current = null
-      void desenhar()
-    })
+    agendarQuadro()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId])
 
   useEffect(() => () => {
     if (quadroRef.current != null) cancelAnimationFrame(quadroRef.current)
   }, [])
+
+  /** Um desenho por quadro, no máximo. Ver `desenhar`. */
+  const agendarQuadro = () => {
+    if (quadroRef.current != null) return
+    quadroRef.current = requestAnimationFrame(() => {
+      quadroRef.current = null
+      void desenhar()
+    })
+  }
+
+  /** Começa um gesto: daqui até soltar, nada passa pelo React. */
+  const iniciarGesto = () => {
+    gestoRef.current = { elementos, estilos: cfgEstilos, caixas }
+  }
+
+  /** O que o movimento do dedo produziu, sem tocar no estado do React. */
+  const aoVivo = (mudanca: { elementos?: ElementoCartaz[]; estilos?: EstilosDosTextos }) => {
+    const g = gestoRef.current
+    const base = opcoesRef.current
+    if (!g || !base) return
+    if (mudanca.elementos) g.elementos = mudanca.elementos
+    if (mudanca.estilos) g.estilos = mudanca.estilos
+    opcoesRef.current = { ...base, elementos: g.elementos, estilos: g.estilos }
+    agendarQuadro()
+  }
+
+  /** Soltou: um render só, com o valor final. */
+  const terminarGesto = () => {
+    const g = gestoRef.current
+    gestoRef.current = null
+    if (!g) return
+    // Quando a referência não mudou, o React nem re-renderiza — é o caso de
+    // pegar o elemento e soltar sem arrastar.
+    setElementos(g.elementos)
+    setCfgEstilos(g.estilos)
+    setCaixas(g.caixas)
+  }
+
+  /**
+   * Guarda o nó da moldura pra alcançá-lo durante um gesto.
+   *
+   * A função é memorizada por id: um `ref` inline novo a cada render faria o
+   * React desmontar e remontar o callback toda vez, tirando e repondo a
+   * entrada do mapa sem necessidade.
+   */
+  const guardarMolduraRef = useRef(new Map<string, (n: HTMLDivElement | null) => void>())
+  const guardarMoldura = (id: string) => {
+    const pronta = guardarMolduraRef.current.get(id)
+    if (pronta) return pronta
+    const fn = (n: HTMLDivElement | null) => {
+      if (n) molduraRefs.current.set(id, n)
+      else molduraRefs.current.delete(id)
+    }
+    guardarMolduraRef.current.set(id, fn)
+    return fn
+  }
+
+  /**
+   * Reposiciona as molduras direto no DOM, sem `setState`.
+   *
+   * Só o elemento que está sendo mexido muda de caixa, mas passar por todas
+   * custa nada e evita ter que descobrir quais mudaram.
+   */
+  const aplicarCaixasNoDom = (novas: CaixaElemento[], els: ElementoCartaz[]) => {
+    for (const c of novas) {
+      const no = molduraRefs.current.get(c.id)
+      if (!no) continue
+      Object.assign(no.style, estiloDaMoldura(c, els.find((e) => e.id === c.id)?.tipo === 'logo' ? 0 : 6))
+    }
+  }
 
   /**
    * Enquanto se edita, a plaquinha fica RETA; ela só volta a se inclinar
@@ -143,7 +257,14 @@ export default function QRCodes() {
       return
     }
     setEditandoAgora(true)
-    const relogio = setTimeout(() => setEditandoAgora(false), 20_000)
+    const relogio = setTimeout(() => {
+      // Num arrasto que passe dos 20s, inclinar a plaquinha no meio do gesto
+      // deslocaria o alvo debaixo do dedo — e o `setState` renderizaria a
+      // página justamente quando ela precisa ficar fora do caminho. Ao soltar,
+      // o estado muda e este efeito recomeça a contagem.
+      if (gestoRef.current) return
+      setEditandoAgora(false)
+    }, 20_000)
     return () => clearTimeout(relogio)
   }, [cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, selecionado])
 
@@ -411,19 +532,23 @@ export default function QRCodes() {
     const alvo = e.currentTarget
     alvo.setPointerCapture(e.pointerId)
     const inicio = { px: e.clientX, py: e.clientY, x: partida.x, y: partida.y }
+    iniciarGesto()
 
     const mover = (ev: PointerEvent) => {
       const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
       const ny = Math.min(1, Math.max(0, inicio.y + (ev.clientY - inicio.py) / area.height))
+      const g = gestoRef.current
+      if (!g) return
       if (fixo) {
-        setCfgEstilos((p) => ({ ...p, [id]: { ...(p[id] ?? {}), x: nx, y: ny } }))
+        aoVivo({ estilos: { ...g.estilos, [id]: { ...(g.estilos[id] ?? {}), x: nx, y: ny } } })
         return
       }
-      alterarElemento(id, { x: nx, y: ny })
+      aoVivo({ elementos: g.elementos.map((el) => (el.id === id ? { ...el, x: nx, y: ny } : el)) })
     }
     const soltar = () => {
       alvo.removeEventListener('pointermove', mover)
       alvo.removeEventListener('pointerup', soltar)
+      terminarGesto()
     }
     alvo.addEventListener('pointermove', mover)
     alvo.addEventListener('pointerup', soltar)
@@ -531,9 +656,15 @@ export default function QRCodes() {
   }
 
   /** Aplica no estilo guardado o que a barra de propriedades mudou. */
-  const alterarTextoFixo = (id: string, campos: Partial<ElementoCartaz>) => {
-    if ('texto' in campos && typeof campos.texto === 'string') textosFixos[id]?.alterar(campos.texto)
-    const estilo: Record<string, unknown> = { ...(cfgEstilos[id] ?? {}) }
+  /**
+   * O estilo de um texto do cartaz depois de aplicar o que mudou.
+   *
+   * Separado do `setState` porque o mesmo cálculo serve aos dois caminhos: a
+   * barra de propriedades, que muda o estado, e o arrasto, que escreve no ref
+   * em voo sem acionar o React (ver `gestoRef`).
+   */
+  const estiloComCampos = (atual: EstilosDosTextos[string] | undefined, campos: Partial<ElementoCartaz>) => {
+    const estilo: Record<string, unknown> = { ...(atual ?? {}) }
     if (campos.fonte !== undefined) estilo.fonte = campos.fonte
     if (campos.tamanho !== undefined) estilo.tamanho = campos.tamanho
     if (campos.negrito !== undefined) estilo.negrito = campos.negrito
@@ -545,7 +676,12 @@ export default function QRCodes() {
     // de propriedades nunca manda x/y, então isto só entra por ali.
     if (campos.x !== undefined) estilo.x = campos.x
     if (campos.y !== undefined) estilo.y = campos.y
-    setCfgEstilos((p) => ({ ...p, [id]: estilo }))
+    return estilo as EstilosDosTextos[string]
+  }
+
+  const alterarTextoFixo = (id: string, campos: Partial<ElementoCartaz>) => {
+    if ('texto' in campos && typeof campos.texto === 'string') textosFixos[id]?.alterar(campos.texto)
+    setCfgEstilos((p) => ({ ...p, [id]: estiloComCampos(p[id], campos) }))
   }
 
   /**
@@ -612,6 +748,7 @@ export default function QRCodes() {
     const sul = ancora.includes('s')
 
     const ehTexto = Boolean(fixo) || el?.tipo === 'texto'
+    iniciarGesto()
 
     // Com a figura virada, "pra direita na tela" não é mais "pra direita da
     // imagem". O movimento do dedo é projetado nos eixos do elemento antes
@@ -651,13 +788,19 @@ export default function QRCodes() {
       const x = (posX + (desX * cos - desY * sen)) / POSTER_W
       const y = (posY + (desX * sen + desY * cos)) / POSTER_H
 
-      if (fixo) alterarTextoFixo(id, { ...campos, x, y })
-      else alterarElemento(id, { ...campos, x, y })
+      const g = gestoRef.current
+      if (!g) return
+      if (fixo) {
+        aoVivo({ estilos: { ...g.estilos, [id]: estiloComCampos(g.estilos[id], { ...campos, x, y }) } })
+      } else {
+        aoVivo({ elementos: g.elementos.map((z) => (z.id === id ? { ...z, ...campos, x, y } : z)) })
+      }
     }
 
     const soltar = () => {
       alvo.removeEventListener('pointermove', mover)
       alvo.removeEventListener('pointerup', soltar)
+      terminarGesto()
     }
     alvo.addEventListener('pointermove', mover)
     alvo.addEventListener('pointerup', soltar)
@@ -692,6 +835,8 @@ export default function QRCodes() {
 
     const alvo = e.currentTarget
     alvo.setPointerCapture(e.pointerId)
+    iniciarGesto()
+
     // Quanto o dedo já andou em volta do centro, acumulado. Só a DIFERENÇA
     // entre uma leitura e a seguinte entra na conta: o ângulo cru salta de
     // +180 pra -180 ao cruzar a esquerda, e somar esse salto era o que fazia
@@ -713,11 +858,14 @@ export default function QRCodes() {
       if (ev.shiftKey) nova = Math.round(nova / 15) * 15
       // Sem teto: dá pra rodar quantas voltas quiser, e o desenho só usa o
       // seno e o cosseno — 400° e 40° pintam igual.
-      alterarElemento(id, { rotacao: nova })
+      const g = gestoRef.current
+      if (!g) return
+      aoVivo({ elementos: g.elementos.map((z) => (z.id === id ? { ...z, rotacao: nova } : z)) })
     }
     const soltar = () => {
       alvo.removeEventListener('pointermove', mover)
       alvo.removeEventListener('pointerup', soltar)
+      terminarGesto()
     }
     alvo.addEventListener('pointermove', mover)
     alvo.addEventListener('pointerup', soltar)
@@ -756,7 +904,17 @@ export default function QRCodes() {
         const canvas = canvasRef.current
         const opcoes = opcoesRef.current
         if (!canvas || !opcoes) break
-        setCaixas(await desenharPoster(canvas, opcoes))
+        const novas = await desenharPoster(canvas, opcoes)
+        const gesto = gestoRef.current
+        if (gesto) {
+          // Em pleno arrasto: guardar a caixa e mover a moldura no DOM. Um
+          // `setCaixas` aqui renderizaria a página inteira a cada movimento
+          // do dedo, que é o atraso que se via.
+          gesto.caixas = novas
+          aplicarCaixasNoDom(novas, gesto.elementos)
+        } else {
+          setCaixas(novas)
+        }
         if (!pendenteRef.current) break
       }
     } catch (err) {
@@ -1211,19 +1369,19 @@ export default function QRCodes() {
                           className="block h-auto w-full rounded-[2px] shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
                           onPointerDown={() => setSelecionado(null)}
                         />
-                        {caixas.map((c) => {
+                        {/* Durante um gesto o que vale é o valor em voo, não o
+                            do estado. Um render que caia no meio do arrasto —
+                            o da própria seleção, por exemplo — reaplicaria a
+                            caixa antiga por cima do que já foi escrito no DOM,
+                            e a moldura saltaria pra trás por um quadro. */}
+                        {(gestoRef.current?.caixas ?? caixas).map((c) => {
                           const fixo = textosFixos[c.id]
-                          const el = elementos.find((e) => e.id === c.id)
+                          const el = (gestoRef.current?.elementos ?? elementos).find((e) => e.id === c.id)
                           if (!fixo && !el) return null
                           const emEdicao = editandoId === c.id
                           // Margem de 6px do cartaz: alvo de texto fino ainda
                           // precisa dar pra pegar com o dedo.
-                          const molduraFixa = {
-                            left: `${((c.x - 6) / POSTER_W) * 100}%`,
-                            top: `${((c.y - 6) / POSTER_H) * 100}%`,
-                            width: `${((c.w + 12) / POSTER_W) * 100}%`,
-                            height: `${((c.h + 12) / POSTER_H) * 100}%`,
-                          }
+                          const molduraFixa = estiloDaMoldura(c, 6)
                           const selecionadoAqui = selecionado === c.id
                           // As alças têm tamanho fixo em pixels de TELA, e a
                           // prévia é bem menor que o cartaz. Decidir o que
@@ -1251,6 +1409,7 @@ export default function QRCodes() {
                                     : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                                 )}
                                 style={molduraFixa}
+                                ref={guardarMoldura(c.id)}
                               >
                                 {emEdicao ? (
                                   <textarea
@@ -1325,16 +1484,7 @@ export default function QRCodes() {
                           // ali a borda é a medida da figura, e um vão em
                           // volta faz parecer que sobra imagem onde não tem.
                           const folga = el.tipo === 'logo' ? 0 : 6
-                          const moldura: React.CSSProperties = {
-                            left: `${((c.x - folga) / POSTER_W) * 100}%`,
-                            top: `${((c.y - folga) / POSTER_H) * 100}%`,
-                            width: `${((c.w + folga * 2) / POSTER_W) * 100}%`,
-                            height: `${((c.h + folga * 2) / POSTER_H) * 100}%`,
-                            // O quadro vira junto com a figura, no mesmo eixo
-                            // e no mesmo centro do canvas. Antes ele ficava
-                            // deitado enquanto a imagem girava dentro dele.
-                            transform: c.rotacao ? `rotate(${c.rotacao}deg)` : undefined,
-                          }
+                          const moldura = estiloDaMoldura(c, folga)
 
                           return (
                             <div
@@ -1346,6 +1496,7 @@ export default function QRCodes() {
                                   : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                               )}
                               style={moldura}
+                              ref={guardarMoldura(c.id)}
                             >
                               {emEdicao && el.tipo === 'texto' ? (
                                 /* O texto se digita AQUI, sobre o cartaz. O
