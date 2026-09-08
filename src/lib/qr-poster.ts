@@ -173,6 +173,11 @@ export interface CaixaElemento {
   y: number
   w: number
   h: number
+  /**
+   * Graus que o elemento está virado. A caixa é sempre a do elemento DEITADO;
+   * quem gira é o editor, aplicando este ângulo no próprio quadro de seleção.
+   */
+  rotacao?: number
 }
 
 /**
@@ -263,14 +268,13 @@ async function desenharElementos(
         ctx.drawImage(img, fx, fy, fw, fh, cx - w / 2, cy - h / 2, w, h)
       }
       ctx.restore()
-      // A caixa de arraste continua alinhada aos eixos: é a área que o
-      // navegador consegue reportar, e girar o alvo junto deixaria o clique
-      // fora do lugar. Com giro, ela cresce pra caber a figura virada.
-      const cos = Math.abs(Math.cos(giro))
-      const sen = Math.abs(Math.sin(giro))
-      const cw = w * cos + h * sen
-      const ch = w * sen + h * cos
-      caixas.push({ id: el.id, x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch })
+      // A caixa é a da imagem DEITADA, mais o ângulo — não a caixa alinhada
+      // aos eixos que a envolve girada. A envolvente cresce e encolhe a cada
+      // grau, então o quadro de seleção desenhado com ela sobrava nos cantos
+      // e, pior, mexia debaixo do dedo enquanto se girava: a argola presa
+      // nela fugia, o ponteiro corria atrás, e o giro travava e voltava. O
+      // editor vira o próprio quadro com este ângulo e a borda cola na figura.
+      caixas.push({ id: el.id, x: cx - w / 2, y: cy - h / 2, w, h, rotacao: el.rotacao ?? 0 })
       continue
     }
 

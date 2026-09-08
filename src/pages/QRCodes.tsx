@@ -132,6 +132,8 @@ export default function QRCodes() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
   /** Largura da prévia em pixels de tela — converte o corpo do cartaz pro campo. */
   const [larguraPreview, setLarguraPreview] = useState(0)
+  /** Editando agora: a plaquinha fica reta. Ver o efeito do descanso abaixo. */
+  const [editandoAgora, setEditandoAgora] = useState(false)
   const camadaRef = useRef<HTMLDivElement>(null)
 
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
@@ -146,6 +148,35 @@ export default function QRCodes() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId])
+
+  /**
+   * Enquanto se edita, a plaquinha fica RETA; ela só volta a se inclinar
+   * depois de 20 segundos parados.
+   *
+   * O motivo é medido, não estético: com a inclinação em 3D, o retângulo que
+   * o navegador reporta é a caixa alinhada aos eixos, não o trapézio que se
+   * vê, e o arrasto sai deslocado. Endireitar só no clique resolvia isso mas
+   * fazia a plaquinha pular a cada seleção — e ela voltava a inclinar no
+   * instante em que se soltava, no meio de uma sequência de ajustes. Vinte
+   * segundos é tempo de sobra entre um ajuste e o seguinte, e curto o
+   * bastante pra devolver o objeto sobre a mesa quando o trabalho acabou.
+   *
+   * O relógio reinicia sozinho porque as dependências são o próprio conteúdo
+   * do cartaz: qualquer mudança dispara o efeito de novo, e o `clearTimeout`
+   * da limpeza cancela a contagem anterior.
+   */
+  const primeiroDesenho = useRef(true)
+  useEffect(() => {
+    // Sem isto a plaquinha nasceria reta e só inclinaria 20s depois de abrir
+    // a página, sem ninguém ter tocado em nada.
+    if (primeiroDesenho.current) {
+      primeiroDesenho.current = false
+      return
+    }
+    setEditandoAgora(true)
+    const relogio = setTimeout(() => setEditandoAgora(false), 20_000)
+    return () => clearTimeout(relogio)
+  }, [cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, selecionado])
 
   /**
    * Largura real da prévia na tela.
@@ -588,12 +619,22 @@ export default function QRCodes() {
 
     const ehTexto = Boolean(fixo) || el?.tipo === 'texto'
 
+    // Com a figura virada, "pra direita na tela" não é mais "pra direita da
+    // imagem". O movimento do dedo é projetado nos eixos do elemento antes
+    // de virar largura e altura — sem isso, puxar a alça de um lado numa
+    // imagem girada mexia no outro.
+    const giro = ((el?.rotacao ?? 0) * Math.PI) / 180
+    const cos = Math.cos(giro)
+    const sen = Math.sin(giro)
+
     const mover = (ev: PointerEvent) => {
+      const telaX = (ev.clientX - inicio.px) * porPixelX
+      const telaY = (ev.clientY - inicio.py) * porPixelY
       // Sinal já corrigido pelo lado pego: daqui pra frente, positivo é
       // sempre "crescer" — as regras em si moram em `redimensionar-cartaz`,
       // testadas fora da tela.
-      const dx = (ev.clientX - inicio.px) * porPixelX * (oeste ? -1 : 1)
-      const dy = (ev.clientY - inicio.py) * porPixelY * (norte ? -1 : 1)
+      const dx = (telaX * cos + telaY * sen) * (oeste ? -1 : 1)
+      const dy = (-telaX * sen + telaY * cos) * (norte ? -1 : 1)
       const mudanca = calcularRedimensionamento(ehTexto ? 'texto' : 'imagem', ancora as Ancora, inicio, dx, dy)
       if (fixo) alterarTextoFixo(id, mudanca)
       else alterarElemento(id, mudanca)
@@ -636,13 +677,27 @@ export default function QRCodes() {
 
     const alvo = e.currentTarget
     alvo.setPointerCapture(e.pointerId)
+    // Quanto o dedo já andou em volta do centro, acumulado. Só a DIFERENÇA
+    // entre uma leitura e a seguinte entra na conta: o ângulo cru salta de
+    // +180 pra -180 ao cruzar a esquerda, e somar esse salto era o que fazia
+    // a figura dar meia-volta sozinha no meio do arrasto.
+    let anterior = inicial
+    let voltas = 0
+
     const mover = (ev: PointerEvent) => {
-      let nova = rotacaoInicial + (anguloDe(ev.clientX, ev.clientY) - inicial)
+      const agora = anguloDe(ev.clientX, ev.clientY)
+      let passo = agora - anterior
+      if (passo > 180) passo -= 360
+      if (passo < -180) passo += 360
+      voltas += passo
+      anterior = agora
+
+      let nova = rotacaoInicial + voltas
       // Segurando Shift, trava de 15 em 15 graus — é como se endireita uma
       // foto torta sem ficar caçando o zero.
       if (ev.shiftKey) nova = Math.round(nova / 15) * 15
-      while (nova > 180) nova -= 360
-      while (nova < -180) nova += 360
+      // Sem teto: dá pra rodar quantas voltas quiser, e o desenho só usa o
+      // seno e o cosseno — 400° e 40° pintam igual.
       alterarElemento(id, { rotacao: nova })
     }
     const soltar = () => {
@@ -1086,16 +1141,14 @@ export default function QRCodes() {
                     plaquinha agora que a caixa em volta encolheu. `max-w-full`
                     só entra em tela estreita demais, pra não vazar. */}
                 <div className="w-[408px] max-w-full" style={{ perspective: '1300px' }}>
-                  {/* Com um elemento selecionado a plaquinha fica RETA.
-                      A inclinação em 3D deforma o mapeamento do arrasto — o
-                      retângulo que o navegador reporta é a caixa alinhada aos
-                      eixos, não o trapézio que se vê —, então arrastar sairia
-                      deslocado. Sem seleção ela volta a inclinar, que é como o
-                      display fica de verdade em cima da mesa. */}
+                  {/* Reta enquanto se edita, inclinada quando descansa — a
+                      contagem dos 20 segundos está no efeito lá em cima, com
+                      o porquê. A volta é lenta de propósito: é o objeto se
+                      acomodando na mesa, não um salto. */}
                   <div
-                    className="relative transition-transform duration-300"
+                    className="relative transition-transform duration-700 ease-out"
                     style={{
-                      transform: selecionado ? 'none' : 'rotateY(-10deg) rotateX(2deg)',
+                      transform: selecionado || editandoAgora ? 'none' : 'rotateY(-10deg) rotateX(2deg)',
                       transformStyle: 'preserve-3d',
                     }}
                   >
@@ -1136,6 +1189,7 @@ export default function QRCodes() {
                             width: `${((c.w + 12) / POSTER_W) * 100}%`,
                             height: `${((c.h + 12) / POSTER_H) * 100}%`,
                           }
+                          const selecionadoAqui = selecionado === c.id
 
                           /* Rótulo, nome e mensagem: editam clicando no
                              próprio cartaz, mas não se arrastam (o lugar
@@ -1145,9 +1199,15 @@ export default function QRCodes() {
                             return (
                               <div
                                 key={c.id}
+                                /* Selecionado já mostra a borda, não só em
+                                   edição: as alças aparecem no clique, e alça
+                                   solta no ar, sem o quadro em volta, não diz
+                                   até onde vai o texto que elas esticam. */
                                 className={cn(
                                   'group absolute rounded-[2px] transition-colors',
-                                  emEdicao ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]' : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
+                                  selecionadoAqui || emEdicao
+                                    ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]'
+                                    : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                                 )}
                                 style={molduraFixa}
                               >
@@ -1209,13 +1269,20 @@ export default function QRCodes() {
                             )
                           }
                           if (!el) return null
-                          // Margem de 6px do cartaz: alvo de texto fino ainda
-                          // precisa dar pra pegar com o dedo.
-                          const moldura = {
-                            left: `${((c.x - 6) / POSTER_W) * 100}%`,
-                            top: `${((c.y - 6) / POSTER_H) * 100}%`,
-                            width: `${((c.w + 12) / POSTER_W) * 100}%`,
-                            height: `${((c.h + 12) / POSTER_H) * 100}%`,
+                          // Texto ganha 6px de folga: linha fina é alvo
+                          // difícil de pegar com o dedo. Imagem NÃO ganha —
+                          // ali a borda é a medida da figura, e um vão em
+                          // volta faz parecer que sobra imagem onde não tem.
+                          const folga = el.tipo === 'logo' ? 0 : 6
+                          const moldura: React.CSSProperties = {
+                            left: `${((c.x - folga) / POSTER_W) * 100}%`,
+                            top: `${((c.y - folga) / POSTER_H) * 100}%`,
+                            width: `${((c.w + folga * 2) / POSTER_W) * 100}%`,
+                            height: `${((c.h + folga * 2) / POSTER_H) * 100}%`,
+                            // O quadro vira junto com a figura, no mesmo eixo
+                            // e no mesmo centro do canvas. Antes ele ficava
+                            // deitado enquanto a imagem girava dentro dele.
+                            transform: c.rotacao ? `rotate(${c.rotacao}deg)` : undefined,
                           }
 
                           return (
@@ -1223,7 +1290,7 @@ export default function QRCodes() {
                               key={c.id}
                               className={cn(
                                 'group absolute rounded-[2px] transition-colors',
-                                selecionado === c.id
+                                selecionadoAqui
                                   ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]'
                                   : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                               )}
@@ -1303,8 +1370,20 @@ export default function QRCodes() {
                           )
                         })}
                       </div>
-                      {/* Reflexo diagonal e aresta viva da chapa */}
-                      <div className="pointer-events-none absolute inset-0 rounded-[6px] bg-gradient-to-tr from-white/0 via-white/35 to-white/0" />
+                      {/* Reflexo diagonal e aresta viva da chapa.
+                          O reflexo é uma FAIXA estreita, não um véu: com 35%
+                          de branco espalhado no meio da chapa, a arte por
+                          baixo saía lavada — a imagem no máximo de opacidade
+                          parecia desbotada, e a cor escolhida nunca era a que
+                          aparecia. Acrílico se enxerga pela aresta e por um
+                          risco de luz, e é isso que ficou. */}
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-[6px]"
+                        style={{
+                          background:
+                            'linear-gradient(118deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.10) 41%, rgba(255,255,255,0.16) 45%, rgba(255,255,255,0.10) 49%, rgba(255,255,255,0) 60%)',
+                        }}
+                      />
                       <div className="pointer-events-none absolute inset-0 rounded-[6px] ring-1 ring-inset ring-white/70" />
                     </div>
 

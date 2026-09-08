@@ -7,7 +7,7 @@
  * próprio elemento, sobre o cartaz.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Bold, Italic, Trash2, Minus, Plus, ChevronDown, RotateCw, Contrast } from 'lucide-react'
+import { Bold, Italic, Trash2, Minus, Plus, ChevronDown, Contrast } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SeletorCor } from '@/components/SeletorCor'
 import {
@@ -253,10 +253,11 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
           )}
         </>
       ) : (
-        /* Tamanho e giro saíram daqui: o tamanho se faz puxando as alças no
-           próprio cartaz, e o giro pela argola embaixo do elemento. Barrinha
-           na barra pra fazer o que o gesto direto já faz era controle
-           duplicado — e ocupava a largura toda. */
+        /* Só a transparência mora aqui. Tamanho se faz puxando as alças, e
+           giro pela argola embaixo da imagem — gesto direto, no próprio
+           cartaz. Repetir os dois como barrinha na barra era controle
+           duplicado, e o de girar ainda brigava com a argola pelo mesmo
+           valor. Transparência fica porque não tem gesto equivalente. */
         <div className="flex flex-1 flex-wrap items-center gap-1.5 px-1">
           <ControleEmPainel
             rotulo="Transparência"
@@ -265,16 +266,6 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
             min={0}
             max={100}
             aoMudar={(n) => onAlterar(elemento.id, { opacidade: Math.min(1, Math.max(0.05, n / 100)) })}
-          />
-
-          <ControleEmPainel
-            rotulo="Girar"
-            sufixo="°"
-            icone={<RotateCw className="h-3.5 w-3.5" />}
-            valor={Math.round(elemento.rotacao ?? 0)}
-            min={-180}
-            max={180}
-            aoMudar={(n) => onAlterar(elemento.id, { rotacao: Math.min(180, Math.max(-180, n)) })}
           />
 
           {/* Volta ao estado de recém-subida sem precisar excluir e subir de

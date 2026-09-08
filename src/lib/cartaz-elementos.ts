@@ -469,7 +469,10 @@ export function lerElementos(bruto: unknown): ElementoCartaz[] {
       escala: limitar(o.escala, ESCALA_MIN, ESCALA_MAX, 0.28),
       escalaY: Number.isFinite(Number(o.escalaY)) ? limitar(o.escalaY, 0.02, 1.5, 0.2) : null,
       recorte: lerRecorte(o.recorte),
-      rotacao: limitar(o.rotacao, -180, 180, 0),
+      // Volta inteira, não corte: quem gira arrastando passa dos 180 sem
+      // perceber, e travar ali fazia a figura saltar pro outro lado. O resto
+      // da divisão por 360 guarda exatamente o ângulo que estava na tela.
+      rotacao: Number.isFinite(Number(o.rotacao)) ? ((Number(o.rotacao) % 360) + 360) % 360 : 0,
       opacidade: limitar(o.opacidade, 0.05, 1, 1),
     }]
   })
