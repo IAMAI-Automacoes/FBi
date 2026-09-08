@@ -19,19 +19,15 @@ function carregarImg(src: string, crossOrigin = false): Promise<HTMLImageElement
 /**
  * Cache do QR (por URL) e da logo.
  *
- * Existe por causa de um piscar, não por micro-otimização. `desenharPoster`
- * LIMPA o canvas na primeira linha e só desenha o QR e a logo depois de dois
- * `await` — gerar o QR e carregar as imagens. Enquanto esses await não voltam,
- * o navegador tem uma janela para pintar, e pinta o cartaz sem QR e sem logo.
+ * Existe por causa de um piscar, não por micro-otimização. Gerar o QR e
+ * decodificar uma imagem custam quadros; sem memória, arrastar no seletor de
+ * cor — que redesenha a cada movimento do mouse — refazia os dois a cada
+ * desenho, justamente os dois elementos que NÃO mudaram: o QR depende só da
+ * URL e a logo do produto é sempre a mesma.
  *
- * Numa troca de tema isolada ninguém percebe. Arrastando no seletor de cor, que
- * redesenha a cada movimento do mouse, vira um pisca-pisca em cima justamente
- * dos dois elementos que NÃO mudaram — o QR depende só da URL e a logo é sempre
- * a mesma.
- *
- * Com o cache, da segunda chamada em diante os dois `await` resolvem em
- * microtask, antes do próximo paint: o limpar e o redesenhar caem no mesmo
- * quadro e o piscar some.
+ * Hoje `desenharPoster` espera tudo antes de pintar qualquer coisa, então o
+ * cache não é mais o que impede o cartaz meio pronto de aparecer — é o que
+ * mantém essa espera perto de zero do segundo desenho em diante.
  */
 const cacheQr = new Map<string, Promise<HTMLImageElement>>()
 let cacheLogo: Promise<HTMLImageElement> | null = null
@@ -218,19 +214,80 @@ function logoDoDono(url: string): Promise<HTMLImageElement> {
   return p
 }
 
-/** Desenha os elementos do dono e devolve onde cada um ficou. */
-async function desenharElementos(
+/**
+ * As duas camadas do cartaz que NÃO mudam enquanto se edita, pintadas uma vez
+ * e copiadas depois.
+ *
+ * Medido com o cartaz de 720×1080: o fundo mais o brilho do topo custavam
+ * 24 ms por desenho, e o cartão branco do QR (sombra de 42 px de desfoque)
+ * outros 11 ms — 35 dos ~45 ms de cada quadro. Arrastando um elemento, isso é
+ * refeito dezenas de vezes por segundo sem que um pixel dessa parte mude:
+ * fundo e brilho dependem só do tema, e cartão, QR e logo do produto só do
+ * endereço que o QR aponta.
+ *
+ * Copiar uma camada pronta custa uma fração disso, e é o que faz o arrasto
+ * caber num quadro de 60 fps.
+ *
+ * Guardamos UMA de cada. A prévia edita um cartaz por vez, então a chave
+ * praticamente nunca muda ali; e o download em lote, que troca de QR a cada
+ * garçom, refaz a camada — que é o trabalho real de gerar aquele cartaz — sem
+ * ir acumulando canvas de 3 MB na memória.
+ */
+interface CamadaPronta { chave: string; canvas: HTMLCanvasElement }
+let camadaDeFundo: CamadaPronta | null = null
+let camadaDoQr: CamadaPronta | null = null
+
+function camadaEmCache(
+  guardada: CamadaPronta | null,
+  chave: string,
+  w: number,
+  h: number,
+  pintar: (c: CanvasRenderingContext2D) => void,
+): CamadaPronta {
+  if (guardada && guardada.chave === chave && guardada.canvas.width === w && guardada.canvas.height === h) {
+    return guardada
+  }
+  const canvas = guardada?.canvas ?? document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const c = canvas.getContext('2d')
+  if (c) {
+    c.clearRect(0, 0, w, h)
+    pintar(c)
+  }
+  return { chave, canvas }
+}
+
+/** Todas as imagens dos elementos do dono, já decodificadas, por URL. */
+async function imagensDosElementos(elementos: ElementoCartaz[]): Promise<Map<string, HTMLImageElement>> {
+  const urls = [...new Set(
+    elementos.filter((e) => e.tipo === 'logo' && e.url).map((e) => e.url as string),
+  )]
+  const pares = await Promise.all(urls.map(async (u) => [u, await logoDoDono(u)] as const))
+  return new Map(pares)
+}
+
+/**
+ * Desenha os elementos do dono e devolve onde cada um ficou.
+ *
+ * SÍNCRONA de propósito, e isso é a correção do arrasto travado. Ela esperava
+ * as fontes e cada imagem aqui dentro, depois de o cartaz já estar meio
+ * pintado. Arrastando, o estado muda a cada movimento do dedo e vários
+ * desenhos ficavam no ar ao mesmo tempo: um limpava o canvas no meio do
+ * outro, e o navegador chegava a pintar entre as duas etapas. Dava a imagem
+ * repetida atrás da atual, atrasada, e o movimento aos solavancos. Agora tudo
+ * o que precisa esperar é esperado ANTES de a pintura começar, e o cartaz
+ * inteiro sai num quadro só.
+ */
+function desenharElementos(
   ctx: CanvasRenderingContext2D,
   elementos: ElementoCartaz[],
   t: QrTema,
   W: number,
   H: number,
+  imagens: Map<string, HTMLImageElement>,
   editandoId?: string,
-): Promise<CaixaElemento[]> {
-  // Sem esta espera o canvas escreve na fonte de reserva sem avisar, e o PNG
-  // que vai pra grafica sai com outra tipografia. Ver `cartaz-elementos.ts`.
-  await garantirFontesCarregadas(elementos)
-
+): CaixaElemento[] {
   const caixas: CaixaElemento[] = []
 
   for (const el of elementos) {
@@ -239,7 +296,7 @@ async function desenharElementos(
 
     if (el.tipo === 'logo') {
       if (!el.url) continue
-      const img = await logoDoDono(el.url)
+      const img = imagens.get(el.url)
       if (!img || img.width < 1) continue
       const rec = el.recorte ?? { x: 0, y: 0, w: 1, h: 1 }
       const w = el.escala * W
@@ -329,24 +386,61 @@ async function desenharElementos(
  * O QR é gerado localmente (lib `qrcode`), sem depender de API externa.
  */
 export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts): Promise<CaixaElemento[]> {
-  canvas.width = POSTER_W
-  canvas.height = POSTER_H
   const ctx = canvas.getContext('2d')
   if (!ctx) return []
   const W = POSTER_W
   const H = POSTER_H
+
+  // ── Tudo o que precisa esperar, esperado AQUI ──
+  //
+  // Nada abaixo desta linha tem `await`: da limpeza do canvas até o último
+  // elemento, o cartaz é pintado de uma vez só, sem devolver o controle ao
+  // navegador no meio. Era essa devolução que deixava o cartaz meio pintado
+  // aparecer na tela e, com dois desenhos no ar durante um arrasto, um limpar
+  // por cima do outro — a "cópia atrasada" atrás da imagem.
+  //
+  // O `Promise.all` também é o que faz a primeira abertura ser mais rápida: o
+  // QR, a logo do produto, as imagens do dono e as fontes carregam juntos, em
+  // vez de um esperar o outro.
+  const elementos = opts.elementos ?? []
+  const [qr, logo, imagens] = await Promise.all([
+    qrDaUrl(opts.url),
+    logoDoProduto(),
+    imagensDosElementos(elementos),
+    // Sem esta espera o canvas escreve na fonte de reserva sem avisar, e o PNG
+    // que vai pra gráfica sai com outra tipografia. Ver `cartaz-elementos.ts`.
+    garantirFontesCarregadas(elementos),
+  ])
+
+  // Mexer em `width` realoca o bitmap; só vale a pena quando o tamanho mudou
+  // mesmo (na prática, só no primeiro desenho). Nos outros, limpar basta.
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W
+    canvas.height = H
+  } else {
+    // `width` zerava o contexto de brinde; `clearRect` não. Como o desenho
+    // pressupõe folha limpa, o que ele zerava volta explícito aqui.
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = 1
+    ctx.shadowBlur = 0
+    ctx.shadowColor = 'transparent'
+    ctx.clearRect(0, 0, W, H)
+  }
   const t = getTema(opts.temaId)
   const cx = W / 2
 
-  // ── Fundo: cor sólida ou textura neutra do tema ──
-  pintarFundo(ctx, t, W, H)
+  // ── Fundo e brilho do topo (camada guardada — ver `camadaEmCache`) ──
+  camadaDeFundo = camadaEmCache(camadaDeFundo, t.id, W, H, (c) => {
+    pintarFundo(c, t, W, H)
 
-  // Brilho suave da cor de acento no topo (profundidade, sem poluir)
-  const glow = ctx.createRadialGradient(cx, 40, 20, cx, 40, 520)
-  glow.addColorStop(0, hexComAlpha(t.acento, 0.14))
-  glow.addColorStop(1, hexComAlpha(t.acento, 0))
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, 560)
+    // Brilho suave da cor de acento no topo (profundidade, sem poluir)
+    const glow = c.createRadialGradient(cx, 40, 20, cx, 40, 520)
+    glow.addColorStop(0, hexComAlpha(t.acento, 0.14))
+    glow.addColorStop(1, hexComAlpha(t.acento, 0))
+    c.fillStyle = glow
+    c.fillRect(0, 0, W, 560)
+  })
+  ctx.drawImage(camadaDeFundo.canvas, 0, 0)
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
@@ -458,47 +552,53 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // rodapé. Ele subia até 402 quando havia duas linhas de instrução embaixo;
   // sem elas, manter o valor antigo deixaria um vão morto no pé do cartaz.
   const card = { x: 130, y: 440, w: 460, h: 460, r: 40 }
-  ctx.save()
-  ctx.shadowColor = 'rgba(23,23,23,0.16)'
-  ctx.shadowBlur = 42
-  ctx.shadowOffsetY = 18
-  roundRect(ctx, card.x, card.y, card.w, card.h, card.r)
-  ctx.fillStyle = '#ffffff'
-  ctx.fill()
-  ctx.restore()
 
-  // ── QR (gerado localmente, correção alta p/ caber a logo no centro) ──
-  const qs = 372
-  const qx = card.x + (card.w - qs) / 2
-  const qy = card.y + (card.h - qs) / 2
-  const qr = await qrDaUrl(opts.url)
-  if (qr.width > 1) ctx.drawImage(qr, qx, qy, qs, qs)
+  // Cartão, QR e logo do produto numa camada só, guardada por endereço do QR
+  // (o resto aí dentro é sempre igual). A sombra de 42px do cartão era o
+  // segundo maior custo de cada desenho; agora ela é pintada uma vez.
+  //
+  // A camada é transparente fora do cartão, então continua compondo sobre o
+  // fundo e sobre os textos exatamente como quando era pintada direto aqui.
+  camadaDoQr = camadaEmCache(camadaDoQr, `${opts.url}|${t.acento}`, W, H, (c) => {
+    c.save()
+    c.shadowColor = 'rgba(23,23,23,0.16)'
+    c.shadowBlur = 42
+    c.shadowOffsetY = 18
+    roundRect(c, card.x, card.y, card.w, card.h, card.r)
+    c.fillStyle = '#ffffff'
+    c.fill()
+    c.restore()
 
-  // ── Quadrado central com a logo do Easy Feed (não é mais um círculo) ──
-  const plate = 104
-  const px = cx - plate / 2
-  const py = card.y + card.h / 2 - plate / 2
-  ctx.save()
-  ctx.shadowColor = 'rgba(23,23,23,0.18)'
-  ctx.shadowBlur = 12
-  roundRect(ctx, px, py, plate, plate, 22)
-  ctx.fillStyle = '#ffffff'
-  ctx.fill()
-  ctx.restore()
-  const logo = await logoDoProduto()
-  if (logo && logo.width > 1) {
-    // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
-    const pad = 6
-    const box = plate - pad * 2
-    const escala = Math.min(box / logo.width, box / logo.height)
-    const lw = logo.width * escala
-    const lh = logo.height * escala
-    ctx.drawImage(logo, cx - lw / 2, card.y + card.h / 2 - lh / 2, lw, lh)
-  } else {
-    ctx.fillStyle = t.acento
-    ctx.font = 'bold 16px sans-serif'
-    ctx.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
-  }
+    // ── QR (gerado localmente, correção alta p/ caber a logo no centro) ──
+    const qs = 372
+    if (qr.width > 1) {
+      c.drawImage(qr, card.x + (card.w - qs) / 2, card.y + (card.h - qs) / 2, qs, qs)
+    }
+
+    // ── Quadrado central com a logo do Easy Feed (não é mais um círculo) ──
+    const plate = 104
+    c.save()
+    c.shadowColor = 'rgba(23,23,23,0.18)'
+    c.shadowBlur = 12
+    roundRect(c, cx - plate / 2, card.y + card.h / 2 - plate / 2, plate, plate, 22)
+    c.fillStyle = '#ffffff'
+    c.fill()
+    c.restore()
+    if (logo && logo.width > 1) {
+      // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
+      const box = plate - 6 * 2
+      const escala = Math.min(box / logo.width, box / logo.height)
+      const lw = logo.width * escala
+      const lh = logo.height * escala
+      c.drawImage(logo, cx - lw / 2, card.y + card.h / 2 - lh / 2, lw, lh)
+    } else {
+      c.textAlign = 'center'
+      c.fillStyle = t.acento
+      c.font = 'bold 16px sans-serif'
+      c.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
+    }
+  })
+  ctx.drawImage(camadaDoQr.canvas, 0, 0)
 
   // ── Nome do garçom, entre o QR e o crédito ──
   //
@@ -540,8 +640,8 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // é ele, e travar a sobreposição aqui seria decidir por ele. O editor avisa
   // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
   // que a sobreposição estraga o cartaz de verdade.
-  const livres = opts.elementos?.length
-    ? await desenharElementos(ctx, opts.elementos, t, W, H, opts.editandoId)
+  const livres = elementos.length
+    ? desenharElementos(ctx, elementos, t, W, H, imagens, opts.editandoId)
     : []
   return [...fixos, ...livres]
 }

@@ -14,7 +14,7 @@ import { jsPDF } from 'jspdf'
 import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus, Plus, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
-import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento } from '@/lib/qr-poster'
+import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
 import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { BarraElemento } from '@/components/EditorCartaz'
@@ -51,18 +51,40 @@ const ANCORAS: Ancora[] = ['no', 'ne', 'so', 'se', 'n', 's', 'l', 'o']
  * `pointermove` tinha ficado preso no nó que acabara de ser destruído. Era
  * exatamente por isso que redimensionar "não funcionava".
  */
+/**
+ * Barrinha comprida: 22px. Somando os dois cantos que ela divide o lado com,
+ * um lado precisa de mais ou menos isto pra caber tudo sem encavalar.
+ */
+const LADO_MINIMO_PRA_BARRINHA = 40
+
 function Alcas({
   id,
   aoPegar,
+  larguraTela,
+  alturaTela,
 }: {
   id: string
   aoPegar: (id: string, ancora: Ancora) => (e: React.PointerEvent<HTMLDivElement>) => void
+  /** Tamanho do elemento em pixels de TELA — não do cartaz. Ver abaixo. */
+  larguraTela: number
+  alturaTela: number
 }) {
   return (
     <>
       {ANCORAS.map((a) => {
         const canto = a.length === 2
         const vertical = a === 'l' || a === 'o'
+
+        // Num elemento baixo (uma linha de texto, por exemplo) a barrinha do
+        // lado tem quase a altura da caixa inteira: ela cobre os dois cantos
+        // e vira aquele amontoado de pontos e traços em cima uns dos outros.
+        // Quando o lado não comporta, a barrinha some e ficam só os cantos —
+        // que continuam redimensionando, então nada se perde. Os cantos nunca
+        // somem: sem eles não haveria como mudar o tamanho.
+        if (!canto) {
+          const lado = vertical ? alturaTela : larguraTela
+          if (lado < LADO_MINIMO_PRA_BARRINHA) return null
+        }
         const estilo: React.CSSProperties = {
           left: a.includes('o') ? -5 : a.includes('l') ? undefined : '50%',
           right: a.includes('l') ? -5 : undefined,
@@ -136,6 +158,12 @@ export default function QRCodes() {
   const [editandoAgora, setEditandoAgora] = useState(false)
   const camadaRef = useRef<HTMLDivElement>(null)
 
+  // Agendamento do desenho do cartaz. O porquê de cada um está em `desenhar`.
+  const opcoesRef = useRef<PosterOpts | null>(null)
+  const quadroRef = useRef<number | null>(null)
+  const desenhandoRef = useRef(false)
+  const pendenteRef = useRef(false)
+
   const cfgSalvoRef = useRef({ modo: 'upload', estilo: 'branco', imagem: null as string | null, mensagem: '' })
 
   useEffect(() => {
@@ -143,11 +171,32 @@ export default function QRCodes() {
   }, [])
 
   useEffect(() => {
-    if (qrData) {
-      drawCanvas()
+    if (!qrData) return
+    // Guarda o pedido mais recente e agenda UM desenho pro próximo quadro.
+    // Ver `desenhar` logo abaixo pro porquê das duas coisas.
+    opcoesRef.current = {
+      url: landingUrl(qrData.slug),
+      // Título e rótulo vazios caem no padrão (nome do cadastro e
+      // "RESTAURANTE"); rótulo em branco de propósito some do cartaz.
+      nome: cfgTitulo.trim() || restaurantName,
+      rotulo: cfgRotulo,
+      tagline: cfgMensagem,
+      estilos: cfgEstilos,
+      temaId: cfgEstilo,
+      elementos,
+      editandoId: editandoId ?? undefined,
     }
+    if (quadroRef.current != null) return
+    quadroRef.current = requestAnimationFrame(() => {
+      quadroRef.current = null
+      void desenhar()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId])
+
+  useEffect(() => () => {
+    if (quadroRef.current != null) cancelAnimationFrame(quadroRef.current)
+  }, [])
 
   /**
    * Enquanto se edita, a plaquinha fica RETA; ela só volta a se inclinar
@@ -572,6 +621,10 @@ export default function QRCodes() {
     if ('cor' in campos) estilo.cor = campos.cor
     if (campos.esticarX !== undefined) estilo.esticarX = campos.esticarX
     if (campos.esticarY !== undefined) estilo.esticarY = campos.esticarY
+    // Posição: o redimensionar mexe nela pra segurar a borda oposta. A barra
+    // de propriedades nunca manda x/y, então isto só entra por ali.
+    if (campos.x !== undefined) estilo.x = campos.x
+    if (campos.y !== undefined) estilo.y = campos.y
     setCfgEstilos((p) => ({ ...p, [id]: estilo }))
   }
 
@@ -602,6 +655,18 @@ export default function QRCodes() {
     // réguas faz o elemento crescer numa velocidade e a alça em outra.
     const porPixelX = POSTER_W / area.width
     const porPixelY = POSTER_H / area.height
+
+    // Onde está o ponto que o desenho usa como origem deste elemento, em
+    // pixels do cartaz. Nos elementos livres é o miolo; nos textos do cartaz
+    // é a linha de base, quase no pé da caixa — e quem nunca foi arrastado
+    // não tem posição guardada, então ela é lida da própria caixa medida.
+    const posX = el
+      ? el.x * POSTER_W
+      : (cfgEstilos[id]?.x ?? (caixa.x + caixa.w / 2) / POSTER_W) * POSTER_W
+    const posY = el
+      ? el.y * POSTER_H
+      : (cfgEstilos[id]?.y ?? (caixa.y + caixa.h) / POSTER_H) * POSTER_H
+
     const inicio = {
       px: e.clientX,
       py: e.clientY,
@@ -614,8 +679,17 @@ export default function QRCodes() {
       escalaY: el?.escalaY ?? null,
       recorte: el?.recorte ?? { x: 0, y: 0, w: 1, h: 1 },
     }
+
+    // Que fatia da caixa fica antes da origem, em cada eixo. É o que traduz
+    // "cresceu tanto" em "a origem tem que andar tanto" — e é medido, não
+    // chutado em 0,5, porque no texto do cartaz a origem não é o miolo.
+    const fracX = caixa.w > 0 ? (posX - caixa.x) / caixa.w : 0.5
+    const fracY = caixa.h > 0 ? (posY - caixa.y) / caixa.h : 0.5
+
     const oeste = ancora.includes('o')
     const norte = ancora.includes('n')
+    const leste = ancora === 'l' || ancora.includes('e')
+    const sul = ancora.includes('s')
 
     const ehTexto = Boolean(fixo) || el?.tipo === 'texto'
 
@@ -635,9 +709,30 @@ export default function QRCodes() {
       // testadas fora da tela.
       const dx = (telaX * cos + telaY * sen) * (oeste ? -1 : 1)
       const dy = (-telaX * sen + telaY * cos) * (norte ? -1 : 1)
-      const mudanca = calcularRedimensionamento(ehTexto ? 'texto' : 'imagem', ancora as Ancora, inicio, dx, dy)
-      if (fixo) alterarTextoFixo(id, mudanca)
-      else alterarElemento(id, mudanca)
+      const { fatorW, fatorH, ...campos } = calcularRedimensionamento(
+        ehTexto ? 'texto' : 'imagem', ancora as Ancora, inicio, dx, dy,
+      )
+
+      // A BORDA OPOSTA FICA PARADA.
+      //
+      // O elemento é desenhado a partir da origem dele, então mudar só o
+      // tamanho o faz crescer pros dois lados: puxando a direita, a esquerda
+      // vinha junto e a figura parecia se recentralizar sozinha a cada
+      // movimento. Andando com a origem na mesma medida em que a caixa
+      // cresceu, o lado que ninguém pegou não sai do lugar — e os outros três
+      // ficam parados quando se puxa um lado só, porque aí um dos fatores é 1.
+      const desX = leste ? fracX * inicio.w * (fatorW - 1)
+        : oeste ? -(1 - fracX) * inicio.w * (fatorW - 1) : 0
+      const desY = sul ? fracY * inicio.h * (fatorH - 1)
+        : norte ? -(1 - fracY) * inicio.h * (fatorH - 1) : 0
+
+      // O deslocamento nasce nos eixos do elemento; a posição vive nos eixos
+      // do cartaz. Numa figura virada, os dois não são a mesma coisa.
+      const x = (posX + (desX * cos - desY * sen)) / POSTER_W
+      const y = (posY + (desX * sen + desY * cos)) / POSTER_H
+
+      if (fixo) alterarTextoFixo(id, { ...campos, x, y })
+      else alterarElemento(id, { ...campos, x, y })
     }
 
     const soltar = () => {
@@ -708,30 +803,50 @@ export default function QRCodes() {
     alvo.addEventListener('pointerup', soltar)
   }
 
-  const drawCanvas = async () => {
-    const canvas = canvasRef.current
-    if (!canvas || !qrData) return
+  /**
+   * Redesenha o cartaz — no máximo um por vez, e sempre com o estado mais
+   * novo.
+   *
+   * Arrastando, o estado muda a cada movimento do dedo: dezenas de vezes por
+   * segundo. Antes cada mudança disparava o próprio desenho, e vários ficavam
+   * no ar ao mesmo tempo — daí o movimento aos trancos e a imagem repetida
+   * atrás da atual. São duas defesas, e as duas são necessárias:
+   *
+   * - o `requestAnimationFrame` de quem chama junta todas as mudanças de um
+   *   quadro num pedido só (não adianta desenhar mais vezes do que a tela
+   *   mostra);
+   * - a trava daqui garante que um desenho só comece quando o anterior tiver
+   *   terminado. Sem ela, dois desenhos concorrentes terminariam fora de
+   *   ordem e o cartaz podia parar num estado velho.
+   *
+   * Quando chega pedido novo no meio de um desenho, ele não vira outra
+   * chamada: marca `pendente`, e o laço aqui embaixo repete lendo as opções
+   * atualizadas. Pedidos acumulados no meio do caminho colapsam num só, que é
+   * o que se quer — só o último interessa.
+   */
+  const desenhar = async () => {
+    if (desenhandoRef.current) {
+      pendenteRef.current = true
+      return
+    }
+    desenhandoRef.current = true
     try {
-      setCaixas(
-        await desenharPoster(canvas, {
-          url: landingUrl(qrData.slug),
-          // Título e rótulo vazios caem no padrão (nome do cadastro e
-          // "RESTAURANTE"); rótulo em branco de propósito some do cartaz.
-          nome: cfgTitulo.trim() || restaurantName,
-          rotulo: cfgRotulo,
-          tagline: cfgMensagem,
-          estilos: cfgEstilos,
-          temaId: cfgEstilo,
-          elementos,
-          editandoId: editandoId ?? undefined,
-        }),
-      )
+      for (;;) {
+        pendenteRef.current = false
+        const canvas = canvasRef.current
+        const opcoes = opcoesRef.current
+        if (!canvas || !opcoes) break
+        setCaixas(await desenharPoster(canvas, opcoes))
+        if (!pendenteRef.current) break
+      }
     } catch (err) {
       // Antes uma falha aqui deixava o canvas em branco sem avisar nada —
       // nenhum try/catch, então a promise rejeitada só sumia no console
       // (ou nem isso). Logar de verdade é o que permite achar a causa real.
       console.error('Falha ao desenhar o QR impresso:', err)
       toast.error('Não foi possível gerar a visualização do QR impresso.')
+    } finally {
+      desenhandoRef.current = false
     }
   }
 
@@ -1190,6 +1305,12 @@ export default function QRCodes() {
                             height: `${((c.h + 12) / POSTER_H) * 100}%`,
                           }
                           const selecionadoAqui = selecionado === c.id
+                          // As alças têm tamanho fixo em pixels de TELA, e a
+                          // prévia é bem menor que o cartaz. Decidir o que
+                          // cabe pela medida do cartaz erraria por essa razão
+                          // inteira — um texto "largo" no cartaz pode ser
+                          // estreito aqui.
+                          const paraTela = larguraPreview / POSTER_W
 
                           /* Rótulo, nome e mensagem: editam clicando no
                              próprio cartaz, mas não se arrastam (o lugar
@@ -1252,9 +1373,19 @@ export default function QRCodes() {
                                   />
                                 )}
 
-                                {selecionado === c.id && !emEdicao && <Alcas id={c.id} aoPegar={redimensionar} />}
+                                {selecionadoAqui && !emEdicao && (
+                                  <Alcas
+                                    id={c.id}
+                                    aoPegar={redimensionar}
+                                    larguraTela={(c.w + 12) * paraTela}
+                                    alturaTela={(c.h + 12) * paraTela}
+                                  />
+                                )}
 
-                                {fixo.podeExcluir && (
+                                {/* Só fora da seleção: selecionado, a lixeira
+                                    está na barra de propriedades, e este "×"
+                                    caía bem em cima da alça do canto. */}
+                                {fixo.podeExcluir && !selecionadoAqui && (
                                   <button
                                     type="button"
                                     onClick={() => { fixo.alterar(''); setEditandoId(null) }}
@@ -1330,24 +1461,32 @@ export default function QRCodes() {
                                 />
                               )}
 
-                              {/* Excluir no hover — some junto com o elemento */}
-                              <button
-                                type="button"
-                                onClick={() => removerElemento(c.id)}
-                                aria-label="Excluir o elemento"
-                                title="Excluir"
-                                className={cn(
-                                  'absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white',
-                                  'group-hover:flex',
-                                  selecionado === c.id && 'flex',
-                                )}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
+                              {/* Excluir no hover, e SÓ fora da seleção: com o
+                                  elemento selecionado este "×" caía em cima
+                                  da alça do canto, e a lixeira já está na
+                                  barra de propriedades logo acima. */}
+                              {!selecionadoAqui && (
+                                <button
+                                  type="button"
+                                  onClick={() => removerElemento(c.id)}
+                                  aria-label="Excluir o elemento"
+                                  title="Excluir"
+                                  className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
 
                               {/* Cantos crescem proporcional; lados esticam o
                                   texto e cortam/esticam a imagem. */}
-                              {selecionado === c.id && !emEdicao && <Alcas id={c.id} aoPegar={redimensionar} />}
+                              {selecionadoAqui && !emEdicao && (
+                                <Alcas
+                                  id={c.id}
+                                  aoPegar={redimensionar}
+                                  larguraTela={(c.w + folga * 2) * paraTela}
+                                  alturaTela={(c.h + folga * 2) * paraTela}
+                                />
+                              )}
 
                               {/* Argola de girar, pendurada embaixo — só na
                                   imagem, porque é o único elemento que o
