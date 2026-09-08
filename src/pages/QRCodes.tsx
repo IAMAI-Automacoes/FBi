@@ -17,6 +17,7 @@ import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
 import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
+import { Alcas } from '@/components/AlcasElemento'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -35,87 +36,6 @@ function gerarSlug(n = 8) {
   let s = ''
   for (let i = 0; i < n; i++) s += SLUG_CHARS[Math.floor(Math.random() * SLUG_CHARS.length)]
   return s
-}
-
-/** As oito posições de alça: quatro cantos e quatro lados. */
-const ANCORAS: Ancora[] = ['no', 'ne', 'so', 'se', 'n', 's', 'l', 'o']
-
-/**
- * As alças em volta do elemento selecionado — mesmo desenho de um editor de
- * arte: bolinha nos cantos (cresce proporcional) e barrinha nos lados (mexe
- * só naquele sentido).
- *
- * Fica FORA do componente da página de propósito. Declarada lá dentro, cada
- * render criava um tipo de componente novo, o React descartava o nó da alça e
- * remontava outro — e o arrasto morria no primeiro movimento, porque o
- * `pointermove` tinha ficado preso no nó que acabara de ser destruído. Era
- * exatamente por isso que redimensionar "não funcionava".
- */
-/**
- * Barrinha comprida: 22px. Somando os dois cantos que ela divide o lado com,
- * um lado precisa de mais ou menos isto pra caber tudo sem encavalar.
- */
-const LADO_MINIMO_PRA_BARRINHA = 40
-
-function Alcas({
-  id,
-  aoPegar,
-  larguraTela,
-  alturaTela,
-}: {
-  id: string
-  aoPegar: (id: string, ancora: Ancora) => (e: React.PointerEvent<HTMLDivElement>) => void
-  /** Tamanho do elemento em pixels de TELA — não do cartaz. Ver abaixo. */
-  larguraTela: number
-  alturaTela: number
-}) {
-  return (
-    <>
-      {ANCORAS.map((a) => {
-        const canto = a.length === 2
-        const vertical = a === 'l' || a === 'o'
-
-        // Num elemento baixo (uma linha de texto, por exemplo) a barrinha do
-        // lado tem quase a altura da caixa inteira: ela cobre os dois cantos
-        // e vira aquele amontoado de pontos e traços em cima uns dos outros.
-        // Quando o lado não comporta, a barrinha some e ficam só os cantos —
-        // que continuam redimensionando, então nada se perde. Os cantos nunca
-        // somem: sem eles não haveria como mudar o tamanho.
-        if (!canto) {
-          const lado = vertical ? alturaTela : larguraTela
-          if (lado < LADO_MINIMO_PRA_BARRINHA) return null
-        }
-        const estilo: React.CSSProperties = {
-          left: a.includes('o') ? -5 : a.includes('l') ? undefined : '50%',
-          right: a.includes('l') ? -5 : undefined,
-          top: a.includes('n') ? -5 : a.includes('s') ? undefined : '50%',
-          bottom: a.includes('s') ? -5 : undefined,
-          transform: `translate(${a === 'n' || a === 's' ? '-50%' : '0'}, ${vertical ? '-50%' : '0'})`,
-          cursor: canto
-            ? (a === 'no' || a === 'se' ? 'nwse-resize' : 'nesw-resize')
-            : (a === 'n' || a === 's' ? 'ns-resize' : 'ew-resize'),
-        }
-        return (
-          <div
-            key={a}
-            onPointerDown={aoPegar(id, a)}
-            role="button"
-            tabIndex={-1}
-            aria-label={canto ? 'Redimensionar proporcional' : 'Redimensionar neste sentido'}
-            className={cn(
-              'absolute touch-none border border-gray-300 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]',
-              canto && 'h-[11px] w-[11px] rounded-full',
-              // Barrinha comprida no sentido do lado que ela puxa: é o que
-              // deixa claro, sem legenda, que ali só cresce naquele eixo.
-              !canto && vertical && 'h-[22px] w-[7px] rounded-full',
-              !canto && !vertical && 'h-[7px] w-[22px] rounded-full',
-            )}
-            style={estilo}
-          />
-        )
-      })}
-    </>
-  )
 }
 
 export default function QRCodes() {
