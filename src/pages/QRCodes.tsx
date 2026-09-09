@@ -20,6 +20,7 @@ import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { Alcas } from '@/components/AlcasElemento'
 import { FundoDaPaginaDoCliente, type FundoDoCliente } from '@/components/FundoDaPaginaDoCliente'
+import type { TextosDaPagina } from '@/components/LandingView'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -109,6 +110,11 @@ export default function QRCodes() {
   const [passo, setPasso] = useState<1 | 2>(1)
   const [fundoCliente, setFundoCliente] = useState<FundoDoCliente>({ modo: 'estilo', imagem: null, estilo: 'branco' })
   const [enviandoFoto, setEnviandoFoto] = useState(false)
+  /** Textos e imagens livres sobre a página do cliente (passo B). */
+  const [elementosCliente, setElementosCliente] = useState<ElementoCartaz[]>([])
+  /** O que o dono reescreveu nos textos da página do cliente, e a tipografia. */
+  const [textosCliente, setTextosCliente] = useState<TextosDaPagina>({})
+  const [estilosCliente, setEstilosCliente] = useState<EstilosDosTextos>({})
   const [whatsappDono, setWhatsappDono] = useState<string | null>(null)
 
   /** Editando agora: a plaquinha fica reta. Ver o efeito do descanso abaixo. */
@@ -326,7 +332,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, cliente_bg_modo, cliente_bg_imagem, cliente_estilo')
+          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, cliente_elementos, cliente_textos, cliente_textos_estilo')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -365,6 +371,10 @@ export default function QRCodes() {
           numero_whatsapp?: string | null
         } | null
         setWhatsappDono(cfgCliente?.numero_whatsapp ?? null)
+        const extras = config as unknown as { cliente_elementos?: unknown; cliente_textos?: unknown; cliente_textos_estilo?: unknown }
+        setElementosCliente(lerElementos(extras?.cliente_elementos))
+        setTextosCliente((extras?.cliente_textos ?? {}) as TextosDaPagina)
+        setEstilosCliente(lerEstiloDosTextos(extras?.cliente_textos_estilo))
         setFundoCliente({
           modo: cfgCliente?.cliente_bg_modo === 'upload' ? 'upload' : 'estilo',
           imagem: cfgCliente?.cliente_bg_imagem ?? null,
@@ -485,6 +495,9 @@ export default function QRCodes() {
           cliente_bg_modo: fundoCliente.modo,
           cliente_bg_imagem: fundoCliente.imagem,
           cliente_estilo: fundoCliente.estilo,
+          cliente_elementos: elementosCliente as unknown as Json,
+          cliente_textos: textosCliente as unknown as Json,
+          cliente_textos_estilo: estilosCliente as unknown as Json,
         } as never)
         .eq('id', restauranteId)
       if (error) throw error
@@ -493,6 +506,26 @@ export default function QRCodes() {
       toast.error('Erro ao salvar', { description: err.message })
     } finally {
       setSavingCfg(false)
+    }
+  }
+
+  /** Imagem de um ELEMENTO da página do cliente — devolve a URL pra quem pediu. */
+  const subirImagemDoCliente = async (arquivo: File): Promise<string | null> => {
+    if (!restauranteId) return null
+    setEnviandoFoto(true)
+    try {
+      const ext = (arquivo.name.split('.').pop() || 'png').toLowerCase()
+      const path = `${restauranteId}/cliente/el-${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('qr-fundos')
+        .upload(path, arquivo, { upsert: true, contentType: arquivo.type || 'image/png' })
+      if (error) throw error
+      return supabase.storage.from('qr-fundos').getPublicUrl(path).data.publicUrl
+    } catch (err: any) {
+      toast.error('Erro no upload', { description: err.message })
+      return null
+    } finally {
+      setEnviandoFoto(false)
     }
   }
 
@@ -1201,6 +1234,13 @@ export default function QRCodes() {
                 restauranteNome={cfgTitulo.trim() || restaurantName}
                 mensagem={cfgMensagem}
                 whatsapp={whatsappDono}
+                elementos={elementosCliente}
+                onElementosChange={setElementosCliente}
+                onSubirImagem={subirImagemDoCliente}
+                textos={textosCliente}
+                onTextosChange={setTextosCliente}
+                estilosDosTextos={estilosCliente}
+                onEstilosChange={setEstilosCliente}
               />
             </div>
           ) : (
@@ -1209,11 +1249,11 @@ export default function QRCodes() {
              50/50 sobrava uma faixa vazia grande dos dois lados dela — espaço
              que a configuração, essa sim cheia de controles, aproveita melhor. */
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
-            {/* ───────── A. Tema do display impresso ───────── */}
+            {/* ───────── Tema do display impresso ───────── */}
             <Card className="border-gray-200">
               <CardHeader className="pb-5">
                 <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
-                  A. Tema do QR Code Impresso
+                  Tema do QR Code Impresso
                 </CardTitle>
                 <CardDescription className="text-[13px] leading-relaxed">
                   Escolha uma cor sólida ou textura simples para a base do display físico que vai na mesa.

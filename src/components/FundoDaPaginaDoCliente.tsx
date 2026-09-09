@@ -1,7 +1,7 @@
 /**
- * Passo B: o fundo da página que o cliente abre ao ler o QR.
+ * Segundo passo: o fundo da página que o cliente abre ao ler o QR.
  *
- * É o irmão do passo A (o tema do cartaz impresso) e mora numa tela separada
+ * É o irmão do primeiro (o tema do cartaz impresso) e mora numa tela separada
  * de propósito: são decisões diferentes. O cartaz é papel sob luz de
  * restaurante, escolhido pelo dono e visto de longe; esta é uma tela na mão de
  * alguém que acabou de comer, e o que importa nela é a foto puxar o
@@ -15,7 +15,9 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { QR_TEXTURAS, fundoCss } from '@/lib/qr-temas'
-import { LandingView } from '@/components/LandingView'
+import { EditorDaPaginaDoCliente } from '@/components/EditorDaPaginaDoCliente'
+import type { ElementoCartaz, EstilosDosTextos } from '@/lib/cartaz-elementos'
+import type { TextosDaPagina } from '@/components/LandingView'
 
 export interface FundoDoCliente {
   modo: 'upload' | 'estilo'
@@ -36,43 +38,29 @@ interface Props {
   restauranteNome: string
   mensagem: string | null
   whatsapp: string | null
+  /** Os elementos livres da página do cliente e como subir imagem pra eles. */
+  elementos: ElementoCartaz[]
+  onElementosChange: (els: ElementoCartaz[]) => void
+  onSubirImagem: (arquivo: File) => Promise<string | null>
+  textos: TextosDaPagina
+  onTextosChange: (t: TextosDaPagina) => void
+  estilosDosTextos: EstilosDosTextos
+  onEstilosChange: (e: EstilosDosTextos) => void
 }
 
+/** A tela do celular na prévia — ver o porquê das medidas no editor. */
+export const ALTURA_TELA = 638
 /**
- * A tela do celular na prévia.
- *
- * A altura é a mesma da plaquinha do passo A (a chapa de acrílico, sem a base
- * de madeira): as duas prévias ficam do mesmo tamanho ao trocar de passo, e a
- * página não pula. A largura sai da PROPORÇÃO de um telefone atual (9:19.5) —
- * escolher uma largura à toa daria um aparelho gordo, e o enquadramento da
- * foto na prévia deixaria de valer pro celular de verdade.
+ * A coluna é mais larga que o aparelho de propósito: a barra de propriedades
+ * (fonte, corpo, negrito, itálico, cor, excluir) mora nela, e espremida na
+ * largura de um celular ela quebrava em duas fileiras a cada seleção.
  */
-const ALTURA_TELA = 638
-const LARGURA_TELA = Math.round(ALTURA_TELA * (9 / 19.5))
-const BORDA = 10
-
-function Celular({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative" style={{ width: LARGURA_TELA + BORDA * 2 }}>
-      <div
-        className="relative overflow-hidden bg-gray-900 shadow-[0_22px_50px_-16px_rgba(16,24,40,0.55)]"
-        style={{ borderRadius: 40, padding: BORDA }}
-      >
-        <div className="relative overflow-hidden bg-white" style={{ height: ALTURA_TELA, borderRadius: 30 }}>
-          {children}
-          {/* Ilha da câmera, por cima do conteúdo como no aparelho */}
-          <div className="pointer-events-none absolute left-1/2 top-2 h-[22px] w-[80px] -translate-x-1/2 rounded-full bg-gray-900" />
-          {/* Barra de gesto */}
-          <div className="pointer-events-none absolute bottom-[7px] left-1/2 h-[4px] w-[96px] -translate-x-1/2 rounded-full bg-white/70 mix-blend-difference" />
-        </div>
-      </div>
-    </div>
-  )
-}
+export const LARGURA_COLUNA = 420
 
 export function FundoDaPaginaDoCliente({
   valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar,
-  restauranteNome, mensagem, whatsapp,
+  restauranteNome, mensagem, whatsapp, elementos, onElementosChange, onSubirImagem,
+  textos, onTextosChange, estilosDosTextos, onEstilosChange,
 }: Props) {
   const temFoto = valor.modo === 'upload' && !!valor.imagem
 
@@ -84,10 +72,10 @@ export function FundoDaPaginaDoCliente({
       <Card className="border-gray-200">
         <CardHeader className="pb-5">
           <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
-            B. Fundo da Página do Cliente (Visual no WhatsApp)
+            Fundo da Página do Cliente
           </CardTitle>
           <CardDescription className="text-[13px] leading-relaxed">
-            Esta imagem ou padrão aparecerá atrás do feedback no celular do cliente.
+            É o que o cliente vê ao abrir o QR Code no celular.
           </CardDescription>
         </CardHeader>
 
@@ -100,7 +88,7 @@ export function FundoDaPaginaDoCliente({
             {/* ── A foto do lugar ── */}
             <div>
               {temFoto ? (
-                <div className="relative overflow-hidden rounded-xl border-2 border-[#C2622C] bg-white shadow-sm">
+                <div className="relative w-[70.7%] overflow-hidden rounded-xl border-2 border-[#C2622C] bg-white shadow-sm">
                   <img src={valor.imagem!} alt="Foto do restaurante" className="block aspect-[4/3] w-full object-cover" />
                   <button
                     type="button"
@@ -113,13 +101,16 @@ export function FundoDaPaginaDoCliente({
                   </button>
                 </div>
               ) : (
-                <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-white px-4 text-center transition-colors hover:border-[#C2622C]/60 hover:bg-[#C2622C]/[0.03]">
+                /* Metade da área de antes, com a mesma proporção: a largura
+                   cai por 1/raiz(2) (~70,7%), que é o que divide a área ao
+                   meio sem achatar o quadro. */
+                <label className="flex aspect-[4/3] w-[70.7%] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white px-3 text-center transition-colors hover:border-[#C2622C]/60 hover:bg-[#C2622C]/[0.03]">
                   {enviando ? (
-                    <Loader2 className="h-7 w-7 animate-spin text-[#C2622C]" />
+                    <Loader2 className="h-6 w-6 animate-spin text-[#C2622C]" />
                   ) : (
-                    <Upload className="h-7 w-7 text-gray-400" />
+                    <Upload className="h-6 w-6 text-gray-400" />
                   )}
-                  <span className="text-[13px] font-medium leading-snug text-gray-700">
+                  <span className="text-[12px] font-medium leading-snug text-gray-700">
                     + Subir Foto do Restaurante (PWA)
                   </span>
                   <input
@@ -197,43 +188,25 @@ export function FundoDaPaginaDoCliente({
         </CardContent>
       </Card>
 
-      {/* ───────── Prévia: o celular do cliente ───────── */}
-      <div className="flex w-[380px] max-w-full flex-col">
-        <div className="mb-2 flex min-h-[50px] items-center">
-          <div>
-            <p className="text-[13px] font-semibold text-gray-700">Página do cliente</p>
-            <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-              É isto que abre no celular de quem escaneia o QR.
-            </p>
-          </div>
-        </div>
-
-        {/* A mesma bancada do passo A, pelo mesmo motivo: dá ao aparelho um
-            chão em vez de deixá-lo flutuando no branco da página. */}
-        <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-5">
-          <Celular>
-            {/* A página DE VERDADE, o mesmo componente que o cliente abre —
-                não um desenho parecido. Uma prévia que não bate com o que
-                chega no celular é pior do que não ter prévia. */}
-            <LandingView
-              preview
-              restauranteNome={restauranteNome}
-              modo={valor.modo}
-              imagem={valor.imagem}
-              estilo={valor.estilo}
-              mensagem={mensagem}
-              whatsapp={whatsapp}
-            />
-          </Celular>
-        </div>
-
-        {!whatsapp && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] leading-relaxed text-amber-900">
-            O WhatsApp do restaurante ainda não está conectado. Sem ele o botão não
-            tem para onde levar, e o cliente abre a página sem conseguir mandar nada.
-          </p>
-        )}
-      </div>
+      {/* ───────── Prévia: o celular do cliente, editável ───────── */}
+      <EditorDaPaginaDoCliente
+        elementos={elementos}
+        onChange={onElementosChange}
+        onSubirImagem={onSubirImagem}
+        enviandoImagem={enviando}
+        restauranteNome={restauranteNome}
+        mensagem={mensagem}
+        whatsapp={whatsapp}
+        modo={valor.modo}
+        imagem={valor.imagem}
+        estilo={valor.estilo}
+        largura={LARGURA_COLUNA}
+        altura={ALTURA_TELA}
+        textos={textos}
+        onTextosChange={onTextosChange}
+        estilosDosTextos={estilosDosTextos}
+        onEstilosChange={onEstilosChange}
+      />
     </div>
   )
 }

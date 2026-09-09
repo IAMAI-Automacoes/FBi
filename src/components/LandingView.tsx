@@ -1,6 +1,19 @@
 import { fundoCss, getTema } from '@/lib/qr-temas'
+import { CamadaDeElementos, type CaixaDoElemento } from '@/components/CamadaDeElementos'
+import { fonteCss, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
-import { easyFeedLogo } from '@/assets/brand'
+import { easyFeedLogoInterna } from '@/assets/brand'
+
+/**
+ * Os textos da página que o dono pode reescrever.
+ *
+ * Tudo o que aparece na tela é dele, menos o crédito do produto — esse é a
+ * marca do Easy Feed no material do cliente, e se coubesse aqui bastaria
+ * apagar o campo para sumir.
+ */
+export const TEXTOS_DA_PAGINA = ['rotulo', 'nome', 'mensagem', 'botao', 'dica'] as const
+export type TextoDaPagina = (typeof TEXTOS_DA_PAGINA)[number]
+export type TextosDaPagina = Partial<Record<TextoDaPagina, string>>
 
 export interface LandingViewProps {
   restauranteNome: string
@@ -12,6 +25,16 @@ export interface LandingViewProps {
   mensagem?: string | null
   whatsapp?: string | null
   preview?: boolean // no preview o botão não navega
+  /** Textos e imagens que o dono posicionou sobre a página. */
+  elementos?: ElementoCartaz[]
+  /** O que o dono reescreveu nos textos da própria página. */
+  textos?: TextosDaPagina
+  /** Tipografia escolhida para esses textos, por id. */
+  estilosDosTextos?: EstilosDosTextos
+  /** Texto em edição: medido, mas não pintado (o editor o mostra). */
+  editandoId?: string | null
+  /** Onde cada elemento ficou. Só o editor usa. */
+  onCaixas?: (caixas: CaixaDoElemento[]) => void
 }
 
 // Estilos inline (sem Tailwind) de propósito: assim a LandingView funciona tanto
@@ -19,6 +42,7 @@ export interface LandingViewProps {
 // app — mantendo a página que o cliente abre pequena e rápida.
 export function LandingView({
   restauranteNome, modo, imagem, estilo, mensagem, whatsapp, preview,
+  elementos, textos, estilosDosTextos, editandoId, onCaixas,
 }: LandingViewProps) {
   const tema = getTema(estilo)
   // Duas apresentações possíveis, e elas pedem tratamentos opostos:
@@ -34,6 +58,30 @@ export function LandingView({
   const suave = sobreFoto ? 'rgba(255,255,255,0.9)' : tema.suave
   const tenue = sobreFoto ? 'rgba(255,255,255,0.7)' : tema.suave
   const waLink = whatsapp ? `https://wa.me/${whatsapp}` : null
+
+  /** O texto que vale: o que o dono escreveu, ou o padrão. */
+  const txt = (id: TextoDaPagina, padrao: string) => {
+    const escolhido = textos?.[id]
+    // String vazia é escolha ("não quero esta linha"), não falta de
+    // configuração — por isso o teste é de nulidade.
+    return escolhido != null ? escolhido : padrao
+  }
+
+  /** A tipografia que o dono mexeu, por cima do padrão daquele texto. */
+  const est = (id: TextoDaPagina, base: React.CSSProperties): React.CSSProperties => {
+    const e = estilosDosTextos?.[id]
+    if (!e) return base
+    return {
+      ...base,
+      fontFamily: e.fonte ? fonteCss(e.fonte) : base.fontFamily,
+      fontSize: e.tamanho ?? base.fontSize,
+      fontWeight: e.negrito != null ? (e.negrito ? 700 : 400) : base.fontWeight,
+      fontStyle: e.italico != null ? (e.italico ? 'italic' : 'normal') : base.fontStyle,
+      color: e.cor ?? base.color,
+    }
+  }
+
+  const oculto = (id: TextoDaPagina) => !txt(id, 'x').trim()
 
   const botaoStyle: React.CSSProperties = {
     display: 'inline-flex',
@@ -52,6 +100,7 @@ export function LandingView({
     boxShadow: '0 14px 34px -10px rgba(37,211,102,0.75)',
     border: '1px solid rgba(255,255,255,0.22)',
   }
+  const rotuloBotao = txt('botao', 'Dar meu feedback')
   const Icone = <WhatsappIcon style={{ width: 22, height: 22 }} />
   // Sem número não há para onde mandar. O cliente não pode resolver isso, e
   // dizer "WhatsApp não configurado" o deixa achando que ele é que errou —
@@ -61,9 +110,9 @@ export function LandingView({
       A coleta de feedback deste restaurante está temporariamente indisponível.
     </p>
   ) : preview || !waLink ? (
-    <div style={botaoStyle}>{Icone} Dar meu feedback</div>
+    <div data-texto="botao" style={est('botao', botaoStyle)}>{Icone} {rotuloBotao}</div>
   ) : (
-    <a href={waLink} style={botaoStyle}>{Icone} Dar meu feedback</a>
+    <a data-texto="botao" href={waLink} style={est('botao', botaoStyle)}>{Icone} {rotuloBotao}</a>
   )
 
   // O tamanho pedido ao gerador é o de uma tela de celular, e não o padrão do
@@ -78,6 +127,13 @@ export function LandingView({
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.42) 55%, rgba(0,0,0,0.22))' }} />
           <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 96, background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))' }} />
         </>
+      )}
+
+      {/* O que o dono acrescentou. Vai atrás do conteúdo fixo de propósito: o
+          botão é a única ação da página, e um elemento livre por cima dele
+          transformaria uma decoração num bloqueio. */}
+      {elementos && elementos.length > 0 && (
+        <CamadaDeElementos elementos={elementos} tinta={forte} editandoId={editandoId} onCaixas={onCaixas} />
       )}
 
       {/* A COMPOSIÇÃO, e por que é esta.
@@ -96,39 +152,45 @@ export function LandingView({
           O crédito do produto sai do caminho e vai pro pé da tela: ele estava
           logo abaixo do botão, disputando a área mais nobre com a única ação
           que a página tem. */}
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px calc(64px + env(safe-area-inset-bottom, 0px))', color: forte }}>
-        {/* Selo topo */}
-        <div style={{ position: 'absolute', left: '50%', top: 24, transform: 'translateX(-50%)' }}>
-          <span style={{ borderRadius: 999, background: sobreFoto ? 'rgba(255,255,255,0.12)' : 'rgba(127,127,127,0.13)', padding: '6px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: suave, border: `1px solid ${sobreFoto ? 'rgba(255,255,255,0.15)' : 'rgba(127,127,127,0.18)'}`, WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}>
-            Sua opinião
-          </span>
-        </div>
-
+      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px calc(104px + env(safe-area-inset-bottom, 0px))', color: forte }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue }}>Restaurante</p>
-          <h1 style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 700, lineHeight: 1.15 }}>{restauranteNome}</h1>
-          <p style={{ margin: '12px 0 0', maxWidth: '19rem', fontSize: 15, lineHeight: 1.5, color: suave }}>
-            {mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.'}
-          </p>
+          {!oculto('rotulo') && (
+            <p data-texto="rotulo" style={est('rotulo', { margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue })}>
+              {txt('rotulo', 'Restaurante')}
+            </p>
+          )}
+          {!oculto('nome') && (
+            <h1 data-texto="nome" style={est('nome', { margin: '4px 0 0', fontSize: 30, fontWeight: 700, lineHeight: 1.15 })}>
+              {txt('nome', restauranteNome)}
+            </h1>
+          )}
+          {!oculto('mensagem') && (
+            <p data-texto="mensagem" style={est('mensagem', { margin: '12px 0 0', maxWidth: '19rem', fontSize: 15, lineHeight: 1.5, color: suave })}>
+              {txt('mensagem', mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.')}
+            </p>
+          )}
 
           {/* Mesma largura do texto acima: mais estreito que a frase, o botão
               lia como um detalhe dela em vez da ação da tela. */}
           <div style={{ marginTop: 26, width: '100%', maxWidth: '19rem' }}>{Botao}</div>
 
-          {whatsapp && (
-            <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue }}>
-              Abre o WhatsApp do restaurante
+          {whatsapp && !oculto('dica') && (
+            <p data-texto="dica" style={est('dica', { margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue })}>
+              {txt('dica', 'Abre o WhatsApp do restaurante')}
             </p>
           )}
         </div>
       </div>
 
-      {/* Crédito do produto, no pé e fora do fluxo: presente pra quem procura,
-          invisível pra quem só quer tocar no botão. */}
-      <div style={{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 'calc(18px + env(safe-area-inset-bottom, 0px))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: 0.75 }}>
-        <span style={{ fontSize: 10.5, color: tenue }}>feito com</span>
-        <span style={{ borderRadius: 5, background: 'rgba(255,255,255,0.95)', padding: '3px 6px', display: 'inline-flex', boxShadow: sobreFoto ? 'none' : '0 1px 3px rgba(0,0,0,0.12)' }}>
-          <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 13, width: 'auto', objectFit: 'contain', display: 'block' }} />
+      {/* Crédito do produto, no pé e fora do fluxo.
+          É a única coisa da tela que o dono não reescreve — a marca do produto
+          no material do cliente. Ficou maior do que era: com 13px de altura o
+          lockup virava um borrão verde em que não dava pra ler "Easy Feed",
+          o que não serve nem ao produto nem a quem vê. */}
+      <div style={{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: tenue, opacity: 0.9 }}>feito com</span>
+        <span style={{ borderRadius: 8, background: 'rgba(255,255,255,0.96)', padding: '6px 12px', display: 'inline-flex', boxShadow: '0 2px 8px rgba(0,0,0,0.14)' }}>
+          <img src={easyFeedLogoInterna} alt="Easy Feed" style={{ height: 22, width: 'auto', objectFit: 'contain', display: 'block' }} />
         </span>
       </div>
     </div>

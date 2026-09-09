@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
-import { LandingView } from '@/components/LandingView'
+import { LandingView, type TextosDaPagina } from '@/components/LandingView'
+import { lerElementos, lerEstiloDosTextos, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 
 interface LandingData {
   restauranteNome: string
@@ -13,6 +14,9 @@ interface LandingData {
   estilo: string
   filtro: string
   mensagem: string | null
+  elementos: ElementoCartaz[]
+  textos: TextosDaPagina
+  estilosDosTextos: EstilosDosTextos
 }
 
 export default function FeedbackLanding() {
@@ -61,6 +65,9 @@ export default function FeedbackLanding() {
         filtro={data.filtro}
         mensagem={data.mensagem}
         whatsapp={data.whatsapp}
+        elementos={lerElementos(data.elementos)}
+        textos={data.textos ?? {}}
+        estilosDosTextos={lerEstiloDosTextos(data.estilosDosTextos)}
       />
     </div>
   )

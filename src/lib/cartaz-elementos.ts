@@ -270,6 +270,48 @@ export function garantirCssDasFontes(): Promise<void> {
   return cssPronto
 }
 
+/**
+ * Injeta o CSS de ALGUMAS famílias, uma vez cada.
+ *
+ * O irmão acima pede as 50 de uma vez, e isso é certo no editor: quem está
+ * escolhendo fonte precisa ver a lista inteira escrita na própria fonte. Na
+ * página que o CLIENTE abre é o contrário — ela é servida por um bundle leve
+ * de propósito, e o dono usou duas ou três famílias no máximo. Pedir 230 KB de
+ * regras `@font-face` pra usar duas seria pagar o editor inteiro no celular de
+ * quem só quer mandar um feedback.
+ */
+const cssPorFamilia = new Map<string, Promise<void>>()
+
+export function garantirCssDestasFontes(ids: string[]): Promise<void> {
+  if (typeof document === 'undefined') return Promise.resolve()
+
+  const familias = [...new Set(
+    ids.map((id) => FONTES.find((f) => f.id === id)?.familia).filter((f): f is string => !!f),
+  )]
+  if (familias.length === 0) return Promise.resolve()
+
+  return Promise.all(familias.map((familia) => {
+    const pronta = cssPorFamilia.get(familia)
+    if (pronta) return pronta
+
+    const p = new Promise<void>((resolve) => {
+      const id = `fonte-${familia.replace(/\s+/g, '-').toLowerCase()}`
+      if (document.getElementById(id)) return resolve()
+      const link = document.createElement('link')
+      link.id = id
+      link.rel = 'stylesheet'
+      link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(familia).replace(/%20/g, '+')}:ital,wght@0,400;0,700;1,400;1,700&display=swap`
+      // Resolve no load E no erro: com a rede fora, a página segue na reserva
+      // em vez de ficar presa esperando.
+      link.onload = () => resolve()
+      link.onerror = () => resolve()
+      document.head.appendChild(link)
+    })
+    cssPorFamilia.set(familia, p)
+    return p
+  })).then(() => undefined)
+}
+
 /** O que já sabemos carregado — evita reconsultar a cada redesenho do cartaz. */
 const carregadas = new Set<string>()
 

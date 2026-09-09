@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest } = await admin
       .from('restaurantes')
-      .select('nome_restaurante, numero_whatsapp, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
+      .select('nome_restaurante, numero_whatsapp, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, cliente_elementos, cliente_textos, cliente_textos_estilo, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
       .eq('id', qr.restaurante_id)
       .maybeSingle()
     if (!rest) return json({ error: 'Restaurante não encontrado' }, 404)
@@ -92,6 +92,9 @@ Deno.serve(async (req: Request) => {
       estilo: rest.cliente_estilo ?? rest.qr_estilo ?? 'classico',
       filtro: rest.qr_filtro ?? 'nenhum',
       mensagem: rest.qr_mensagem ?? null,
+      elementos: Array.isArray(rest.cliente_elementos) ? rest.cliente_elementos : [],
+      textos: rest.cliente_textos ?? {},
+      estilosDosTextos: rest.cliente_textos_estilo ?? {},
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
