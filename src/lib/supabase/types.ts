@@ -1893,6 +1893,9 @@ export type Database = {
           assinatura_expira_em: string | null
           assinatura_status: string
           auth_user_id: string
+          cliente_bg_imagem: string | null
+          cliente_bg_modo: string | null
+          cliente_estilo: string | null
           config_bonificacao: Json
           config_insights: Json | null
           created_at: string
@@ -1939,6 +1942,9 @@ export type Database = {
           assinatura_expira_em?: string | null
           assinatura_status?: string
           auth_user_id: string
+          cliente_bg_imagem?: string | null
+          cliente_bg_modo?: string | null
+          cliente_estilo?: string | null
           config_bonificacao?: Json
           config_insights?: Json | null
           created_at?: string
@@ -1985,6 +1991,9 @@ export type Database = {
           assinatura_expira_em?: string | null
           assinatura_status?: string
           auth_user_id?: string
+          cliente_bg_imagem?: string | null
+          cliente_bg_modo?: string | null
+          cliente_estilo?: string | null
           config_bonificacao?: Json
           config_insights?: Json | null
           created_at?: string

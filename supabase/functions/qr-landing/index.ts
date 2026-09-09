@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest } = await admin
       .from('restaurantes')
-      .select('nome_restaurante, numero_whatsapp, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
+      .select('nome_restaurante, numero_whatsapp, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
       .eq('id', qr.restaurante_id)
       .maybeSingle()
     if (!rest) return json({ error: 'Restaurante não encontrado' }, 404)
@@ -83,9 +83,13 @@ Deno.serve(async (req: Request) => {
       restauranteNome: rest.nome_restaurante ?? 'Restaurante',
       whatsapp,
       garcomNome,
-      modo: rest.qr_bg_modo ?? 'estilo',
-      imagem: rest.qr_bg_imagem ?? null,
-      estilo: rest.qr_estilo ?? 'classico',
+      // O fundo desta página tem campos PRÓPRIOS desde a separação entre o
+      // cartaz impresso e o que o cliente vê no celular. Os `qr_*` ficam de
+      // reserva: a migração copiou os valores, mas um restaurante criado entre
+      // o deploy do banco e o desta função pode ter só os antigos preenchidos.
+      modo: rest.cliente_bg_modo ?? rest.qr_bg_modo ?? 'estilo',
+      imagem: rest.cliente_bg_imagem ?? rest.qr_bg_imagem ?? null,
+      estilo: rest.cliente_estilo ?? rest.qr_estilo ?? 'classico',
       filtro: rest.qr_filtro ?? 'nenhum',
       mensagem: rest.qr_mensagem ?? null,
     })

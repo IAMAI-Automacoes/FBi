@@ -12,13 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
 import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { Alcas } from '@/components/AlcasElemento'
+import { FundoDaPaginaDoCliente, type FundoDoCliente } from '@/components/FundoDaPaginaDoCliente'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
@@ -98,6 +99,18 @@ export default function QRCodes() {
   const [editandoId, setEditandoId] = useState<string | null>(null)
   /** Largura da prévia em pixels de tela — converte o corpo do cartaz pro campo. */
   const [larguraPreview, setLarguraPreview] = useState(0)
+  /**
+   * Em que passo da personalização a pessoa está.
+   *
+   * 1 = o cartaz impresso (A), 2 = o fundo da página do cliente (B). São duas
+   * decisões sem nada em comum além de saírem do mesmo QR, e numa tela só a
+   * segunda ficava enterrada abaixo da dobra — ninguém a encontrava.
+   */
+  const [passo, setPasso] = useState<1 | 2>(1)
+  const [fundoCliente, setFundoCliente] = useState<FundoDoCliente>({ modo: 'estilo', imagem: null, estilo: 'branco' })
+  const [enviandoFoto, setEnviandoFoto] = useState(false)
+  const [whatsappDono, setWhatsappDono] = useState<string | null>(null)
+
   /** Editando agora: a plaquinha fica reta. Ver o efeito do descanso abaixo. */
   const [editandoAgora, setEditandoAgora] = useState(false)
   const camadaRef = useRef<HTMLDivElement>(null)
@@ -249,6 +262,28 @@ export default function QRCodes() {
    * do cartaz: qualquer mudança dispara o efeito de novo, e o `clearTimeout`
    * da limpeza cancela a contagem anterior.
    */
+  /**
+   * Endireita a plaquinha e reinicia a contagem dos 20 segundos.
+   *
+   * Um relógio próprio, e não um `setTimeout` dentro de um efeito: quem
+   * acorda a plaquinha não é só a edição do conteúdo — o mouse chegando perto
+   * também acorda (ver `onPointerEnter` na prévia), e isso não muda nenhuma
+   * dependência que um efeito pudesse observar.
+   */
+  const relogioDaPlaquinha = useRef<number | null>(null)
+  const acordarPlaquinha = () => {
+    setEditandoAgora(true)
+    if (relogioDaPlaquinha.current) clearTimeout(relogioDaPlaquinha.current)
+    relogioDaPlaquinha.current = window.setTimeout(() => {
+      // Num arrasto que passe dos 20s, inclinar no meio do gesto deslocaria o
+      // alvo debaixo do dedo — e o `setState` renderizaria a página bem quando
+      // ela precisa ficar fora do caminho. Ao soltar, o conteúdo muda e a
+      // contagem recomeça.
+      if (gestoRef.current) return
+      setEditandoAgora(false)
+    }, 20_000)
+  }
+
   const primeiroDesenho = useRef(true)
   useEffect(() => {
     // Sem isto a plaquinha nasceria reta e só inclinaria 20s depois de abrir
@@ -257,17 +292,13 @@ export default function QRCodes() {
       primeiroDesenho.current = false
       return
     }
-    setEditandoAgora(true)
-    const relogio = setTimeout(() => {
-      // Num arrasto que passe dos 20s, inclinar a plaquinha no meio do gesto
-      // deslocaria o alvo debaixo do dedo — e o `setState` renderizaria a
-      // página justamente quando ela precisa ficar fora do caminho. Ao soltar,
-      // o estado muda e este efeito recomeça a contagem.
-      if (gestoRef.current) return
-      setEditandoAgora(false)
-    }, 20_000)
-    return () => clearTimeout(relogio)
+    acordarPlaquinha()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, selecionado])
+
+  useEffect(() => () => {
+    if (relogioDaPlaquinha.current) clearTimeout(relogioDaPlaquinha.current)
+  }, [])
 
   /**
    * Largura real da prévia na tela.
@@ -295,7 +326,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos')
+          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, cliente_bg_modo, cliente_bg_imagem, cliente_estilo')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -325,6 +356,20 @@ export default function QRCodes() {
         // existe. Vazio aqui significa "usa o nome do cadastro", e o
         // placeholder mostra qual é.
         setCfgTitulo((config as any)?.qr_titulo ?? '')
+        // Fundo da página do cliente (passo B). Quem nunca passou por lá cai
+        // no que a migração copiou do cartaz — o mesmo que o cliente já via.
+        const cfgCliente = config as unknown as {
+          cliente_bg_modo?: string | null
+          cliente_bg_imagem?: string | null
+          cliente_estilo?: string | null
+          numero_whatsapp?: string | null
+        } | null
+        setWhatsappDono(cfgCliente?.numero_whatsapp ?? null)
+        setFundoCliente({
+          modo: cfgCliente?.cliente_bg_modo === 'upload' ? 'upload' : 'estilo',
+          imagem: cfgCliente?.cliente_bg_imagem ?? null,
+          estilo: getTema(cfgCliente?.cliente_estilo ?? config?.qr_estilo).id,
+        })
         setElementos(lerElementos(config?.qr_elementos))
         setCfgEstilos(lerEstiloDosTextos((config as any)?.qr_textos_estilo))
         cfgSalvoRef.current = {
@@ -421,6 +466,62 @@ export default function QRCodes() {
       toast.error('Erro ao salvar', { description: err.message })
     } finally {
       setSavingCfg(false)
+    }
+  }
+
+  /**
+   * Grava o passo B. Separado do `salvarCfg` porque são gravações de coisas
+   * diferentes: uma fecha o cartaz impresso, a outra a página do cliente.
+   * Juntar as duas faria "Salvar Alterações" na prévia do celular regravar
+   * também a tipografia do cartaz — sem ninguém ter pedido.
+   */
+  const salvarFundoDoCliente = async () => {
+    if (!restauranteId) return
+    setSavingCfg(true)
+    try {
+      const { error } = await supabase
+        .from('restaurantes')
+        .update({
+          cliente_bg_modo: fundoCliente.modo,
+          cliente_bg_imagem: fundoCliente.imagem,
+          cliente_estilo: fundoCliente.estilo,
+        } as never)
+        .eq('id', restauranteId)
+      if (error) throw error
+      toast.success('Página do cliente salva!')
+    } catch (err: any) {
+      toast.error('Erro ao salvar', { description: err.message })
+    } finally {
+      setSavingCfg(false)
+    }
+  }
+
+  /**
+   * Foto de fundo da página do cliente.
+   *
+   * Vai pro mesmo balde das artes do cartaz, mas numa pasta própria: são
+   * imagens com vidas separadas, e apagar a arte do cartaz não pode levar
+   * junto a foto que o cliente vê. Sobe direto, sem passar pelo recorte — a
+   * `LandingView` já cobre a tela com `object-fit: cover`, e obrigar a
+   * recortar antes de ver o resultado é uma etapa a mais pra nada.
+   */
+  const enviarFotoDoCliente = async (arquivo: File) => {
+    if (!restauranteId) return
+    setEnviandoFoto(true)
+    try {
+      const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `${restauranteId}/cliente/${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('qr-fundos')
+        .upload(path, arquivo, { upsert: true, contentType: arquivo.type || 'image/jpeg' })
+      if (error) throw error
+      const { data } = supabase.storage.from('qr-fundos').getPublicUrl(path)
+      setFundoCliente((f) => ({ ...f, modo: 'upload', imagem: data.publicUrl }))
+      toast.success('Foto enviada!')
+    } catch (err: any) {
+      toast.error('Erro no upload', { description: err.message })
+    } finally {
+      setEnviandoFoto(false)
     }
   }
 
@@ -998,7 +1099,7 @@ export default function QRCodes() {
             <TabsTrigger value="config">Personalizar</TabsTrigger>
             <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
-          {aba === 'config' && (
+          {aba === 'config' && passo === 1 && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
                principal no corpo, o formato atrás da seta. Um menu inteiro só
                pra escolher entre dois formatos obrigava dois cliques pra
@@ -1080,16 +1181,39 @@ export default function QRCodes() {
 
         {/* ── PERSONALIZAR ── */}
         <TabsContent value="config" className="mt-0">
-          {/* A coluna da prévia é dimensionada pelo CONTEÚDO (`auto`), não por
-              metade da tela: a plaquinha tem largura fixa, então numa grade
-              50/50 sobrava uma faixa vazia grande dos dois lados dela — espaço
-              que a configuração, essa sim cheia de controles, aproveita melhor. */}
+          {passo === 2 ? (
+            <div className="mx-auto max-w-3xl space-y-4">
+              <button
+                type="button"
+                onClick={() => setPasso(1)}
+                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="h-4 w-4" /> Voltar para o cartaz impresso
+              </button>
+              <FundoDaPaginaDoCliente
+                valor={fundoCliente}
+                onChange={setFundoCliente}
+                onEscolherFoto={enviarFotoDoCliente}
+                enviando={enviandoFoto}
+                salvando={savingCfg}
+                onSalvar={salvarFundoDoCliente}
+                onCancelar={() => setPasso(1)}
+                restauranteNome={cfgTitulo.trim() || restaurantName}
+                mensagem={cfgMensagem}
+                whatsapp={whatsappDono}
+              />
+            </div>
+          ) : (
+          /* A coluna da prévia é dimensionada pelo CONTEÚDO (`auto`), não por
+             metade da tela: a plaquinha tem largura fixa, então numa grade
+             50/50 sobrava uma faixa vazia grande dos dois lados dela — espaço
+             que a configuração, essa sim cheia de controles, aproveita melhor. */
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
             {/* ───────── A. Tema do display impresso ───────── */}
             <Card className="border-gray-200">
               <CardHeader className="pb-5">
                 <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
-                  Tema do QR Code Impresso
+                  A. Tema do QR Code Impresso
                 </CardTitle>
                 <CardDescription className="text-[13px] leading-relaxed">
                   Escolha uma cor sólida ou textura simples para a base do display físico que vai na mesa.
@@ -1268,7 +1392,12 @@ export default function QRCodes() {
                     direita — ação que conclui e leva adiante, não um botão de
                     barra ocupando a largura toda. Ele grava do mesmo jeito. */}
                 <div className="flex justify-end">
-                  <Button onClick={salvarCfg} disabled={savingCfg} variant="primario" size="forma">
+                  <Button
+                    onClick={async () => { await salvarCfg(); setPasso(2) }}
+                    disabled={savingCfg}
+                    variant="primario"
+                    size="forma"
+                  >
                     {savingCfg && <Loader2 className="h-4 w-4 animate-spin" />}
                     {savingCfg ? 'Salvando…' : 'Continuar'}
                     {!savingCfg && <ArrowRight className="h-4 w-4" />}
@@ -1315,7 +1444,15 @@ export default function QRCodes() {
               {/* A barra de propriedades fica colada na prévia: é nela que o
                   elemento é posicionado e digitado, e ter o controle no outro
                   lado da tela obrigava a ir e voltar com o olho a cada
-                  ajuste. */}
+                  ajuste.
+
+                  O ESPAÇO DELA É SEMPRE RESERVADO, com ou sem seleção. Ela
+                  aparecia do nada e empurrava a plaquinha 54px pra baixo — o
+                  primeiro clique selecionava o texto, a barra nascia, o cartaz
+                  descia, e o segundo clique dos dois-cliques caía 54px acima
+                  do que a pessoa mirou: clicar na mensagem abria o nome do
+                  restaurante. Reservando a faixa, o cartaz não sai do lugar. */}
+              <div className="min-h-[50px]">
               {elementoSelecionado && (
                 <BarraElemento
                   elemento={elementoSelecionado}
@@ -1339,6 +1476,7 @@ export default function QRCodes() {
                   podeRemover={textosFixos[selecionado].podeExcluir}
                 />
               )}
+              </div>
 
 
               {/* O fundo da bancada acompanha o tema: é o que faz a troca de cor
@@ -1383,7 +1521,14 @@ export default function QRCodes() {
                           caixas vêm de `desenharPoster`, medidas no MESMO
                           desenho, então o alvo cai onde o elemento está —
                           estimar a largura do texto aqui daria alvo torto. */}
-                      <div ref={camadaRef} className="relative">
+                      {/* O ponteiro chegando perto já endireita a plaquinha.
+                          O arrasto converte pixels de tela em pixels do cartaz
+                          pela largura MEDIDA da prévia, e inclinada essa
+                          largura é a da caixa projetada, não a do cartaz: o
+                          elemento andaria mais devagar que o dedo. Endireitar
+                          na aproximação faz o gesto sempre começar reto, sem
+                          precisar corrigir a conta. */}
+                      <div ref={camadaRef} className="relative" onPointerEnter={acordarPlaquinha}>
                         <canvas
                           ref={canvasRef}
                           width={POSTER_W}
@@ -1643,6 +1788,7 @@ export default function QRCodes() {
               </div>
             </div>
           </div>
+          )}
         </TabsContent>
       </Tabs>
 
