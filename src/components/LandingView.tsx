@@ -38,13 +38,14 @@ export function LandingView({
   const botaoStyle: React.CSSProperties = {
     display: 'inline-flex',
     width: '100%',
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
     gap: '10px',
     borderRadius: '16px',
     background: '#25D366',
-    padding: '15px 24px',
-    fontSize: '16px',
+    padding: '16px 24px',
+    fontSize: '17px',
     fontWeight: 700,
     color: '#ffffff',
     textDecoration: 'none',
@@ -52,8 +53,13 @@ export function LandingView({
     border: '1px solid rgba(255,255,255,0.22)',
   }
   const Icone = <WhatsappIcon style={{ width: 22, height: 22 }} />
+  // Sem número não há para onde mandar. O cliente não pode resolver isso, e
+  // dizer "WhatsApp não configurado" o deixa achando que ele é que errou —
+  // então a página só admite que a coleta está fora do ar.
   const Botao = !whatsapp ? (
-    <p style={{ textAlign: 'center', fontSize: 14, color: suave }}>WhatsApp ainda não configurado.</p>
+    <p style={{ textAlign: 'center', fontSize: 14, lineHeight: 1.5, color: suave }}>
+      A coleta de feedback deste restaurante está temporariamente indisponível.
+    </p>
   ) : preview || !waLink ? (
     <div style={botaoStyle}>{Icone} Dar meu feedback</div>
   ) : (
@@ -74,7 +80,23 @@ export function LandingView({
         </>
       )}
 
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px 32px', color: forte }}>
+      {/* A COMPOSIÇÃO, e por que é esta.
+          Quem abre acabou de comer, está sentado, com o celular numa mão e
+          pressa. A página tem UMA decisão: mandar o feedback ou não. Então ela
+          é lida de baixo pra cima, na ordem em que a pessoa precisa:
+
+          1. o botão, na metade de baixo — onde o polegar alcança sem trocar a
+             mão de posição;
+          2. logo acima dele, o que vai acontecer ao tocar (abre o WhatsApp) —
+             sem isso, quem hesita não toca;
+          3. acima, o pedido do dono;
+          4. e no alto do bloco, o nome do restaurante, que é o que responde
+             "caí no lugar certo?".
+
+          O crédito do produto sai do caminho e vai pro pé da tela: ele estava
+          logo abaixo do botão, disputando a área mais nobre com a única ação
+          que a página tem. */}
+      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px calc(64px + env(safe-area-inset-bottom, 0px))', color: forte }}>
         {/* Selo topo */}
         <div style={{ position: 'absolute', left: '50%', top: 24, transform: 'translateX(-50%)' }}>
           <span style={{ borderRadius: 999, background: sobreFoto ? 'rgba(255,255,255,0.12)' : 'rgba(127,127,127,0.13)', padding: '6px 14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: suave, border: `1px solid ${sobreFoto ? 'rgba(255,255,255,0.15)' : 'rgba(127,127,127,0.18)'}`, WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}>
@@ -89,15 +111,25 @@ export function LandingView({
             {mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.'}
           </p>
 
-          <div style={{ marginTop: 24, width: '100%', maxWidth: '18rem' }}>{Botao}</div>
+          {/* Mesma largura do texto acima: mais estreito que a frase, o botão
+              lia como um detalhe dela em vez da ação da tela. */}
+          <div style={{ marginTop: 26, width: '100%', maxWidth: '19rem' }}>{Botao}</div>
 
-          <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85 }}>
-            <span style={{ fontSize: 11, color: tenue }}>feito com</span>
-            <span style={{ borderRadius: 6, background: 'rgba(255,255,255,0.95)', padding: '4px 8px', display: 'inline-flex', boxShadow: sobreFoto ? 'none' : '0 1px 3px rgba(0,0,0,0.12)' }}>
-              <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 16, width: 'auto', objectFit: 'contain', display: 'block' }} />
-            </span>
-          </div>
+          {whatsapp && (
+            <p style={{ margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue }}>
+              Abre o WhatsApp do restaurante
+            </p>
+          )}
         </div>
+      </div>
+
+      {/* Crédito do produto, no pé e fora do fluxo: presente pra quem procura,
+          invisível pra quem só quer tocar no botão. */}
+      <div style={{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 'calc(18px + env(safe-area-inset-bottom, 0px))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: 0.75 }}>
+        <span style={{ fontSize: 10.5, color: tenue }}>feito com</span>
+        <span style={{ borderRadius: 5, background: 'rgba(255,255,255,0.95)', padding: '3px 6px', display: 'inline-flex', boxShadow: sobreFoto ? 'none' : '0 1px 3px rgba(0,0,0,0.12)' }}>
+          <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 13, width: 'auto', objectFit: 'contain', display: 'block' }} />
+        </span>
       </div>
     </div>
   )

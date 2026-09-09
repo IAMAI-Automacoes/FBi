@@ -10,12 +10,10 @@
  * Até esta tela existir, os dois liam o MESMO campo no banco: trocar a madeira
  * do display mudava junto o que o cliente via no celular.
  */
-import { useState } from 'react'
-import { Eye, Info, Loader2, Upload, X, Check } from 'lucide-react'
+import { Info, Loader2, Upload, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { QR_TEXTURAS, fundoCss } from '@/lib/qr-temas'
 import { LandingView } from '@/components/LandingView'
 
@@ -41,25 +39,33 @@ interface Props {
 }
 
 /**
- * Moldura de celular em volta da prévia.
+ * A tela do celular na prévia.
  *
- * A página do cliente é vista SEMPRE num telefone, e num retângulo solto no
- * meio do monitor não dá pra julgar se a foto escolhida funciona — some a
- * noção de tamanho, e o que parece um plano bonito na tela grande vira uma
- * mancha marrom na mão de alguém.
+ * A altura é a mesma da plaquinha do passo A (a chapa de acrílico, sem a base
+ * de madeira): as duas prévias ficam do mesmo tamanho ao trocar de passo, e a
+ * página não pula. A largura sai da PROPORÇÃO de um telefone atual (9:19.5) —
+ * escolher uma largura à toa daria um aparelho gordo, e o enquadramento da
+ * foto na prévia deixaria de valer pro celular de verdade.
  */
+const ALTURA_TELA = 638
+const LARGURA_TELA = Math.round(ALTURA_TELA * (9 / 19.5))
+const BORDA = 10
+
 function Celular({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative mx-auto" style={{ width: 260 }}>
-      <div className="relative overflow-hidden rounded-[38px] border-[10px] border-gray-900 bg-gray-900 shadow-[0_22px_50px_-16px_rgba(16,24,40,0.55)]">
-        <div className="relative overflow-hidden rounded-[28px] bg-white" style={{ height: 520 }}>
+    <div className="relative" style={{ width: LARGURA_TELA + BORDA * 2 }}>
+      <div
+        className="relative overflow-hidden bg-gray-900 shadow-[0_22px_50px_-16px_rgba(16,24,40,0.55)]"
+        style={{ borderRadius: 40, padding: BORDA }}
+      >
+        <div className="relative overflow-hidden bg-white" style={{ height: ALTURA_TELA, borderRadius: 30 }}>
           {children}
           {/* Ilha da câmera, por cima do conteúdo como no aparelho */}
-          <div className="pointer-events-none absolute left-1/2 top-2 h-[22px] w-[86px] -translate-x-1/2 rounded-full bg-gray-900" />
+          <div className="pointer-events-none absolute left-1/2 top-2 h-[22px] w-[80px] -translate-x-1/2 rounded-full bg-gray-900" />
+          {/* Barra de gesto */}
+          <div className="pointer-events-none absolute bottom-[7px] left-1/2 h-[4px] w-[96px] -translate-x-1/2 rounded-full bg-white/70 mix-blend-difference" />
         </div>
       </div>
-      {/* Barra de gesto */}
-      <div className="mx-auto mt-2 h-[5px] w-[92px] rounded-full bg-gray-300" />
     </div>
   )
 }
@@ -68,11 +74,13 @@ export function FundoDaPaginaDoCliente({
   valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar,
   restauranteNome, mensagem, whatsapp,
 }: Props) {
-  const [previa, setPrevia] = useState(false)
   const temFoto = valor.modo === 'upload' && !!valor.imagem
 
   return (
-    <>
+    /* Mesma grade do passo A: os controles à esquerda e a prévia à direita,
+       dimensionada pelo conteúdo. Trocar de passo não muda onde as coisas
+       estão — o olho continua indo ao mesmo canto pra ver o resultado. */
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
       <Card className="border-gray-200">
         <CardHeader className="pb-5">
           <CardTitle className="text-[22px] leading-snug font-semibold tracking-tight">
@@ -84,7 +92,11 @@ export function FundoDaPaginaDoCliente({
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <div className="grid gap-7 sm:grid-cols-2">
+          {/* Teto de largura nos controles: a coluna cresce até o que sobra da
+              tela, e sem limite o quadro de subir foto virava um retângulo de
+              meio metro e as amostras de textura ficavam maiores que a prévia
+              que elas estão descrevendo. */}
+          <div className="grid max-w-[600px] gap-7 sm:grid-cols-2">
             {/* ── A foto do lugar ── */}
             <div>
               {temFoto ? (
@@ -168,60 +180,60 @@ export function FundoDaPaginaDoCliente({
             </div>
           </div>
 
-          {/* Ver antes de salvar é o ponto da tela: o dono escolhe uma foto que
-              conhece de cor, e não tem como saber como ela fica com o texto por
-              cima até olhar. */}
-          <Button
-            type="button"
-            onClick={() => setPrevia(true)}
-            className="h-11 w-full gap-2 bg-[#C2622C] text-[15px] font-semibold text-white hover:bg-[#A9531F] active:bg-[#8A431C]"
-          >
-            <Eye className="h-4 w-4" /> Visualizar Prévia do Cliente
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Dialog open={previa} onOpenChange={setPrevia}>
-        <DialogContent className="max-w-[440px] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-white px-5 py-4">
-            <DialogTitle className="text-[15px] font-semibold">
-              Prévia: Página do Cliente (WhatsApp PWA)
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="bg-[#FBF6EC] px-6 py-7">
-            <Celular>
-              {/* A página DE VERDADE, o mesmo componente que o cliente abre —
-                  não um desenho parecido. Uma prévia que não bate com o que
-                  chega no celular é pior do que não ter prévia. */}
-              <LandingView
-                preview
-                restauranteNome={restauranteNome}
-                modo={valor.modo}
-                imagem={valor.imagem}
-                estilo={valor.estilo}
-                mensagem={mensagem}
-                whatsapp={whatsapp}
-              />
-            </Celular>
-          </div>
-
-          <DialogFooter className="gap-2 border-t bg-white px-5 py-4 sm:justify-end sm:space-x-0">
-            <Button variant="neutro" size="forma" onClick={() => { setPrevia(false); onCancelar() }}>
+          <div className="flex justify-end gap-2 border-t pt-5">
+            <Button variant="neutro" size="forma" onClick={onCancelar}>
               Cancelar
             </Button>
             <Button
               size="forma"
               disabled={salvando}
-              onClick={() => { onSalvar(); setPrevia(false) }}
+              onClick={onSalvar}
               className="gap-2 bg-[#C2622C] text-white hover:bg-[#A9531F] active:bg-[#8A431C]"
             >
               {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
               Salvar Alterações
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ───────── Prévia: o celular do cliente ───────── */}
+      <div className="flex w-[380px] max-w-full flex-col">
+        <div className="mb-2 flex min-h-[50px] items-center">
+          <div>
+            <p className="text-[13px] font-semibold text-gray-700">Página do cliente</p>
+            <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+              É isto que abre no celular de quem escaneia o QR.
+            </p>
+          </div>
+        </div>
+
+        {/* A mesma bancada do passo A, pelo mesmo motivo: dá ao aparelho um
+            chão em vez de deixá-lo flutuando no branco da página. */}
+        <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100 p-5">
+          <Celular>
+            {/* A página DE VERDADE, o mesmo componente que o cliente abre —
+                não um desenho parecido. Uma prévia que não bate com o que
+                chega no celular é pior do que não ter prévia. */}
+            <LandingView
+              preview
+              restauranteNome={restauranteNome}
+              modo={valor.modo}
+              imagem={valor.imagem}
+              estilo={valor.estilo}
+              mensagem={mensagem}
+              whatsapp={whatsapp}
+            />
+          </Celular>
+        </div>
+
+        {!whatsapp && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] leading-relaxed text-amber-900">
+            O WhatsApp do restaurante ainda não está conectado. Sem ele o botão não
+            tem para onde levar, e o cliente abre a página sem conseguir mandar nada.
+          </p>
+        )}
+      </div>
+    </div>
   )
 }

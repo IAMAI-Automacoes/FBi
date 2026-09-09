@@ -1182,7 +1182,7 @@ export default function QRCodes() {
         {/* ── PERSONALIZAR ── */}
         <TabsContent value="config" className="mt-0">
           {passo === 2 ? (
-            <div className="mx-auto max-w-3xl space-y-4">
+            <div className="space-y-4">
               <button
                 type="button"
                 onClick={() => setPasso(1)}
