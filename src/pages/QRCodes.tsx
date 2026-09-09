@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import type { Json } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -11,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, Palette, Info, X, Type, ImagePlus, Plus, RotateCw } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
@@ -989,42 +990,47 @@ export default function QRCodes() {
   return (
     <div className="flex-1">
       <Tabs value={aba} onValueChange={setAba} className="w-full">
+        {/* As mesmas abas da página dos garçons, sem ícone: são duas seções
+            do mesmo assunto, e cada tela ter o seu desenho de aba fazia o
+            app parecer montado por pedaços. */}
         <div className="flex items-center justify-between gap-3 mb-6">
-          {/* Cardzinho cinza claro e retangular (não pill, não sólido azul) —
-              o destaque vem da PRÓPRIA caixa, e a aba ativa é só um branco
-              suave por cima, sem cor forte. */}
-          <TabsList className="h-auto gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
-            <TabsTrigger
-              value="config"
-              className="gap-2 rounded-md px-4 py-2 text-sm font-semibold text-gray-600 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
-            >
-              <Palette className="h-4 w-4" />
-              Personalizar
-            </TabsTrigger>
-            <TabsTrigger
-              value="info"
-              className="gap-2 rounded-md px-4 py-2 text-sm font-semibold text-gray-600 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
-            >
-              <Info className="h-4 w-4" />
-              Informações
-            </TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="config">Personalizar</TabsTrigger>
+            <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
           {aba === 'config' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="gap-2">
-                  <Download className="h-4 w-4" /> Baixar <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={downloadPNG} className="gap-2 cursor-pointer">
-                  <FileImage className="h-4 w-4" /> PNG (imagem)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={downloadPDF} className="gap-2 cursor-pointer">
-                  <FileText className="h-4 w-4" /> PDF (impressão)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
+               principal no corpo, o formato atrás da seta. Um menu inteiro só
+               pra escolher entre dois formatos obrigava dois cliques pra
+               tarefa mais comum da tela. */
+            <div className="flex items-stretch">
+              <Button
+                variant="baixar"
+                onClick={downloadPDF}
+                className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 pl-3 pr-2.5"
+              >
+                <Download className="h-4 w-4" /> Baixar QRCode
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="baixar"
+                    aria-label="Escolher o formato"
+                    className="h-9 rounded-l-none rounded-r-full px-2.5"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={downloadPDF} className="gap-2 cursor-pointer">
+                    <FileText className="h-4 w-4" /> PDF para impressão
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadPNG} className="gap-2 cursor-pointer">
+                    <FileImage className="h-4 w-4" /> PNG (imagem)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
 
@@ -1233,25 +1239,41 @@ export default function QRCodes() {
                     dois caminhos porque é texto corrido, e digitar frase longa
                     dentro da prévia pequena é ruim. */}
 
-                {/* Frase impressa no cartaz e repetida na página do cliente */}
+                {/* Frase impressa no cartaz e repetida na página do cliente.
+                    Usa o `Textarea` do sistema — este campo tinha borda, raio
+                    e cor de foco próprios, e era o único da tela que não
+                    reagia igual aos outros. Sem contador nem teto apertado:
+                    quem escreve vê a frase crescendo no cartaz ao lado, que
+                    diz mais sobre o tamanho certo do que um "26/120". */}
                 <div>
-                  <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                  <label htmlFor="qr-mensagem" className="mb-1.5 block text-[13px] font-semibold text-gray-700">
                     Mensagem para o cliente
                   </label>
-                  <textarea
+                  <Textarea
+                    id="qr-mensagem"
                     value={cfgMensagem}
                     onChange={(e) => setCfgMensagem(e.target.value)}
-                    rows={2}
-                    maxLength={120}
+                    rows={3}
+                    // Teto alto e silencioso: não atrapalha ninguém escrevendo,
+                    // e evita que um texto colado sem querer tome o cartaz.
+                    maxLength={400}
                     placeholder="Ex: É rapidinho! Conte como foi sua experiência."
-                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2622C]/25"
+                    className="min-h-0 resize-none py-2.5 leading-relaxed"
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">{cfgMensagem.length}/120</p>
                 </div>
 
-                <Button onClick={salvarCfg} disabled={savingCfg} variant="outline" className="w-full">
-                  {savingCfg ? 'Salvando…' : 'Salvar tema'}
-                </Button>
+                {/* Fim desta etapa, não "salvar": o cartaz fica pronto aqui e
+                    o passo seguinte é escolher o que o QR abre. Por isso a
+                    seta e o tamanho de botão de formulário, encostado à
+                    direita — ação que conclui e leva adiante, não um botão de
+                    barra ocupando a largura toda. Ele grava do mesmo jeito. */}
+                <div className="flex justify-end">
+                  <Button onClick={salvarCfg} disabled={savingCfg} variant="primario" size="forma">
+                    {savingCfg && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {savingCfg ? 'Salvando…' : 'Continuar'}
+                    {!savingCfg && <ArrowRight className="h-4 w-4" />}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

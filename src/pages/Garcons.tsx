@@ -265,17 +265,11 @@ const CLASSE_BOTAO_PAGAR =
  *  verdade (bem mais saturada) só que escura o bastante pra continuar lendo
  *  como "preto" — assim o "azulado" fica óbvio sem precisar comparar lado a
  *  lado ou passar o mouse. */
-const CLASSE_BOTAO_BAIXAR =
-  'gap-1.5 bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 text-sm font-medium text-white ' +
-  'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-  'hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 ' +
-  'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
-
-/** Mesma construção do "baixar" (degradê + luz no topo + sombra baixa, pra
- *  ter volume de botão de verdade em vez de um retângulo de cor chapada) —
- *  só que em azul, porque o preto azulado ali em cima já significa "baixar";
- *  usar a mesma cor pra "criar" faria as duas ações parecerem uma coisa só
- *  lado a lado na barra. */
+/** Mesma construção da variante `baixar` (degradê + luz no topo + sombra baixa,
+ *  pra ter volume de botão de verdade em vez de um retângulo de cor chapada) —
+ *  só que em azul claro, porque o azul escuro dali do lado já significa
+ *  "baixar"; usar a mesma cor pra "criar" faria as duas ações parecerem uma
+ *  coisa só lado a lado na barra. */
 const CLASSE_BOTAO_NOVO =
   'bg-blue-600 bg-gradient-to-b from-blue-500 to-blue-700 text-white ' +
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(16,24,40,0.20)] ' +
@@ -1080,7 +1074,8 @@ export default function Garcons() {
               <Button
                 onClick={confirmarSelecao}
                 disabled={selecionados.size === 0 || baixando}
-                className={cn('h-9 rounded-full px-4', CLASSE_BOTAO_BAIXAR)}
+                variant="baixar"
+                className="h-9 gap-1.5 rounded-full px-4 text-sm font-medium"
               >
                 {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 Baixar ({selecionados.size})
@@ -1100,10 +1095,8 @@ export default function Garcons() {
                   <Button
                     onClick={() => baixarPdf()}
                     disabled={baixando}
-                    className={cn(
-                      'h-9 rounded-l-full rounded-r-none border-r border-white/10 pl-3 pr-2.5 disabled:border-transparent',
-                      CLASSE_BOTAO_BAIXAR,
-                    )}
+                    variant="baixar"
+                    className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 pl-3 pr-2.5 text-sm font-medium disabled:border-transparent"
                   >
                     {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Baixar QRCodes
@@ -1113,7 +1106,8 @@ export default function Garcons() {
                       <Button
                         aria-label="Escolher garçons"
                         disabled={baixando}
-                        className={cn('h-9 rounded-l-none rounded-r-full px-2.5', CLASSE_BOTAO_BAIXAR)}
+                        variant="baixar"
+                        className="h-9 rounded-l-none rounded-r-full px-2.5"
                       >
                         <ChevronDown className="h-3.5 w-3.5" />
                       </Button>
@@ -1572,7 +1566,8 @@ export default function Garcons() {
                       <Button
                         onClick={() => baixarPdf([garcomAtual.id])}
                         disabled={baixando}
-                        className={cn('h-9 gap-1.5 rounded-full px-3.5 text-sm', CLASSE_BOTAO_BAIXAR)}
+                        variant="baixar"
+                        className="h-9 gap-1.5 rounded-full px-3.5 text-sm font-medium"
                       >
                         {baixando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                         Baixar QR Code

@@ -49,6 +49,26 @@ const buttonVariants = cva(
 
         /** O par do `primario`: desistir não se oferece com peso. */
         neutro: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+
+        /**
+         * Baixar um material pronto — o PDF dos garçons, o cartaz do QR.
+         *
+         * Mesma construção do `primario` (luz no topo, degradê curto, sombra
+         * baixa), em azul escuro. A cor separa as duas famílias: preto decide
+         * um formulário, azul escuro leva um arquivo embora. Numa barra em que
+         * as duas aparecem lado a lado, cor chapada igual faria as duas ações
+         * lerem como uma coisa só.
+         *
+         * Estava escrita à mão dentro da página dos garçons; virou variante
+         * quando a página do QR passou a precisar do MESMO botão — duas
+         * cópias da mesma receita divergem no primeiro ajuste.
+         */
+        baixar:
+          'bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-blue-700 hover:to-blue-900 ' +
+          'active:shadow-none active:from-blue-900 active:to-blue-900 ' +
+          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
       },
       size: {
         default: 'h-10 px-4 py-2',
