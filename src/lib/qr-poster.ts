@@ -65,7 +65,10 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * Quebra o texto na largura disponível e o escreve centralizado.
+ * Quebra o texto na largura disponível e o escreve.
+ *
+ * O bloco fica centrado no ponto do cartaz, mas as linhas DENTRO dele nascem
+ * todas na mesma margem esquerda — ver o porquê logo abaixo, na pintura.
  *
  * Devolve também a MEDIDA do que escreveu, porque a camada de edição da tela
  * precisa desenhar o alvo de clique exatamente onde a letra caiu — e estimar
@@ -107,8 +110,27 @@ function wrapText(
     }
     if (linha) linhas.push(linha)
   }
-  if (pintar) linhas.forEach((l, i) => ctx.fillText(l, cx, y + i * lh))
+  // Mede ANTES de pintar: as linhas nascem todas na mesma margem esquerda, e
+  // pra saber onde essa margem cai é preciso conhecer a linha mais larga.
   const largura = linhas.reduce((maior, l) => Math.max(maior, ctx.measureText(l).width), 0)
+
+  // Alinhado à ESQUERDA, não linha a linha centralizada.
+  //
+  // Centralizando cada linha, dar Enter empurrava as duas metades pra fora e
+  // a segunda linha começava num lugar que não era o começo de nada — nunca
+  // no ponto onde a primeira tinha começado. Com a margem única, a quebra faz
+  // o que se espera de uma quebra: desce e recomeça embaixo do início do
+  // texto, que é a própria borda esquerda do quadro de seleção.
+  //
+  // O bloco continua CENTRADO no ponto do cartaz: o que muda é o alinhamento
+  // interno, então um texto de uma linha só fica exatamente onde estava.
+  if (pintar) {
+    const alinhamentoAnterior = ctx.textAlign
+    ctx.textAlign = 'left'
+    const margem = cx - largura / 2
+    linhas.forEach((l, i) => ctx.fillText(l, margem, y + i * lh))
+    ctx.textAlign = alinhamentoAnterior
+  }
   return { fim: y + linhas.length * lh, largura, altura: Math.max(1, linhas.length) * lh }
 }
 
@@ -340,7 +362,9 @@ function desenharElementos(
 
     ctx.save()
     ctx.font = fonteDoElemento(el)
-    ctx.textAlign = 'center'
+    // Esquerda, e não centro: ver o porquê em `wrapText`. A caixa toda segue
+    // centrada no ponto do elemento; o que muda é onde cada linha começa.
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillStyle = el.cor ?? t.tinta
 
@@ -362,7 +386,7 @@ function desenharElementos(
       // prévia. Pintar os dois deixaria o texto dobrado e fora de registro a
       // cada tecla. A caixa continua sendo medida, e é ela que posiciona o campo.
       if (el.id !== editandoId) {
-        ctx.fillText(linha, 0, -alturaTotal / 2 + alturaLinha * (i + 0.5))
+        ctx.fillText(linha, -larguraMax / 2, -alturaTotal / 2 + alturaLinha * (i + 0.5))
       }
     })
     ctx.restore()

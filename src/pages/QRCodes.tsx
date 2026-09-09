@@ -1440,7 +1440,7 @@ export default function QRCodes() {
                                     onChange={(e) => fixo.alterar(e.target.value)}
                                     onBlur={() => setEditandoId(null)}
                                     onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
-                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center leading-[1.2] outline-none"
+                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
                                     style={{
                                       fontFamily: fixo.estilo.familia,
                                       fontSize: (fixo.estilo.tamanho * larguraPreview) / POSTER_W || 12,
@@ -1534,7 +1534,7 @@ export default function QRCodes() {
                                   onChange={(e) => alterarElemento(el.id, { texto: e.target.value })}
                                   onBlur={() => setEditandoId(null)}
                                   onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
-                                  className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-center leading-[1.2] outline-none"
+                                  className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
                                   style={{
                                     fontFamily: fonteCss(el.fonte),
                                     fontSize: (el.tamanho * larguraPreview) / POSTER_W || 12,
