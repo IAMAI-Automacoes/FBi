@@ -2,7 +2,7 @@ import { fundoCss, getTema } from '@/lib/qr-temas'
 import { CamadaDeElementos, type CaixaDoElemento } from '@/components/CamadaDeElementos'
 import { fonteCss, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
-import { easyFeedLogoInterna } from '@/assets/brand'
+import { easyFeedLogo } from '@/assets/brand'
 
 /**
  * Os textos da página que o dono pode reescrever.
@@ -67,10 +67,31 @@ export function LandingView({
     return escolhido != null ? escolhido : padrao
   }
 
-  /** A tipografia que o dono mexeu, por cima do padrão daquele texto. */
-  const est = (id: TextoDaPagina, base: React.CSSProperties): React.CSSProperties => {
+  /**
+   * A tipografia que o dono mexeu, por cima do padrão daquele texto — e, se
+   * ele arrastou, a posição também.
+   *
+   * ARRASTAR TIRA O TEXTO DO FLUXO. Enquanto ninguém mexe, quem empilha
+   * rótulo, nome, pedido e botão é o layout, que se ajusta a qualquer tela.
+   * A partir do momento em que o dono põe um deles num lugar escolhido, esse
+   * lugar passa a valer — em fração, não em pixel, pra sobreviver à diferença
+   * de tamanho entre a prévia e o celular de quem escaneia.
+   */
+  const est = (id: TextoDaPagina, base: React.CSSProperties, soTipografia = false): React.CSSProperties => {
     const e = estilosDosTextos?.[id]
     if (!e) return base
+    if (soTipografia) {
+      return {
+        ...base,
+        fontFamily: e.fonte ? fonteCss(e.fonte) : base.fontFamily,
+        fontSize: e.tamanho ?? base.fontSize,
+        fontWeight: e.negrito != null ? (e.negrito ? 700 : 400) : base.fontWeight,
+        fontStyle: e.italico != null ? (e.italico ? 'italic' : 'normal') : base.fontStyle,
+        color: e.cor ?? base.color,
+      }
+    }
+    const solto = e.x != null && e.y != null
+    const esticou = (e.esticarX ?? 1) !== 1 || (e.esticarY ?? 1) !== 1
     return {
       ...base,
       fontFamily: e.fonte ? fonteCss(e.fonte) : base.fontFamily,
@@ -78,7 +99,23 @@ export function LandingView({
       fontWeight: e.negrito != null ? (e.negrito ? 700 : 400) : base.fontWeight,
       fontStyle: e.italico != null ? (e.italico ? 'italic' : 'normal') : base.fontStyle,
       color: e.cor ?? base.color,
+      ...(solto ? {
+        position: 'absolute' as const,
+        left: `${e.x! * 100}%`,
+        top: `${e.y! * 100}%`,
+        margin: 0,
+        zIndex: 12,
+        transform: `translate(-50%, -50%)${esticou ? ` scale(${e.esticarX ?? 1}, ${e.esticarY ?? 1})` : ''}`,
+      } : esticou ? {
+        transform: `scale(${e.esticarX ?? 1}, ${e.esticarY ?? 1})`,
+      } : {}),
     }
+  }
+
+  /** Um texto arrastado sai do empilhamento e é posicionado sozinho. */
+  const solto = (id: TextoDaPagina) => {
+    const e = estilosDosTextos?.[id]
+    return e?.x != null && e?.y != null
   }
 
   const oculto = (id: TextoDaPagina) => !txt(id, 'x').trim()
@@ -110,9 +147,9 @@ export function LandingView({
       A coleta de feedback deste restaurante está temporariamente indisponível.
     </p>
   ) : preview || !waLink ? (
-    <div data-texto="botao" style={est('botao', botaoStyle)}>{Icone} {rotuloBotao}</div>
+    <div data-texto="botao" style={est('botao', botaoStyle, true)}>{Icone} {rotuloBotao}</div>
   ) : (
-    <a data-texto="botao" href={waLink} style={est('botao', botaoStyle)}>{Icone} {rotuloBotao}</a>
+    <a data-texto="botao" href={waLink} style={est('botao', botaoStyle, true)}>{Icone} {rotuloBotao}</a>
   )
 
   // O tamanho pedido ao gerador é o de uma tela de celular, e não o padrão do
@@ -172,7 +209,9 @@ export function LandingView({
 
           {/* Mesma largura do texto acima: mais estreito que a frase, o botão
               lia como um detalhe dela em vez da ação da tela. */}
-          <div style={{ marginTop: 26, width: '100%', maxWidth: '19rem' }}>{Botao}</div>
+          <div style={solto('botao')
+            ? { position: 'absolute', left: `${estilosDosTextos!.botao!.x! * 100}%`, top: `${estilosDosTextos!.botao!.y! * 100}%`, transform: 'translate(-50%, -50%)', width: '19rem', maxWidth: 'calc(100% - 48px)', zIndex: 12 }
+            : { marginTop: 26, width: '100%', maxWidth: '19rem' }}>{Botao}</div>
 
           {whatsapp && !oculto('dica') && (
             <p data-texto="dica" style={est('dica', { margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue })}>
@@ -188,9 +227,15 @@ export function LandingView({
           lockup virava um borrão verde em que não dava pra ler "Easy Feed",
           o que não serve nem ao produto nem a quem vê. */}
       <div style={{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-        <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: tenue, opacity: 0.9 }}>feito com</span>
-        <span style={{ borderRadius: 8, background: 'rgba(255,255,255,0.96)', padding: '6px 12px', display: 'inline-flex', boxShadow: '0 2px 8px rgba(0,0,0,0.14)' }}>
-          <img src={easyFeedLogoInterna} alt="Easy Feed" style={{ height: 22, width: 'auto', objectFit: 'contain', display: 'block' }} />
+        <span style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: tenue, opacity: 0.85 }}>feito com</span>
+        {/* A chapinha branca FICA. A marca é verde-escuro com um raio laranja,
+            e sobre madeira escura ou uma foto com scrim ela simplesmente some —
+            e um crédito que não se lê não credita ninguém. O branco é o que faz
+            a mesma logo funcionar em cima de qualquer fundo que o dono escolha.
+            Cresceu mais que o "feito com" de propósito: quem tem que ser lido
+            ali é o nome do produto, não a preposição. */}
+        <span style={{ borderRadius: 10, background: '#ffffff', padding: '7px 14px', display: 'inline-flex', boxShadow: '0 3px 12px rgba(0,0,0,0.18)' }}>
+          <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 30, width: 'auto', objectFit: 'contain', display: 'block' }} />
         </span>
       </div>
     </div>

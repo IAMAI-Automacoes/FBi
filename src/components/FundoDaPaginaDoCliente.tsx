@@ -135,9 +135,11 @@ export function FundoDaPaginaDoCliente({
             {/* ── Ou um material neutro ── */}
             <div>
               <p className="mb-3 text-[13px] font-semibold text-gray-700">
-                Texturas Neutras / Padrões Simples
+                Texturas Neutras
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              {/* Quatro por linha: são oito materiais, então duas fileiras
+                  cheias em vez de três com uma sobrando pela metade. */}
+              <div className="grid grid-cols-4 gap-2">
                 {QR_TEXTURAS.map((t) => {
                   const ativo = !temFoto && valor.estilo === t.id
                   return (
@@ -200,6 +202,7 @@ export function FundoDaPaginaDoCliente({
         modo={valor.modo}
         imagem={valor.imagem}
         estilo={valor.estilo}
+        onEstiloChange={(id) => onChange({ ...valor, modo: 'estilo', imagem: null, estilo: id })}
         largura={LARGURA_COLUNA}
         altura={ALTURA_TELA}
         textos={textos}

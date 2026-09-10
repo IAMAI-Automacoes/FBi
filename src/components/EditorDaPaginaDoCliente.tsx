@@ -20,6 +20,8 @@ import { Button } from '@/components/ui/button'
 import { Alcas } from '@/components/AlcasElemento'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { LandingView, TEXTOS_DA_PAGINA, type TextoDaPagina, type TextosDaPagina } from '@/components/LandingView'
+import { SeletorCor } from '@/components/SeletorCor'
+import { ehCorPersonalizada } from '@/lib/qr-temas'
 import type { CaixaDoElemento } from '@/components/CamadaDeElementos'
 import { novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
@@ -51,6 +53,8 @@ interface Props {
   modo: 'upload' | 'estilo'
   imagem: string | null
   estilo: string
+  /** Trocar o fundo por uma cor livre, sem sair da prévia. */
+  onEstiloChange: (id: string) => void
   /** Largura da COLUNA. O aparelho tem a sua, centrado nela. */
   largura: number
   altura: number
@@ -63,7 +67,7 @@ interface Props {
 
 export function EditorDaPaginaDoCliente({
   elementos, onChange, onSubirImagem, enviandoImagem,
-  restauranteNome, mensagem, whatsapp, modo, imagem, estilo, largura, altura,
+  restauranteNome, mensagem, whatsapp, modo, imagem, estilo, onEstiloChange, largura, altura,
   textos, onTextosChange, estilosDosTextos, onEstilosChange,
 }: Props) {
   const [selecionado, setSelecionado] = useState<string | null>(null)
@@ -125,6 +129,115 @@ export function EditorDaPaginaDoCliente({
       url: null, escala: 0.3, escalaY: null,
       recorte: { x: 0, y: 0, w: 1, h: 1 }, rotacao: 0, opacidade: 1,
     }
+  }
+
+  /**
+   * Arrastar um texto da própria página.
+   *
+   * A posição vai pro estilo daquele texto, em fração — e é ela que faz a
+   * `LandingView` tirá-lo do empilhamento. Enquanto ninguém arrasta, o layout
+   * continua mandando, que é o que mantém a página funcionando em telas de
+   * tamanhos diferentes.
+   */
+  const arrastarTexto = (id: TextoDaPagina) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    setTextoSelecionado(id)
+    setSelecionado(null)
+
+    const camada = camadaRef.current
+    const caixa = caixasDeTexto.find((c) => c.id === id)
+    if (!camada || !caixa) return
+
+    const area = camada.getBoundingClientRect()
+    const alvo = e.currentTarget
+    try { alvo.setPointerCapture(e.pointerId) } catch { /* ponteiro sintético */ }
+
+    // Sem posição guardada, ele parte de onde o layout o deixou.
+    const atual = estilosDosTextos[id] ?? {}
+    const partida = {
+      x: atual.x ?? (caixa.x + caixa.w / 2) / area.width,
+      y: atual.y ?? (caixa.y + caixa.h / 2) / area.height,
+    }
+    const inicio = { px: e.clientX, py: e.clientY }
+
+    const mover = (ev: PointerEvent) => {
+      onEstilosChange({
+        ...estilosDosTextos,
+        [id]: {
+          ...atual,
+          x: Math.min(1, Math.max(0, partida.x + (ev.clientX - inicio.px) / area.width)),
+          y: Math.min(1, Math.max(0, partida.y + (ev.clientY - inicio.py) / area.height)),
+        },
+      })
+    }
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover)
+      alvo.removeEventListener('pointerup', soltar)
+    }
+    alvo.addEventListener('pointermove', mover)
+    alvo.addEventListener('pointerup', soltar)
+  }
+
+  /** Puxar as alças de um texto da página: canto muda o corpo, lado estica. */
+  const redimensionarTexto = (id: string, ancora: Ancora) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const alvoTexto = id as TextoDaPagina
+    setTextoSelecionado(alvoTexto)
+    setSelecionado(null)
+
+    const camada = camadaRef.current
+    const caixa = caixasDeTexto.find((c) => c.id === alvoTexto)
+    if (!camada || !caixa) return
+
+    const area = camada.getBoundingClientRect()
+    const alvo = e.currentTarget
+    try { alvo.setPointerCapture(e.pointerId) } catch { /* ponteiro sintético */ }
+
+    const atual = estilosDosTextos[alvoTexto] ?? {}
+    const no = paginaRef.current?.querySelector<HTMLElement>(`[data-texto="${alvoTexto}"]`)
+    const corpoAtual = atual.tamanho ?? (no ? parseFloat(getComputedStyle(no).fontSize) : 16)
+    const inicio = {
+      px: e.clientX, py: e.clientY,
+      w: caixa.w, h: caixa.h,
+      tamanho: corpoAtual,
+      esticarX: atual.esticarX ?? 1,
+      esticarY: atual.esticarY ?? 1,
+      escala: 0.3, escalaY: null,
+      recorte: { x: 0, y: 0, w: 1, h: 1 },
+    }
+    const partida = {
+      x: atual.x ?? (caixa.x + caixa.w / 2) / area.width,
+      y: atual.y ?? (caixa.y + caixa.h / 2) / area.height,
+    }
+    const oeste = ancora.includes('o')
+    const norte = ancora.includes('n')
+    const leste = ancora === 'l' || ancora.includes('e')
+    const sul = ancora.includes('s')
+
+    const mover = (ev: PointerEvent) => {
+      const dx = (ev.clientX - inicio.px) * (oeste ? -1 : 1)
+      const dy = (ev.clientY - inicio.py) * (norte ? -1 : 1)
+      const { fatorW, fatorH, ...campos } = calcularRedimensionamento('texto', ancora, inicio, dx, dy)
+      // A borda oposta fica parada: a origem anda metade do que a caixa cresceu.
+      const desX = leste ? 0.5 * inicio.w * (fatorW - 1) : oeste ? -0.5 * inicio.w * (fatorW - 1) : 0
+      const desY = sul ? 0.5 * inicio.h * (fatorH - 1) : norte ? -0.5 * inicio.h * (fatorH - 1) : 0
+      onEstilosChange({
+        ...estilosDosTextos,
+        [alvoTexto]: {
+          ...atual,
+          ...campos,
+          x: partida.x + desX / area.width,
+          y: partida.y + desY / area.height,
+        },
+      })
+    }
+    const soltar = () => {
+      alvo.removeEventListener('pointermove', mover)
+      alvo.removeEventListener('pointerup', soltar)
+    }
+    alvo.addEventListener('pointermove', mover)
+    alvo.addEventListener('pointerup', soltar)
   }
 
   const alterarTextoDaPagina = (id: string, campos: Partial<ElementoCartaz>) => {
@@ -331,6 +444,20 @@ export function EditorDaPaginaDoCliente({
         </div>
       </div>
 
+      {/* Cor livre pro fundo, embaixo do adicionar imagem.
+          As oito texturas do card ao lado cobrem os materiais; isto cobre o
+          resto — a cor da marca do restaurante, que nenhuma lista de oito
+          adivinha. Fica aqui, e não lá, porque é a única escolha de fundo que
+          se faz olhando a prévia mudar. */}
+      <div className="mb-2 flex items-center justify-end gap-2">
+        <span className="text-[11.5px] text-muted-foreground">Cor de fundo</span>
+        <SeletorCor
+          compacto
+          valor={modo === 'estilo' && ehCorPersonalizada(estilo) ? estilo : null}
+          onChange={onEstiloChange}
+        />
+      </div>
+
       {/* A ALTURA DA BARRA É RESERVADA, ocupada ou não.
           Sem isso a barra nascia ao selecionar e empurrava o celular pra
           baixo — e o segundo clique de um duplo clique caía no texto DE CIMA,
@@ -413,11 +540,7 @@ export function EditorDaPaginaDoCliente({
                         />
                       ) : (
                         <div
-                          onPointerDown={(ev) => {
-                            ev.stopPropagation()
-                            setTextoSelecionado(c.id)
-                            setSelecionado(null)
-                          }}
+                          onPointerDown={arrastarTexto(c.id)}
                           onDoubleClick={() => {
                             // Um campo vazio não tem o que editar: abre já com
                             // o texto que está aparecendo na página.
@@ -431,7 +554,18 @@ export function EditorDaPaginaDoCliente({
                           tabIndex={0}
                           aria-label={`Editar o texto: ${ROTULO_DO_TEXTO[c.id]}`}
                           title={`Clique para selecionar, dois cliques para editar: ${ROTULO_DO_TEXTO[c.id]}`}
-                          className="h-full w-full cursor-text touch-none"
+                          className="h-full w-full cursor-move touch-none"
+                        />
+                      )}
+
+                      {/* As mesmas alças dos elementos livres: canto muda o
+                          corpo da fonte, lado estica só naquele sentido. */}
+                      {marcado && !emEdicao && (
+                        <Alcas
+                          id={c.id}
+                          aoPegar={redimensionarTexto}
+                          larguraTela={c.w + 8}
+                          alturaTela={c.h + 8}
                         />
                       )}
                     </div>
@@ -527,7 +661,9 @@ export function EditorDaPaginaDoCliente({
                 })}
               </div>
             </div>
-            <div className="pointer-events-none absolute left-1/2 top-[12px] z-40 h-[22px] w-[80px] -translate-x-1/2 rounded-full bg-gray-900" />
+            {/* Sem a ilha da câmera: ela era só enfeite de aparelho, e no topo
+                da prévia lia como um elemento preto que a pessoa tinha posto
+                ali sem querer. */}
           </div>
         </div>
       </div>
