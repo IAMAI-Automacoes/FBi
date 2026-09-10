@@ -143,6 +143,8 @@ export default function QRCodes() {
   const [clienteJaConfigurado, setClienteJaConfigurado] = useState(false)
   const [fundoCliente, setFundoCliente] = useState<FundoDoCliente>({ modo: 'estilo', imagem: null, estilo: 'branco' })
   const [enviandoFoto, setEnviandoFoto] = useState(false)
+  /** Foto do cliente esperando o dono escolher o pedaço que aparece. */
+  const [fotoDoClienteParaAjustar, setFotoDoClienteParaAjustar] = useState<File | null>(null)
   /** Textos e imagens livres sobre a página do cliente (passo B). */
   const [elementosCliente, setElementosCliente] = useState<ElementoCartaz[]>([])
   /** O que o dono reescreveu nos textos da página do cliente, e a tipografia. */
@@ -204,6 +206,7 @@ export default function QRCodes() {
       tagline: cfgMensagem,
       estilos: cfgEstilos,
       temaId: cfgEstilo,
+      imagemDeFundo: cfgImagem,
       elementos,
       editandoId: editandoId ?? undefined,
     }
@@ -212,7 +215,7 @@ export default function QRCodes() {
     // página do cliente e um novo nasce na volta — em branco. Sem redesenhar
     // aqui, o cartaz voltava vazio e parecia que a configuração tinha sumido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, passo])
+  }, [qrData, restaurantName, cfgEstilo, cfgImagem, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, passo])
 
   useEffect(() => () => {
     if (quadroRef.current != null) cancelAnimationFrame(quadroRef.current)
@@ -586,18 +589,26 @@ export default function QRCodes() {
    * `LandingView` já cobre a tela com `object-fit: cover`, e obrigar a
    * recortar antes de ver o resultado é uma etapa a mais pra nada.
    */
-  const enviarFotoDoCliente = async (arquivo: File) => {
+  /**
+   * A foto de fundo do cliente, já recortada na moldura do celular.
+   *
+   * Ela subia direto, sem ajuste: o dono escolhia uma foto larga do salão e a
+   * página cortava sozinha pelo centro, guardando o pedaço que calhasse. Como
+   * a arte do cartaz, agora ele decide qual pedaço aparece — na proporção da
+   * tela em que a foto vai ser vista.
+   */
+  const enviarFotoDoCliente = async (blob: Blob) => {
     if (!restauranteId) return
     setEnviandoFoto(true)
     try {
-      const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase()
-      const path = `${restauranteId}/cliente/${Date.now()}.${ext}`
+      const path = `${restauranteId}/cliente/${Date.now()}.jpg`
       const { error } = await supabase.storage
         .from('qr-fundos')
-        .upload(path, arquivo, { upsert: true, contentType: arquivo.type || 'image/jpeg' })
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
       if (error) throw error
       const { data } = supabase.storage.from('qr-fundos').getPublicUrl(path)
       setFundoCliente((f) => ({ ...f, modo: 'upload', imagem: data.publicUrl }))
+      setFotoDoClienteParaAjustar(null)
       toast.success('Foto enviada!')
     } catch (err: any) {
       toast.error('Erro no upload', { description: err.message })
@@ -1294,7 +1305,7 @@ export default function QRCodes() {
               <FundoDaPaginaDoCliente
                 valor={fundoCliente}
                 onChange={setFundoCliente}
-                onEscolherFoto={enviarFotoDoCliente}
+                onEscolherFoto={setFotoDoClienteParaAjustar}
                 enviando={enviandoFoto}
                 salvando={savingCfg}
                 onSalvar={salvarFundoDoCliente}
@@ -1377,7 +1388,7 @@ export default function QRCodes() {
                         onChange={setCfgEstilo}
                       />
                       {cfgImagem ? (
-                        <div className="relative w-[108px] shrink-0 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
+                        <div className="relative w-[81px] shrink-0 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
                           <span className="relative block aspect-[5/4] w-full">
                             <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
                             <button
@@ -1389,20 +1400,20 @@ export default function QRCodes() {
                               <X className="h-2.5 w-2.5" />
                             </button>
                           </span>
-                          <span className="block px-1.5 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                          <span className="block px-1 py-1 text-[9px] font-medium leading-tight text-gray-600">
                             Arte própria
                           </span>
                         </div>
                       ) : (
-                        <label className="group w-[108px] shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
+                        <label className="group w-[81px] shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
                           <span className="flex aspect-[5/4] w-full items-center justify-center bg-[#C2622C]/5">
                             {uploading ? (
-                              <Loader2 className="h-6 w-6 animate-spin text-[#C2622C]" />
+                              <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
                             ) : (
-                              <ImageUp className="h-6 w-6 text-[#C2622C]" />
+                              <ImageUp className="h-5 w-5 text-[#C2622C]" />
                             )}
                           </span>
-                          <span className="block px-1.5 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                          <span className="block px-1 py-1 text-[9px] font-medium leading-tight text-gray-600">
                             {uploading ? 'Enviando…' : 'Subir arte'}
                           </span>
                           <input
@@ -1915,6 +1926,20 @@ export default function QRCodes() {
         </TabsContent>
       </Tabs>
 
+      {fotoDoClienteParaAjustar && (
+        <ImageCropper
+          file={fotoDoClienteParaAjustar}
+          salvando={enviandoFoto}
+          onConfirm={enviarFotoDoCliente}
+          onCancel={() => setFotoDoClienteParaAjustar(null)}
+          title="Ajuste a foto do restaurante"
+          // A moldura aqui é a da TELA DO CELULAR, que é onde esta foto vai
+          // aparecer — 9:19,5, a proporção de um telefone atual.
+          outputWidth={1080}
+          outputHeight={2340}
+        />
+      )}
+
       {cropFile && (
         <ImageCropper
           file={cropFile}
@@ -1922,6 +1947,12 @@ export default function QRCodes() {
           onConfirm={enviarImagem}
           onCancel={() => setCropFile(null)}
           title="Ajuste a sua arte"
+          // A moldura do recorte é a do CARTAZ. Estava em 1080×1920, o formato
+          // de um celular — sobra de quando esta imagem era o fundo da página
+          // do cliente. Recortar em retrato de celular e depois usar num
+          // cartaz 2:3 cortava a arte de novo, agora sem ninguém ver.
+          outputWidth={POSTER_W}
+          outputHeight={POSTER_H}
         />
       )}
     </div>

@@ -166,6 +166,14 @@ export interface PosterOpts {
   rotulo?: string | null
   tagline?: string
   temaId?: string | null
+  /**
+   * Arte do próprio dono no fundo do cartaz, cobrindo o tema.
+   *
+   * Ela era guardada em `qr_bg_imagem` e NUNCA chegava aqui: o desenho só
+   * conhecia o tema, então subir uma arte não mudava nada no cartaz — a
+   * miniatura aparecia no botão e o arquivo ia pro storage, e era só isso.
+   */
+  imagemDeFundo?: string | null
   /** Tipografia que o dono escolheu pros textos fixos, por id (ver
    *  `ID_ROTULO`/`ID_TITULO`/`ID_MENSAGEM`). O que não vier usa o padrão. */
   estilos?: EstilosDosTextos
@@ -427,10 +435,14 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   // QR, a logo do produto, as imagens do dono e as fontes carregam juntos, em
   // vez de um esperar o outro.
   const elementos = opts.elementos ?? []
-  const [qr, logo, imagens] = await Promise.all([
+  const arte = opts.imagemDeFundo ? logoDoDono(opts.imagemDeFundo) : Promise.resolve(null)
+  // A ordem aqui é a ordem lá em cima: a espera das fontes não devolve nada e
+  // fica por último, pra não empurrar o índice de quem devolve.
+  const [qr, logo, imagens, arteDeFundo] = await Promise.all([
     qrDaUrl(opts.url),
     logoDoProduto(),
     imagensDosElementos(elementos),
+    arte,
     // Sem esta espera o canvas escreve na fonte de reserva sem avisar, e o PNG
     // que vai pra gráfica sai com outra tipografia. Ver `cartaz-elementos.ts`.
     garantirFontesCarregadas(elementos),
@@ -454,6 +466,8 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const cx = W / 2
 
   // ── Fundo e brilho do topo (camada guardada — ver `camadaEmCache`) ──
+  // A arte do dono não entra na camada guardada: ela é uma imagem só, já
+  // decodificada, e cachear por URL aqui só somaria um canvas de 3 MB.
   camadaDeFundo = camadaEmCache(camadaDeFundo, t.id, W, H, (c) => {
     pintarFundo(c, t, W, H)
 
@@ -465,6 +479,15 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     c.fillRect(0, 0, W, 560)
   })
   ctx.drawImage(camadaDeFundo.canvas, 0, 0)
+
+  // A arte do dono cobre o tema, recortada pelo centro pra preencher o cartaz
+  // sem deformar — o mesmo que `object-fit: cover` faz no HTML.
+  if (arteDeFundo && arteDeFundo.width > 1) {
+    const escalaArte = Math.max(W / arteDeFundo.width, H / arteDeFundo.height)
+    const aw = arteDeFundo.width * escalaArte
+    const ah = arteDeFundo.height * escalaArte
+    ctx.drawImage(arteDeFundo, (W - aw) / 2, (H - ah) / 2, aw, ah)
+  }
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
