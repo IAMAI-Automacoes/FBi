@@ -99,18 +99,26 @@ export interface AreaReservada {
 }
 
 /**
- * No CARTAZ a marca é só a linha "FEITO COM EASY FEED", em 18px no rodapé.
- * O limite fica colado nela: o valor anterior (0,90) reservava uma faixa morta
- * bem acima do que ela de fato ocupa.
+ * No CARTAZ a marca é a linha "FEITO COM EASY FEED", em 18px no rodapé.
+ *
+ * Em cima e embaixo, a folga é a mesma de sempre. Nos LADOS ela é bem mais
+ * larga que a própria frase: o texto tem cerca de 40% da largura do cartaz, e
+ * a barreira reserva 64%. Encostar um elemento rente à letra deixa as duas
+ * coisas espremidas e a marca continua ilegível na prática, mesmo pintada por
+ * cima — a folga lateral é o que faz ela respirar.
  */
-export const AREA_DA_MARCA_CARTAZ: AreaReservada = { x0: 0.26, x1: 0.74, y: 0.945 }
+export const AREA_DA_MARCA_CARTAZ: AreaReservada = { x0: 0.18, x1: 0.82, y: 0.9 }
 
 /**
  * Na PÁGINA DO CLIENTE a marca é maior: o "feito com" mais o lockup inteiro
- * numa chapinha branca. Ela começa mais acima, e o limite acompanha — senão a
- * barreira do cartaz deixaria a logo desprotegida justamente aqui.
+ * numa chapinha branca. É UMA área só em volta das duas coisas, e não duas
+ * barreiras coladas — tratar o texto e a chapinha separados deixaria um vão
+ * entre eles onde caberia justamente o que atrapalha.
+ *
+ * Medida do desenho: a chapinha ocupa ~36% da largura e o conjunto começa em
+ * ~88% da altura; a folga em volta é o resto.
  */
-export const AREA_DA_MARCA_PAGINA: AreaReservada = { x0: 0.22, x1: 0.78, y: 0.86 }
+export const AREA_DA_MARCA_PAGINA: AreaReservada = { x0: 0.2, x1: 0.8, y: 0.85 }
 
 /**
  * Prende a posição de um elemento fora da área da marca.

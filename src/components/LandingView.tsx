@@ -58,17 +58,35 @@ export function LandingView({
    * textos da própria página passaram a fazer também.
    */
   const raizRef = useRef<HTMLDivElement>(null)
-  const [larguraTela, setLarguraTela] = useState(BASE_CLIENTE)
+  const [tela, setTela] = useState({ w: BASE_CLIENTE, h: BASE_CLIENTE * 2 })
   useLayoutEffect(() => {
     const no = raizRef.current
     if (!no) return
-    const ler = () => setLarguraTela(no.clientWidth || BASE_CLIENTE)
+    const ler = () => setTela({
+      w: no.clientWidth || BASE_CLIENTE,
+      h: no.clientHeight || BASE_CLIENTE * 2,
+    })
     ler()
     const obs = new ResizeObserver(ler)
     obs.observe(no)
     return () => obs.disconnect()
   }, [])
+  const larguraTela = tela.w
   const escalaTela = larguraTela / BASE_CLIENTE
+
+  /**
+   * As faixas de cima e de baixo saem da ALTURA, em pixel calculado.
+   *
+   * Não dá pra usar porcentagem aqui: `padding-top`/`bottom` em % contam a
+   * LARGURA do contentor, não a altura. Escrito como "17%", o vão de baixo
+   * virava 50px numa tela de 638 de altura — e o conteúdo descia por cima do
+   * crédito no pé. Calculado assim, continua proporcional (a prévia e o
+   * celular do cliente mostram a mesma coisa) e agora proporcional ao eixo
+   * certo.
+   */
+  const vaoDeCima = Math.round(tela.h * 0.075)
+  const vaoDeBaixo = Math.round(tela.h * 0.155)
+  const alturaDoCredito = Math.round(tela.h * 0.028)
   // Duas apresentações possíveis, e elas pedem tratamentos opostos:
   //
   // FOTO (o dono subiu a própria imagem): a foto tem contraste imprevisível,
@@ -163,10 +181,14 @@ export function LandingView({
     minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '10px',
+    gap: '9px',
     borderRadius: '16px',
     background: '#25D366',
-    padding: '16px 24px',
+    // Folga lateral menor e sem quebra: com 24px de cada lado, "Dar meu
+    // feedback" não cabia numa linha num telefone estreito e o botão crescia
+    // pra duas, empurrando o conteúdo por baixo do crédito no pé da tela.
+    padding: '16px 14px',
+    whiteSpace: 'nowrap' as const,
     fontSize: '17px',
     fontWeight: 700,
     color: '#ffffff',
@@ -226,7 +248,7 @@ export function LandingView({
           O crédito do produto sai do caminho e vai pro pé da tela: ele estava
           logo abaixo do botão, disputando a área mais nobre com a única ação
           que a página tem. */}
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '9% 7% calc(13% + env(safe-area-inset-bottom, 0px))', color: forte }}>
+      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: `${vaoDeCima}px 7% calc(${vaoDeBaixo}px + env(safe-area-inset-bottom, 0px))`, color: forte }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
           {!oculto('rotulo') && (
             <p data-texto="rotulo" style={{ ...est('rotulo', { margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue }), ...escondido('rotulo') }}>
@@ -267,7 +289,7 @@ export function LandingView({
           página fica abaixo desta camada.
           Ficou maior do que era: com 13px o lockup virava um borrão verde em
           que não dava pra ler "Easy Feed". */}
-      <div style={{ position: 'absolute', zIndex: 900, left: 0, right: 0, bottom: 'calc(3% + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', zIndex: 900, left: 0, right: 0, bottom: `calc(${alturaDoCredito}px + env(safe-area-inset-bottom, 0px))`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
         <span style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: tenue, opacity: 0.85 }}>feito com</span>
         {/* A chapinha branca FICA. A marca é verde-escuro com um raio laranja,
             e sobre madeira escura ou uma foto com scrim ela simplesmente some —

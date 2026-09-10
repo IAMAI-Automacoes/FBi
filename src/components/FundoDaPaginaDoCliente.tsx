@@ -35,6 +35,8 @@ interface Props {
   salvando?: boolean
   onSalvar: () => void
   onCancelar: () => void
+  /** "Voltar para o cartaz" na primeira volta; "Cancelar" depois disso. */
+  rotuloCancelar: string
   /** Para a prévia mostrar a página de verdade, e não um desenho dela. */
   restauranteNome: string
   mensagem: string | null
@@ -59,7 +61,7 @@ export const ALTURA_TELA = 638
 export const LARGURA_COLUNA = 420
 
 export function FundoDaPaginaDoCliente({
-  valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar,
+  valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar, rotuloCancelar,
   restauranteNome, mensagem, whatsapp, elementos, onElementosChange, onSubirImagem,
   textos, onTextosChange, estilosDosTextos, onEstilosChange,
 }: Props) {
@@ -188,8 +190,11 @@ export function FundoDaPaginaDoCliente({
           </div>
 
           <div className="flex justify-end gap-2 border-t pt-5">
+            {/* O caminho de volta mora AQUI embaixo, ao lado do salvar, e não
+                num link solto acima do card: é onde a decisão de terminar
+                acontece, e as duas saídas ficam no mesmo lugar. */}
             <Button variant="neutro" size="forma" onClick={onCancelar}>
-              Cancelar
+              {rotuloCancelar}
             </Button>
             <Button
               size="forma"
@@ -198,7 +203,7 @@ export function FundoDaPaginaDoCliente({
               className="gap-2 bg-[#C2622C] text-white hover:bg-[#A9531F] active:bg-[#8A431C]"
             >
               {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
-              Salvar Alterações
+              Salvar página do cliente
             </Button>
           </div>
         </CardContent>

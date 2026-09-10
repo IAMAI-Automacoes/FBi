@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight, ArrowLeft } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
@@ -20,6 +20,7 @@ import { AREA_DA_MARCA_CARTAZ, FONTES, fonteCss, forcarForaDaMarca, lerElementos
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { Alcas } from '@/components/AlcasElemento'
 import { FundoDaPaginaDoCliente, type FundoDoCliente } from '@/components/FundoDaPaginaDoCliente'
+import { ResumoDaPersonalizacao } from '@/components/ResumoDaPersonalizacao'
 import type { TextosDaPagina } from '@/components/LandingView'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
@@ -131,7 +132,15 @@ export default function QRCodes() {
    * decisões sem nada em comum além de saírem do mesmo QR, e numa tela só a
    * segunda ficava enterrada abaixo da dobra — ninguém a encontrava.
    */
-  const [passo, setPasso] = useState<1 | 2>(1)
+  const [passo, setPasso] = useState<'resumo' | 'cartaz' | 'cliente'>('cartaz')
+  /**
+   * Se a página do cliente já foi salva alguma vez.
+   *
+   * É o que decide entre os dois modos da tela. Nulo = primeira vez: os dois
+   * passos vêm em sequência, porque ninguém sabe que a segunda peça existe
+   * antes de ver. Preenchido = a tela abre no resumo, com as duas lado a lado.
+   */
+  const [clienteJaConfigurado, setClienteJaConfigurado] = useState(false)
   const [fundoCliente, setFundoCliente] = useState<FundoDoCliente>({ modo: 'estilo', imagem: null, estilo: 'branco' })
   const [enviandoFoto, setEnviandoFoto] = useState(false)
   /** Textos e imagens livres sobre a página do cliente (passo B). */
@@ -359,7 +368,7 @@ export default function QRCodes() {
       if (userData?.user) {
         const { data: config } = await supabase
           .from('restaurantes')
-          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, cliente_elementos, cliente_textos, cliente_textos_estilo')
+          .select('id, nome_restaurante, numero_whatsapp, qr_bg_modo, qr_estilo, qr_bg_imagem, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, cliente_elementos, cliente_textos, cliente_textos_estilo, cliente_configurado_em')
           .eq('auth_user_id', userData.user.id)
           .single()
 
@@ -398,6 +407,9 @@ export default function QRCodes() {
           numero_whatsapp?: string | null
         } | null
         setWhatsappDono(cfgCliente?.numero_whatsapp ?? null)
+        const jaConfigurou = !!(config as unknown as { cliente_configurado_em?: string | null })?.cliente_configurado_em
+        setClienteJaConfigurado(jaConfigurou)
+        setPasso(jaConfigurou ? 'resumo' : 'cartaz')
         const extras = config as unknown as { cliente_elementos?: unknown; cliente_textos?: unknown; cliente_textos_estilo?: unknown }
         setElementosCliente(lerElementos(extras?.cliente_elementos))
         setTextosCliente((extras?.cliente_textos ?? {}) as TextosDaPagina)
@@ -525,9 +537,15 @@ export default function QRCodes() {
           cliente_elementos: elementosCliente as unknown as Json,
           cliente_textos: textosCliente as unknown as Json,
           cliente_textos_estilo: estilosCliente as unknown as Json,
+          // Marca o fim da primeira configuração: daqui em diante a tela abre
+          // no resumo, com as duas peças lado a lado, em vez de levar pelos
+          // dois passos em sequência.
+          cliente_configurado_em: new Date().toISOString(),
         } as never)
         .eq('id', restauranteId)
       if (error) throw error
+      setClienteJaConfigurado(true)
+      setPasso('resumo')
       toast.success('Página do cliente salva!')
     } catch (err: any) {
       toast.error('Erro ao salvar', { description: err.message })
@@ -1167,7 +1185,7 @@ export default function QRCodes() {
             <TabsTrigger value="config">Personalizar</TabsTrigger>
             <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
-          {aba === 'config' && passo === 1 && (
+          {aba === 'config' && passo !== 'cliente' && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
                principal no corpo, o formato atrás da seta. Um menu inteiro só
                pra escolher entre dois formatos obrigava dois cliques pra
@@ -1249,15 +1267,25 @@ export default function QRCodes() {
 
         {/* ── PERSONALIZAR ── */}
         <TabsContent value="config" className="mt-0">
-          {passo === 2 ? (
+          {passo === 'resumo' ? (
+            <ResumoDaPersonalizacao
+              canvasRef={canvasRef}
+              larguraCartaz={POSTER_W}
+              alturaCartaz={POSTER_H}
+              onEditarCartaz={() => setPasso('cartaz')}
+              onEditarCliente={() => setPasso('cliente')}
+              restauranteNome={cfgTitulo.trim() || restaurantName}
+              mensagem={cfgMensagem}
+              whatsapp={whatsappDono}
+              modo={fundoCliente.modo}
+              imagem={fundoCliente.imagem}
+              estilo={fundoCliente.estilo}
+              elementos={elementosCliente}
+              textos={textosCliente}
+              estilosDosTextos={estilosCliente}
+            />
+          ) : passo === 'cliente' ? (
             <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setPasso(1)}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft className="h-4 w-4" /> Voltar para o cartaz impresso
-              </button>
               <FundoDaPaginaDoCliente
                 valor={fundoCliente}
                 onChange={setFundoCliente}
@@ -1265,7 +1293,8 @@ export default function QRCodes() {
                 enviando={enviandoFoto}
                 salvando={savingCfg}
                 onSalvar={salvarFundoDoCliente}
-                onCancelar={() => setPasso(1)}
+                onCancelar={() => setPasso(clienteJaConfigurado ? 'resumo' : 'cartaz')}
+                rotuloCancelar={clienteJaConfigurado ? 'Cancelar' : 'Voltar para o cartaz'}
                 restauranteNome={cfgTitulo.trim() || restaurantName}
                 mensagem={cfgMensagem}
                 whatsapp={whatsappDono}
@@ -1467,15 +1496,28 @@ export default function QRCodes() {
                     direita — ação que conclui e leva adiante, não um botão de
                     barra ocupando a largura toda. Ele grava do mesmo jeito. */}
                 <div className="flex justify-end">
+                  {/* Na primeira vez isto CONTINUA — ainda falta a página do
+                      cliente, e é o próprio botão que revela que ela existe.
+                      Depois de tudo configurado, o mesmo botão só termina a
+                      edição e volta pro resumo: continuar pra onde, se não há
+                      mais passo? */}
+                  {clienteJaConfigurado && (
+                    <Button variant="neutro" size="forma" onClick={() => setPasso('resumo')}>
+                      Cancelar
+                    </Button>
+                  )}
                   <Button
-                    onClick={async () => { await salvarCfg(); setPasso(2) }}
+                    onClick={async () => {
+                      await salvarCfg()
+                      setPasso(clienteJaConfigurado ? 'resumo' : 'cliente')
+                    }}
                     disabled={savingCfg}
                     variant="primario"
                     size="forma"
                   >
                     {savingCfg && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {savingCfg ? 'Salvando…' : 'Continuar'}
-                    {!savingCfg && <ArrowRight className="h-4 w-4" />}
+                    {savingCfg ? 'Salvando…' : clienteJaConfigurado ? 'Salvar alterações' : 'Continuar'}
+                    {!savingCfg && !clienteJaConfigurado && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>
               </CardContent>
@@ -1488,8 +1530,9 @@ export default function QRCodes() {
                   empurrava pra baixo a barra de propriedades — que é o
                   controle usado o tempo todo, e por isso é ela que merece
                   estar colada na prévia. */}
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-[15px] font-semibold text-gray-800">QR Code impresso</h2>
+              {/* Sem rótulo: o card ao lado já se chama "Tema do QR Code
+                  Impresso", e a plaquinha embaixo é o que ele descreve. */}
+              <div className="mb-2 flex items-center justify-end gap-2">
                 <div className="flex gap-1.5">
                   <button
                     type="button"
