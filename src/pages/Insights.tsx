@@ -19,7 +19,7 @@ import { CampoBusca } from '@/components/CampoBusca'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
-import { PRIORIDADES } from '@/lib/prioridade'
+import { PRIORIDADES, pesoPrioridade } from '@/lib/prioridade'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
@@ -324,10 +324,20 @@ export default function Insights() {
             .some((c) => (c ?? '').toLowerCase().includes(termo))
         return prioMatch && catMatch && pinMatch && txtMatch
       })
-      // Fixados sempre no topo — sort é estável, então dentro de cada grupo
-      // (fixado / não fixado) a ordem por data (`created_at desc`) do fetch
-      // original se mantém.
-      .sort((a, b) => Number(!!b.fixado) - Number(!!a.fixado))
+      // Ordem fixa da página: prioridade primeiro (URGENTE > IMPORTANTE >
+      // OBSERVAÇÃO) e, dentro de cada prioridade, os fixados no topo do
+      // PRÓPRIO grupo (não no topo absoluto). O último empate resolve
+      // sozinho: sort é estável, então quem empata em prioridade e fixação
+      // mantém a ordem por data (`created_at desc`) do fetch original.
+      //
+      // Como isto roda DEPOIS do filtro, a ordem dos urgentes com o filtro
+      // "Todos" é a mesma que com o filtro "Urgente" — trocar de filtro só
+      // tira itens da lista, nunca reordena os que sobram.
+      .sort((a, b) => {
+        const porPrioridade = pesoPrioridade(b.prioridade) - pesoPrioridade(a.prioridade)
+        if (porPrioridade !== 0) return porPrioridade
+        return Number(!!b.fixado) - Number(!!a.fixado)
+      })
   }, [insights, filterPriority, filterCategories, showOnlyPinned, busca])
 
   // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.

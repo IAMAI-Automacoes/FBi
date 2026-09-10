@@ -63,4 +63,19 @@ export function estiloPrioridade(prioridade?: string | null): EstiloPrioridade {
   return ESTILOS.OBSERVACAO
 }
 
+/**
+ * Peso pra ordenar por prioridade: maior fica mais no topo.
+ * Urgente > Importante > Observação/Normal/outros.
+ *
+ * Mesma tolerância de grafia de `estiloPrioridade` — 'OBSERVAÇÃO' (acentuado,
+ * como vem do filtro da UI), 'OBSERVACAO' (como está no banco), 'NORMAL' (das
+ * ações antigas) e `null` valem todos igual, no nível de baixo.
+ */
+export function pesoPrioridade(prioridade?: string | null): number {
+  const v = (prioridade || '').toUpperCase().trim()
+  if (v === 'URGENTE') return 3
+  if (v === 'IMPORTANTE') return 2
+  return 1
+}
+
 export { ESTILOS as PRIORIDADES }

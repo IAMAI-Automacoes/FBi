@@ -24,6 +24,7 @@ import {
   type CollisionDetection,
 } from '@dnd-kit/core'
 import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable'
+import { pesoPrioridade } from '@/lib/prioridade'
 
 // Cada TaskCard registra um droppable do próprio tamanho, e cada coluna
 // TAMBÉM registra um droppable grande (a área toda, pra dar pra soltar no
@@ -104,14 +105,6 @@ export type ExtendedActionTask = {
   date?: string
   /** Fixado no topo da coluna, por cima da ordenação automática por prioridade. */
   fixado?: boolean
-}
-
-/** Peso pra ordenar por prioridade: Urgente > Importante > Observação/Normal/outros. */
-function pesoPrioridade(prioridade?: string | null): number {
-  const v = (prioridade || '').toUpperCase().trim()
-  if (v === 'URGENTE') return 3
-  if (v === 'IMPORTANTE') return 2
-  return 1
 }
 
 /** Ordem de exibição de uma coluna: fixados primeiro (entre si, pela `ordem`),
@@ -268,7 +261,10 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ExtendedActionTask | null>(null)
-  const [activeColumn, setActiveColumn] = useState<ActionStatus>('PENDENTE')
+  // Guardado ao abrir o modal (`handleOpenModal`) mas nunca lido hoje — o
+  // modal recebe a coluna por outro caminho. Prefixo `_` só pra marcar que a
+  // falta de leitura é conhecida, não esquecimento.
+  const [_activeColumn, setActiveColumn] = useState<ActionStatus>('PENDENTE')
   /** Card cujo painel lateral de detalhes (plano completo + prazo +
    *  responsável) está aberto — só leitura, ver `DetalhesAcaoPanel`. */
   const [detalhesTask, setDetalhesTask] = useState<ExtendedActionTask | null>(null)
@@ -372,7 +368,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       // 2h de carência e só então vira aviso — e essa rota funciona mesmo quando
       // o status muda pela API ou por outra aba. O disparo daqui era um segundo
       // caminho, que mandava a mensagem na hora e não sabia desfazer.
-    } catch (err) {
+    } catch (_err) {
       toast({ title: 'Falha ao atualizar o status.', variant: 'destructive' })
       load({ silencioso: true }) // desfaz o movimento otimista sem piscar a tela
     }
@@ -658,7 +654,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       toast({ title: 'Ação excluída' })
       setModalOpen(false)
       load({ silencioso: true })
-    } catch (err) {
+    } catch (_err) {
       toast({ title: 'Falha ao excluir a tarefa', variant: 'destructive' })
     }
   }
@@ -770,7 +766,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             // modal para tentar de novo.
           })
       }
-    } catch (err) {
+    } catch (_err) {
       toast({ title: 'Falha ao salvar ação', variant: 'destructive' })
     }
     setModalOpen(false)
@@ -978,7 +974,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   }
                 : null
             }
-            onSave={handleSaveTask}
+            onSave={handleSaveTask}
           />
         )}
 
