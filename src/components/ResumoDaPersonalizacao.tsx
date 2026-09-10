@@ -12,7 +12,7 @@
  * lado a lado é o que deixa perceber quando uma destoa da outra.
  */
 import { Pencil } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LandingView, type TextosDaPagina } from '@/components/LandingView'
 import { POSTER_H, POSTER_W } from '@/lib/qr-poster'
 import type { ElementoCartaz, EstilosDosTextos } from '@/lib/cartaz-elementos'
@@ -75,18 +75,30 @@ function Peca({
       <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
         <h3 className="text-[15px] font-semibold text-gray-900">{titulo}</h3>
         {/* Só o ícone: o botão fica DENTRO do card da peça que ele edita, e
-            ali não há a quem confundir — dizer "editar cartaz" seria repetir
-            o título que está a dois centímetros dele. */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={onEditar}
-          aria-label={`Editar: ${titulo}`}
-          title={`Editar: ${titulo}`}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+            ali não há a quem confundir — dizer "editar cartaz" seria repetir o
+            título que está a dois centímetros dele. Quem passar o mouse lê
+            "Editar" na etiqueta; quem usa leitor de tela, no `aria-label`. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onEditar}
+              aria-label={`Editar: ${titulo}`}
+              className={
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' +
+                // Discreto em repouso e sólido no hover: ele fica ao lado do
+                // título, e um botão de peso ali competiria com o nome da peça
+                // por atenção sem precisar.
+                'border border-gray-200 bg-gray-50 text-gray-500 transition-colors ' +
+                'hover:border-gray-300 hover:bg-gray-100 hover:text-gray-900 ' +
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300'
+              }
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>Editar</TooltipContent>
+        </Tooltip>
       </div>
 
       <div

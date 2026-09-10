@@ -510,7 +510,10 @@ export default function QRCodes() {
         .eq('id', restauranteId)
       if (error) throw error
       cfgSalvoRef.current = { modo: cfgModo, estilo: cfgEstilo, imagem: cfgImagem, mensagem: cfgMensagem }
-      toast.success('QR Code e página salvos!')
+      // Só o cartaz: a página do cliente tem tela e salvamento próprios desde
+      // que virou o segundo passo. Dizer "e página" aqui prometia o que este
+      // botão não faz.
+      toast.success('Cartaz salvo!')
     } catch (err: any) {
       toast.error('Erro ao salvar', { description: err.message })
     } finally {
@@ -672,9 +675,9 @@ export default function QRCodes() {
       const nova = novaLogo(data.publicUrl, elementos)
       setElementos((prev) => [...prev, nova])
       setSelecionado(nova.id)
-      toast.success('Logo adicionada — arraste na prévia para posicionar.')
+      toast.success('Imagem adicionada — arraste na prévia para posicionar.')
     } catch (err: any) {
-      toast.error('Erro ao enviar a logo', { description: err.message })
+      toast.error('Erro ao enviar a imagem', { description: err.message })
     } finally {
       setEnviandoLogo(false)
     }
@@ -1122,8 +1125,11 @@ export default function QRCodes() {
     try {
       const blob = await canvasToBlob(canvas)
       baixarBlob(blob, `qrcode-${restaurantName.replace(/\s+/g, '-').toLowerCase()}.png`)
+      // Os dois formatos avisam igual: sem isto, baixar em PNG não dava
+      // retorno nenhum e parecia que o clique não tinha pegado.
+      toast.success('PNG baixado!')
     } catch {
-      toast.error('Erro ao baixar PNG')
+      toast.error('Não foi possível baixar o PNG', { description: 'Tente de novo em instantes.' })
     }
   }
 
@@ -1140,9 +1146,9 @@ export default function QRCodes() {
       const y = (ph - h) / 2
       pdf.addImage(canvas, 'PNG', x, y, w, h)
       baixarBlob(pdf.output('blob'), `qrcode-${restaurantName.replace(/\s+/g, '-').toLowerCase()}.pdf`)
-      toast.success('PDF baixado com sucesso!')
+      toast.success('PDF baixado!')
     } catch {
-      toast.error('Erro ao gerar PDF')
+      toast.error('Não foi possível gerar o PDF', { description: 'Tente de novo em instantes.' })
     }
   }
 
