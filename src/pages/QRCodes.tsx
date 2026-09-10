@@ -1270,8 +1270,6 @@ export default function QRCodes() {
           {passo === 'resumo' ? (
             <ResumoDaPersonalizacao
               canvasRef={canvasRef}
-              larguraCartaz={POSTER_W}
-              alturaCartaz={POSTER_H}
               onEditarCartaz={() => setPasso('cartaz')}
               onEditarCliente={() => setPasso('cliente')}
               restauranteNome={cfgTitulo.trim() || restaurantName}
@@ -1294,7 +1292,7 @@ export default function QRCodes() {
                 salvando={savingCfg}
                 onSalvar={salvarFundoDoCliente}
                 onCancelar={() => setPasso(clienteJaConfigurado ? 'resumo' : 'cartaz')}
-                rotuloCancelar={clienteJaConfigurado ? 'Cancelar' : 'Voltar para o cartaz'}
+                rotuloCancelar="Voltar"
                 restauranteNome={cfgTitulo.trim() || restaurantName}
                 mensagem={cfgMensagem}
                 whatsapp={whatsappDono}
@@ -1486,7 +1484,10 @@ export default function QRCodes() {
                     // e evita que um texto colado sem querer tome o cartaz.
                     maxLength={400}
                     placeholder="Ex: É rapidinho! Conte como foi sua experiência."
-                    className="min-h-0 resize-none py-2.5 leading-relaxed"
+                    // Rola em vez de crescer sem fim: a mensagem pode ter
+                    // várias linhas, e sem teto o campo empurrava o botão de
+                    // continuar pra fora da vista enquanto se digitava.
+                    className="max-h-[120px] min-h-0 resize-none overflow-y-auto py-2.5 leading-relaxed"
                   />
                 </div>
 

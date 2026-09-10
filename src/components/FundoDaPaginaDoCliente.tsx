@@ -35,7 +35,7 @@ interface Props {
   salvando?: boolean
   onSalvar: () => void
   onCancelar: () => void
-  /** "Voltar para o cartaz" na primeira volta; "Cancelar" depois disso. */
+  /** O texto do caminho de volta. */
   rotuloCancelar: string
   /** Para a prévia mostrar a página de verdade, e não um desenho dela. */
   restauranteNome: string
@@ -203,7 +203,7 @@ export function FundoDaPaginaDoCliente({
               className="gap-2 bg-[#C2622C] text-white hover:bg-[#A9531F] active:bg-[#8A431C]"
             >
               {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
-              Salvar página do cliente
+              Salvar
             </Button>
           </div>
         </CardContent>
