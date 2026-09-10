@@ -35,8 +35,8 @@ interface Props {
   salvando?: boolean
   onSalvar: () => void
   onCancelar: () => void
-  /** O texto do caminho de volta. */
-  rotuloCancelar: string
+  /** O voltar só existe na primeira passagem, quando há de onde voltar. */
+  mostrarVoltar: boolean
   /** Para a prévia mostrar a página de verdade, e não um desenho dela. */
   restauranteNome: string
   mensagem: string | null
@@ -61,7 +61,7 @@ export const ALTURA_TELA = 638
 export const LARGURA_COLUNA = 420
 
 export function FundoDaPaginaDoCliente({
-  valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar, rotuloCancelar,
+  valor, onChange, onEscolherFoto, enviando, salvando, onSalvar, onCancelar, mostrarVoltar,
   restauranteNome, mensagem, whatsapp, elementos, onElementosChange, onSubirImagem,
   textos, onTextosChange, estilosDosTextos, onEstilosChange,
 }: Props) {
@@ -192,16 +192,18 @@ export function FundoDaPaginaDoCliente({
           <div className="flex justify-end gap-2 border-t pt-5">
             {/* O caminho de volta mora AQUI embaixo, ao lado do salvar, e não
                 num link solto acima do card: é onde a decisão de terminar
-                acontece, e as duas saídas ficam no mesmo lugar. */}
-            <Button variant="neutro" size="forma" onClick={onCancelar}>
-              {rotuloCancelar}
-            </Button>
-            <Button
-              size="forma"
-              disabled={salvando}
-              onClick={onSalvar}
-              className="gap-2 bg-[#C2622C] text-white hover:bg-[#A9531F] active:bg-[#8A431C]"
-            >
+                acontece. Ele só aparece na PRIMEIRA passagem — quem chegou
+                aqui por um "editar" veio mexer nesta peça, e não há passo
+                anterior pra onde voltar. */}
+            {mostrarVoltar && (
+              <Button variant="neutro" size="forma" onClick={onCancelar}>
+                Voltar
+              </Button>
+            )}
+            {/* Mesmo botão do "Continuar" do cartaz: são dois passos do mesmo
+                caminho, e botões diferentes fariam uma decisão parecer mais
+                pesada que a outra. */}
+            <Button variant="etapa" size="forma" disabled={salvando} onClick={onSalvar}>
               {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
               Salvar
             </Button>

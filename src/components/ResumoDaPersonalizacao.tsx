@@ -11,6 +11,8 @@
  * duas metades da mesma experiência do cliente — a mesa e o celular —, e vê-las
  * lado a lado é o que deixa perceber quando uma destoa da outra.
  */
+import { Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { LandingView, type TextosDaPagina } from '@/components/LandingView'
 import { POSTER_H, POSTER_W } from '@/lib/qr-poster'
 import type { ElementoCartaz, EstilosDosTextos } from '@/lib/cartaz-elementos'
@@ -44,6 +46,8 @@ const CHAPA_LARGURA = CANVAS_LARGURA + CHAPA_TOPO * 2
 interface Props {
   /** O canvas do cartaz continua sendo o da página: é dele que sai o download. */
   canvasRef: React.RefObject<HTMLCanvasElement>
+  onEditarCartaz: () => void
+  onEditarCliente: () => void
   // ── o que a página do cliente precisa pra se desenhar ──
   restauranteNome: string
   mensagem: string | null
@@ -56,17 +60,38 @@ interface Props {
   estilosDosTextos: EstilosDosTextos
 }
 
-function Peca({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Peca({
+  titulo, onEditar, children,
+}: {
+  titulo: string
+  onEditar: () => void
+  children: React.ReactNode
+}) {
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
-      {/* Só o nome da peça, colado nela. A frase que explicava o que era cada
-          uma existia pra quem nunca tinha visto — mas a essa altura o dono já
-          montou as duas, e a própria imagem embaixo diz o que é. */}
-      <h3 className="px-5 pb-3 pt-4 text-[15px] font-semibold text-gray-900">{titulo}</h3>
+      {/* Só o nome da peça e o lápis, colados nela. A frase que explicava o
+          que era cada uma existia pra quem nunca tinha visto — mas a essa
+          altura o dono já montou as duas, e a própria imagem diz o que é. */}
+      <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
+        <h3 className="text-[15px] font-semibold text-gray-900">{titulo}</h3>
+        {/* Só o ícone: o botão fica DENTRO do card da peça que ele edita, e
+            ali não há a quem confundir — dizer "editar cartaz" seria repetir
+            o título que está a dois centímetros dele. */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={onEditar}
+          aria-label={`Editar: ${titulo}`}
+          title={`Editar: ${titulo}`}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </div>
 
       <div
-        className="flex flex-1 items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-5 py-5"
-        style={{ minHeight: ALTURA_PECA + 40 }}
+        className="flex flex-1 items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-5 pb-5 pt-2"
+        style={{ minHeight: ALTURA_PECA + 24 }}
       >
         {children}
       </div>
@@ -75,12 +100,12 @@ function Peca({ titulo, children }: { titulo: string; children: React.ReactNode 
 }
 
 export function ResumoDaPersonalizacao({
-  canvasRef,
+  canvasRef, onEditarCartaz, onEditarCliente,
   restauranteNome, mensagem, whatsapp, modo, imagem, estilo, elementos, textos, estilosDosTextos,
 }: Props) {
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <Peca titulo="QR Code impresso">
+      <Peca titulo="QR Code impresso" onEditar={onEditarCartaz}>
         {/* O mesmo display de acrílico do editor, sem a camada de arraste — e o
             MESMO canvas, porque é dele que saem o PNG e o PDF. */}
         {/* Inclinada, como no editor: é a leve rotação em Y que faz ler como
@@ -113,7 +138,7 @@ export function ResumoDaPersonalizacao({
         </div>
       </Peca>
 
-      <Peca titulo="Página do cliente">
+      <Peca titulo="Página do cliente" onEditar={onEditarCliente}>
         <div style={{ width: TELA_LARGURA + BORDA_CELULAR * 2 }}>
           <div
             className="relative overflow-hidden bg-gray-900 shadow-[0_16px_36px_-14px_rgba(16,24,40,0.5)]"

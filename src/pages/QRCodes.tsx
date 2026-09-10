@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight, Pencil } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
@@ -1180,36 +1180,12 @@ export default function QRCodes() {
         {/* As mesmas abas da página dos garçons, sem ícone: são duas seções
             do mesmo assunto, e cada tela ter o seu desenho de aba fazia o
             app parecer montado por pedaços. */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
           <TabsList>
             <TabsTrigger value="config">Personalizar</TabsTrigger>
             <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
           <div className="flex-1" />
-          {/* No resumo, os dois "editar" ficam AQUI, ao lado do baixar: são as
-              ações da tela, e a barra de cima é onde as ações da tela moram.
-              No pé dos cards eles duplicavam essa barra e empurravam as peças
-              pra baixo. Os nomes dizem qual é qual — dois botões "Editar" lado
-              a lado não escolhem nada. */}
-          {aba === 'config' && passo === 'resumo' && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="h-9 gap-1.5 rounded-full px-3.5 text-[13px] font-medium"
-                onClick={() => setPasso('cartaz')}
-              >
-                <Pencil className="h-3.5 w-3.5" /> Editar cartaz
-              </Button>
-              <Button
-                variant="outline"
-                className="h-9 gap-1.5 rounded-full px-3.5 text-[13px] font-medium"
-                onClick={() => setPasso('cliente')}
-              >
-                <Pencil className="h-3.5 w-3.5" /> Editar página
-              </Button>
-            </div>
-          )}
-
           {aba === 'config' && passo !== 'cliente' && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
                principal no corpo, o formato atrás da seta. Um menu inteiro só
@@ -1295,6 +1271,8 @@ export default function QRCodes() {
           {passo === 'resumo' ? (
             <ResumoDaPersonalizacao
               canvasRef={canvasRef}
+              onEditarCartaz={() => setPasso('cartaz')}
+              onEditarCliente={() => setPasso('cliente')}
               restauranteNome={cfgTitulo.trim() || restaurantName}
               mensagem={cfgMensagem}
               whatsapp={whatsappDono}
@@ -1315,7 +1293,7 @@ export default function QRCodes() {
                 salvando={savingCfg}
                 onSalvar={salvarFundoDoCliente}
                 onCancelar={() => setPasso(clienteJaConfigurado ? 'resumo' : 'cartaz')}
-                rotuloCancelar="Voltar"
+                mostrarVoltar={!clienteJaConfigurado}
                 restauranteNome={cfgTitulo.trim() || restaurantName}
                 mensagem={cfgMensagem}
                 whatsapp={whatsappDono}
@@ -1522,25 +1500,21 @@ export default function QRCodes() {
                 <div className="flex justify-end">
                   {/* Na primeira vez isto CONTINUA — ainda falta a página do
                       cliente, e é o próprio botão que revela que ela existe.
-                      Depois de tudo configurado, o mesmo botão só termina a
-                      edição e volta pro resumo: continuar pra onde, se não há
-                      mais passo? */}
-                  {clienteJaConfigurado && (
-                    <Button variant="neutro" size="forma" onClick={() => setPasso('resumo')}>
-                      Cancelar
-                    </Button>
-                  )}
+                      Configurado, ele só salva: continuar pra onde, se não há
+                      mais passo? E aí ele fica SOZINHO — quem entrou por um
+                      "editar" veio mexer numa peça só, e o único caminho de
+                      saída é terminar. */}
                   <Button
                     onClick={async () => {
                       await salvarCfg()
                       setPasso(clienteJaConfigurado ? 'resumo' : 'cliente')
                     }}
                     disabled={savingCfg}
-                    variant="primario"
+                    variant="etapa"
                     size="forma"
                   >
                     {savingCfg && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {savingCfg ? 'Salvando…' : clienteJaConfigurado ? 'Salvar alterações' : 'Continuar'}
+                    {savingCfg ? 'Salvando…' : clienteJaConfigurado ? 'Salvar' : 'Continuar'}
                     {!savingCfg && !clienteJaConfigurado && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>

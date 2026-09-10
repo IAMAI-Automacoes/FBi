@@ -51,6 +51,23 @@ const buttonVariants = cva(
         neutro: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
 
         /**
+         * Concluir uma etapa da personalização do QR — o "Continuar" do cartaz
+         * impresso e o "Salvar" da página do cliente.
+         *
+         * É uma variante só porque as duas telas são dois passos do mesmo
+         * caminho: botões diferentes fariam parecer que uma decisão pesa mais
+         * que a outra. Terracota porque é a cor de quem edita o material do
+         * cliente — o azul do app já é a cor de tudo o que é clicável e não
+         * distinguiria nada ali.
+         */
+        etapa:
+          'bg-[#C2622C] bg-gradient-to-b from-[#CE7038] to-[#A9531F] text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-[#D67B44] hover:to-[#B85B24] ' +
+          'active:shadow-none active:from-[#A9531F] active:to-[#A9531F] ' +
+          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
+
+        /**
          * Baixar um material pronto — o PDF dos garçons, o cartaz do QR.
          *
          * Mesma construção do `primario` (luz no topo, degradê curto, sombra
