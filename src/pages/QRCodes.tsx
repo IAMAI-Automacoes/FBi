@@ -1365,13 +1365,54 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Cor livre, fora da paleta pronta. O respiro maior é para
-                        o botão não ler como a 13ª cor da grade acima. */}
-                    <div className="mt-6">
+                    {/* As duas escolhas que NÃO cabem numa grade pronta, lado
+                        a lado: a cor livre e a arte do próprio dono. Ficavam em
+                        colunas diferentes, cada uma no pé de uma lista — o que
+                        as fazia ler como sobras de duas listas em vez do par
+                        que são. O respiro maior é pra elas não lerem como a
+                        última cor da paleta logo acima. */}
+                    <div className="mt-6 flex items-start gap-3">
                       <SeletorCor
                         valor={personalizada ? cfgEstilo : null}
                         onChange={setCfgEstilo}
                       />
+                      {cfgImagem ? (
+                        <div className="relative w-[108px] shrink-0 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm">
+                          <span className="relative block aspect-[5/4] w-full">
+                            <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
+                            <button
+                              onClick={removerImagem}
+                              title="Remover arte"
+                              aria-label="Remover a arte"
+                              className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                          <span className="block px-1.5 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                            Arte própria
+                          </span>
+                        </div>
+                      ) : (
+                        <label className="group w-[108px] shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60">
+                          <span className="flex aspect-[5/4] w-full items-center justify-center bg-[#C2622C]/5">
+                            {uploading ? (
+                              <Loader2 className="h-6 w-6 animate-spin text-[#C2622C]" />
+                            ) : (
+                              <ImageUp className="h-6 w-6 text-[#C2622C]" />
+                            )}
+                          </span>
+                          <span className="block px-1.5 py-1.5 text-[10px] font-medium leading-tight text-gray-600">
+                            {uploading ? 'Enviando…' : 'Subir arte'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
 
@@ -1408,60 +1449,6 @@ export default function QRCodes() {
                       ))}
                     </div>
 
-                    {/* Arte própria: é uma OPÇÃO DE FUNDO como as outras, então
-                        tem o mesmo tamanho e a mesma forma de uma textura, na
-                        mesma grade. Como faixa larga separada, lia como outra
-                        coisa — e quem estava escolhendo fundo não a via como
-                        alternativa às texturas ao lado. */}
-                    {/* O MESMO retângulo de um card de textura, só que deitado:
-                        largura de 1,25 coluna (a altura de um card lá de cima) e
-                        altura de 1 coluna (a largura dele). A coluna da grade
-                        vale (100% - 3 vãos) / 4, então dá pra escrever a medida
-                        exata em vez de chutar pixel. */}
-                    <div className="mt-2 grid grid-cols-4 gap-2">
-                      {cfgImagem ? (
-                        <div
-                          className="relative col-span-2 overflow-hidden rounded-lg border-2 border-[#C2622C] bg-white shadow-sm"
-                          style={{ width: 'calc(((100% - 1.5rem) / 4) * 1.25)' }}
-                        >
-                          <span className="relative block aspect-[5/4] w-full">
-                            <img src={cfgImagem} alt="Arte enviada" className="h-full w-full object-cover" />
-                            <button
-                              onClick={removerImagem}
-                              title="Remover arte"
-                              className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75"
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </span>
-                          <span className="block px-1 py-1.5 text-[9px] font-medium leading-tight text-gray-600">
-                            Arte própria
-                          </span>
-                        </div>
-                      ) : (
-                        <label
-                          className="group col-span-2 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-white transition-colors hover:border-[#C2622C]/60"
-                          style={{ width: 'calc(((100% - 1.5rem) / 4) * 1.25)' }}
-                        >
-                          <span className="flex aspect-[5/4] w-full items-center justify-center bg-[#C2622C]/5">
-                            {uploading ? (
-                              <Loader2 className="h-5 w-5 animate-spin text-[#C2622C]" />
-                            ) : (
-                              <ImageUp className="h-5 w-5 text-[#C2622C]" />
-                            )}
-                          </span>
-                          <span className="block px-1 py-1.5 text-[9px] font-medium leading-tight text-gray-600">
-                            {uploading ? 'Enviando…' : 'Subir arte'}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropFile(f); e.target.value = '' }}
-                          />
-                        </label>
-                      )}
-                    </div>
                   </div>
                 </div>
 
