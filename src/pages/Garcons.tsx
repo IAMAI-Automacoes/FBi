@@ -39,7 +39,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { jsPDF } from 'jspdf'
-import { desenharPoster, landingUrl, baixarBlob, POSTER_W, POSTER_H } from '@/lib/qr-poster'
+import { desenharPoster, landingUrl, baixarBlob, POSTER_W, POSTER_H, type PosterOpts } from '@/lib/qr-poster'
+import { lerElementos, lerEstiloDosTextos, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { getIniciais, CORES_AVATAR } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
 import { nomeDeArquivoSeguro } from '@/lib/nome-arquivo'
@@ -286,15 +287,15 @@ function gerarSlug(n = 8) {
  *  pé — sem ele, uma pilha de impressões fica indistinguível, já que o QR é a
  *  única coisa que muda entre elas e ninguém lê QR a olho nu. */
 async function posterCanvas(
-  url: string,
-  nome: string,
-  temaId: string,
-  tagline: string | null,
   garcom: string,
-  rotulo: string | null,
+  url: string,
+  cartaz: Omit<PosterOpts, 'url' | 'garcom'>,
 ): Promise<HTMLCanvasElement> {
   const c = document.createElement('canvas')
-  await desenharPoster(c, { url, nome, temaId, tagline: tagline ?? undefined, garcom, rotulo })
+  // O cartaz do garçom é O MESMO que o dono montou na tela de QR Codes: tema,
+  // arte de fundo, tipografia e posição de cada texto, e os elementos que ele
+  // acrescentou. A ÚNICA diferença é o nome dele no pé — ver acima.
+  await desenharPoster(c, { ...cartaz, url, garcom })
   return c
 }
 
@@ -316,6 +317,17 @@ export default function Garcons() {
   const [posterMsg, setPosterMsg] = useState<string | null>(null)
   // Textos editaveis do cartaz (ver qr-poster.ts). null = padrao.
   const [posterRotulo, setPosterRotulo] = useState<string | null>(null)
+  /**
+   * O RESTO do que o dono desenhou no cartaz: a tipografia e a posicao dos
+   * textos fixos, os textos e imagens que ele acrescentou, e a arte de fundo.
+   *
+   * Sem isto o cartaz do garcom saia so com o tema e a mensagem — quem tinha
+   * mexido na fonte do nome, arrastado um texto ou subido uma arte via tudo
+   * isso sumir na hora de imprimir a folha de cada garcom.
+   */
+  const [posterEstilos, setPosterEstilos] = useState<EstilosDosTextos>({})
+  const [posterElementos, setPosterElementos] = useState<ElementoCartaz[]>([])
+  const [posterArte, setPosterArte] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [baixando, setBaixando] = useState(false)
 
@@ -389,7 +401,7 @@ export default function Garcons() {
     if (!u?.user) { setLoading(false); return }
     const { data: r } = await supabase
       .from('restaurantes')
-      .select('id, nome_restaurante, qr_estilo, qr_mensagem, qr_rotulo, qr_titulo, config_bonificacao')
+      .select('id, nome_restaurante, qr_estilo, qr_mensagem, qr_rotulo, qr_titulo, qr_textos_estilo, qr_elementos, qr_bg_imagem, config_bonificacao')
       .eq('auth_user_id', u.user.id)
       .single()
     if (!r) { setLoading(false); return }
@@ -400,6 +412,9 @@ export default function Garcons() {
     setPosterRotulo((r as any).qr_rotulo ?? null)
     setPosterTema(r.qr_estilo ?? 'classico')
     setPosterMsg(r.qr_mensagem ?? null)
+    setPosterEstilos(lerEstiloDosTextos((r as any).qr_textos_estilo))
+    setPosterElementos(lerElementos((r as any).qr_elementos))
+    setPosterArte((r as any).qr_bg_imagem ?? null)
 
     let listaRegras = (Array.isArray(r.config_bonificacao) ? r.config_bonificacao : []) as unknown as RegraBonificacao[]
 
@@ -684,7 +699,15 @@ export default function Garcons() {
       for (let i = 0; i < ativos.length; i++) {
         const g = ativos[i]
         const slug = await ensureQr(g.id)
-        const canvas = await posterCanvas(landingUrl(slug), restaurantName, posterTema, posterMsg, g.nome_garcon, posterRotulo)
+        const canvas = await posterCanvas(g.nome_garcon, landingUrl(slug), {
+          nome: restaurantName,
+          temaId: posterTema,
+          tagline: posterMsg ?? undefined,
+          rotulo: posterRotulo,
+          estilos: posterEstilos,
+          elementos: posterElementos,
+          imagemDeFundo: posterArte,
+        })
         if (i > 0) pdf.addPage()
         pdf.addImage(canvas, 'PNG', x, y, w, h)
       }

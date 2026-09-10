@@ -8,7 +8,8 @@
  */
 import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
-import { LandingView } from '@/components/LandingView'
+import { LandingView, type TextosDaPagina } from '@/components/LandingView'
+import { lerElementos, lerEstiloDosTextos, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { SUPABASE_URL, SUPABASE_ANON } from '@/lib/qr-landing-config'
 
 interface LandingData {
@@ -20,6 +21,17 @@ interface LandingData {
   estilo: string
   filtro: string
   mensagem: string | null
+  /**
+   * O que o dono personalizou: os textos que ele reescreveu, a tipografia e a
+   * posição de cada um, e os elementos que ele colocou por cima.
+   *
+   * Esta entrada é a que o CLIENTE abre de verdade — a rota `/f/:slug` do app
+   * existe, mas quem serve o QR é este bundle leve. Sem repassar isto aqui, o
+   * dono via uma coisa na prévia e o cliente recebia a página padrão.
+   */
+  elementos: unknown
+  textos: TextosDaPagina | null
+  estilosDosTextos: unknown
 }
 
 function slugDaUrl(): string | null {
@@ -71,6 +83,11 @@ function App() {
   if (estado === 'carregando') return <Boot />
   if (estado === 'erro' || !data) return <Invalido />
 
+  // Os mesmos sanitizadores do editor: o que vem da rede é dado de fora, e um
+  // campo torto não pode derrubar a página de quem escaneou.
+  const elementos: ElementoCartaz[] = lerElementos(data.elementos)
+  const estilos: EstilosDosTextos = lerEstiloDosTextos(data.estilosDosTextos)
+
   return (
     <div style={{ height: '100dvh', width: '100%' }}>
       <LandingView
@@ -80,6 +97,9 @@ function App() {
         estilo={data.estilo}
         mensagem={data.mensagem}
         whatsapp={data.whatsapp}
+        elementos={elementos}
+        textos={data.textos ?? {}}
+        estilosDosTextos={estilos}
       />
     </div>
   )
