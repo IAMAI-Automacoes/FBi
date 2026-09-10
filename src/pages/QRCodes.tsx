@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { jsPDF } from 'jspdf'
-import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight } from 'lucide-react'
+import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, Check, X, Type, ImagePlus, Plus, RotateCw, ArrowRight, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
@@ -1180,11 +1180,36 @@ export default function QRCodes() {
         {/* As mesmas abas da página dos garçons, sem ícone: são duas seções
             do mesmo assunto, e cada tela ter o seu desenho de aba fazia o
             app parecer montado por pedaços. */}
-        <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           <TabsList>
             <TabsTrigger value="config">Personalizar</TabsTrigger>
             <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
+          <div className="flex-1" />
+          {/* No resumo, os dois "editar" ficam AQUI, ao lado do baixar: são as
+              ações da tela, e a barra de cima é onde as ações da tela moram.
+              No pé dos cards eles duplicavam essa barra e empurravam as peças
+              pra baixo. Os nomes dizem qual é qual — dois botões "Editar" lado
+              a lado não escolhem nada. */}
+          {aba === 'config' && passo === 'resumo' && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-9 gap-1.5 rounded-full px-3.5 text-[13px] font-medium"
+                onClick={() => setPasso('cartaz')}
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar cartaz
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 gap-1.5 rounded-full px-3.5 text-[13px] font-medium"
+                onClick={() => setPasso('cliente')}
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar página
+              </Button>
+            </div>
+          )}
+
           {aba === 'config' && passo !== 'cliente' && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
                principal no corpo, o formato atrás da seta. Um menu inteiro só
@@ -1270,8 +1295,6 @@ export default function QRCodes() {
           {passo === 'resumo' ? (
             <ResumoDaPersonalizacao
               canvasRef={canvasRef}
-              onEditarCartaz={() => setPasso('cartaz')}
-              onEditarCliente={() => setPasso('cliente')}
               restauranteNome={cfgTitulo.trim() || restaurantName}
               mensagem={cfgMensagem}
               whatsapp={whatsappDono}

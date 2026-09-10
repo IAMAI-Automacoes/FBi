@@ -11,7 +11,6 @@
  * duas metades da mesma experiência do cliente — a mesa e o celular —, e vê-las
  * lado a lado é o que deixa perceber quando uma destoa da outra.
  */
-import { Pencil } from 'lucide-react'
 import { LandingView, type TextosDaPagina } from '@/components/LandingView'
 import { POSTER_H, POSTER_W } from '@/lib/qr-poster'
 import type { ElementoCartaz, EstilosDosTextos } from '@/lib/cartaz-elementos'
@@ -45,8 +44,6 @@ const CHAPA_LARGURA = CANVAS_LARGURA + CHAPA_TOPO * 2
 interface Props {
   /** O canvas do cartaz continua sendo o da página: é dele que sai o download. */
   canvasRef: React.RefObject<HTMLCanvasElement>
-  onEditarCartaz: () => void
-  onEditarCliente: () => void
   // ── o que a página do cliente precisa pra se desenhar ──
   restauranteNome: string
   mensagem: string | null
@@ -59,75 +56,46 @@ interface Props {
   estilosDosTextos: EstilosDosTextos
 }
 
-function Peca({
-  titulo, descricao, onEditar, children,
-}: {
-  titulo: string
-  descricao: string
-  onEditar: () => void
-  children: React.ReactNode
-}) {
+function Peca({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <div className="px-5 pb-4 pt-5">
-        <h3 className="text-[15px] font-semibold text-gray-900">{titulo}</h3>
-        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">{descricao}</p>
-      </div>
+      {/* Só o nome da peça, colado nela. A frase que explicava o que era cada
+          uma existia pra quem nunca tinha visto — mas a essa altura o dono já
+          montou as duas, e a própria imagem embaixo diz o que é. */}
+      <h3 className="px-5 pb-3 pt-4 text-[15px] font-semibold text-gray-900">{titulo}</h3>
 
       <div
-        className="flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-5 py-6"
-        style={{ minHeight: ALTURA_PECA + 48 }}
+        className="flex flex-1 items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-5 py-5"
+        style={{ minHeight: ALTURA_PECA + 40 }}
       >
         {children}
-      </div>
-
-      {/* O editar fica EMBAIXO, depois da peça.
-          Em cima ele competia com o título por atenção e ficava longe do que
-          descreve; aqui ele é a última coisa que se lê — vê o resultado, e
-          então decide mexer. Largura cheia porque é a única ação do card. */}
-      <div className="border-t border-gray-100 p-4">
-        <button
-          type="button"
-          onClick={onEditar}
-          className={
-            'flex h-11 w-full items-center justify-center gap-2 rounded-lg text-[14.5px] font-semibold text-white ' +
-            // Mesma construção dos botões de peso do app: luz na quina de
-            // cima, degradê curto e sombra baixa — some tudo ao apertar, que é
-            // a leitura de afundar. Terracota porque é a cor de quem edita o
-            // material do cliente, e o azul do app já é a cor de tudo que é
-            // clicável.
-            'bg-[#C2622C] bg-gradient-to-b from-[#CE7038] to-[#A9531F] ' +
-            'shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(16,24,40,0.20)] ' +
-            'transition-all hover:from-[#D67B44] hover:to-[#B85B24] ' +
-            'active:shadow-none active:from-[#A9531F] active:to-[#A9531F] active:scale-[0.99]'
-          }
-        >
-          <Pencil className="h-4 w-4" /> Editar
-        </button>
       </div>
     </div>
   )
 }
 
 export function ResumoDaPersonalizacao({
-  canvasRef, onEditarCartaz, onEditarCliente,
+  canvasRef,
   restauranteNome, mensagem, whatsapp, modo, imagem, estilo, elementos, textos, estilosDosTextos,
 }: Props) {
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <Peca
-        titulo="QR Code impresso"
-        descricao="O display que fica na mesa do restaurante."
-        onEditar={onEditarCartaz}
-      >
+      <Peca titulo="QR Code impresso">
         {/* O mesmo display de acrílico do editor, sem a camada de arraste — e o
             MESMO canvas, porque é dele que saem o PNG e o PDF. */}
-        <div style={{ width: CHAPA_LARGURA }}>
+        {/* Inclinada, como no editor: é a leve rotação em Y que faz ler como
+            OBJETO em cima de uma mesa em vez de uma imagem colada na tela.
+            Aqui ela pode ficar sempre assim — não há arrasto pra ela deformar
+            o mapeamento, que é o motivo de o editor endireitá-la. */}
+        <div style={{ width: CHAPA_LARGURA, perspective: '1300px' }}>
           <div
             className="relative rounded-[6px] ring-1 ring-white/60 shadow-[0_16px_30px_-12px_rgba(0,0,0,0.4)]"
+            data-plaquinha
             style={{
               padding: `${CHAPA_TOPO}px ${CHAPA_TOPO}px ${CHAPA_PE}px`,
               background: 'linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.06) 42%, rgba(255,255,255,0.24))',
+              transform: 'rotateY(-10deg) rotateX(2deg)',
+              transformStyle: 'preserve-3d',
             }}
           >
             <canvas
@@ -145,11 +113,7 @@ export function ResumoDaPersonalizacao({
         </div>
       </Peca>
 
-      <Peca
-        titulo="Página do cliente"
-        descricao="O que abre no celular de quem escaneia o QR."
-        onEditar={onEditarCliente}
-      >
+      <Peca titulo="Página do cliente">
         <div style={{ width: TELA_LARGURA + BORDA_CELULAR * 2 }}>
           <div
             className="relative overflow-hidden bg-gray-900 shadow-[0_16px_36px_-14px_rgba(16,24,40,0.5)]"
