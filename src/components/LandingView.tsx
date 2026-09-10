@@ -1,6 +1,8 @@
 import { fundoCss, getTema } from '@/lib/qr-temas'
 import { CamadaDeElementos, type CaixaDoElemento } from '@/components/CamadaDeElementos'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { fonteCss, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { BASE_CLIENTE } from '@/components/CamadaDeElementos'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { easyFeedLogo } from '@/assets/brand'
 
@@ -45,6 +47,28 @@ export function LandingView({
   elementos, textos, estilosDosTextos, editandoId, onCaixas,
 }: LandingViewProps) {
   const tema = getTema(estilo)
+
+  /**
+   * Quanto a tela atual é maior ou menor que a régua do editor.
+   *
+   * Sem isto, o corpo escolhido na prévia ia em PIXEL para o celular do
+   * cliente: um nome com 43px ocupava quase a largura toda na prévia (294px de
+   * largura) e sobrava folga num telefone de 390px — a página que chegava não
+   * era a que o dono aprovou. Os elementos livres já faziam esta conta; os
+   * textos da própria página passaram a fazer também.
+   */
+  const raizRef = useRef<HTMLDivElement>(null)
+  const [larguraTela, setLarguraTela] = useState(BASE_CLIENTE)
+  useLayoutEffect(() => {
+    const no = raizRef.current
+    if (!no) return
+    const ler = () => setLarguraTela(no.clientWidth || BASE_CLIENTE)
+    ler()
+    const obs = new ResizeObserver(ler)
+    obs.observe(no)
+    return () => obs.disconnect()
+  }, [])
+  const escalaTela = larguraTela / BASE_CLIENTE
   // Duas apresentações possíveis, e elas pedem tratamentos opostos:
   //
   // FOTO (o dono subiu a própria imagem): a foto tem contraste imprevisível,
@@ -84,7 +108,7 @@ export function LandingView({
       return {
         ...base,
         fontFamily: e.fonte ? fonteCss(e.fonte) : base.fontFamily,
-        fontSize: e.tamanho ?? base.fontSize,
+        fontSize: e.tamanho != null ? e.tamanho * escalaTela : base.fontSize,
         fontWeight: e.negrito != null ? (e.negrito ? 700 : 400) : base.fontWeight,
         fontStyle: e.italico != null ? (e.italico ? 'italic' : 'normal') : base.fontStyle,
         color: e.cor ?? base.color,
@@ -95,7 +119,7 @@ export function LandingView({
     return {
       ...base,
       fontFamily: e.fonte ? fonteCss(e.fonte) : base.fontFamily,
-      fontSize: e.tamanho ?? base.fontSize,
+      fontSize: e.tamanho != null ? e.tamanho * escalaTela : base.fontSize,
       fontWeight: e.negrito != null ? (e.negrito ? 700 : 400) : base.fontWeight,
       fontStyle: e.italico != null ? (e.italico ? 'italic' : 'normal') : base.fontStyle,
       color: e.cor ?? base.color,
@@ -156,7 +180,7 @@ export function LandingView({
   // selo da paleta: a textura cobre a tela inteira, e ampliar um selo pequeno
   // para ~800px de altura borra o material todo.
   return (
-    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden', background: fundoCss(tema, 420, 760), fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
+    <div ref={raizRef} style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden', background: fundoCss(tema, 420, 760), fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
       {sobreFoto && (
         <>
           <img src={imagem!} alt="" style={{ position: 'absolute', inset: 0, height: '100%', width: '100%', objectFit: 'cover' }} />
@@ -189,7 +213,7 @@ export function LandingView({
           O crédito do produto sai do caminho e vai pro pé da tela: ele estava
           logo abaixo do botão, disputando a área mais nobre com a única ação
           que a página tem. */}
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '56px 24px calc(104px + env(safe-area-inset-bottom, 0px))', color: forte }}>
+      <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '9% 7% calc(13% + env(safe-area-inset-bottom, 0px))', color: forte }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
           {!oculto('rotulo') && (
             <p data-texto="rotulo" style={est('rotulo', { margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue })}>
@@ -202,7 +226,7 @@ export function LandingView({
             </h1>
           )}
           {!oculto('mensagem') && (
-            <p data-texto="mensagem" style={est('mensagem', { margin: '12px 0 0', maxWidth: '19rem', fontSize: 15, lineHeight: 1.5, color: suave })}>
+            <p data-texto="mensagem" style={est('mensagem', { margin: '12px 0 0', maxWidth: '82%', fontSize: 15, lineHeight: 1.5, color: suave })}>
               {txt('mensagem', mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.')}
             </p>
           )}
@@ -210,8 +234,8 @@ export function LandingView({
           {/* Mesma largura do texto acima: mais estreito que a frase, o botão
               lia como um detalhe dela em vez da ação da tela. */}
           <div style={solto('botao')
-            ? { position: 'absolute', left: `${estilosDosTextos!.botao!.x! * 100}%`, top: `${estilosDosTextos!.botao!.y! * 100}%`, transform: 'translate(-50%, -50%)', width: '19rem', maxWidth: 'calc(100% - 48px)', zIndex: 12 }
-            : { marginTop: 26, width: '100%', maxWidth: '19rem' }}>{Botao}</div>
+            ? { position: 'absolute', left: `${estilosDosTextos!.botao!.x! * 100}%`, top: `${estilosDosTextos!.botao!.y! * 100}%`, transform: 'translate(-50%, -50%)', width: '82%', maxWidth: '22rem', zIndex: 12 }
+            : { marginTop: '4%', width: '82%', maxWidth: '22rem' }}>{Botao}</div>
 
           {whatsapp && !oculto('dica') && (
             <p data-texto="dica" style={est('dica', { margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue })}>
@@ -221,12 +245,16 @@ export function LandingView({
         </div>
       </div>
 
-      {/* Crédito do produto, no pé e fora do fluxo.
+      {/* Crédito do produto, no pé, fora do fluxo e ACIMA DE TUDO.
           É a única coisa da tela que o dono não reescreve — a marca do produto
-          no material do cliente. Ficou maior do que era: com 13px de altura o
-          lockup virava um borrão verde em que não dava pra ler "Easy Feed",
-          o que não serve nem ao produto nem a quem vê. */}
-      <div style={{ position: 'absolute', zIndex: 10, left: 0, right: 0, bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+          no material do cliente —, e o z-index alto é o que faz essa regra
+          valer de verdade: sem ele bastava arrastar uma imagem da cor do fundo
+          por cima pra a página chegar no celular do cliente sem marca nenhuma,
+          sem nem parecer que algo tinha sido apagado. Tudo o que o dono põe na
+          página fica abaixo desta camada.
+          Ficou maior do que era: com 13px o lockup virava um borrão verde em
+          que não dava pra ler "Easy Feed". */}
+      <div style={{ position: 'absolute', zIndex: 900, left: 0, right: 0, bottom: 'calc(3% + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
         <span style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: tenue, opacity: 0.85 }}>feito com</span>
         {/* A chapinha branca FICA. A marca é verde-escuro com um raio laranja,
             e sobre madeira escura ou uma foto com scrim ela simplesmente some —

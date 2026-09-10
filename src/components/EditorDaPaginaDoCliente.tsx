@@ -23,7 +23,7 @@ import { LandingView, TEXTOS_DA_PAGINA, type TextoDaPagina, type TextosDaPagina 
 import { SeletorCor } from '@/components/SeletorCor'
 import { ehCorPersonalizada } from '@/lib/qr-temas'
 import type { CaixaDoElemento } from '@/components/CamadaDeElementos'
-import { novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { fonteCss, novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 
 /** Folga do quadro de seleção. Texto ganha; imagem não — a borda é a figura. */
@@ -89,6 +89,32 @@ export function EditorDaPaginaDoCliente({
    * medido do DOM depois de cada pintura.
    */
   const [caixasDeTexto, setCaixasDeTexto] = useState<{ id: TextoDaPagina; x: number; y: number; w: number; h: number }[]>([])
+  /**
+   * A aparência exata do texto que está sendo editado, copiada do próprio nó.
+   *
+   * O campo de edição precisa ser indistinguível do texto que ele substitui —
+   * mesma fonte, mesmo corpo, mesma cor, mesmo peso. Com um estilo genérico, o
+   * texto encolhia e trocava de tipo no instante do duplo clique, e a pessoa
+   * editava uma coisa diferente da que ia aparecer.
+   */
+  const [aparenciaDoCampo, setAparenciaDoCampo] = useState<React.CSSProperties>({})
+
+  const vestirCampoComo = (id: string) => {
+    const no = paginaRef.current?.querySelector<HTMLElement>(`[data-texto="${id}"]`)
+    if (!no) return
+    const c = getComputedStyle(no)
+    setAparenciaDoCampo({
+      fontFamily: c.fontFamily,
+      fontSize: c.fontSize,
+      fontWeight: c.fontWeight,
+      fontStyle: c.fontStyle,
+      letterSpacing: c.letterSpacing,
+      textTransform: c.textTransform as React.CSSProperties['textTransform'],
+      lineHeight: c.lineHeight,
+      color: c.color,
+      textAlign: 'center',
+    })
+  }
   const paginaRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -533,10 +559,21 @@ export function EditorDaPaginaDoCliente({
                         <textarea
                           autoFocus
                           value={textos[c.id] ?? ''}
+                          // Abre com TUDO selecionado: quem deu dois cliques
+                          // quer trocar a frase, e digitar já substitui. O
+                          // clique seguinte, dentro do campo, põe o cursor na
+                          // letra em que se clicou — comportamento normal de
+                          // um campo que já está com foco.
+                          onFocus={(ev) => { const campo = ev.currentTarget; requestAnimationFrame(() => campo.select()) }}
+                          // Sem isto, o clique dentro do campo subia até a
+                          // camada de fundo, que fecha a edição: era impossível
+                          // pôr o cursor no meio da frase.
+                          onPointerDown={(ev) => ev.stopPropagation()}
                           onChange={(ev) => onTextosChange({ ...textos, [c.id]: ev.target.value })}
                           onBlur={() => setEditandoId(null)}
                           onKeyDown={(ev) => { if (ev.key === 'Escape') setEditandoId(null) }}
-                          className="h-full w-full resize-none overflow-hidden rounded-[3px] border-0 bg-white/90 p-0 text-center text-[12px] leading-[1.2] text-gray-900 outline-none"
+                          className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none"
+                          style={aparenciaDoCampo}
                         />
                       ) : (
                         <div
@@ -548,6 +585,7 @@ export function EditorDaPaginaDoCliente({
                               const no = paginaRef.current?.querySelector<HTMLElement>(`[data-texto="${c.id}"]`)
                               onTextosChange({ ...textos, [c.id]: no?.innerText?.trim() ?? '' })
                             }
+                            vestirCampoComo(c.id)
                             setEditandoId(c.id)
                           }}
                           role="button"
@@ -599,12 +637,14 @@ export function EditorDaPaginaDoCliente({
                         <textarea
                           autoFocus
                           value={el.texto}
+                          onPointerDown={(ev) => ev.stopPropagation()}
                           onChange={(ev) => alterar(el.id, { texto: ev.target.value })}
                           onBlur={() => setEditandoId(null)}
                           onKeyDown={(ev) => { if (ev.key === 'Escape') setEditandoId(null) }}
                           className="h-full w-full resize-none overflow-hidden whitespace-pre border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
+                          onFocus={(ev) => { const campo = ev.currentTarget; requestAnimationFrame(() => campo.select()) }}
                           style={{
-                            fontFamily: undefined,
+                            fontFamily: fonteCss(el.fonte),
                             fontSize: (el.tamanho * (LARGURA_APARELHO - 20)) / 390,
                             fontWeight: el.negrito ? 700 : 400,
                             fontStyle: el.italico ? 'italic' : 'normal',

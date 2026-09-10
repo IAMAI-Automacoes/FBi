@@ -599,28 +599,8 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
       c.drawImage(qr, card.x + (card.w - qs) / 2, card.y + (card.h - qs) / 2, qs, qs)
     }
 
-    // ── Quadrado central com a logo do Easy Feed (não é mais um círculo) ──
-    const plate = 104
-    c.save()
-    c.shadowColor = 'rgba(23,23,23,0.18)'
-    c.shadowBlur = 12
-    roundRect(c, cx - plate / 2, card.y + card.h / 2 - plate / 2, plate, plate, 22)
-    c.fillStyle = '#ffffff'
-    c.fill()
-    c.restore()
-    if (logo && logo.width > 1) {
-      // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
-      const box = plate - 6 * 2
-      const escala = Math.min(box / logo.width, box / logo.height)
-      const lw = logo.width * escala
-      const lh = logo.height * escala
-      c.drawImage(logo, cx - lw / 2, card.y + card.h / 2 - lh / 2, lw, lh)
-    } else {
-      c.textAlign = 'center'
-      c.fillStyle = t.acento
-      c.font = 'bold 16px sans-serif'
-      c.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
-    }
+    // O selo do Easy Feed NÃO entra nesta camada: ele é pintado no fim, depois
+    // dos elementos do dono, pra não haver como cobri-lo. Ver o rodapé.
   })
   ctx.drawImage(camadaDoQr.canvas, 0, 0)
 
@@ -639,13 +619,29 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     ctx.fillText(garcom, cx, H - 86)
   }
 
-  // ── Rodapé: crédito do produto ──
+  // Os elementos do dono vão POR CIMA de tudo, inclusive do QR: quem posiciona
+  // é ele, e travar a sobreposição aqui seria decidir por ele. O editor avisa
+  // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
+  // que a sobreposição estraga o cartaz de verdade.
+  const livres = elementos.length
+    ? desenharElementos(ctx, elementos, t, W, H, imagens, opts.editandoId)
+    : []
+
+  // ── A MARCA DO PRODUTO, por último ──
   //
-  // A cor não vem do tema: vem do que EFETIVAMENTE está pintado atrás dele.
-  // Tema claro com arte escura por baixo (ou uma textura com manchas) apagava
-  // o crédito, e ele é a marca do produto no material impresso do cliente —
-  // não pode depender de sorte.
+  // Depois dos elementos do dono, e essa ordem é a proteção: enquanto o
+  // crédito era pintado antes, bastava arrastar um retângulo da cor do fundo
+  // por cima dele pra fazer o cartaz sair da gráfica sem marca nenhuma —
+  // sem nem parecer que algo foi apagado. Pintado por último, o que estiver
+  // embaixo não o alcança.
+  //
+  // A cor não vem do tema: vem do que EFETIVAMENTE está pintado atrás dele,
+  // agora incluindo o que o dono pôs ali. Tema claro com arte escura por baixo
+  // apagava o crédito, e ele não pode depender de sorte.
   const leitura = lerFundoAtras(ctx, W * 0.2, H - 62, W * 0.6, 40)
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = leitura.tinta
   ctx.globalAlpha = leitura.alpha
   ctx.font = `${leitura.negrito ? 'bold ' : ''}18px sans-serif`
@@ -656,17 +652,35 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
     ctx.shadowBlur = 6
   }
   espacado(ctx, 'FEITO COM EASY FEED', cx, H - 40, 3)
-  ctx.shadowBlur = 0
-  ctx.shadowColor = 'transparent'
-  ctx.globalAlpha = 1
+  ctx.restore()
 
-  // Os elementos do dono vão POR CIMA de tudo, inclusive do QR: quem posiciona
-  // é ele, e travar a sobreposição aqui seria decidir por ele. O editor avisa
-  // quando um elemento cobre o QR (ver `QRCodes.tsx`), que é o único caso em
-  // que a sobreposição estraga o cartaz de verdade.
-  const livres = elementos.length
-    ? desenharElementos(ctx, elementos, t, W, H, imagens, opts.editandoId)
-    : []
+  // O selo no meio do QR, pelo mesmo motivo. Ele é pequeno e fica no centro do
+  // cartão — o lugar mais fácil de cobrir com uma figura sem querer, e o mais
+  // fácil de cobrir de propósito.
+  const plate = 104
+  ctx.save()
+  ctx.shadowColor = 'rgba(23,23,23,0.18)'
+  ctx.shadowBlur = 12
+  roundRect(ctx, cx - plate / 2, card.y + card.h / 2 - plate / 2, plate, plate, 22)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.restore()
+  if (logo && logo.width > 1) {
+    // Respiro pequeno de propósito: a logo preenche quase todo o quadrado.
+    const box = plate - 6 * 2
+    const escalaLogo = Math.min(box / logo.width, box / logo.height)
+    const lw = logo.width * escalaLogo
+    const lh = logo.height * escalaLogo
+    ctx.drawImage(logo, cx - lw / 2, card.y + card.h / 2 - lh / 2, lw, lh)
+  } else {
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.fillStyle = t.acento
+    ctx.font = 'bold 16px sans-serif'
+    ctx.fillText('Easy Feed', cx, card.y + card.h / 2 + 6)
+    ctx.restore()
+  }
+
   return [...fixos, ...livres]
 }
 

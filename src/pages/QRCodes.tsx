@@ -42,6 +42,30 @@ function gerarSlug(n = 8) {
 }
 
 /**
+ * Abre um campo de edição com o foco nele e TUDO selecionado.
+ *
+ * Duas armadilhas, e por isso não é só um `autoFocus`:
+ *
+ * - o segundo clique de um duplo clique cai dentro do campo recém-criado, e o
+ *   navegador seleciona só a palavra sob o cursor — desfazendo um `select()`
+ *   imediato. Daí esperar o quadro seguinte.
+ * - o cartaz é redesenhado enquanto se digita, e o React remonta o campo; com
+ *   `autoFocus` (que só age na montagem original) ele perdia o foco no meio do
+ *   caminho. O callback de ref roda a cada montagem e devolve o foco.
+ *
+ * Selecionar tudo é o que faz o gesto valer a pena: quem deu dois cliques quer
+ * trocar a frase, e digitar já substitui. O clique seguinte, já dentro do
+ * campo, põe o cursor na letra em que se clicou.
+ */
+function abrirSelecionandoTudo(campo: HTMLTextAreaElement | null) {
+  if (!campo || document.activeElement === campo) return
+  campo.focus()
+  requestAnimationFrame(() => {
+    if (document.activeElement === campo) campo.select()
+  })
+}
+
+/**
  * Onde a moldura de seleção fica na prévia, em porcentagem do cartaz.
  *
  * Vive fora do componente porque é usada de dois jeitos: pelo JSX, no render
@@ -1620,9 +1644,9 @@ export default function QRCodes() {
                               >
                                 {emEdicao ? (
                                   <textarea
-                                    autoFocus
                                     value={fixo.valor}
                                     onChange={(e) => fixo.alterar(e.target.value)}
+                                    ref={abrirSelecionandoTudo}
                                     onBlur={() => setEditandoId(null)}
                                     onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
                                     className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
@@ -1714,9 +1738,9 @@ export default function QRCodes() {
                                    da prévia — sem isso a letra do campo não
                                    bate com a desenhada. */
                                 <textarea
-                                  autoFocus
                                   value={el.texto}
                                   onChange={(e) => alterarElemento(el.id, { texto: e.target.value })}
+                                  ref={abrirSelecionandoTudo}
                                   onBlur={() => setEditandoId(null)}
                                   onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
                                   className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
