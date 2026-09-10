@@ -137,13 +137,12 @@ export function FundoDaPaginaDoCliente({
                   As oito texturas cobrem os materiais; isto cobre o resto, a
                   cor da marca do restaurante, que nenhuma lista de oito
                   adivinha. */}
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4">
                 <SeletorCor
                   compacto
                   valor={!temFoto && ehCorPersonalizada(valor.estilo) ? valor.estilo : null}
                   onChange={(hex) => onChange({ ...valor, modo: 'estilo', imagem: null, estilo: hex })}
                 />
-                <span className="text-[12px] text-muted-foreground">Ou uma cor sólida</span>
               </div>
             </div>
 

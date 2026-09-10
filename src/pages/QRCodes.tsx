@@ -16,7 +16,7 @@ import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, C
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
-import { FONTES, fonteCss, forcarForaDaMarca, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { AREA_DA_MARCA_CARTAZ, FONTES, fonteCss, forcarForaDaMarca, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { Alcas } from '@/components/AlcasElemento'
 import { FundoDaPaginaDoCliente, type FundoDoCliente } from '@/components/FundoDaPaginaDoCliente'
@@ -199,8 +199,11 @@ export default function QRCodes() {
       editandoId: editandoId ?? undefined,
     }
     agendarQuadro()
+    // `passo` entra na lista porque o CANVAS é desmontado ao ir pro fundo da
+    // página do cliente e um novo nasce na volta — em branco. Sem redesenhar
+    // aqui, o cartaz voltava vazio e parecia que a configuração tinha sumido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId])
+  }, [qrData, restaurantName, cfgEstilo, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, passo])
 
   useEffect(() => () => {
     if (quadroRef.current != null) cancelAnimationFrame(quadroRef.current)
@@ -695,7 +698,7 @@ export default function QRCodes() {
 
     const mover = (ev: PointerEvent) => {
       const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
-      const ny = forcarForaDaMarca(inicio.y + (ev.clientY - inicio.py) / area.height)
+      const ny = forcarForaDaMarca(nx, inicio.y + (ev.clientY - inicio.py) / area.height, AREA_DA_MARCA_CARTAZ)
       const g = gestoRef.current
       if (!g) return
       if (fixo) {
@@ -1524,7 +1527,7 @@ export default function QRCodes() {
                   descia, e o segundo clique dos dois-cliques caía 54px acima
                   do que a pessoa mirou: clicar na mensagem abria o nome do
                   restaurante. Reservando a faixa, o cartaz não sai do lugar. */}
-              <div className="min-h-[50px]">
+              <div className="min-h-[48px]">
               {elementoSelecionado && (
                 <BarraElemento
                   elemento={elementoSelecionado}

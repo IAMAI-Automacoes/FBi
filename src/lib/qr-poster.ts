@@ -550,9 +550,16 @@ export async function desenharPoster(canvas: HTMLCanvasElement, opts: PosterOpts
   const mensagem = (opts.tagline ?? MENSAGEM_PADRAO).trim()
   if (mensagem) {
     const fMsg = fonteFixa(ID_MENSAGEM, 25, 'sans-serif', false)
-    // A mensagem desce a partir do FIM do título já esticado — senão, com o
-    // nome alargado, ela subiria por cima dele.
-    const fimTitulo = ondeTitulo.y + (medidaTitulo.fim - 0) * estTitulo.y
+    // A mensagem desce a partir do fim do título, mas contado do lugar PADRÃO
+    // dele — não de onde o dono o arrastou.
+    //
+    // Antes vinha da posição real, e isso amarrava os dois: arrastar o nome
+    // levava a mensagem junto, sem que ninguém a tivesse tocado. O tamanho do
+    // título continua contando (um nome em duas linhas empurra a mensagem pra
+    // baixo, que é o que evita os dois se encavalarem de saída); o que deixou
+    // de contar é para onde ele foi.
+    const yPadraoTitulo = rotulo ? 196 : 172
+    const fimTitulo = yPadraoTitulo + medidaTitulo.fim * estTitulo.y
     const ondeMsg = ondeFica(ID_MENSAGEM, cx, fimTitulo + 44)
     const estMsg = esticoDe(ID_MENSAGEM)
     ctx.fillStyle = corFixa(ID_MENSAGEM, t.suave)

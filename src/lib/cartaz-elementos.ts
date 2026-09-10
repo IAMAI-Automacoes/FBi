@@ -79,19 +79,50 @@ export function proximaPosicaoLivre(existentes: { x: number; y: number }[]): { x
 }
 
 /**
- * Até onde um elemento do dono pode descer, em fração da altura.
+ * A área reservada à marca do produto, em fração do cartaz/da tela.
  *
- * Abaixo disto fica a faixa da marca do produto ("feito com Easy Feed" no
- * cartaz, o mesmo crédito na página do cliente). A marca já é pintada por
- * cima de tudo, então não há como apagá-la — mas sem este limite dava pra
- * empilhar texto em cima dela até virar um borrão ilegível, que na prática é
- * a mesma coisa. O arrasto simplesmente para aqui.
+ * Nada do dono entra aqui: nem o crédito "feito com Easy Feed" nem a logo
+ * podem ser cobertos. Eles já são pintados por cima de tudo, então não há como
+ * apagá-los — mas dava pra empilhar coisa em cima até virar um borrão
+ * ilegível, que na prática é a mesma coisa.
+ *
+ * É uma FAIXA CENTRAL, e não a largura inteira: a marca ocupa o miolo do
+ * rodapé, e as duas margens ao lado dela continuam livres. Reservar a linha
+ * toda tirava do dono um espaço que ninguém estava disputando.
  */
-export const LIMITE_ANTES_DA_MARCA = 0.9
+export interface AreaReservada {
+  /** Onde a marca começa e termina na horizontal. */
+  x0: number
+  x1: number
+  /** A partir daqui pra baixo é dela. */
+  y: number
+}
 
-/** Prende a posição de um elemento fora da faixa reservada à marca. */
-export function forcarForaDaMarca(y: number): number {
-  return Math.min(LIMITE_ANTES_DA_MARCA, Math.max(0, y))
+/**
+ * No CARTAZ a marca é só a linha "FEITO COM EASY FEED", em 18px no rodapé.
+ * O limite fica colado nela: o valor anterior (0,90) reservava uma faixa morta
+ * bem acima do que ela de fato ocupa.
+ */
+export const AREA_DA_MARCA_CARTAZ: AreaReservada = { x0: 0.26, x1: 0.74, y: 0.945 }
+
+/**
+ * Na PÁGINA DO CLIENTE a marca é maior: o "feito com" mais o lockup inteiro
+ * numa chapinha branca. Ela começa mais acima, e o limite acompanha — senão a
+ * barreira do cartaz deixaria a logo desprotegida justamente aqui.
+ */
+export const AREA_DA_MARCA_PAGINA: AreaReservada = { x0: 0.22, x1: 0.78, y: 0.86 }
+
+/**
+ * Prende a posição de um elemento fora da área da marca.
+ *
+ * Só empurra pra cima quem está no corredor central. Passando por fora, à
+ * esquerda ou à direita da marca, o elemento desce até o fim — as margens do
+ * rodapé continuam do dono.
+ */
+export function forcarForaDaMarca(x: number, y: number, area: AreaReservada): number {
+  const limitado = Math.min(1, Math.max(0, y))
+  const noCorredorDaMarca = x > area.x0 && x < area.x1
+  return noCorredorDaMarca ? Math.min(area.y, limitado) : limitado
 }
 
 export interface ElementoCartaz {

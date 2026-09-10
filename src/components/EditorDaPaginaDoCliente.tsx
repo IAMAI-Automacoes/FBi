@@ -21,7 +21,7 @@ import { Alcas } from '@/components/AlcasElemento'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { LandingView, TEXTOS_DA_PAGINA, type TextoDaPagina, type TextosDaPagina } from '@/components/LandingView'
 import type { CaixaDoElemento } from '@/components/CamadaDeElementos'
-import { fonteCss, forcarForaDaMarca, novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { AREA_DA_MARCA_PAGINA, fonteCss, forcarForaDaMarca, novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 
 /** Folga do quadro de seleção. Texto ganha; imagem não — a borda é a figura. */
@@ -188,7 +188,11 @@ export function EditorDaPaginaDoCliente({
         [id]: {
           ...atual,
           x: Math.min(1, Math.max(0, partida.x + (ev.clientX - inicio.px) / area.width)),
-          y: forcarForaDaMarca(partida.y + (ev.clientY - inicio.py) / area.height),
+          y: forcarForaDaMarca(
+            Math.min(1, Math.max(0, partida.x + (ev.clientX - inicio.px) / area.width)),
+            partida.y + (ev.clientY - inicio.py) / area.height,
+            AREA_DA_MARCA_PAGINA,
+          ),
         },
       })
     }
@@ -315,9 +319,10 @@ export function EditorDaPaginaDoCliente({
     const inicio = { px: e.clientX, py: e.clientY, x: el.x, y: el.y }
 
     const mover = (ev: PointerEvent) => {
+      const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
       alterar(id, {
-        x: Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width)),
-        y: forcarForaDaMarca(inicio.y + (ev.clientY - inicio.py) / area.height),
+        x: nx,
+        y: forcarForaDaMarca(nx, inicio.y + (ev.clientY - inicio.py) / area.height, AREA_DA_MARCA_PAGINA),
       })
     }
     const soltar = () => {
@@ -438,13 +443,10 @@ export function EditorDaPaginaDoCliente({
       {/* Adicionar fica no cabeçalho, longe do celular: é ação de uma vez só,
           e logo acima da prévia empurraria pra baixo a barra de propriedades,
           que é a que se usa a cada ajuste. */}
-      <div className="mb-2 flex min-h-[50px] items-start justify-between gap-2">
-        <div>
-          <p className="text-[13px] font-semibold text-gray-700">Página do cliente</p>
-          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-            É isto que abre no celular de quem escaneia o QR.
-          </p>
-        </div>
+      {/* Sem rótulo aqui: o card ao lado já se chama "Fundo da Página do
+          Cliente" e explica o que é. Repetir a mesma frase em cima do aparelho
+          só empurrava a prévia pra baixo. */}
+      <div className="mb-2 flex items-center justify-end gap-2">
         <div className="flex shrink-0 gap-1.5">
           <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 text-[12px]" onClick={adicionarTexto}>
             <Plus className="h-3 w-3" /> <Type className="h-3.5 w-3.5" /> Texto
@@ -471,10 +473,10 @@ export function EditorDaPaginaDoCliente({
           baixo — e o segundo clique de um duplo clique caía no texto DE CIMA,
           porque o conteúdo tinha andado entre um clique e outro. Quem tentava
           editar o nome entrava no rótulo.
-          A medida é a da barra OCUPADA (54px), não um valor aproximado: com 46
-          ela ainda crescia 8px ao aparecer, e o texto descia esses 8px no
-          instante da seleção. */}
-      <div className="min-h-[54px]">
+          A medida é a da barra OCUPADA, medida no navegador (48px), e não um
+          valor aproximado: com 46 ela ainda crescia 2px ao aparecer e o texto
+          descia esses 2px no instante da seleção. */}
+      <div className="min-h-[48px]">
       {elSelecionado ? (
         <BarraElemento elemento={elSelecionado} onAlterar={alterar} onRemover={remover} />
       ) : textoSelecionado ? (

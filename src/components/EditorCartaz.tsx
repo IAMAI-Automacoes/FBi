@@ -46,7 +46,7 @@ function EscolhaDeFonte({ valor, onChange }: { valor: string; onChange: (id: str
         onClick={() => setAberto((a) => !a)}
         aria-label="Fonte"
         aria-expanded={aberto}
-        className="flex h-8 min-w-[124px] items-center justify-between gap-1.5 rounded-md border border-gray-200 bg-white px-2 text-[13px] text-gray-800 hover:bg-gray-50"
+        className="flex h-[30px] min-w-[124px] items-center justify-between gap-1.5 rounded-md border border-gray-200 bg-white px-2 text-[13px] text-gray-800 hover:bg-gray-50"
       >
         <span className="truncate" style={{ fontFamily: fonteCss(atual.id) }}>{atual.nome}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
@@ -131,7 +131,7 @@ function ControleEmPainel({
         aria-label={rotulo}
         title={rotulo}
         className={cn(
-          'flex h-8 items-center gap-1 rounded-md border px-2 text-[12px]',
+          'flex h-[30px] items-center gap-1 rounded-md border px-2 text-[12px]',
           aberto ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
         )}
       >
@@ -181,15 +181,20 @@ interface Props {
 }
 
 export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = true }: Props) {
-  const botao = 'flex h-8 items-center justify-center rounded-md border px-2'
+  const botao = 'flex h-[30px] items-center justify-center rounded-md border px-2'
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
+    /* Compacta de propósito: a altura desta barra é RESERVADA acima da prévia
+       mesmo quando nada está selecionado (senão a prévia desceria a cada
+       clique e o segundo clique de um duplo clique erraria o alvo). Cada pixel
+       aqui é um pixel de vão morto lá, então ela é a mais baixa que ainda
+       comporta os controles com folga. */
+    <div className="mb-1.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
       {elemento.tipo === 'texto' ? (
         <>
           <EscolhaDeFonte valor={elemento.fonte} onChange={(fonte) => onAlterar(elemento.id, { fonte })} />
 
-          <div className="flex h-8 items-center rounded-md border border-gray-200 bg-white">
+          <div className="flex h-[30px] items-center rounded-md border border-gray-200 bg-white">
             <button
               type="button"
               aria-label="Diminuir a fonte"
