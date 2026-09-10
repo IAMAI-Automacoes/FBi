@@ -14,7 +14,8 @@ import { Info, Loader2, Upload, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { QR_TEXTURAS, fundoCss } from '@/lib/qr-temas'
+import { QR_TEXTURAS, ehCorPersonalizada, fundoCss } from '@/lib/qr-temas'
+import { SeletorCor } from '@/components/SeletorCor'
 import { EditorDaPaginaDoCliente } from '@/components/EditorDaPaginaDoCliente'
 import type { ElementoCartaz, EstilosDosTextos } from '@/lib/cartaz-elementos'
 import type { TextosDaPagina } from '@/components/LandingView'
@@ -130,6 +131,20 @@ export function FundoDaPaginaDoCliente({
                 <Info className="mt-[2px] h-3.5 w-3.5 shrink-0" />
                 Use fotos reais do seu ambiente ou pratos para criar conexão.
               </p>
+
+              {/* Cor livre, logo abaixo do subir foto: as três escolhas de
+                  fundo ficam juntas — a foto, a cor e, ao lado, os materiais.
+                  As oito texturas cobrem os materiais; isto cobre o resto, a
+                  cor da marca do restaurante, que nenhuma lista de oito
+                  adivinha. */}
+              <div className="mt-4 flex items-center gap-2">
+                <SeletorCor
+                  compacto
+                  valor={!temFoto && ehCorPersonalizada(valor.estilo) ? valor.estilo : null}
+                  onChange={(hex) => onChange({ ...valor, modo: 'estilo', imagem: null, estilo: hex })}
+                />
+                <span className="text-[12px] text-muted-foreground">Ou uma cor sólida</span>
+              </div>
             </div>
 
             {/* ── Ou um material neutro ── */}
@@ -202,7 +217,6 @@ export function FundoDaPaginaDoCliente({
         modo={valor.modo}
         imagem={valor.imagem}
         estilo={valor.estilo}
-        onEstiloChange={(id) => onChange({ ...valor, modo: 'estilo', imagem: null, estilo: id })}
         largura={LARGURA_COLUNA}
         altura={ALTURA_TELA}
         textos={textos}

@@ -48,6 +48,16 @@ interface Props {
 export function CamadaDeElementos({ elementos, tinta, editandoId, onCaixas }: Props) {
   const caixaRef = useRef<HTMLDivElement>(null)
   const [medida, setMedida] = useState({ w: 0, h: 0 })
+  /**
+   * Sobe de um a cada imagem que termina de carregar, só pra forçar nova
+   * medição.
+   *
+   * Uma imagem sem altura definida ocupa ZERO até o arquivo chegar. A caixa
+   * saía com 0×0 e a moldura de seleção nascia do tamanho de um ponto: era
+   * por isso que não dava pra pegar uma imagem recém-adicionada na página do
+   * cliente.
+   */
+  const [imagensProntas, setImagensProntas] = useState(0)
 
   // A conversão de fração para pixel precisa do tamanho real do container, e
   // ele muda: a prévia tem um tamanho, o celular do cliente tem outro, e girar
@@ -95,7 +105,7 @@ export function CamadaDeElementos({ elementos, tinta, editandoId, onCaixas }: Pr
       })
     }
     onCaixas(caixas)
-  }, [elementos, medida, editandoId, onCaixas])
+  }, [elementos, medida, editandoId, imagensProntas, onCaixas])
 
   const escala = medida.w / BASE_CLIENTE
 
@@ -125,6 +135,7 @@ export function CamadaDeElementos({ elementos, tinta, editandoId, onCaixas }: Pr
                 <img
                   src={el.url}
                   alt=""
+                  onLoad={() => setImagensProntas((n) => n + 1)}
                   style={{
                     display: 'block',
                     width: `${100 / rec.w}%`,

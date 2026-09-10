@@ -144,6 +144,19 @@ export function LandingView({
 
   const oculto = (id: TextoDaPagina) => !txt(id, 'x').trim()
 
+  /**
+   * O texto que está sendo editado some do desenho — quem o mostra é o campo
+   * de edição, exatamente por cima.
+   *
+   * Sem isto os dois apareciam ao mesmo tempo: o original ficava atrás,
+   * fraquinho, na posição em que estava, e o campo por cima. Dava a impressão
+   * de que a letra tinha subido um pouco ao ser selecionada, quando na verdade
+   * eram duas letras. `visibility` e não `display`: o nó continua ocupando o
+   * lugar, e é dele que sai a medida do alvo de clique.
+   */
+  const escondido = (id: TextoDaPagina): React.CSSProperties =>
+    editandoId === id ? { visibility: 'hidden' } : {}
+
   const botaoStyle: React.CSSProperties = {
     display: 'inline-flex',
     width: '100%',
@@ -171,9 +184,9 @@ export function LandingView({
       A coleta de feedback deste restaurante está temporariamente indisponível.
     </p>
   ) : preview || !waLink ? (
-    <div data-texto="botao" style={est('botao', botaoStyle, true)}>{Icone} {rotuloBotao}</div>
+    <div data-texto="botao" style={{ ...est('botao', botaoStyle, true), ...escondido('botao') }}>{Icone} {rotuloBotao}</div>
   ) : (
-    <a data-texto="botao" href={waLink} style={est('botao', botaoStyle, true)}>{Icone} {rotuloBotao}</a>
+    <a data-texto="botao" href={waLink} style={{ ...est('botao', botaoStyle, true), ...escondido('botao') }}>{Icone} {rotuloBotao}</a>
   )
 
   // O tamanho pedido ao gerador é o de uma tela de celular, e não o padrão do
@@ -216,17 +229,17 @@ export function LandingView({
       <div style={{ position: 'relative', zIndex: 10, display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'flex-end', padding: '9% 7% calc(13% + env(safe-area-inset-bottom, 0px))', color: forte }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
           {!oculto('rotulo') && (
-            <p data-texto="rotulo" style={est('rotulo', { margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue })}>
+            <p data-texto="rotulo" style={{ ...est('rotulo', { margin: 0, fontSize: 12, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.2em', color: tenue }), ...escondido('rotulo') }}>
               {txt('rotulo', 'Restaurante')}
             </p>
           )}
           {!oculto('nome') && (
-            <h1 data-texto="nome" style={est('nome', { margin: '4px 0 0', fontSize: 30, fontWeight: 700, lineHeight: 1.15 })}>
+            <h1 data-texto="nome" style={{ ...est('nome', { margin: '4px 0 0', fontSize: 30, fontWeight: 700, lineHeight: 1.15 }), ...escondido('nome') }}>
               {txt('nome', restauranteNome)}
             </h1>
           )}
           {!oculto('mensagem') && (
-            <p data-texto="mensagem" style={est('mensagem', { margin: '12px 0 0', maxWidth: '82%', fontSize: 15, lineHeight: 1.5, color: suave })}>
+            <p data-texto="mensagem" style={{ ...est('mensagem', { margin: '12px 0 0', maxWidth: '82%', fontSize: 15, lineHeight: 1.5, color: suave }), ...escondido('mensagem') }}>
               {txt('mensagem', mensagem?.trim() || 'É rapidinho! Conte como foi sua experiência com a gente.')}
             </p>
           )}
@@ -238,7 +251,7 @@ export function LandingView({
             : { marginTop: '4%', width: '82%', maxWidth: '22rem' }}>{Botao}</div>
 
           {whatsapp && !oculto('dica') && (
-            <p data-texto="dica" style={est('dica', { margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue })}>
+            <p data-texto="dica" style={{ ...est('dica', { margin: '10px 0 0', fontSize: 12.5, lineHeight: 1.4, color: tenue }), ...escondido('dica') }}>
               {txt('dica', 'Abre o WhatsApp do restaurante')}
             </p>
           )}

@@ -20,10 +20,8 @@ import { Button } from '@/components/ui/button'
 import { Alcas } from '@/components/AlcasElemento'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { LandingView, TEXTOS_DA_PAGINA, type TextoDaPagina, type TextosDaPagina } from '@/components/LandingView'
-import { SeletorCor } from '@/components/SeletorCor'
-import { ehCorPersonalizada } from '@/lib/qr-temas'
 import type { CaixaDoElemento } from '@/components/CamadaDeElementos'
-import { fonteCss, novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { fonteCss, forcarForaDaMarca, novoTexto, novaLogo, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 
 /** Folga do quadro de seleção. Texto ganha; imagem não — a borda é a figura. */
@@ -53,8 +51,6 @@ interface Props {
   modo: 'upload' | 'estilo'
   imagem: string | null
   estilo: string
-  /** Trocar o fundo por uma cor livre, sem sair da prévia. */
-  onEstiloChange: (id: string) => void
   /** Largura da COLUNA. O aparelho tem a sua, centrado nela. */
   largura: number
   altura: number
@@ -67,7 +63,7 @@ interface Props {
 
 export function EditorDaPaginaDoCliente({
   elementos, onChange, onSubirImagem, enviandoImagem,
-  restauranteNome, mensagem, whatsapp, modo, imagem, estilo, onEstiloChange, largura, altura,
+  restauranteNome, mensagem, whatsapp, modo, imagem, estilo, largura, altura,
   textos, onTextosChange, estilosDosTextos, onEstilosChange,
 }: Props) {
   const [selecionado, setSelecionado] = useState<string | null>(null)
@@ -192,7 +188,7 @@ export function EditorDaPaginaDoCliente({
         [id]: {
           ...atual,
           x: Math.min(1, Math.max(0, partida.x + (ev.clientX - inicio.px) / area.width)),
-          y: Math.min(1, Math.max(0, partida.y + (ev.clientY - inicio.py) / area.height)),
+          y: forcarForaDaMarca(partida.y + (ev.clientY - inicio.py) / area.height),
         },
       })
     }
@@ -321,7 +317,7 @@ export function EditorDaPaginaDoCliente({
     const mover = (ev: PointerEvent) => {
       alterar(id, {
         x: Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width)),
-        y: Math.min(1, Math.max(0, inicio.y + (ev.clientY - inicio.py) / area.height)),
+        y: forcarForaDaMarca(inicio.y + (ev.clientY - inicio.py) / area.height),
       })
     }
     const soltar = () => {
@@ -470,26 +466,15 @@ export function EditorDaPaginaDoCliente({
         </div>
       </div>
 
-      {/* Cor livre pro fundo, embaixo do adicionar imagem.
-          As oito texturas do card ao lado cobrem os materiais; isto cobre o
-          resto — a cor da marca do restaurante, que nenhuma lista de oito
-          adivinha. Fica aqui, e não lá, porque é a única escolha de fundo que
-          se faz olhando a prévia mudar. */}
-      <div className="mb-2 flex items-center justify-end gap-2">
-        <span className="text-[11.5px] text-muted-foreground">Cor de fundo</span>
-        <SeletorCor
-          compacto
-          valor={modo === 'estilo' && ehCorPersonalizada(estilo) ? estilo : null}
-          onChange={onEstiloChange}
-        />
-      </div>
-
       {/* A ALTURA DA BARRA É RESERVADA, ocupada ou não.
           Sem isso a barra nascia ao selecionar e empurrava o celular pra
           baixo — e o segundo clique de um duplo clique caía no texto DE CIMA,
           porque o conteúdo tinha andado entre um clique e outro. Quem tentava
-          editar o nome entrava no rótulo. */}
-      <div className="min-h-[46px]">
+          editar o nome entrava no rótulo.
+          A medida é a da barra OCUPADA (54px), não um valor aproximado: com 46
+          ela ainda crescia 8px ao aparecer, e o texto descia esses 8px no
+          instante da seleção. */}
+      <div className="min-h-[54px]">
       {elSelecionado ? (
         <BarraElemento elemento={elSelecionado} onAlterar={alterar} onRemover={remover} />
       ) : textoSelecionado ? (
@@ -553,7 +538,13 @@ export function EditorDaPaginaDoCliente({
                           ? 'ring-1 ring-[#8B3DFF] shadow-[0_0_0_1px_rgba(255,255,255,0.85)]'
                           : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                       )}
-                      style={{ left: c.x - 4, top: c.y - 4, width: c.w + 8, height: c.h + 8 }}
+                      /* Em edição a folga sai: ela existe pra dar o que pegar
+                         com o dedo, mas o campo preenche a moldura inteira, e
+                         com 4px sobrando em cima a letra começava acima de
+                         onde estava — subia no instante do duplo clique. */
+                      style={emEdicao
+                        ? { left: c.x, top: c.y, width: c.w, height: c.h }
+                        : { left: c.x - 4, top: c.y - 4, width: c.w + 8, height: c.h + 8 }}
                     >
                       {emEdicao ? (
                         <textarea
@@ -626,10 +617,10 @@ export function EditorDaPaginaDoCliente({
                           : 'hover:ring-1 hover:ring-[#8B3DFF]/70',
                       )}
                       style={{
-                        left: c.x - folga,
-                        top: c.y - folga,
-                        width: c.w + folga * 2,
-                        height: c.h + folga * 2,
+                        left: c.x - (emEdicao ? 0 : folga),
+                        top: c.y - (emEdicao ? 0 : folga),
+                        width: c.w + (emEdicao ? 0 : folga * 2),
+                        height: c.h + (emEdicao ? 0 : folga * 2),
                         transform: c.rotacao ? `rotate(${c.rotacao}deg)` : undefined,
                       }}
                     >

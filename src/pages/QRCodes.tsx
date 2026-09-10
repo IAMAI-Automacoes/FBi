@@ -16,7 +16,7 @@ import { QrCode, Download, Loader2, ChevronDown, FileImage, FileText, ImageUp, C
 import { cn } from '@/lib/utils'
 import { QR_CORES, QR_TEXTURAS, ehCorPersonalizada, fundoCss, getTema } from '@/lib/qr-temas'
 import { landingUrl, desenharPoster, baixarBlob, canvasToBlob, POSTER_W, POSTER_H, ID_ROTULO, ID_TITULO, ID_MENSAGEM, MENSAGEM_PADRAO, type CaixaElemento, type PosterOpts } from '@/lib/qr-poster'
-import { FONTES, fonteCss, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
+import { FONTES, fonteCss, forcarForaDaMarca, lerElementos, lerEstiloDosTextos, novaLogo, novoTexto, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { redimensionar as calcularRedimensionamento, type Ancora } from '@/lib/redimensionar-cartaz'
 import { Alcas } from '@/components/AlcasElemento'
 import { FundoDaPaginaDoCliente, type FundoDoCliente } from '@/components/FundoDaPaginaDoCliente'
@@ -695,7 +695,7 @@ export default function QRCodes() {
 
     const mover = (ev: PointerEvent) => {
       const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
-      const ny = Math.min(1, Math.max(0, inicio.y + (ev.clientY - inicio.py) / area.height))
+      const ny = forcarForaDaMarca(inicio.y + (ev.clientY - inicio.py) / area.height)
       const g = gestoRef.current
       if (!g) return
       if (fixo) {
@@ -747,6 +747,8 @@ export default function QRCodes() {
     rotuloAcessivel: string
     maiuscula?: boolean
     espacado?: boolean
+    /** Entrelinha do DESENHO, em múltiplo do corpo. Ver o campo de edição. */
+    entrelinha: number
     estilo: ReturnType<typeof estiloFixo>
   }> = {
     [ID_ROTULO]: {
@@ -757,6 +759,7 @@ export default function QRCodes() {
       rotuloAcessivel: 'o rótulo acima do nome',
       maiuscula: true,
       espacado: true,
+      entrelinha: 1.2,
       estilo: estiloFixo(ID_ROTULO, { tamanho: 24, fonteCssPadrao: 'sans-serif', negrito: true, cor: tema.acento }),
     },
     [ID_TITULO]: {
@@ -768,6 +771,9 @@ export default function QRCodes() {
       // O único que não sai: cartaz sem nome do restaurante não é cartaz.
       podeExcluir: false,
       rotuloAcessivel: 'o nome no cartaz',
+      // `wrapText` desenha o título com entrelinha de corpo + 10.
+      entrelinha: (tituloVisivel.length > 22 ? 48 : tituloVisivel.length > 15 ? 56 : 62)
+        / (tituloVisivel.length > 22 ? 38 : tituloVisivel.length > 15 ? 46 : 52),
       estilo: estiloFixo(ID_TITULO, {
         tamanho: tituloVisivel.length > 22 ? 38 : tituloVisivel.length > 15 ? 46 : 52,
         fonteCssPadrao: 'Georgia, serif',
@@ -780,6 +786,8 @@ export default function QRCodes() {
       alterar: setCfgMensagem,
       podeExcluir: true,
       rotuloAcessivel: 'a mensagem para o cliente',
+      // A mensagem é desenhada com entrelinha de corpo + 8.
+      entrelinha: 33 / 25,
       estilo: estiloFixo(ID_MENSAGEM, { tamanho: 25, fonteCssPadrao: 'sans-serif', negrito: false, cor: tema.suave }),
     },
   }
@@ -1612,7 +1620,10 @@ export default function QRCodes() {
                           const emEdicao = editandoId === c.id
                           // Margem de 6px do cartaz: alvo de texto fino ainda
                           // precisa dar pra pegar com o dedo.
-                          const molduraFixa = estiloDaMoldura(c, 6)
+                          // Em edição sem folga: o campo preenche a moldura,
+                          // e os 6px de sobra em cima faziam a letra começar
+                          // acima de onde ela estava desenhada.
+                          const molduraFixa = estiloDaMoldura(c, emEdicao ? 0 : 6)
                           const selecionadoAqui = selecionado === c.id
                           // As alças têm tamanho fixo em pixels de TELA, e a
                           // prévia é bem menor que o cartaz. Decidir o que
@@ -1649,7 +1660,7 @@ export default function QRCodes() {
                                     ref={abrirSelecionandoTudo}
                                     onBlur={() => setEditandoId(null)}
                                     onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
-                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
+                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left outline-none"
                                     style={{
                                       fontFamily: fixo.estilo.familia,
                                       fontSize: (fixo.estilo.tamanho * larguraPreview) / POSTER_W || 12,
@@ -1658,6 +1669,14 @@ export default function QRCodes() {
                                       letterSpacing: fixo.espacado ? `${(6 * larguraPreview) / POSTER_W}px` : undefined,
                                       textTransform: fixo.maiuscula ? 'uppercase' : undefined,
                                       color: fixo.estilo.cor,
+                                      // Entrelinha e esticar copiados do desenho: com a
+                                      // entrelinha genérica de 1,2 e sem o esticar, a letra
+                                      // mudava de tamanho e de lugar dentro da caixa assim
+                                      // que se entrava pra editar.
+                                      lineHeight: fixo.entrelinha,
+                                      transform: fixo.estilo.esticarX !== 1 || fixo.estilo.esticarY !== 1
+                                        ? `scale(${fixo.estilo.esticarX}, ${fixo.estilo.esticarY})`
+                                        : undefined,
                                     }}
                                   />
                                 ) : (
@@ -1714,7 +1733,7 @@ export default function QRCodes() {
                           // difícil de pegar com o dedo. Imagem NÃO ganha —
                           // ali a borda é a medida da figura, e um vão em
                           // volta faz parecer que sobra imagem onde não tem.
-                          const folga = el.tipo === 'logo' ? 0 : 6
+                          const folga = el.tipo === 'logo' || emEdicao ? 0 : 6
                           const moldura = estiloDaMoldura(c, folga)
 
                           return (
@@ -1750,6 +1769,9 @@ export default function QRCodes() {
                                     fontWeight: el.negrito ? 700 : 400,
                                     fontStyle: el.italico ? 'italic' : 'normal',
                                     color: el.cor ?? tema.tinta,
+                                    transform: (el.esticarX ?? 1) !== 1 || (el.esticarY ?? 1) !== 1
+                                      ? `scale(${el.esticarX ?? 1}, ${el.esticarY ?? 1})`
+                                      : undefined,
                                   }}
                                 />
                               ) : (

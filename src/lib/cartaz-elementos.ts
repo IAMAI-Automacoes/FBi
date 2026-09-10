@@ -78,6 +78,22 @@ export function proximaPosicaoLivre(existentes: { x: number; y: number }[]): { x
   }
 }
 
+/**
+ * Até onde um elemento do dono pode descer, em fração da altura.
+ *
+ * Abaixo disto fica a faixa da marca do produto ("feito com Easy Feed" no
+ * cartaz, o mesmo crédito na página do cliente). A marca já é pintada por
+ * cima de tudo, então não há como apagá-la — mas sem este limite dava pra
+ * empilhar texto em cima dela até virar um borrão ilegível, que na prática é
+ * a mesma coisa. O arrasto simplesmente para aqui.
+ */
+export const LIMITE_ANTES_DA_MARCA = 0.9
+
+/** Prende a posição de um elemento fora da faixa reservada à marca. */
+export function forcarForaDaMarca(y: number): number {
+  return Math.min(LIMITE_ANTES_DA_MARCA, Math.max(0, y))
+}
+
 export interface ElementoCartaz {
   id: string
   tipo: 'texto' | 'logo'
