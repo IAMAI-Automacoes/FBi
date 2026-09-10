@@ -1,0 +1,13 @@
+-- O numerozinho de "tem bônus pra pagar" na barra lateral tinha que sumir no
+-- instante em que o dono marca o bônus como pago. `AppSidebar.tsx` já
+-- assinava `UPDATE` em `garcons` exatamente pra isso ("cobre o 'acabei de
+-- marcar como pago' imediatamente", diz o comentário de lá) — mas a tabela
+-- nunca entrou na publicação do Realtime, então o evento não chegava nunca e
+-- a assinatura era decorativa.
+--
+-- Sem ela, o badge só se corrigia no recálculo de 1 em 1 minuto: pra quem
+-- acabou de pagar, parece que o sistema não registrou.
+--
+-- Isolamento continua garantido: o Realtime aplica RLS nos eventos, e
+-- `garcons` já tem `tenant_isolation_select` por `restaurante_id`.
+alter publication supabase_realtime add table public.garcons;

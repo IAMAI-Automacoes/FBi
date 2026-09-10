@@ -47,8 +47,21 @@ export interface DashboardData {
     positivePercent: number
     negativePercent: number
     neutralPercent: number
+    /**
+     * Avaliações cujo sentimento não é positivo, negativo nem neutro.
+     *
+     * Deve ser sempre 0. Se passar disso, o classificador começou a gravar um
+     * valor que ninguém aqui conhece, e as três fatias da barra de divisão
+     * param de somar o total — a planilha avisa quando acontece.
+     */
+    semClassificacao: number
     /** Pontos percentuais vs. período anterior, ex: "+8 pts". Usada no card "Avaliações positivas". */
     positivePercentTrend: string
+    /** Mensagens recebidas — uma por vez que um cliente escreveu. */
+    totalMensagens: number
+    mensagensTrend: string
+    /** Mensagens do período anterior, para a trava de base mínima. */
+    prevMensagens: number
     /** Valor bruto (0-100) do índice de satisfação do período anterior — para
      *  textos que precisem citar o número sem reconstruí-lo a partir da string
      *  formatada de `sentimentTrend` (ex.: "estável", "+5 pts"). */
@@ -78,6 +91,26 @@ export const getPeriodDates = (period: PeriodInfo) => {
   return { now, currentStart, previousStart, days }
 }
 
+/**
+ * As MENSAGENS originais do período — uma por vez que um cliente escreveu.
+ *
+ * Consulta `feedbacks_originais` direto, e não conta `origem_id` distinto nos
+ * separados: existem mensagens que ainda não foram divididas em assuntos (8 no
+ * Camelo, em 30 dias), e contar pelos separados as perderia — o número diria
+ * 45 quando o restaurante recebeu 53.
+ */
+const getMensagensDoPeriodo = async (restauranteId: number | null, period: PeriodInfo) => {
+  if (!restauranteId) return []
+  const { previousStart } = getPeriodDates(period)
+  const { data, error } = await supabase
+    .from('feedbacks_originais')
+    .select('id, created_at')
+    .eq('restaurante_id', restauranteId)
+    .gte('created_at', previousStart.toISOString())
+  if (error) throw error
+  return data || []
+}
+
 const getFeedbacksForPeriod = async (restauranteId: number | null, period: PeriodInfo) => {
   // Conta sem restaurante vinculado (onboarding incompleto): nada a buscar
   if (!restauranteId) return []
@@ -95,7 +128,10 @@ const getFeedbacksForPeriod = async (restauranteId: number | null, period: Perio
 }
 
 export const buscarKpis = async (restauranteId: number | null, periodo: PeriodInfo) => {
-  const feedbacks = await getFeedbacksForPeriod(restauranteId, periodo)
+  const [feedbacks, mensagens] = await Promise.all([
+    getFeedbacksForPeriod(restauranteId, periodo),
+    getMensagensDoPeriodo(restauranteId, periodo),
+  ])
   const { currentStart } = getPeriodDates(periodo)
 
   const currentFeedbacks = feedbacks.filter((f) => isAfter(parseISO(f.created_at), currentStart))
@@ -103,6 +139,27 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
 
   const totalFeedbacks = currentFeedbacks.length
   const prevTotal = previousFeedbacks.length
+
+  // ── Mensagens x assuntos ─────────────────────────────────────────────────
+  // Duas contagens diferentes da mesma realidade, e as duas importam:
+  //
+  //   mensagens = quantas vezes um cliente escreveu
+  //   assuntos  = quantos pontos ele levantou (uma mensagem que fala de comida
+  //               e de atendimento vira dois)
+  //
+  // O card do topo mostra MENSAGENS, que é o que o dono chama de "avaliação".
+  // O resto da página trabalha com assuntos, porque satisfação por categoria
+  // só faz sentido por assunto. Os dois números aparecem juntos no card para
+  // que a diferença fique explicada onde ela é vista pela primeira vez.
+  const totalMensagens = mensagens.filter((m) => isAfter(parseISO(m.created_at), currentStart)).length
+  const prevMensagens = mensagens.length - totalMensagens
+  let mensagensTrend: string
+  if (prevMensagens === 0) {
+    mensagensTrend = totalMensagens > 0 ? 'novo' : '—'
+  } else {
+    const v = Math.round(((totalMensagens - prevMensagens) / prevMensagens) * 100)
+    mensagensTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v}%`
+  }
   const hasPrevData = prevTotal > 0
   // Comparar 3 avaliações contra 1 gera "+200%" que engana o dono.
   // Só tratamos a variação como confiável com uma base mínima.
@@ -117,15 +174,33 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     totalTrend = `${v >= 0 ? '+' : ''}${v}%`
   }
 
+  // `toLowerCase` porque o banco tem as duas grafias ('negativo' e 'Negativo'),
+  // vindas de versões diferentes do classificador.
   const isPositivo = (f: any) =>
     f.sentimento?.toLowerCase() === 'positivo' || f.sentimento?.toLowerCase() === 'positive'
   const isNegativo = (f: any) =>
     f.sentimento?.toLowerCase() === 'negativo' || f.sentimento?.toLowerCase() === 'negative'
+  const isNeutro = (f: any) => {
+    const s = f.sentimento?.toLowerCase()
+    return s === 'neutro' || s === 'neutral'
+  }
 
   // Contagens absolutas do período atual (métricas diretas que o dono entende)
   const positivos = currentFeedbacks.filter(isPositivo).length
   const negativos = currentFeedbacks.filter(isNegativo).length
-  const neutros = totalFeedbacks - positivos - negativos
+  // Contado, não subtraído.
+  //
+  // Era `total - positivos - negativos`, e isso jogava em "neutro" tudo que
+  // não fosse reconhecido — sentimento nulo, vazio ou grafado de um jeito
+  // novo. Pior: o ÍNDICE de satisfação usa a definição estrita (só 'neutro' e
+  // 'neutral'), então um valor desconhecido contava como neutro na barra de
+  // divisão e como negativo no índice. As duas leituras da mesma tela
+  // discordariam sem nada explicando.
+  //
+  // Hoje não há sentimento fora dos três valores (conferido no banco), então
+  // isto é uma trava para o dia em que houver.
+  const neutros = currentFeedbacks.filter(isNeutro).length
+  const semClassificacao = totalFeedbacks - positivos - negativos - neutros
   const positivePercent = totalFeedbacks ? Math.round((positivos / totalFeedbacks) * 100) : 0
   const negativePercent = totalFeedbacks ? Math.round((negativos / totalFeedbacks) * 100) : 0
   const neutralPercent = totalFeedbacks ? Math.round((neutros / totalFeedbacks) * 100) : 0
@@ -143,13 +218,12 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivePercentTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v} pts`
   }
 
+  // Índice 0-100: positivo vale 100, neutro vale 50, negativo vale 0. Usa a
+  // MESMA definição de neutro das contagens acima — ver a nota lá.
   const getSentimentScore = (arr: any[]) => {
     if (!arr.length) return 0
     const pos = arr.filter(isPositivo).length
-    const neu = arr.filter((f) => {
-      const s = f.sentimento?.toLowerCase()
-      return s === 'neutro' || s === 'neutral'
-    }).length
+    const neu = arr.filter(isNeutro).length
     return Math.round((pos * 100 + neu * 50) / arr.length)
   }
 
@@ -209,6 +283,9 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   return {
     totalFeedbacks,
     totalTrend,
+    totalMensagens,
+    mensagensTrend,
+    prevMensagens,
     sentiment,
     sentimentTrend,
     nps,
@@ -224,6 +301,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivePercent,
     negativePercent,
     neutralPercent,
+    semClassificacao,
     positivePercentTrend,
     prevSentiment,
   }
@@ -390,18 +468,35 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
     .sort((a, b) => b.count - a.count)
 }
 
+/**
+ * Os feedbacks mais recentes DENTRO do período escolhido.
+ *
+ * O `period` não existia aqui: a lista trazia os últimos cinco de sempre, e
+ * com o filtro em 7 dias a tela mostrava "0 feedbacks" no topo e cinco
+ * mensagens logo abaixo — as de semanas atrás. Quem olhava só a lista concluía
+ * que o número estava errado.
+ *
+ * Sem `period`, não há corte — é o que os chamadores antigos esperam.
+ */
 export const buscarUltimosFeedbacks = async (
   restauranteId: number | null,
   limit = 5,
+  period?: PeriodInfo,
 ): Promise<FeedbackItem[]> => {
   if (!restauranteId) return []
 
   // Mensagem ORIGINAL do cliente (transcrição exata). A view deriva o sentimento
   // geral e as categorias a partir dos pedaços separados.
-  const { data, error } = await supabase
+  let consulta = supabase
     .from('feedbacks_originais_view')
     .select('*')
     .eq('restaurante_id', restauranteId)
+
+  if (period) {
+    consulta = consulta.gte('created_at', getPeriodDates(period).currentStart.toISOString())
+  }
+
+  const { data, error } = await consulta
     .order('created_at', { ascending: false })
     .limit(limit)
 

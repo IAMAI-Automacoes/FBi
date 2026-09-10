@@ -1,4 +1,10 @@
-import { Fragment } from 'react'
+import { Fragment, type CSSProperties } from 'react'
+import {
+  ESTILO_PALAVRA_ITALICA,
+  TAMANHO_PADRAO,
+  analisar,
+  emPalavras,
+} from '@/lib/texto-rico'
 import { cn } from '@/lib/utils'
 
 interface TextoFormatadoProps {
@@ -7,64 +13,70 @@ interface TextoFormatadoProps {
 }
 
 /**
- * Mostra o plano de ação com os destaques que o dono marcou no editor:
- * `**assim**` vira negrito e uma linha começada por `## ` vira título.
+ * Mostra o plano de ação com o negrito, o itálico e os tamanhos que o dono
+ * marcou no editor.
  *
- * Só esses dois. O editor oferece exatamente esses dois botões, e um
- * renderizador que entende mais do que o editor produz acabaria formatando
- * por acidente um texto que a pessoa escreveu como texto — um asterisco de
- * lista virando itálico, por exemplo.
- *
- * Nada de `dangerouslySetInnerHTML`: o texto vem do que alguém digitou, e
- * transformá-lo em HTML seria injetar marcação de origem externa na página.
- * Aqui o texto é partido e devolvido como elementos React, então `<script>`
- * escrito no plano continua sendo a palavra "<script>" na tela.
+ * Nada de `dangerouslySetInnerHTML`, mesmo o conteúdo vindo do próprio
+ * restaurante: parte dele é escrita pela IA, e o plano é o campo mais longo e
+ * mais livre do sistema. Aqui o HTML é lido por `analisar()` — que só conhece
+ * negrito, itálico e tamanho — e devolvido como elementos React. Qualquer
+ * outra coisa que estivesse no meio simplesmente não atravessa.
  */
 export function TextoFormatado({ texto, className }: TextoFormatadoProps) {
-  const linhas = (texto ?? '').split('\n')
+  const linhas = analisar(texto ?? '')
 
   return (
     <div className={cn('space-y-1', className)}>
-      {linhas.map((linha, i) => {
-        const ehTitulo = linha.startsWith('## ')
-        const conteudo = ehTitulo ? linha.slice(3) : linha
+      {linhas.map((trechos, i) => {
+        const vazia = trechos.every((t) => !t.texto.trim())
 
-        // Linha em branco vira espaço entre parágrafos, não um <p> vazio que
-        // o navegador colapsaria para altura zero.
-        if (!conteudo.trim()) return <div key={i} className="h-2" />
+        // Linha em branco é espaço entre parágrafos, não um <p> vazio que o
+        // navegador colapsaria para altura zero.
+        if (vazia) return <div key={i} className="h-2" />
 
         return (
           <p
             key={i}
-            className={cn(
-              ehTitulo
-                ? 'text-[15px] font-semibold text-gray-900'
-                : 'text-sm leading-relaxed text-gray-700',
-              // Um título depois de texto precisa de ar; o primeiro, não.
-              ehTitulo && i > 0 && 'pt-2',
-            )}
+            // Mesmo tamanho base do editor, saindo da mesma constante.
+            style={{ fontSize: `${TAMANHO_PADRAO}px` }}
+            className="leading-relaxed text-gray-700"
           >
-            {comNegrito(conteudo)}
+            {trechos.map((t, j) => {
+              // `fontSize` inline é a única forma: o tamanho é um número
+              // escolhido no editor, não um degrau de uma escala fixa, então
+              // não existe classe do Tailwind que o cubra.
+              const estilo: CSSProperties = {}
+              if (t.tamanho) estilo.fontSize = `${t.tamanho}px`
+              if (t.italico) estilo.fontStyle = 'italic'
+
+              // Em itálico cada PALAVRA vai na sua própria caixa inclinada —
+              // ver `ANGULO_ITALICO`. Inclinar o trecho inteiro desalinharia o
+              // começo de cada linha.
+              const conteudo = t.italico
+                ? emPalavras(t.texto).map((parte, k) =>
+                    /^\s+$/.test(parte) ? (
+                      <Fragment key={k}>{parte}</Fragment>
+                    ) : (
+                      <span key={k} style={ESTILO_PALAVRA_ITALICA}>
+                        {parte}
+                      </span>
+                    ),
+                  )
+                : t.texto
+
+              return (
+                <span
+                  key={j}
+                  style={estilo}
+                  className={cn(t.negrito && 'font-semibold text-gray-900')}
+                >
+                  {conteudo}
+                </span>
+              )
+            })}
           </p>
         )
       })}
     </div>
-  )
-}
-
-/** Parte a linha nos pares de `**` e devolve os trechos internos em negrito. */
-function comNegrito(linha: string) {
-  // Índices ímpares do split são o que estava ENTRE os asteriscos. Um `**`
-  // solto, sem par, cai num índice par e volta como texto comum — que é o
-  // certo: quem digitou dois asteriscos sem fechar não pediu negrito.
-  const partes = linha.split(/\*\*(.+?)\*\*/g)
-  return partes.map((parte, i) =>
-    i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-gray-900">
-        {parte}
-      </strong>
-    ) : (
-      <Fragment key={i}>{parte}</Fragment>
-    ),
   )
 }

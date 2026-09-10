@@ -1,4 +1,5 @@
 import { json, preflight } from '../_shared/cors.ts'
+import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
@@ -101,7 +102,7 @@ Deno.serve(async (req: Request) => {
       acao.prioridade ? `Prioridade: ${acao.prioridade}` : '',
       acao.status ? `Status: ${acao.status}` : '',
       acao.plano_detalhado
-        ? `Plano já escrito pelo usuário (desenvolva A PARTIR dele, não ignore):\n${acao.plano_detalhado}`
+        ? `Plano já escrito pelo usuário (desenvolva A PARTIR dele, não ignore):\n${planoParaPrompt(acao.plano_detalhado)}`
         : '',
     ].filter(Boolean).join('\n')
 

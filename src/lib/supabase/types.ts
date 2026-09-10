@@ -10,22 +10,68 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      acao_status_historico: {
+        Row: {
+          acao_id: number
+          cancelado_em: string | null
+          criado_em: string
+          id: number
+          promover_em: string | null
+          promovido_em: string | null
+          restaurante_id: number | null
+          status_de: string | null
+          status_para: string
+        }
+        Insert: {
+          acao_id: number
+          cancelado_em?: string | null
+          criado_em?: string
+          id?: never
+          promover_em?: string | null
+          promovido_em?: string | null
+          restaurante_id?: number | null
+          status_de?: string | null
+          status_para: string
+        }
+        Update: {
+          acao_id?: number
+          cancelado_em?: string | null
+          criado_em?: string
+          id?: never
+          promover_em?: string | null
+          promovido_em?: string | null
+          restaurante_id?: number | null
+          status_de?: string | null
+          status_para?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acao_status_historico_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       acoes_operacionais: {
         Row: {
-          originais_ids: string[]
-          pontos_ids: number[]
           arquivada_em: string | null
           categoria: string | null
+          concluida_em: string | null
           created_at: string
           feedback_id: number | null
+          fixado: boolean
           id: number
           insight_id: string | null
           ordem: number
+          originais_ids: string[]
           plano_detalhado: string | null
+          pontos_ids: number[]
           prazo: string | null
           prioridade: string | null
           responsavel: string | null
@@ -35,16 +81,18 @@ export type Database = {
           titulo_acao: string | null
         }
         Insert: {
-          originais_ids?: string[]
-          pontos_ids?: number[]
           arquivada_em?: string | null
           categoria?: string | null
+          concluida_em?: string | null
           created_at?: string
           feedback_id?: number | null
+          fixado?: boolean
           id?: number
           insight_id?: string | null
           ordem?: number
+          originais_ids?: string[]
           plano_detalhado?: string | null
+          pontos_ids?: number[]
           prazo?: string | null
           prioridade?: string | null
           responsavel?: string | null
@@ -54,16 +102,18 @@ export type Database = {
           titulo_acao?: string | null
         }
         Update: {
-          originais_ids?: string[]
-          pontos_ids?: number[]
           arquivada_em?: string | null
           categoria?: string | null
+          concluida_em?: string | null
           created_at?: string
           feedback_id?: number | null
+          fixado?: boolean
           id?: number
           insight_id?: string | null
           ordem?: number
+          originais_ids?: string[]
           plano_detalhado?: string | null
+          pontos_ids?: number[]
           prazo?: string | null
           prioridade?: string | null
           responsavel?: string | null
@@ -188,6 +238,224 @@ export type Database = {
         }
         Relationships: []
       }
+      alerta_urgente: {
+        Row: {
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          feedback_original_id: string
+          feedback_restaurante_id: number | null
+          id: number
+          motivo: string | null
+          restaurante_id: number
+          termos: string[]
+        }
+        Insert: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          feedback_original_id: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          motivo?: string | null
+          restaurante_id: number
+          termos?: string[]
+        }
+        Update: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          feedback_original_id?: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          motivo?: string | null
+          restaurante_id?: number
+          termos?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "feedbacks_originais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "feedbacks_originais_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: true
+            referencedRelation: "fila_retorno_n8n"
+            referencedColumns: ["feedback_original_id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerta_urgente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      aviso_pendente: {
+        Row: {
+          acao_id: number
+          contato_id: string
+          criado_em: string
+          etapa: Database["public"]["Enums"]["aviso_etapa"]
+          expira_em: string
+          feedback_restaurante_id: number | null
+          feedbacks_originais_ids: string[]
+          feedbacks_restaurante_ids: number[]
+          id: string
+          mensagem_id: string | null
+          restaurante_id: number
+          status: Database["public"]["Enums"]["aviso_status"]
+        }
+        Insert: {
+          acao_id: number
+          contato_id: string
+          criado_em?: string
+          etapa: Database["public"]["Enums"]["aviso_etapa"]
+          expira_em: string
+          feedback_restaurante_id?: number | null
+          feedbacks_originais_ids?: string[]
+          feedbacks_restaurante_ids?: number[]
+          id?: string
+          mensagem_id?: string | null
+          restaurante_id: number
+          status?: Database["public"]["Enums"]["aviso_status"]
+        }
+        Update: {
+          acao_id?: number
+          contato_id?: string
+          criado_em?: string
+          etapa?: Database["public"]["Enums"]["aviso_etapa"]
+          expira_em?: string
+          feedback_restaurante_id?: number | null
+          feedbacks_originais_ids?: string[]
+          feedbacks_restaurante_ids?: number[]
+          id?: string
+          mensagem_id?: string | null
+          restaurante_id?: number
+          status?: Database["public"]["Enums"]["aviso_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aviso_pendente_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_mensagem_fk"
+            columns: ["mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "mensagem_enviada"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonificacao_marco: {
+        Row: {
+          created_at: string
+          enviado_em: string | null
+          erro: string | null
+          garcom_id: number
+          id: number
+          marco: number
+          periodo_inicio: string
+          regra_id: string
+          restaurante_id: number
+        }
+        Insert: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          garcom_id: number
+          id?: never
+          marco: number
+          periodo_inicio: string
+          regra_id: string
+          restaurante_id: number
+        }
+        Update: {
+          created_at?: string
+          enviado_em?: string | null
+          erro?: string | null
+          garcom_id?: number
+          id?: never
+          marco?: number
+          periodo_inicio?: string
+          regra_id?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonificacao_marco_garcom_id_fkey"
+            columns: ["garcom_id"]
+            isOneToOne: false
+            referencedRelation: "garcons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonificacao_marco_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias: {
         Row: {
           ativa: boolean | null
@@ -213,6 +481,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "categorias_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contatos: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string | null
+          opt_out_em: string | null
+          restaurante_id: number
+          telefone: string
+          ultimo_envio_em: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome?: string | null
+          opt_out_em?: string | null
+          restaurante_id: number
+          telefone: string
+          ultimo_envio_em?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string | null
+          opt_out_em?: string | null
+          restaurante_id?: number
+          telefone?: string
+          ultimo_envio_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contatos_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
@@ -492,6 +798,83 @@ export type Database = {
           },
         ]
       }
+      feedback_acao: {
+        Row: {
+          acao_id: number
+          created_at: string
+          feedback_original_id: string
+          feedback_restaurante_id: number | null
+          id: number
+          restaurante_id: number
+        }
+        Insert: {
+          acao_id: number
+          created_at?: string
+          feedback_original_id: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          restaurante_id: number
+        }
+        Update: {
+          acao_id?: number
+          created_at?: string
+          feedback_original_id?: string
+          feedback_restaurante_id?: number | null
+          id?: never
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_acao_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_feedback_original_id_fkey"
+            columns: ["feedback_original_id"]
+            isOneToOne: false
+            referencedRelation: "fila_retorno_n8n"
+            referencedColumns: ["feedback_original_id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_acao_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback_temas: {
         Row: {
           atualizado_em: string
@@ -532,30 +915,43 @@ export type Database = {
       }
       feedbacks_originais: {
         Row: {
+          contato_id: string | null
           created_at: string
           id: string
           restaurante_id: number | null
           sentimento: string | null
           telefone_cliente: string | null
+          texto_destacado: string | null
           texto_original: string | null
         }
         Insert: {
+          contato_id?: string | null
           created_at?: string
           id?: string
           restaurante_id?: number | null
           sentimento?: string | null
           telefone_cliente?: string | null
+          texto_destacado?: string | null
           texto_original?: string | null
         }
         Update: {
+          contato_id?: string | null
           created_at?: string
           id?: string
           restaurante_id?: number | null
           sentimento?: string | null
           telefone_cliente?: string | null
+          texto_destacado?: string | null
           texto_original?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "feedbacks_originais_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "feedbacks_originais_restaurante_id_fkey"
             columns: ["restaurante_id"]
@@ -571,6 +967,7 @@ export type Database = {
           contato_id: string | null
           created_at: string
           id: number
+          invalidado_em: string | null
           origem_id: string | null
           restaurante_id: number | null
           resumo: string | null
@@ -578,12 +975,16 @@ export type Database = {
           telefone_cliente: string | null
           tema_id: string | null
           texto_original: string | null
+          usado_em: string | null
+          usado_por_acao_id: number | null
+          usado_por_insight_id: string | null
         }
         Insert: {
           categoria?: string | null
           contato_id?: string | null
           created_at?: string
           id?: number
+          invalidado_em?: string | null
           origem_id?: string | null
           restaurante_id?: number | null
           resumo?: string | null
@@ -591,12 +992,16 @@ export type Database = {
           telefone_cliente?: string | null
           tema_id?: string | null
           texto_original?: string | null
+          usado_em?: string | null
+          usado_por_acao_id?: number | null
+          usado_por_insight_id?: string | null
         }
         Update: {
           categoria?: string | null
           contato_id?: string | null
           created_at?: string
           id?: number
+          invalidado_em?: string | null
           origem_id?: string | null
           restaurante_id?: number | null
           resumo?: string | null
@@ -604,8 +1009,18 @@ export type Database = {
           telefone_cliente?: string | null
           tema_id?: string | null
           texto_original?: string | null
+          usado_em?: string | null
+          usado_por_acao_id?: number | null
+          usado_por_insight_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "feedbacks_restaurante_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
             columns: ["origem_id"]
@@ -621,6 +1036,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "fila_retorno_n8n"
+            referencedColumns: ["feedback_original_id"]
+          },
+          {
             foreignKeyName: "feedbacks_restaurante_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
@@ -634,29 +1056,49 @@ export type Database = {
             referencedRelation: "feedback_temas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "feedbacks_restaurante_usado_por_acao_id_fkey"
+            columns: ["usado_por_acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_usado_por_insight_id_fkey"
+            columns: ["usado_por_insight_id"]
+            isOneToOne: false
+            referencedRelation: "insights"
+            referencedColumns: ["id"]
+          },
         ]
       }
       garcons: {
         Row: {
           ativo: boolean | null
+          bonus_pagamentos: Json
           created_at: string
           id: number
           nome_garcon: string | null
           restaurante_id: number | null
+          telefone: string | null
         }
         Insert: {
           ativo?: boolean | null
+          bonus_pagamentos?: Json
           created_at?: string
           id?: number
           nome_garcon?: string | null
           restaurante_id?: number | null
+          telefone?: string | null
         }
         Update: {
           ativo?: boolean | null
+          bonus_pagamentos?: Json
           created_at?: string
           id?: number
           nome_garcon?: string | null
           restaurante_id?: number | null
+          telefone?: string | null
         }
         Relationships: []
       }
@@ -713,6 +1155,62 @@ export type Database = {
           },
         ]
       }
+      insight_feedback: {
+        Row: {
+          created_at: string
+          feedback_original_id: string | null
+          feedback_restaurante_id: number
+          insight_id: string
+          origem: string
+          restaurante_id: number
+        }
+        Insert: {
+          created_at?: string
+          feedback_original_id?: string | null
+          feedback_restaurante_id: number
+          insight_id: string
+          origem?: string
+          restaurante_id: number
+        }
+        Update: {
+          created_at?: string
+          feedback_original_id?: string | null
+          feedback_restaurante_id?: number
+          insight_id?: string
+          origem?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insight_feedback_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_feedback_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_feedback_insight_id_fkey"
+            columns: ["insight_id"]
+            isOneToOne: false
+            referencedRelation: "insights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_feedback_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insight_feedbacks: {
         Row: {
           feedback_id: number
@@ -731,6 +1229,13 @@ export type Database = {
             foreignKeyName: "insight_feedbacks_feedback_id_fkey"
             columns: ["feedback_id"]
             isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_feedbacks_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
             referencedRelation: "feedbacks_restaurante"
             referencedColumns: ["id"]
           },
@@ -745,51 +1250,76 @@ export type Database = {
       }
       insights: {
         Row: {
-          pontos_ids: number[]
+          acao_id: number | null
+          assunto_chave: string | null
           ativo: boolean | null
           categoria: string | null
           created_at: string | null
+          deletado_em: string | null
+          desativado_em: string | null
           descricao: string | null
           feedback_ids: string[]
           feedbacks_relacionados: number | null
+          fixado: boolean
           gerado_por: string | null
           id: string
+          motivo_encerramento: string | null
+          pontos_ids: number[]
           prioridade: string
           restaurante_id: number | null
           sugestao: string | null
           titulo: string
         }
         Insert: {
-          pontos_ids?: number[]
+          acao_id?: number | null
+          assunto_chave?: string | null
           ativo?: boolean | null
           categoria?: string | null
           created_at?: string | null
+          deletado_em?: string | null
+          desativado_em?: string | null
           descricao?: string | null
           feedback_ids?: string[]
           feedbacks_relacionados?: number | null
+          fixado?: boolean
           gerado_por?: string | null
           id?: string
+          motivo_encerramento?: string | null
+          pontos_ids?: number[]
           prioridade: string
           restaurante_id?: number | null
           sugestao?: string | null
           titulo: string
         }
         Update: {
-          pontos_ids?: number[]
+          acao_id?: number | null
+          assunto_chave?: string | null
           ativo?: boolean | null
           categoria?: string | null
           created_at?: string | null
+          deletado_em?: string | null
+          desativado_em?: string | null
           descricao?: string | null
           feedback_ids?: string[]
           feedbacks_relacionados?: number | null
+          fixado?: boolean
           gerado_por?: string | null
           id?: string
+          motivo_encerramento?: string | null
+          pontos_ids?: number[]
           prioridade?: string
           restaurante_id?: number | null
           sugestao?: string | null
           titulo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "insights_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "insights_restaurante_id_fkey"
             columns: ["restaurante_id"]
@@ -842,6 +1372,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "memoria_assistente_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mensagem_enviada: {
+        Row: {
+          contato_id: string
+          criado_em: string
+          enviado_em: string | null
+          erro_codigo: string | null
+          erro_mensagem: string | null
+          feedbacks_originais_ids: string[]
+          feedbacks_restaurante_ids: number[]
+          id: string
+          provider_message_id: string | null
+          restaurante_id: number
+          status: string
+          texto: string
+        }
+        Insert: {
+          contato_id: string
+          criado_em?: string
+          enviado_em?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          feedbacks_originais_ids?: string[]
+          feedbacks_restaurante_ids?: number[]
+          id?: string
+          provider_message_id?: string | null
+          restaurante_id: number
+          status?: string
+          texto: string
+        }
+        Update: {
+          contato_id?: string
+          criado_em?: string
+          enviado_em?: string | null
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          feedbacks_originais_ids?: string[]
+          feedbacks_restaurante_ids?: number[]
+          id?: string
+          provider_message_id?: string | null
+          restaurante_id?: number
+          status?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagem_enviada_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagem_enviada_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
@@ -1303,12 +1893,17 @@ export type Database = {
           assinatura_expira_em: string | null
           assinatura_status: string
           auth_user_id: string
+          cliente_bg_imagem: string | null
+          cliente_bg_modo: string | null
+          cliente_estilo: string | null
+          config_bonificacao: Json
           config_insights: Json | null
           created_at: string
           credito_ia_ciclo_inicio: string
           credito_ia_limite_usd: number
           detalhes: string | null
           excluida_em: string | null
+          feedbacks_visto_em: string
           frequencia_relatorios: string | null
           funcoes_config: Json | null
           ia_modo_acao: string
@@ -1324,9 +1919,13 @@ export type Database = {
           plano_ciclo: string | null
           qr_bg_imagem: string | null
           qr_bg_modo: string | null
+          qr_elementos: Json
           qr_estilo: string | null
           qr_filtro: string | null
           qr_mensagem: string | null
+          qr_rotulo: string | null
+          qr_textos_estilo: Json | null
+          qr_titulo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           texto_banner: string | null
@@ -1335,6 +1934,7 @@ export type Database = {
           ultima_atualizacao_banner: string | null
           whatsapp_admin_token: string | null
           whatsapp_base_url: string | null
+          whatsapp_dono: string | null
           whatsapp_token: string | null
         }
         Insert: {
@@ -1342,12 +1942,17 @@ export type Database = {
           assinatura_expira_em?: string | null
           assinatura_status?: string
           auth_user_id: string
+          cliente_bg_imagem?: string | null
+          cliente_bg_modo?: string | null
+          cliente_estilo?: string | null
+          config_bonificacao?: Json
           config_insights?: Json | null
           created_at?: string
           credito_ia_ciclo_inicio?: string
           credito_ia_limite_usd?: number
           detalhes?: string | null
           excluida_em?: string | null
+          feedbacks_visto_em?: string
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           ia_modo_acao?: string
@@ -1363,9 +1968,13 @@ export type Database = {
           plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
+          qr_elementos?: Json
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
+          qr_rotulo?: string | null
+          qr_textos_estilo?: Json | null
+          qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           texto_banner?: string | null
@@ -1374,6 +1983,7 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_dono?: string | null
           whatsapp_token?: string | null
         }
         Update: {
@@ -1381,12 +1991,17 @@ export type Database = {
           assinatura_expira_em?: string | null
           assinatura_status?: string
           auth_user_id?: string
+          cliente_bg_imagem?: string | null
+          cliente_bg_modo?: string | null
+          cliente_estilo?: string | null
+          config_bonificacao?: Json
           config_insights?: Json | null
           created_at?: string
           credito_ia_ciclo_inicio?: string
           credito_ia_limite_usd?: number
           detalhes?: string | null
           excluida_em?: string | null
+          feedbacks_visto_em?: string
           frequencia_relatorios?: string | null
           funcoes_config?: Json | null
           ia_modo_acao?: string
@@ -1402,9 +2017,13 @@ export type Database = {
           plano_ciclo?: string | null
           qr_bg_imagem?: string | null
           qr_bg_modo?: string | null
+          qr_elementos?: Json
           qr_estilo?: string | null
           qr_filtro?: string | null
           qr_mensagem?: string | null
+          qr_rotulo?: string | null
+          qr_textos_estilo?: Json | null
+          qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           texto_banner?: string | null
@@ -1413,6 +2032,7 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_dono?: string | null
           whatsapp_token?: string | null
         }
         Relationships: []
@@ -1549,6 +2169,117 @@ export type Database = {
       }
     }
     Views: {
+      feedbacks_livres: {
+        Row: {
+          categoria: string | null
+          contato_id: string | null
+          created_at: string | null
+          id: number | null
+          invalidado_em: string | null
+          origem_id: string | null
+          restaurante_id: number | null
+          resumo: string | null
+          sentimento: string | null
+          telefone_cliente: string | null
+          tema_id: string | null
+          texto_original: string | null
+          usado_em: string | null
+          usado_por_acao_id: number | null
+          usado_por_insight_id: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          contato_id?: string | null
+          created_at?: string | null
+          id?: number | null
+          invalidado_em?: string | null
+          origem_id?: string | null
+          restaurante_id?: number | null
+          resumo?: string | null
+          sentimento?: string | null
+          telefone_cliente?: string | null
+          tema_id?: string | null
+          texto_original?: string | null
+          usado_em?: string | null
+          usado_por_acao_id?: number | null
+          usado_por_insight_id?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          contato_id?: string | null
+          created_at?: string | null
+          id?: number | null
+          invalidado_em?: string | null
+          origem_id?: string | null
+          restaurante_id?: number | null
+          resumo?: string | null
+          sentimento?: string | null
+          telefone_cliente?: string | null
+          tema_id?: string | null
+          texto_original?: string | null
+          usado_em?: string | null
+          usado_por_acao_id?: number | null
+          usado_por_insight_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_restaurante_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_originais_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_origem_id_fkey"
+            columns: ["origem_id"]
+            isOneToOne: false
+            referencedRelation: "fila_retorno_n8n"
+            referencedColumns: ["feedback_original_id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_tema_id_fkey"
+            columns: ["tema_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_temas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_usado_por_acao_id_fkey"
+            columns: ["usado_por_acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedbacks_restaurante_usado_por_insight_id_fkey"
+            columns: ["usado_por_insight_id"]
+            isOneToOne: false
+            referencedRelation: "insights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedbacks_originais_view: {
         Row: {
           categorias: string[] | null
@@ -1557,11 +2288,74 @@ export type Database = {
           restaurante_id: number | null
           sentimento: string | null
           telefone_cliente: string | null
+          texto_destacado: string | null
+          texto_exibicao: string | null
           texto_original: string | null
         }
         Relationships: [
           {
             foreignKeyName: "feedbacks_originais_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fila_retorno_n8n: {
+        Row: {
+          acao_id: number | null
+          aviso_em: string | null
+          aviso_id: string | null
+          categoria: string | null
+          categoria_do_ponto: string | null
+          contato_id: string | null
+          etapa: Database["public"]["Enums"]["aviso_etapa"] | null
+          feedback_em: string | null
+          feedback_original_id: string | null
+          feedback_restaurante_id: number | null
+          nome_cliente: string | null
+          nome_restaurante: string | null
+          plano_detalhado: string | null
+          restaurante_id: number | null
+          telefone: string | null
+          texto_do_ponto: string | null
+          titulo_acao: string | null
+          ultimo_envio_em: string | null
+          whatsapp_base_url: string | null
+          whatsapp_token: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aviso_pendente_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_livres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_feedback_restaurante_id_fkey"
+            columns: ["feedback_restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "feedbacks_restaurante"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aviso_pendente_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"
@@ -1579,6 +2373,7 @@ export type Database = {
           p256dh: string
         }[]
       }
+      arquivar_concluidas_antigas: { Args: never; Returns: number }
       assinaturas_expirar_e_listar: {
         Args: never
         Returns: {
@@ -1618,6 +2413,16 @@ export type Database = {
           url: string
         }[]
       }
+      conferir_contatos_cruzados: {
+        Args: never
+        Returns: {
+          contato_id: string
+          dono_do_contato: number
+          dono_do_registro: number
+          registro: string
+          tabela: string
+        }[]
+      }
       consumir_credito_ia: {
         Args: { p_custo?: number; p_restaurante_id: number }
         Returns: {
@@ -1627,7 +2432,41 @@ export type Database = {
           permitido: boolean
         }[]
       }
+      deve_gerar_insights: {
+        Args: { p_restaurante_id: number }
+        Returns: {
+          deve: boolean
+          livres_novos: number
+          necessarios: number
+        }[]
+      }
       expirar_assinaturas: { Args: never; Returns: number }
+      feedbacks_para_geracao: {
+        Args: { p_dias?: number; p_restaurante_id: number }
+        Returns: {
+          categoria: string | null
+          contato_id: string | null
+          created_at: string
+          id: number
+          invalidado_em: string | null
+          origem_id: string | null
+          restaurante_id: number | null
+          resumo: string | null
+          sentimento: string | null
+          telefone_cliente: string | null
+          tema_id: string | null
+          texto_original: string | null
+          usado_em: string | null
+          usado_por_acao_id: number | null
+          usado_por_insight_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "feedbacks_restaurante"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_user_restaurante_id: { Args: never; Returns: number }
       limpar_contas_abandonadas: { Args: never; Returns: number }
       meu_uso_ia: {
@@ -1637,6 +2476,36 @@ export type Database = {
           gasto: number
           limite: number
         }[]
+      }
+      normalizar_telefone: { Args: { p: string }; Returns: string }
+      ordem_status_acao:
+        | {
+            Args: { p_etapa: Database["public"]["Enums"]["aviso_etapa"] }
+            Returns: number
+          }
+        | { Args: { p_status: string }; Returns: number }
+      promover_transicoes_pendentes: {
+        Args: never
+        Returns: {
+          avisos_criados: number
+          canceladas: number
+          promovidas: number
+        }[]
+      }
+      reconciliar_uso_feedbacks: {
+        Args: { p_restaurante_id?: number }
+        Returns: {
+          corrigidos: number
+        }[]
+      }
+      registrar_envio_retorno: {
+        Args: {
+          p_aviso_ids: string[]
+          p_contato_id: string
+          p_provider_message_id?: string
+          p_texto: string
+        }
+        Returns: string
       }
       temas_agrupados: {
         Args: { p_desde?: string; p_restaurante_id: number; p_tipo?: string }
@@ -1649,7 +2518,8 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      aviso_etapa: "em_andamento" | "concluida"
+      aviso_status: "na_fila" | "enviado" | "cancelado" | "expirado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1665,12 +2535,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1694,11 +2564,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1719,11 +2589,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1744,11 +2614,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1761,11 +2631,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1776,6 +2646,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      aviso_etapa: ["em_andamento", "concluida"],
+      aviso_status: ["na_fila", "enviado", "cancelado", "expirado"],
+    },
   },
 } as const

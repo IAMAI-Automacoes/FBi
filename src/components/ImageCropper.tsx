@@ -1,8 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
-import { ZoomIn } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /** Maior lado da moldura na tela (o outro sai da proporção outputWidth:outputHeight). */
@@ -17,17 +15,22 @@ const ZOOM_MAX_MULT = 4
  * decide); a imagem fica atrás, dá pra arrastar pra posicionar e dar zoom.
  *
  * Zoom por duas vias, as duas mantendo a moldura sempre coberta:
- * - roda do mouse sobre a moldura: o zoom foca exatamente no ponto embaixo
- *   do cursor (a matemática de "zoom to cursor" abaixo), então o ponto que
- *   o mouse está apontando não sai do lugar enquanto a imagem cresce/encolhe.
- * - slider: sem "posição do mouse" pra ancorar, foca no centro da moldura.
+ * - roda do mouse: o zoom foca exatamente no ponto embaixo do cursor (a
+ *   matemática de "zoom to cursor" abaixo), então o que está sob o mouse não
+ *   sai do lugar enquanto a imagem cresce;
+ * - pinça de dois dedos: mesma matemática, ancorada no ponto médio entre eles.
+ *
+ * A pinça não é enfeite. Havia um slider de zoom, e era ele o ÚNICO caminho no
+ * celular — roda do mouse não existe no toque. Tirar o slider sem a pinça
+ * deixaria quem usa o celular sem nenhuma forma de dar zoom, e é justamente no
+ * celular que a foto costuma ser escolhida.
  */
 export function ImageCropper({
   file, onConfirm, onCancel, salvando,
   outputWidth = 1080, outputHeight = 1920,
   shape = 'rect',
   title = 'Ajuste a imagem',
-  instructions = 'Arraste a imagem para posicionar e use a roda do mouse (ou o controle abaixo) para dar zoom. O que ficar dentro da moldura é o que aparece.',
+  instructions = 'Arraste ou dê zoom para ajustar.',
 }: {
   file: File
   onConfirm: (blob: Blob) => void
@@ -87,17 +90,58 @@ export function ImageCropper({
     return { x: Math.min(FRAME_L, Math.max(minX, x)), y: Math.min(FRAME_T, Math.max(minY, y)) }
   }, [FRAME_L, FRAME_T, FRAME_W, FRAME_H])
 
+  /** Ponteiros encostados agora. Dois = pinça; um = arrasto. */
+  const pontosRef = useRef(new Map<number, { x: number; y: number }>())
+  const pincaRef = useRef<{ dist: number; escala: number } | null>(null)
+
   const onPointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }
+    pontosRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pontosRef.current.size === 2) {
+      const [a, b] = [...pontosRef.current.values()]
+      pincaRef.current = { dist: Math.hypot(b.x - a.x, b.y - a.y), escala: scale }
+      dragRef.current = null
+    } else {
+      dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }
+    }
   }
+
   const onPointerMove = (e: React.PointerEvent) => {
+    const ponto = pontosRef.current.get(e.pointerId)
+    if (!ponto) return
+    ponto.x = e.clientX
+    ponto.y = e.clientY
+
+    if (pontosRef.current.size >= 2 && pincaRef.current) {
+      const [a, b] = [...pontosRef.current.values()]
+      const dist = Math.hypot(b.x - a.x, b.y - a.y)
+      if (pincaRef.current.dist > 0) {
+        const caixa = boxRef.current?.getBoundingClientRect()
+        if (!caixa) return
+        // Âncora no ponto médio entre os dedos: é o que faz a imagem crescer
+        // "de onde os dedos estão", e não do centro da moldura.
+        const focoX = (a.x + b.x) / 2 - caixa.left
+        const focoY = (a.y + b.y) / 2 - caixa.top
+        aplicarZoom(pincaRef.current.escala * (dist / pincaRef.current.dist), focoX, focoY)
+      }
+      return
+    }
+
     if (!dragRef.current) return
     const dx = e.clientX - dragRef.current.x
     const dy = e.clientY - dragRef.current.y
     setOffset(clamp(dragRef.current.ox + dx, dragRef.current.oy + dy, dispW, dispH))
   }
-  const onPointerUp = () => { dragRef.current = null }
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    pontosRef.current.delete(e.pointerId)
+    pincaRef.current = null
+    // Ao soltar um dedo no meio da pinça, o que sobrou vira o novo arrasto —
+    // sem isto a imagem salta, porque o arrasto retomaria da posição antiga.
+    const resto = [...pontosRef.current.values()][0]
+    dragRef.current = resto ? { x: resto.x, y: resto.y, ox: offset.x, oy: offset.y } : null
+  }
 
   /** Muda a escala mantendo `focoX`/`focoY` (coordenadas relativas ao box,
    *  ex.: onde o mouse está) parados no lugar — é o que faz o zoom "focar"
@@ -124,11 +168,6 @@ export function ImageCropper({
     const focoY = e.clientY - rect.top
     const fator = Math.exp(-e.deltaY * 0.0015)
     aplicarZoom(scale * fator, focoX, focoY)
-  }
-
-  const onSliderChange = ([v]: number[]) => {
-    // sem cursor pra ancorar: foca no centro da moldura
-    aplicarZoom(v, FRAME_L + FRAME_W / 2, FRAME_T + FRAME_H / 2)
   }
 
   const confirmar = () => {
@@ -183,18 +222,6 @@ export function ImageCropper({
               }}
             />
           </div>
-        </div>
-        <div className="flex items-center gap-3 px-1">
-          <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <Slider
-            value={[scale]}
-            min={minScale}
-            max={minScale * ZOOM_MAX_MULT}
-            step={(minScale * ZOOM_MAX_MULT - minScale) / 100 || 0.001}
-            onValueChange={onSliderChange}
-            disabled={!img}
-            className="flex-1"
-          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={salvando}>Cancelar</Button>

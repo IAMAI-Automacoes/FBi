@@ -18,6 +18,7 @@ import {
 } from '@/lib/queries/feedbacks'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { useFiltroPersistente, esquecerFiltro } from '@/hooks/use-filtro-persistente'
 import { FiltroPeriodo } from '@/components/FiltroPeriodo'
 import { CampoBusca } from '@/components/CampoBusca'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
@@ -28,6 +29,8 @@ import { supabase } from '@/lib/supabase/client'
 
 const LIMIT = 10
 
+
+const CHAVE_FILTROS = 'feedbacks:filtros'
 
 export default function Feedbacks() {
   const { toast } = useToast()
@@ -47,7 +50,23 @@ export default function Feedbacks() {
   // ?periodo=30d&categoria=Reserva&sentimento=negativo) — lida só uma vez,
   // ao montar; depois disso os filtros vivem normalmente no Select/
   // FiltroCategorias da tela, sem ficar "preso" ao que veio na URL.
-  const [filtros, setFiltros] = useState<FiltrosFeedback>(() => {
+  //
+  // A URL VENCE o que estava guardado: quem chega por um link que já traz o
+  // recorte pronto pediu aquele recorte, e misturá-lo com a categoria de
+  // uma visita anterior abriria uma terceira coisa que ninguém pediu. Por
+  // isso a memória do filtro é apagada antes de semear.
+  //
+  // O `useRef` garante UMA execução: sem ele, a limpeza rodaria a cada
+  // repintura enquanto os parâmetros estivessem na URL, e um filtro mexido
+  // aqui seria apagado da memória logo em seguida.
+  const jaSemeou = useRef(false)
+  if (!jaSemeou.current) {
+    jaSemeou.current = true
+    const veioDaUrl = ['periodo', 'categoria', 'sentimento'].some((p) => searchParams.get(p))
+    if (veioDaUrl) esquecerFiltro(CHAVE_FILTROS)
+  }
+
+  const [filtros, setFiltros] = useFiltroPersistente<FiltrosFeedback>(CHAVE_FILTROS, (() => {
     const periodoParam = searchParams.get('periodo')
     const periodosValidos: FiltrosFeedback['periodo'][] = ['7d', '30d', '90d', 'all']
     const categoriaParam = searchParams.get('categoria')
@@ -61,7 +80,7 @@ export default function Feedbacks() {
       busca: '',
       ordenacao: 'recent',
     }
-  })
+  })())
   const [offset, setOffset] = useState(0)
 
   // Ao trocar um filtro (não a busca por texto, que digita contínuo) a lista

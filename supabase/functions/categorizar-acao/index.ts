@@ -31,6 +31,7 @@
  * feedbacks livres da categoria, quais aquela ação realmente resolve.
  */
 import { json, preflight } from '../_shared/cors.ts'
+import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
@@ -189,7 +190,7 @@ Deno.serve(async (req: Request) => {
           nome: nomeDoAssistente(config?.mascote_config),
           perfil: blocoPerfil(config),
           titulo: acao.titulo_acao ?? '',
-          plano: acao.plano_detalhado ?? '',
+          plano: planoParaPrompt(acao.plano_detalhado),
         })
         const { result } = await chamarIA(db, {
           messages: [{ role: 'user', content: prompt }],
@@ -241,7 +242,7 @@ Deno.serve(async (req: Request) => {
         acaoId,
         restauranteId: acao.restaurante_id,
         titulo: acao.titulo_acao ?? '',
-        plano: acao.plano_detalhado ?? '',
+        plano: planoParaPrompt(acao.plano_detalhado),
         categoria: categoriaFinal,
         expiracaoDias: Number(
           (config?.config_insights as Record<string, unknown>)?.expiracao_feedback_dias ?? 14,

@@ -8,8 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { DashboardData, PeriodInfo } from '@/lib/queries/visao-geral'
+import type { DashboardData } from '@/lib/queries/visao-geral'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
@@ -67,8 +66,6 @@ function SentimentTooltip({
 interface TrendChartProps {
   data: DashboardData['chartData']
   categories: DashboardData['categories']
-  period: PeriodInfo
-  onPeriodChange: (p: PeriodInfo) => void
 }
 
 /** Quantas categorias ficam visíveis antes de precisar expandir. */
@@ -76,7 +73,7 @@ const MAX_VISIVEL = 6
 /** Quantas categorias (as com mais feedback NEGATIVO) ganham o card destacado. */
 const MAX_DESTAQUE = 3
 
-export function TrendChart({ data, categories, period, onPeriodChange }: TrendChartProps) {
+export function TrendChart({ data, categories }: TrendChartProps) {
   const [expandido, setExpandido] = useState(false)
 
   // Intervalo derivado do tamanho real dos dados (não do period),
@@ -109,37 +106,12 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
 
   return (
     <Card className="shadow-subtle flex flex-col">
-      <CardHeader className="p-5 pb-0 flex flex-row items-center justify-between border-b-0 space-y-0">
+      <CardHeader className="p-5 pb-0 border-b-0 space-y-0">
         <CardTitle className="text-base font-semibold">Tendência de Sentimento</CardTitle>
-        <ToggleGroup
-          type="single"
-          value={period}
-          onValueChange={(v) => v && onPeriodChange(v as PeriodInfo)}
-          className="bg-muted p-1 rounded-lg scale-90 sm:scale-100"
-        >
-          <ToggleGroupItem
-            value="7d"
-            className="h-7 px-3 text-xs data-[state=on]:bg-white data-[state=on]:shadow-sm"
-          >
-            7d
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="30d"
-            className="h-7 px-3 text-xs data-[state=on]:bg-white data-[state=on]:shadow-sm"
-          >
-            30d
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="90d"
-            className="h-7 px-3 text-xs data-[state=on]:bg-white data-[state=on]:shadow-sm"
-          >
-            90d
-          </ToggleGroupItem>
-        </ToggleGroup>
       </CardHeader>
-      <CardContent className="p-5 pt-6 flex gap-6 min-h-[280px]">
-        <div className="flex-1 min-w-0">
-          <ChartContainer config={chartConfig} className="w-full h-full min-h-[240px]">
+      <CardContent className="p-5 pt-6 flex items-start gap-6">
+        <div className="flex-1 min-w-0 h-[280px]">
+          <ChartContainer config={chartConfig} className="w-full h-full">
             <AreaChart data={dataComFlag} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorSentiment" x1="0" y1="0" x2="0" y2="1">
@@ -226,7 +198,7 @@ export function TrendChart({ data, categories, period, onPeriodChange }: TrendCh
             <p className="text-sm text-muted-foreground">Nenhuma reclamação neste período 🎉</p>
           ) : (
             <>
-              <div className="flex flex-col gap-1.5 max-h-[280px] overflow-y-auto pr-0.5">
+              <div className="flex flex-col gap-1.5">
                 {listaCategorias.map((cat) => {
                   const estilo = estiloCategoria(cat.name)
                   const Icon = estilo.icon

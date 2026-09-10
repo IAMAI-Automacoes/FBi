@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { MessageCircle, CheckCircle2, RefreshCw, Loader2, Smartphone } from 'lucide-react'
+import { MessageCircle, CheckCircle2, RefreshCw, Loader2, Smartphone, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { CampoTelefone } from '@/components/CampoTelefone'
+import { telefoneNacionalValido } from '@/lib/telefone'
 
 interface EstadoWhats {
   hasInstance: boolean
@@ -232,7 +234,116 @@ export function WhatsAppTab({
           Conecte o número de WhatsApp que recebe e responde os feedbacks dos clientes.
         </CardDescription>
       </CardHeader>
-      <CardContent>{conteudo}</CardContent>
+      <CardContent className="space-y-6">
+        {conteudo}
+        <NumeroDoDono restauranteId={restauranteId} />
+      </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Número do dono, para onde vão os avisos urgentes.
+ *
+ * Separado do número conectado acima, e a distinção é o ponto: aquele é a
+ * linha por onde o CLIENTE manda o feedback; este é o celular de quem precisa
+ * largar o que está fazendo quando alguém passa mal no salão. Costumam ser
+ * telefones diferentes, e misturá-los faria o aviso urgente chegar na caixa de
+ * entrada do atendimento, junto com tudo o mais.
+ */
+export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }) {
+  const { toast } = useToast()
+  const [numero, setNumero] = useState('')
+  const [salvo, setSalvo] = useState('')
+  // "Tem algo escrito no campo?" — um número pela metade também vira `numero`
+  // vazio (DDD incompleto não é valor guardável), e sem isto "estou digitando"
+  // seria confundido com "quero remover o número".
+  const [temDigitos, setTemDigitos] = useState(false)
+  const [carregando, setCarregando] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    if (!restauranteId) return
+    let ativo = true
+    supabase
+      .from('restaurantes')
+      .select('whatsapp_dono')
+      .eq('id', restauranteId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!ativo) return
+        const existente = data?.whatsapp_dono ?? ''
+        setNumero(existente)
+        setSalvo(existente)
+        setTemDigitos(Boolean(existente))
+        setCarregando(false)
+      })
+    return () => { ativo = false }
+  }, [restauranteId])
+
+  const salvar = async () => {
+    if (!restauranteId) return
+    // Mesmo campo/mesma regra do telefone do garçom (`CampoTelefone`, em
+    // `src/lib/telefone.ts`): o "55" é fixo e o valor que chega aqui já vem
+    // canônico do onChange.
+    //
+    // Campo com algo escrito mas sem número válido (DDD ou telefone pela
+    // metade) é ERRO, nunca "remover" — senão uma edição interrompida no meio
+    // apagaria silenciosamente o número que já estava salvo.
+    if (temDigitos && !telefoneNacionalValido(numero)) {
+      toast({
+        title: 'Número inválido',
+        description: 'Confira o DDD e o número — precisa ter DDD + telefone completo.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setSalvando(true)
+    const { error } = await supabase
+      .from('restaurantes')
+      .update({ whatsapp_dono: numero || null })
+      .eq('id', restauranteId)
+    setSalvando(false)
+    if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
+      return
+    }
+    setSalvo(numero)
+    toast({ title: numero ? 'Número salvo' : 'Número removido' })
+  }
+
+  if (carregando) return null
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-gray-800">Avisos urgentes</p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            Quando chegar um feedback grave — cliente passou mal, corpo estranho na comida,
+            praga no salão — mandamos uma mensagem na hora para este número.
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <CampoTelefone
+              value={numero}
+              onChange={(valor, tem) => { setNumero(valor); setTemDigitos(tem) }}
+              className="h-9 w-[210px] rounded-md border-gray-200 bg-white px-2.5 text-sm focus-within:border-amber-300 focus-within:ring-amber-300"
+            />
+            <Button size="sm" onClick={salvar} disabled={salvando || numero === salvo}>
+              {salvando ? 'Salvando…' : 'Salvar'}
+            </Button>
+          </div>
+
+          {!salvo && (
+            <p className="mt-2 text-[12px] font-medium text-amber-700">
+              Sem este número, nenhum aviso urgente é enviado.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

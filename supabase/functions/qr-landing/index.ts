@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { talvezAvisarGarcom } from '../_shared/aviso-garcom.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest } = await admin
       .from('restaurantes')
-      .select('nome_restaurante, numero_whatsapp, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
+      .select('nome_restaurante, numero_whatsapp, cliente_bg_modo, cliente_bg_imagem, cliente_estilo, cliente_elementos, cliente_textos, cliente_textos_estilo, qr_bg_modo, qr_bg_imagem, qr_estilo, qr_mensagem, qr_filtro, excluida_em')
       .eq('id', qr.restaurante_id)
       .maybeSingle()
     if (!rest) return json({ error: 'Restaurante não encontrado' }, 404)
@@ -69,6 +70,12 @@ Deno.serve(async (req: Request) => {
       admin.from('qr_codes').update({ total_scans: (qr.total_scans || 0) + 1 }).eq('id', qr.id),
     ])
 
+    // Fire-and-forget: vê se essa abertura bateu algum marco de bonificação
+    // do garçom dono do QR e avisa via n8n. Nunca pode atrasar a página de
+    // quem escaneou, nem derrubá-la se falhar.
+    talvezAvisarGarcom(admin, { id: qr.id, garcom_id: qr.garcom_id, restaurante_id: qr.restaurante_id })
+      .catch((e) => console.error('[qr-landing] falha ao avaliar bonificação do garçom:', e))
+
     const clean = (rest.numero_whatsapp ?? '').replace(/\D/g, '')
     const whatsapp = clean ? (clean.startsWith('55') ? clean : `55${clean}`) : null
 
@@ -76,11 +83,18 @@ Deno.serve(async (req: Request) => {
       restauranteNome: rest.nome_restaurante ?? 'Restaurante',
       whatsapp,
       garcomNome,
-      modo: rest.qr_bg_modo ?? 'estilo',
-      imagem: rest.qr_bg_imagem ?? null,
-      estilo: rest.qr_estilo ?? 'classico',
+      // O fundo desta página tem campos PRÓPRIOS desde a separação entre o
+      // cartaz impresso e o que o cliente vê no celular. Os `qr_*` ficam de
+      // reserva: a migração copiou os valores, mas um restaurante criado entre
+      // o deploy do banco e o desta função pode ter só os antigos preenchidos.
+      modo: rest.cliente_bg_modo ?? rest.qr_bg_modo ?? 'estilo',
+      imagem: rest.cliente_bg_imagem ?? rest.qr_bg_imagem ?? null,
+      estilo: rest.cliente_estilo ?? rest.qr_estilo ?? 'classico',
       filtro: rest.qr_filtro ?? 'nenhum',
       mensagem: rest.qr_mensagem ?? null,
+      elementos: Array.isArray(rest.cliente_elementos) ? rest.cliente_elementos : [],
+      textos: rest.cliente_textos ?? {},
+      estilosDosTextos: rest.cliente_textos_estilo ?? {},
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

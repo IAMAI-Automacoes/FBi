@@ -503,6 +503,10 @@ REGRAS OBRIGATÓRIAS:
 - Se só existir uma faixa de horário ou um único dia com avaliações, não afirme que
   ele é o "melhor" ou o "pior" — não há comparação possível.
 - Cite trechos reais dos clientes quando ajudar a justificar o ponto forte/fraco.
+- Se for citar algo entre aspas simples ('assim'), copie PALAVRA POR PALAVRA de um
+  "rotulo" em "temas" ou de um "texto_original"/"resumo" em "feedbacks" — nunca resuma,
+  traduza ou parafraseie e apresente como se fosse uma citação literal. Se for
+  parafrasear a ideia, escreva sem aspas.
 
 DADOS DO PERÍODO:
 ${JSON.stringify(dadosRelatorio)}`
@@ -521,6 +525,10 @@ REGRAS:
   positivo e negativo; (3) UMA recomendação concreta e acionável para as próximas semanas.
 - Se o total de avaliações for pequeno (menos de 10), diga explicitamente que a amostra
   ainda é pequena e que a leitura é preliminar.
+- Se for citar algo entre aspas simples ('assim'), copie PALAVRA POR PALAVRA de um
+  "rotulo" em "temas" ou de um "texto_original"/"resumo" em "feedbacks" — nunca resuma,
+  traduza ou parafraseie e apresente como se fosse uma citação literal. Se for
+  parafrasear a ideia, escreva sem aspas.
 
 DADOS DO PERÍODO:
 ${JSON.stringify(dadosRelatorio)}`

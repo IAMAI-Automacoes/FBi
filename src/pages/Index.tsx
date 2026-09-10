@@ -10,16 +10,19 @@ import {
   buscarTendencia,
   buscarCategorias,
   buscarUltimosFeedbacks,
+  getPeriodDates,
 } from '@/lib/queries/visao-geral'
 import { useToast } from '@/hooks/use-toast'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { MessageSquare, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 export default function Index() {
-  const [period, setPeriod] = useState<PeriodInfo>('7d')
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('visao-geral:periodo', '7d')
   const [data, setData] = useState<DashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
@@ -35,7 +38,7 @@ export default function Index() {
         buscarKpis(restauranteId, period),
         buscarTendencia(restauranteId, period),
         buscarCategorias(restauranteId, period),
-        buscarUltimosFeedbacks(restauranteId, 5),
+        buscarUltimosFeedbacks(restauranteId, 5, period),
       ])
       setData({ kpis, chartData, categories, recentFeedbacks })
       hasLoadedOnce.current = true
@@ -70,6 +73,39 @@ export default function Index() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
+
+      {/* Filtro de período — no topo da página, não escondido dentro do
+          card de tendência (que tem o próprio título pra disputar espaço).
+          Tamanho 1,5x o antigo (h-7 → h-10/h-11, texto xs → sm). */}
+      {!isNeverUsed && (
+        <div className="flex justify-end">
+          <ToggleGroup
+            type="single"
+            value={period}
+            onValueChange={(v) => v && setPeriod(v as PeriodInfo)}
+            className="bg-muted p-1.5 rounded-xl"
+          >
+            <ToggleGroupItem
+              value="7d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              7d
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="30d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              30d
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="90d"
+              className="h-11 px-5 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+            >
+              90d
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      )}
 
       {isLoading ? (
         <>
@@ -108,13 +144,48 @@ export default function Index() {
             </div>
           )}
           <KpiCards data={data.kpis} period={period} />
-          <TrendChart
-            data={data.chartData}
-            categories={data.categories}
-            period={period}
-            onPeriodChange={setPeriod}
+
+          {/* Como as avaliações se dividem — mesmo bloco (e mesma lógica) da
+              aba Relatórios, só que sempre visível aqui na Visão Geral. */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <h3 className="text-base font-bold text-gray-900">Como as avaliações se dividem</h3>
+            <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="flex shrink-0 gap-6">
+                {[
+                  { valor: data.kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
+                  { valor: data.kpis.neutralPercent, cor: 'text-amber-500', dot: 'bg-amber-500', label: 'Neutras' },
+                  { valor: data.kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
+                ].map((s) => (
+                  <div key={s.label}>
+                    <p className={`text-2xl font-bold ${s.cor}`}>{s.valor}%</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                      {s.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="flex h-full w-full">
+                  {[
+                    { n: data.kpis.positivos, cor: 'bg-green-500' },
+                    { n: data.kpis.neutros, cor: 'bg-amber-500' },
+                    { n: data.kpis.negativos, cor: 'bg-red-500' },
+                  ].map((s, i) =>
+                    s.n > 0 ? (
+                      <div key={i} className={s.cor} style={{ width: `${(s.n / data.kpis.totalFeedbacks) * 100}%` }} />
+                    ) : null,
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <TrendChart data={data.chartData} categories={data.categories} />
+          <TemasFeedback
+            restauranteId={usuario?.restaurante_id ?? null}
+            dias={getPeriodDates(period).days}
           />
-          <TemasFeedback restauranteId={usuario?.restaurante_id ?? null} />
           <RecentFeedbacks feedbacks={data.recentFeedbacks} />
         </>
       ) : null}

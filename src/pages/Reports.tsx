@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
-  FileText, Download, FileDown, Users, ThumbsUp, ThumbsDown,
+  FileText, Download, FileSpreadsheet, ChevronDown, Users, ThumbsUp, ThumbsDown,
   AlertTriangle, Loader2, PartyPopper, CalendarDays, Clock,
   Heart, MessageCircle, ChevronRight, TrendingUp,
 } from 'lucide-react'
@@ -26,9 +26,15 @@ import { estiloCategoria } from '@/lib/categorias-feedback'
 import { gerarPdfRelatorio } from '@/lib/pdf/gerar-pdf-relatorio'
 import { supabase } from '@/lib/supabase/client'
 import { useUserProfile } from '@/hooks/use-user-profile'
-import { format, parseISO } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { montarLinhasCsv, serializarCsv } from '@/lib/relatorio-csv'
 import { toast } from 'sonner'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
 
 const PERIOD_LABEL: Record<PeriodInfo, string> = {
@@ -70,7 +76,7 @@ function SatisfacaoTooltip({ active, payload }: { active?: boolean; payload?: an
 
 export default function Reports() {
   const { profile, loading: profileLoading } = useUserProfile()
-  const [period, setPeriod] = useState<PeriodInfo>('30d')
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('relatorios:periodo', '30d')
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState<any>(null)
   const [stats, setStats] = useState<EstatisticasRelatorio | null>(null)
@@ -126,88 +132,75 @@ export default function Reports() {
     setGerandoCsv(true)
     try {
       const { currentStart } = getPeriodDates(period)
-      const { data: brutos } = restauranteId
-        ? await supabase
-            .from('feedbacks_restaurante')
-            .select('created_at, categoria, sentimento, texto_original, resumo')
-            .eq('restaurante_id', restauranteId)
-            .gte('created_at', currentStart.toISOString())
-            .order('created_at', { ascending: false })
-        : { data: [] as any[] }
+      const desde = currentStart.toISOString()
 
-      const temaCritico =
-        kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum'
-          ? `${kpis.criticalTheme} (${kpis.criticalPercent}% negativas)` : 'Nenhum'
+      // Insights e ações vêm junto: eles não estão na página de relatórios,
+      // mas são o que o sistema CONCLUIU e o que está sendo FEITO. Sem eles a
+      // planilha conta só o problema.
+      const [brutosRes, insRes, acoesRes] = await Promise.all([
+        restauranteId
+          ? supabase
+              .from('feedbacks_restaurante')
+              .select('created_at, categoria, sentimento, texto_original, resumo')
+              .eq('restaurante_id', restauranteId)
+              .gte('created_at', desde)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        restauranteId
+          ? supabase
+              .from('insights')
+              .select('titulo, prioridade, descricao')
+              .eq('restaurante_id', restauranteId)
+              .eq('ativo', true)
+              .gte('created_at', desde)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        restauranteId
+          ? supabase
+              .from('acoes_operacionais')
+              .select('titulo_acao, status, prioridade, categoria')
+              .eq('restaurante_id', restauranteId)
+              .is('arquivada_em', null)
+              .order('ordem', { ascending: true })
+          : Promise.resolve({ data: [] as any[] }),
+      ])
 
-      // Mesma regra da tela e do PDF: só mostra variação vs. período anterior
-      // quando ele tem base suficiente (senão "+200%" saindo de 1 avaliação
-      // engana). Antes o CSV só checava `hasPrevData`, ignorando essa trava.
-      const comparavelCsv = kpis.hasPrevData && kpis.prevConfiavel
-
-      const linhas: string[][] = [
-        ['RELATÓRIO', nomeRestaurante],
-        ['Período', PERIOD_LABEL[period]],
-        ['Gerado em', format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })],
-        [],
-        ['RESUMO'],
-        ['Métrica', 'Valor', 'vs. período anterior'],
-        ['Total de avaliações', String(kpis.totalFeedbacks), comparavelCsv ? kpis.totalTrend : '—'],
-        ['Índice de satisfação (0-100)', String(kpis.sentiment), comparavelCsv ? kpis.sentimentTrend : '—'],
-        ['Avaliações positivas', `${kpis.positivos} (${kpis.positivePercent}%)`, ''],
-        ['Avaliações neutras', `${kpis.neutros} (${kpis.neutralPercent}%)`, ''],
-        ['Avaliações negativas', `${kpis.negativos} (${kpis.negativePercent}%)`, ''],
-        ['Tema que mais preocupa', temaCritico, ''],
-        ['Clientes únicos', String(stats.clientesUnicos), ''],
-        ['Clientes que avaliaram mais de uma vez', String(stats.clientesRecorrentes), ''],
-        ['Avaliações por cliente', String(stats.avaliacoesPorCliente), ''],
-        [],
-        ['POR CATEGORIA'],
-        ['Categoria', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porCategoria.map((c) => [c.nome, String(c.total), String(c.satisfacao)]),
-        [],
-        ['EVOLUÇÃO NO PERÍODO'],
-        ['Data', 'Avaliações', 'Satisfação (0-100)'],
-        ...tendencia.map((t) => [t.date, String(t.avaliacoes), t.sentiment == null ? '' : String(t.sentiment)]),
-        [],
-        ['POR DIA DA SEMANA'],
-        ['Dia', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porDiaSemana.map((d) => [d.nome, String(d.total), d.satisfacao == null ? '' : String(d.satisfacao)]),
-        [],
-        ['POR FAIXA DE HORÁRIO'],
-        ['Faixa', 'Avaliações', 'Satisfação (0-100)'],
-        ...stats.porFaixaHorario.map((f) => [f.nome, String(f.total), f.satisfacao == null ? '' : String(f.satisfacao)]),
-        [],
-        ['TODAS AS AVALIAÇÕES'],
-        ['Data', 'Hora', 'Categoria', 'Sentimento', 'Avaliação'],
-        ...(brutos || []).map((f: any) => {
-          const d = parseISO(f.created_at)
-          return [
-            format(d, 'dd/MM/yyyy'), format(d, 'HH:mm'),
-            f.categoria || 'Outros', f.sentimento || '',
-            (f.texto_original || f.resumo || '').replace(/[\r\n]+/g, ' '),
-          ]
+      const csv = serializarCsv(
+        montarLinhasCsv({
+          nomeRestaurante,
+          rotuloPeriodo: PERIOD_LABEL[period],
+          inicio: currentStart,
+          fim: new Date(),
+          kpis,
+          stats,
+          tendencia,
+          temas,
+          insights: insRes.data || [],
+          acoes: acoesRes.data || [],
+          avaliacoes: brutosRes.data || [],
+          // Só entra se a leitura da IA já foi gerada na tela: o CSV não vai
+          // chamar a IA por conta própria — baixar uma planilha não deveria
+          // custar uma chamada nem a espera dela.
+          resumoIa: analise?.resumo ?? null,
         }),
-      ]
+      )
 
-      const csv = linhas
-        .map((cols) => cols.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))
-        .join('\r\n')
       baixar(
-        new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }),
+        new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
         `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.csv`,
       )
-      toast.success('CSV baixado!')
+      toast.success('Planilha baixada')
     } catch (e: any) {
-      toast.error('Erro ao gerar o CSV', { description: e.message })
+      toast.error('Erro ao gerar a planilha', { description: e.message })
     } finally {
       setGerandoCsv(false)
     }
   }
 
-  /** Monta o pacote de dados que alimenta a IA e o PDF. */
+  /** Monta o pacote de dados que alimenta a IA, o PDF e (parcialmente) o CSV. */
   const montarDados = async () => {
     const { currentStart } = getPeriodDates(period)
-    const [fbRes, insRes] = await Promise.all([
+    const [fbRes, insRes, acoesRes] = await Promise.all([
       restauranteId
         ? supabase.from('feedbacks_restaurante')
             .select('categoria, sentimento, texto_original, resumo')
@@ -215,10 +208,27 @@ export default function Reports() {
             .gte('created_at', currentStart.toISOString())
             .order('created_at', { ascending: false }).limit(15)
         : Promise.resolve({ data: [] as any[] }),
+      // Os insights também são do PERÍODO. Sem o corte, um relatório de 7 dias
+      // saía com insights de meses atrás ao lado de números de uma semana — e
+      // o texto que a IA escrevia a partir disso relacionava as duas coisas
+      // como se fossem do mesmo recorte.
       restauranteId
         ? supabase.from('insights').select('titulo, prioridade')
             .eq('restaurante_id', restauranteId).eq('ativo', true)
+            .gte('created_at', currentStart.toISOString())
             .order('created_at', { ascending: false }).limit(8)
+        : Promise.resolve({ data: [] as any[] }),
+      // Ações abertas — não dependem do período (são o que está sendo feito
+      // HOJE, não o que foi criado nesta janela). Já entravam no CSV; o PDF
+      // não tinha isto e ficava com metade da história: mostrava o que a IA
+      // detectou ("Insights do sistema") sem mostrar o que já está em
+      // andamento por causa disso.
+      restauranteId
+        ? supabase.from('acoes_operacionais')
+            .select('titulo_acao, status, prioridade, categoria')
+            .eq('restaurante_id', restauranteId)
+            .is('arquivada_em', null)
+            .order('ordem', { ascending: true })
         : Promise.resolve({ data: [] as any[] }),
     ])
     return {
@@ -227,7 +237,14 @@ export default function Reports() {
       kpis,
       estatisticas: stats,
       categorias: stats?.porCategoria ?? [],
+      // Os temas e o comportamento por dia/hora estão na tela desde sempre e
+      // não chegavam ao PDF: quem recebia o arquivo via um relatório sem os
+      // assuntos que os clientes citaram, que é a parte mais concreta dele.
+      temas,
+      porDiaSemana: stats?.porDiaSemana ?? [],
+      porFaixaHorario: stats?.porFaixaHorario ?? [],
       insights: insRes.data || [],
+      acoes: acoesRes.data || [],
       feedbacks: fbRes.data || [],
     }
   }
@@ -394,7 +411,11 @@ function LayoutNovo({
   // Sempre mostra todas as categorias que já têm alguma avaliação no
   // período — sem cortar, sem botão de "ver mais", sem linha inventada
   // pra categoria sem dado nenhum (decisão explícita do Raver).
-  const categoriasOrdenadas = [...(stats.porCategoria || [])].sort((a, b) => a.satisfacao - b.satisfacao)
+  //
+  // A ordenação (pior satisfação primeiro) já vem pronta de
+  // `buscarEstatisticasRelatorio` — é a mesma fonte que alimenta o CSV e o
+  // PDF, para os três nunca mais discordarem sobre a ordem das categorias.
+  const categoriasOrdenadas = stats.porCategoria || []
 
   const elogios = temas.filter((t) => t.tipo === 'elogio').slice(0, 6)
   const criticas = temas.filter((t) => t.tipo === 'reclamacao').slice(0, 6)
@@ -419,7 +440,7 @@ function LayoutNovo({
         <div />
         <div className="flex items-center gap-1.5 w-full sm:w-auto">
           <Select value={period} onValueChange={(v) => setPeriod(v as PeriodInfo)}>
-            <SelectTrigger className="w-[170px] rounded-md border-gray-200 bg-white">
+            <SelectTrigger className="h-9 w-[170px] rounded-md border-gray-200 bg-white">
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
@@ -428,20 +449,73 @@ function LayoutNovo({
               <SelectItem value="90d">Últimos 3 meses</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant="outline" onClick={handleExportCSV} disabled={semDados || gerandoCsv}
-            className="rounded-md border-gray-200 bg-white text-gray-700"
-          >
-            {gerandoCsv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Exportar
-          </Button>
-          <Button
-            onClick={handleExportPdf} disabled={semDados || gerandoPdf}
-            className="rounded-md bg-green-600 text-white hover:bg-green-700"
-          >
-            {gerandoPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-            PDF
-          </Button>
+          {/* Split button — pesquisado antes de refazer: um botão de export
+              com um padrão claro (baixar o formato mais usado) e variantes
+              (o resto, atrás da seta) é o desenho recomendado para "export"
+              em ferramenta de dados, e o ícone de seta-para-baixo só serve
+              para reforçar o rótulo, não decorar.
+
+              Trocado de verde chapado (bg-emerald-600, mesma cor "sucesso" de
+              um toast — confundia "baixei o arquivo" com "deu certo") para a
+              mesma linguagem escura do resto do app: um degradê curto de
+              cinza-900, com uma linha clara no alto de dentro simulando luz
+              pegando a quina — é o mesmo tratamento do botão de Salvar dos
+              popups de ação, então "isto é uma decisão" fica consistente em
+              vez de cada botão ter sua própria cor.
+
+              Formato: pílula (cantos totalmente arredondados), não retângulo
+              com pontas quadradas — e 36px de altura (h-9), abaixo dos 40px
+              anteriores, com o MESMO text-sm de antes; só o botão encolheu,
+              não a letra. O seletor de período ao lado encolhe junto, para
+              os dois ficarem na mesma linha de novo. */}
+          <div className="flex items-stretch">
+            <Button
+              onClick={handleExportPdf}
+              disabled={semDados || gerandoPdf || gerandoCsv}
+              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+            >
+              {gerandoPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Baixar
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="Escolher formato"
+                  disabled={semDados || gerandoPdf || gerandoCsv}
+                  className="h-9 rounded-l-none rounded-r-full bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[268px]">
+                {/* Cada item diz para que o arquivo SERVE, não só o que ele
+                    é: quem baixa escolhe entre ler e calcular. */}
+                <DropdownMenuItem onClick={handleExportPdf} disabled={gerandoPdf} className="gap-3 py-2.5">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Relatório em PDF</p>
+                    <p className="text-xs leading-snug text-gray-500">
+                      Com gráficos e análise escrita, pronto para enviar
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCSV} disabled={gerandoCsv} className="gap-3 py-2.5">
+                  <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Planilha (CSV)</p>
+                    <p className="text-xs leading-snug text-gray-500">
+                      Todos os dados, para abrir no Excel
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -462,11 +536,28 @@ function LayoutNovo({
         <>
           {/* 4 KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* MENSAGENS, não assuntos.
+                O card mostrava 113 quando o restaurante tinha recebido 53
+                mensagens — o 113 é a soma dos assuntos citados, porque quem
+                fala de comida e de atendimento na mesma mensagem gera dois.
+                Para o dono, "avaliação recebida" é uma pessoa que escreveu.
+
+                O detalhe traz os assuntos logo abaixo, e é ali que a diferença
+                fica explicada: é o primeiro lugar onde os dois números se
+                encontram, e sem isso o resto da página (que trabalha por
+                assunto) pareceria não bater com o topo. */}
             <KpiCardNovo
               icon={MessageCircle} iconBg="bg-blue-50" iconColor="text-blue-600"
-              label="Avaliações recebidas" valor={String(kpis.totalFeedbacks)}
-              trend={kpis.totalTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
-              prevTotal={kpis.prevTotal}
+              label="Avaliações recebidas" valor={String(kpis.totalMensagens)}
+              trend={kpis.mensagensTrend}
+              hasPrevData={kpis.prevMensagens > 0}
+              prevConfiavel={kpis.prevMensagens >= 3}
+              prevTotal={kpis.prevMensagens}
+              detalhe={
+                kpis.totalFeedbacks !== kpis.totalMensagens
+                  ? `${kpis.totalFeedbacks} assuntos citados`
+                  : undefined
+              }
             />
             <KpiCardNovo
               icon={Heart} iconBg="bg-green-50" iconColor="text-green-600"
@@ -533,7 +624,7 @@ function LayoutNovo({
                 <div>
                   <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-red-600">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    Tema que mais precisa de atenção
+                    Categoria que mais precisa de atenção
                   </p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{kpis.criticalTheme}</p>
                   <p className="mt-1 text-sm text-gray-600">
@@ -604,10 +695,29 @@ function LayoutNovo({
                       axisLine={false} tickLine={false} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]}
                       tick={{ fontSize: 10, fill: '#9ca3af' }}
                     />
-                    <ReferenceLine
-                      y={70} stroke="#3b82f6" strokeDasharray="4 3" strokeOpacity={0.8}
-                      label={{ value: 'Meta: 70%', position: 'insideTopRight', fill: '#3b82f6', fontSize: 11 }}
-                    />
+                    {/* A linha de referência é o período ANTERIOR, não uma meta.
+                        Havia um `y={70}` fixo rotulado "Meta: 70%" — um número
+                        que ninguém escolheu, igual para todo restaurante, e
+                        chamado de porcentagem quando o eixo é um índice de 0 a
+                        100 (que não é o mesmo que 70% dos clientes satisfeitos).
+                        Uma meta inventada faz o dono perseguir um número que não
+                        é dele; o período anterior é um fato, e responde a
+                        pergunta que ele realmente tem: melhorou ou piorou?
+
+                        Só aparece com base suficiente — a mesma trava que
+                        esconde as variações percentuais quando o período
+                        anterior tem menos de 3 avaliações. */}
+                    {kpis.hasPrevData && kpis.prevConfiavel && (
+                      <ReferenceLine
+                        y={kpis.prevSentiment} stroke="#94a3b8" strokeDasharray="4 3" strokeOpacity={0.9}
+                        label={{
+                          value: `Período anterior: ${kpis.prevSentiment}`,
+                          position: 'insideTopRight',
+                          fill: '#64748b',
+                          fontSize: 11,
+                        }}
+                      />
+                    )}
                     <ChartTooltip content={<SatisfacaoTooltip />} />
                     <Area
                       type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-1))" strokeWidth={2.5}
@@ -708,7 +818,7 @@ function LayoutNovo({
                 </div>
               )}
               <Link
-                to="/feedbacks"
+                to={`/feedbacks?periodo=${period}`}
                 className="mt-4 flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
               >
                 Ver todos os comentários <ChevronRight className="h-4 w-4" />

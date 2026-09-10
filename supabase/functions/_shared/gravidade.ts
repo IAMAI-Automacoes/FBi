@@ -73,6 +73,12 @@ const LEXICO: NivelLexico[] = [
       'comida estragada', 'estava estragado', 'estava estragada',
       'estava azedo', 'estava azeda', 'cheiro de estragado', 'gosto estranho',
       'mofo', 'mofado', 'mofada', 'carne crua', 'frango cru', 'cru no meio',
+      // Formas femininas e a variante "por dentro": faltavam, e "a carne
+      // estava crua no meio" — proteína malcozida, risco sanitário de
+      // verdade — escapava para G2. São expressões coladas em carne/frango de
+      // propósito: "estava cru" sozinho pegaria tomate cru, que é normal.
+      'crua no meio', 'cru por dentro', 'crua por dentro',
+      'carne estava crua', 'frango estava cru', 'carne mal cozida',
       // segurança e conduta
       'me agrediu', 'foi agredido', 'assedio', 'assediou',
       'racismo', 'racista', 'homofobia', 'homofobico',

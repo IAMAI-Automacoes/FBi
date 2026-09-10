@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { InsightCard } from '@/components/insights/InsightCard'
 import { FiltroCategorias } from '@/components/FiltroCategorias'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { CampoBusca } from '@/components/CampoBusca'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
@@ -33,10 +34,10 @@ const FEEDBACKS_MAX = 30
 const FEEDBACKS_PADRAO = 10
 
 export default function Insights() {
-  const [filterPriority, setFilterPriority] = useState<string>('Todos')
-  const [filterCategories, setFilterCategories] = useState<string[]>([])
-  const [showOnlyPinned, setShowOnlyPinned] = useState(false)
-  const [busca, setBusca] = useState('')
+  const [filterPriority, setFilterPriority] = useFiltroPersistente<string>('insights:prioridade', 'Todos')
+  const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>('insights:categorias', [])
+  const [showOnlyPinned, setShowOnlyPinned] = useFiltroPersistente('insights:fixados', false)
+  const [busca, setBusca] = useFiltroPersistente('insights:busca', '')
 
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)

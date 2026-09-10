@@ -24,22 +24,34 @@ export const PERIODOS: { value: PeriodoPreset; label: string }[] = [
   { value: 'all', label: 'Todo o período' },
 ]
 
-/** Texto do botão: o intervalo quando há um, senão o nome do atalho ativo. */
-export function rotuloPeriodo(periodo: PeriodoPreset, datas?: IntervaloDatas): string {
+/** Texto do botão: o intervalo quando há um, senão o nome do atalho ativo.
+ *  `presets` deixa reaproveitar isto quando os atalhos não são os 4 padrão
+ *  (Ranking usa semana/mês/trimestre em vez de dias corridos). */
+export function rotuloPeriodo<P extends string = PeriodoPreset>(
+  periodo: P,
+  datas?: IntervaloDatas,
+  presets?: { value: P; label: string }[],
+): string {
   if (datas) {
     const { from, to } = datas
     if (!to || isSameDay(from, to)) return format(from, "d 'de' MMM", { locale: ptBR })
     return `${format(from, 'd MMM', { locale: ptBR })} – ${format(to, 'd MMM', { locale: ptBR })}`
   }
-  return PERIODOS.find((p) => p.value === periodo)?.label ?? 'Período'
+  const lista = presets ?? (PERIODOS as unknown as { value: P; label: string }[])
+  return lista.find((p) => p.value === periodo)?.label ?? 'Período'
 }
 
-interface FiltroPeriodoProps {
-  periodo: PeriodoPreset
+interface FiltroPeriodoProps<P extends string = PeriodoPreset> {
+  periodo: P
   datas?: IntervaloDatas
-  onPeriodo: (p: PeriodoPreset) => void
+  onPeriodo: (p: P) => void
   onDatas: (d: IntervaloDatas | undefined) => void
   className?: string
+  /** Troca os 4 atalhos padrão (7/30/90 dias + todo o período) por outro
+   *  conjunto — o Ranking usa semana/mês/trimestre pra combinar com os
+   *  mesmos períodos que as regras de bonificação já usam, em vez de dias
+   *  corridos sem relação com nada. */
+  presets?: { value: P; label: string }[]
 }
 
 /**
@@ -62,16 +74,18 @@ interface FiltroPeriodoProps {
  * calendário tira o destaque do atalho. Deixar os dois ativos daria dois
  * recortes contraditórios sem dizer qual vale.
  */
-export function FiltroPeriodo({
+export function FiltroPeriodo<P extends string = PeriodoPreset>({
   periodo,
   datas,
   onPeriodo,
   onDatas,
   className,
-}: FiltroPeriodoProps) {
+  presets,
+}: FiltroPeriodoProps<P>) {
   const [aberto, setAberto] = useState(false)
+  const lista = presets ?? (PERIODOS as unknown as { value: P; label: string }[])
 
-  const escolherPreset = (p: PeriodoPreset) => {
+  const escolherPreset = (p: P) => {
     onPeriodo(p)
     onDatas(undefined)
     setAberto(false)
@@ -107,7 +121,7 @@ export function FiltroPeriodo({
           )}
         >
           <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
-          {rotuloPeriodo(periodo, datas)}
+          {rotuloPeriodo(periodo, datas, lista)}
           {/* Limpar sem abrir o popover: um X dentro do próprio botão. Não é um
               <button> aninhado — botão dentro de botão é HTML inválido e o
               clique do interno não chega. */}
@@ -139,7 +153,7 @@ export function FiltroPeriodo({
         <div className="flex flex-col">
           <div className="flex flex-col sm:flex-row">
             <div className="flex gap-0.5 border-b p-2 sm:flex-col sm:border-b-0 sm:border-r">
-              {PERIODOS.map((p) => (
+              {lista.map((p) => (
                 <button
                   key={p.value}
                   onClick={() => escolherPreset(p.value)}
