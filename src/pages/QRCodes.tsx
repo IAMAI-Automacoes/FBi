@@ -1,10 +1,13 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { subDays } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
 import type { Json } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +28,9 @@ import type { TextosDaPagina } from '@/components/LandingView'
 import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
+import { AberturasDoQr } from '@/components/AberturasDoQr'
+import { DIAS_DO_PERIODO, montarSerie, ROTULO_DO_PERIODO, type PeriodoQr } from '@/lib/aberturas-qr'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { toast } from 'sonner'
 
 interface QrData {
@@ -114,7 +120,20 @@ export default function QRCodes() {
   const [cropFile, setCropFile] = useState<File | null>(null)
 
   // Métricas
-  const [metricas, setMetricas] = useState<{ dia7: number; dia30: number; barras: { label: string; n: number }[] }>({ dia7: 0, dia30: 0, barras: [] })
+  /**
+   * O instante de cada abertura, cru — a série do gráfico e o número do card
+   * saem daqui, no navegador (`montarSerie`).
+   *
+   * A tela NÃO usa mais `qr_codes.total_scans`. Aquele contador é incrementado
+   * com uma leitura seguida de escrita (`qr-landing/index.ts`), então duas
+   * aberturas simultâneas leem o mesmo valor e gravam o mesmo +1: uma se
+   * perde. É por isso que ele fica abaixo do número de linhas em `qr_scans`
+   * (10 contra 11 neste restaurante). Cada linha de `qr_scans` é um INSERT e
+   * não se perde — contando por ela, o card e o gráfico sempre fecham.
+   */
+  const [aberturas, setAberturas] = useState<Date[]>([])
+  const [carregandoAberturas, setCarregandoAberturas] = useState(true)
+  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoQr>('qrcodes:periodo', '7d')
   const [aba, setAba] = useState('config')
 
   // Elementos livres do cartaz (textos e logo do dono)
@@ -211,11 +230,14 @@ export default function QRCodes() {
       editandoId: editandoId ?? undefined,
     }
     agendarQuadro()
-    // `passo` entra na lista porque o CANVAS é desmontado ao ir pro fundo da
-    // página do cliente e um novo nasce na volta — em branco. Sem redesenhar
-    // aqui, o cartaz voltava vazio e parecia que a configuração tinha sumido.
+    // `passo` e `aba` entram na lista porque o CANVAS é desmontado nas duas
+    // trocas — ao ir pro fundo da página do cliente, e ao sair para a aba de
+    // Informações (o Radix desmonta o conteúdo da aba que não está à vista).
+    // Nos dois casos um canvas novo nasce em branco na volta, e sem redesenhar
+    // aqui o cartaz voltava vazio, como se a configuração tivesse sumido.
+    // Medido: 72 mil pixels de tinta na primeira abertura, zero na volta.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrData, restaurantName, cfgEstilo, cfgImagem, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, passo])
+  }, [qrData, restaurantName, cfgEstilo, cfgImagem, cfgMensagem, cfgRotulo, cfgTitulo, cfgEstilos, elementos, editandoId, passo, aba])
 
   useEffect(() => () => {
     if (quadroRef.current != null) cancelAnimationFrame(quadroRef.current)
@@ -457,8 +479,9 @@ export default function QRCodes() {
         if (error) throw error
         qr = novo
       }
+      // As aberturas vêm num efeito próprio, que também reage à troca de
+      // período — buscá-las aqui daria uma requisição duplicada na abertura.
       setQrData({ id: qr.id, slug: qr.slug, total_scans: qr.total_scans ?? 0, papel_fundo: qr.papel_fundo ?? 'padrao', url_redirect: '' })
-      loadMetrics(qr.id)
     } catch (err: any) {
       toast.error('Erro ao carregar', { description: err.message })
     } finally {
@@ -466,27 +489,54 @@ export default function QRCodes() {
     }
   }
 
-  const loadMetrics = async (qrId: number) => {
-    const desde30 = new Date(Date.now() - 30 * 86400000)
-    const { data } = await supabase
-      .from('qr_scans')
-      .select('scanned_at')
-      .eq('qr_code_id', qrId)
-      .gte('scanned_at', desde30.toISOString())
-    const scans = (data ?? []).map((s: any) => new Date(s.scanned_at).getTime())
-    const agora = Date.now()
-    const dia7 = scans.filter((t) => t >= agora - 7 * 86400000).length
-    const dia30 = scans.length
-    // Barras dos últimos 7 dias
-    const barras: { label: string; n: number }[] = []
-    for (let i = 6; i >= 0; i--) {
-      const ini = new Date(); ini.setHours(0, 0, 0, 0); ini.setDate(ini.getDate() - i)
-      const fim = ini.getTime() + 86400000
-      const n = scans.filter((t) => t >= ini.getTime() && t < fim).length
-      barras.push({ label: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][ini.getDay()], n })
+  /**
+   * As aberturas deste QR no período escolhido — mais a janela anterior de
+   * mesmo tamanho, que é o que dá a comparação do card ("+40% vs. os 7 dias
+   * anteriores"). Sem ela o card não teria com o que comparar.
+   *
+   * Busca em páginas de mil porque é esse o teto de linhas que o PostgREST
+   * devolve numa requisição. Com "Tudo" num restaurante movimentado dá pra
+   * passar disso, e o gráfico sairia cortado sem avisar nada.
+   */
+  const buscarAberturas = async (qrId: number, qual: PeriodoQr): Promise<Date[]> => {
+    const desde = qual === 'tudo' ? null : subDays(new Date(), DIAS_DO_PERIODO[qual] * 2)
+    const PAGINA = 1000
+    const datas: Date[] = []
+    for (let de = 0; ; de += PAGINA) {
+      let consulta = supabase
+        .from('qr_scans')
+        .select('scanned_at')
+        .eq('qr_code_id', qrId)
+        .order('scanned_at', { ascending: true })
+        .range(de, de + PAGINA - 1)
+      if (desde) consulta = consulta.gte('scanned_at', desde.toISOString())
+      const { data, error } = await consulta
+      if (error) throw error
+      const lote = data ?? []
+      datas.push(...lote.map((s) => new Date(s.scanned_at as string)))
+      if (lote.length < PAGINA) break
     }
-    setMetricas({ dia7, dia30, barras })
+    return datas
   }
+
+  // Recarrega ao trocar o período. O `cancelado` evita que uma resposta lenta
+  // do período antigo chegue depois e sobrescreva a do período novo.
+  const qrId = qrData?.id ?? null
+  useEffect(() => {
+    if (!qrId) return
+    let cancelado = false
+    setCarregandoAberturas(true)
+    buscarAberturas(qrId, periodo)
+      .then((datas) => { if (!cancelado) setAberturas(datas) })
+      .catch((err: any) => {
+        if (!cancelado) toast.error('Não foi possível carregar as aberturas', { description: err.message })
+      })
+      .finally(() => { if (!cancelado) setCarregandoAberturas(false) })
+    return () => { cancelado = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrId, periodo])
+
+  const serie = useMemo(() => montarSerie(aberturas, periodo), [aberturas, periodo])
 
   const salvarCfg = async () => {
     if (!restauranteId) return
@@ -1187,7 +1237,6 @@ export default function QRCodes() {
     )
   }
 
-  const maxBar = Math.max(1, ...metricas.barras.map((b) => b.n))
   const personalizada = ehCorPersonalizada(cfgEstilo)
   const elementoSelecionado = elementos.find((e) => e.id === selecionado) ?? null
 
@@ -1203,6 +1252,30 @@ export default function QRCodes() {
             <TabsTrigger value="info">Informações</TabsTrigger>
           </TabsList>
           <div className="flex-1" />
+          {aba === 'info' && (
+            /* Ocupa o lugar que o botão de baixar deixa vago nesta aba, e é o
+               mesmo controle (e o mesmo desenho) do filtro da Visão Geral —
+               quem já usa o painel não precisa aprender outro.
+
+               A ordem é a do tempo: a semana, o mês, e então tudo. */
+            <ToggleGroup
+              type="single"
+              value={periodo}
+              onValueChange={(v) => v && setPeriodo(v as PeriodoQr)}
+              className="rounded-xl bg-muted p-1"
+            >
+              {(['7d', '30d', 'tudo'] as const).map((p) => (
+                <ToggleGroupItem
+                  key={p}
+                  value={p}
+                  aria-label={p === 'tudo' ? 'Desde o começo' : `Últimos ${ROTULO_DO_PERIODO[p]}`}
+                  className="h-9 px-4 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
+                >
+                  {ROTULO_DO_PERIODO[p]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
           {aba === 'config' && passo !== 'cliente' && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
                principal no corpo, o formato atrás da seta. Um menu inteiro só
@@ -1240,47 +1313,15 @@ export default function QRCodes() {
         </div>
 
         {/* ── INFORMAÇÕES ── */}
-        <TabsContent value="info" className="mt-0 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              { label: 'Aberturas totais', valor: qrData.total_scans },
-              { label: 'Últimos 7 dias', valor: metricas.dia7 },
-              { label: 'Últimos 30 dias', valor: metricas.dia30 },
-            ].map((m) => (
-              <Card key={m.label}>
-                <CardContent className="p-5 flex items-center gap-4">
-                  <div className="rounded-full bg-blue-100 p-3">
-                    <QrCode className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">{m.valor}</p>
-                    <p className="text-sm text-muted-foreground">{m.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Aberturas nos últimos 7 dias</CardTitle>
-              <CardDescription>Cada abertura ≈ um cliente indo dar feedback</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end justify-between gap-3 h-40">
-                {metricas.barras.map((b, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end gap-2 h-full">
-                    <span className="text-xs font-semibold text-muted-foreground">{b.n || ''}</span>
-                    <div
-                      className="w-full rounded-t-md bg-blue-500/80 transition-all"
-                      style={{ height: `${(b.n / maxBar) * 100}%`, minHeight: b.n > 0 ? 6 : 2 }}
-                    />
-                    <span className="text-[11px] text-muted-foreground">{b.label}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="info" className="mt-0">
+          {carregandoAberturas ? (
+            <div className="flex flex-col gap-6">
+              <Skeleton className="h-[118px] w-full" />
+              <Skeleton className="h-[380px] w-full" />
+            </div>
+          ) : (
+            <AberturasDoQr serie={serie} periodo={periodo} />
+          )}
         </TabsContent>
 
         {/* ── PERSONALIZAR ── */}
