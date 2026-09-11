@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { fonteCss, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { BASE_CLIENTE } from '@/components/CamadaDeElementos'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
-import { easyFeedLogo } from '@/assets/brand'
+import { logoDaLanding } from '@/assets/brand/logo-landing'
 
 /**
  * Os textos da página que o dono pode reescrever.
@@ -298,7 +298,15 @@ export function LandingView({
             Cresceu mais que o "feito com" de propósito: quem tem que ser lido
             ali é o nome do produto, não a preposição. */}
         <span style={{ borderRadius: 10, background: '#ffffff', padding: '7px 14px', display: 'inline-flex', boxShadow: '0 3px 12px rgba(0,0,0,0.18)' }}>
-          <img src={easyFeedLogo} alt="Easy Feed" style={{ height: 30, width: 'auto', objectFit: 'contain', display: 'block' }} />
+          {/* `width`/`height` declarados: sem eles o navegador não sabe o
+              tamanho antes de decodificar e o rodapé pula quando a logo entra. */}
+          <img
+            src={logoDaLanding}
+            alt="Easy Feed"
+            width={73}
+            height={30}
+            style={{ height: 30, width: 'auto', objectFit: 'contain', display: 'block' }}
+          />
         </span>
       </div>
     </div>

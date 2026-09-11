@@ -61,7 +61,12 @@ function App() {
   useEffect(() => {
     const slug = slugDaUrl()
     if (!slug) { setEstado('erro'); return }
-    fetch(`${SUPABASE_URL}/functions/v1/qr-landing`, {
+    // O `f.html` já disparou este mesmo pedido antes de o bundle terminar de
+    // baixar — aproveita a resposta em vez de pedir de novo. O `fetch` abaixo
+    // é o plano B: vale se o HTML for servido sem aquele script (um proxy que
+    // reescreve a página, um teste montando o componente sozinho).
+    const jaPedido = (window as unknown as { __dadosDoQr?: Promise<LandingData & { error?: string }> }).__dadosDoQr
+    const resposta = jaPedido ?? fetch(`${SUPABASE_URL}/functions/v1/qr-landing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -69,8 +74,8 @@ function App() {
         Authorization: `Bearer ${SUPABASE_ANON}`,
       },
       body: JSON.stringify({ slug }),
-    })
-      .then((r) => r.json())
+    }).then((r) => r.json())
+    resposta
       .then((d: LandingData & { error?: string }) => {
         if (!d || d.error) { setEstado('erro'); return }
         setData(d)

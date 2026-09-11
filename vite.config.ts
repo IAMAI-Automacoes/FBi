@@ -16,12 +16,13 @@ export default defineConfig(({ mode }) => ({
     minify: mode !== 'development',
     sourcemap: mode === 'development',
     rolldownOptions: {
-      // Duas entradas: o app (index.html) e a landing pública LEVE (f.html),
-      // que o cliente abre ao escanear o QR. A landing vira um bundle mínimo,
-      // sem o app de ~2 MB — o `.htaccess` reescreve /f/:slug → /f.html.
+      // Só o app. A landing pública (f.html), que o cliente abre ao escanear
+      // o QR, é compilada à parte por `vite.landing.config.ts`: ela troca o
+      // React pelo Preact, e `resolve.alias` vale para o build inteiro — não
+      // dá pra aplicar a uma entrada só dentro do mesmo build. O `.htaccess`
+      // reescreve /f/:slug → /f.html, que sai do outro build no mesmo dist.
       input: {
         main: path.resolve(__dirname, 'index.html'),
-        landing: path.resolve(__dirname, 'f.html'),
       },
       onwarn(warning, warn) {
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {

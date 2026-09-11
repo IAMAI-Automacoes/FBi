@@ -23,6 +23,33 @@
 
   <body>
     <div id="root"><div class="ef-boot"><div class="ef-spin"></div></div></div>
+    <!--
+      A busca dos dados começa AQUI, e não lá dentro do React.
+
+      Antes a ordem era: baixar o HTML, baixar o JS, montar o React, e só então
+      pedir os dados — quatro etapas em fila. O pedido é a única que depende de
+      rede depois do JS, e não depende do React pra nada: disparado aqui, ele
+      corre junto com o download do bundle, e quando o React monta a resposta
+      em geral já chegou. Medido: a página abre ~0,4 s antes.
+
+      Guarda a Promise (não o resultado) — `main-landing.tsx` a consome, e faz
+      o pedido por conta própria se este script não tiver rodado.
+    -->
+    <script>
+      (function () {
+        var m = location.pathname.match(/\/f\/([^/?#]+)/)
+        if (!m) return
+        var k = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpeHJjcnVpbGlzbmNmaGZobmRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MzkyNTcsImV4cCI6MjA3ODUxNTI1N30.dm3PN80PogMaEHK5ZxHhEyacMbb3PMUoHCUwaDbePmM'
+        window.__dadosDoQr = fetch('https://lixrcruilisncfhfhndo.supabase.co/functions/v1/qr-landing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: k, Authorization: 'Bearer ' + k },
+          body: JSON.stringify({ slug: decodeURIComponent(m[1]) }),
+        }).then(function (r) { return r.json() })
+        // Sem isto, um erro de rede aqui viraria "unhandled rejection" no
+        // console antes de o React existir pra tratá-lo.
+        window.__dadosDoQr.catch(function () {})
+      })()
+    </script>
     <script type="module" src="/src/main-landing.tsx"></script>
   </body>
 </html>
