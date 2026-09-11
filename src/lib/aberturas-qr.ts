@@ -13,10 +13,10 @@ import { addDays, differenceInCalendarDays, startOfDay, subDays } from 'date-fns
  * `subDays`), e duas telas com a mesma palavra medindo coisas diferentes é
  * pior que qualquer uma das duas escolhas.
  */
-export type PeriodoQr = '7d' | '30d' | 'tudo'
+export type PeriodoQr = '7d' | '30d' | 'total'
 
-/** Quantos dias cada janela fechada cobre. `tudo` não tem tamanho fixo. */
-export const DIAS_DO_PERIODO: Record<Exclude<PeriodoQr, 'tudo'>, number> = {
+/** Quantos dias cada atalho cobre. `total` não tem tamanho fixo. */
+export const DIAS_DO_PERIODO: Record<Exclude<PeriodoQr, 'total'>, number> = {
   '7d': 7,
   '30d': 30,
 }
@@ -24,7 +24,20 @@ export const DIAS_DO_PERIODO: Record<Exclude<PeriodoQr, 'tudo'>, number> = {
 export const ROTULO_DO_PERIODO: Record<PeriodoQr, string> = {
   '7d': '7 dias',
   '30d': '30 dias',
-  tudo: 'Tudo',
+  total: 'Total',
+}
+
+/** Os atalhos do filtro, na ordem do tempo: a semana, o mês, e então tudo. */
+export const PRESETS_QR: { value: PeriodoQr; label: string }[] = [
+  { value: '7d', label: 'Últimos 7 dias' },
+  { value: '30d', label: 'Últimos 30 dias' },
+  { value: 'total', label: 'Total' },
+]
+
+/** Intervalo escolhido no calendário. `to` ausente = só o dia de `from`. */
+export interface IntervaloDeDatas {
+  from: Date
+  to?: Date
 }
 
 /** Acima disto, um ponto por dia vira uma serra ilegível — passa a semanal. */
@@ -58,13 +71,16 @@ export interface SerieDeAberturas {
   /** Aberturas dentro do período escolhido. */
   total: number
   /**
-   * Aberturas na janela anterior, do mesmo tamanho. `null` em `tudo`, que não
+   * Aberturas na janela anterior, do mesmo tamanho. `null` em `total`, que não
    * tem "anterior" — é o começo de tudo.
    */
   anterior: number | null
   porSemana: boolean
   /** Dia da primeira abertura registrada, ou `null` se nunca houve uma. */
   primeiraAbertura: Date | null
+  /** As pontas da janela desenhada — o que o card mostra ao lado do número. */
+  inicio: Date
+  fim: Date
 }
 
 function rotulo(inicio: Date, diasNaJanela: number, porSemana: boolean): string {
@@ -87,37 +103,51 @@ export function montarSerie(
   datas: Date[],
   periodo: PeriodoQr,
   agora: Date = new Date(),
+  intervalo?: IntervaloDeDatas,
 ): SerieDeAberturas {
   const hoje = startOfDay(agora)
   const ordenadas = [...datas].sort((a, b) => a.getTime() - b.getTime())
   const primeiraAbertura = ordenadas.length > 0 ? startOfDay(ordenadas[0]) : null
 
-  // O primeiro dia do gráfico. Em `tudo`, a primeira abertura de todas — e o
-  // dia de hoje quando ainda não houve nenhuma, pra série nunca sair vazia.
+  // Onde a janela começa e termina.
+  //
+  // O intervalo do calendário manda quando existe — é a escolha mais explícita
+  // que o dono pode fazer, e ela é a única que não termina necessariamente
+  // hoje: dá pra olhar uma semana de dois meses atrás.
   let inicio: Date
-  if (periodo === 'tudo') {
-    inicio = primeiraAbertura ?? hoje
+  let fim: Date
+  if (intervalo) {
+    inicio = startOfDay(intervalo.from)
+    // Sem data de fim, o calendário quer dizer "só este dia".
+    fim = startOfDay(intervalo.to ?? intervalo.from)
+    // Invertido no teclado, o intervalo se acomoda em vez de sumir da tela.
+    if (inicio > fim) [inicio, fim] = [fim, inicio]
   } else {
-    inicio = subDays(hoje, DIAS_DO_PERIODO[periodo] - 1)
+    fim = hoje
+    // Em `total`, a primeira abertura de todas — e o dia de hoje quando ainda
+    // não houve nenhuma, pra série nunca sair vazia.
+    inicio = periodo === 'total' ? (primeiraAbertura ?? hoje) : subDays(hoje, DIAS_DO_PERIODO[periodo] - 1)
   }
-  if (inicio > hoje) inicio = hoje
+  if (inicio > fim) inicio = fim
 
-  const diasNaJanela = differenceInCalendarDays(hoje, inicio) + 1
+  const diasNaJanela = differenceInCalendarDays(fim, inicio) + 1
   const porSemana = diasNaJanela > MAX_PONTOS_DIARIOS
   const passo = porSemana ? 7 : 1
 
   const pontos: PontoDeAbertura[] = []
   for (let d = 0; d < diasNaJanela; d += passo) {
     const ini = addDays(inicio, d)
-    // O último balde é aparado em hoje: uma semana que ainda não terminou não
-    // deve parecer completa nem contar dias que ainda não existem.
-    const fim = addDays(ini, Math.min(passo - 1, diasNaJanela - 1 - d))
+    // O último balde é aparado no fim da janela: uma semana que ainda não
+    // terminou não deve parecer completa nem contar dias que não existem.
+    const fimDoBalde = addDays(ini, Math.min(passo - 1, diasNaJanela - 1 - d))
     pontos.push({
       label: rotulo(ini, diasNaJanela, porSemana),
       inicio: ini,
-      fim,
+      fim: fimDoBalde,
       aberturas: 0,
-      emAndamento: d + passo >= diasNaJanela,
+      // Só o último balde, e só quando a janela chega em hoje: um intervalo
+      // que terminou no mês passado não tem nada "ainda contando".
+      emAndamento: d + passo >= diasNaJanela && fimDoBalde >= hoje,
     })
   }
 
@@ -138,17 +168,20 @@ export function montarSerie(
     total++
   }
 
+  // A janela anterior: mesma duração, colada antes desta. Serve tanto para os
+  // atalhos quanto para um intervalo do calendário — "a semana do feriado
+  // contra a semana antes dele" é exatamente a comparação que se quer fazer.
+  // `total` é o único sem anterior: antes dele não há nada.
   let anterior: number | null = null
-  if (periodo !== 'tudo') {
-    const dias = DIAS_DO_PERIODO[periodo]
-    const inicioAnterior = subDays(inicio, dias)
+  if (intervalo || periodo !== 'total') {
+    const inicioAnterior = subDays(inicio, diasNaJanela)
     anterior = ordenadas.filter((d) => {
       const dia = startOfDay(d)
       return dia >= inicioAnterior && dia < inicio
     }).length
   }
 
-  return { pontos, total, anterior, porSemana, primeiraAbertura }
+  return { pontos, total, anterior, porSemana, primeiraAbertura, inicio, fim }
 }
 
 /**

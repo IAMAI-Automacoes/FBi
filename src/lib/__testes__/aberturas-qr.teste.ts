@@ -35,7 +35,7 @@ const diasAtras = (n: number, hora = 10) =>
 {
   const datas = [diasAtras(0), diasAtras(0), diasAtras(2), diasAtras(6)]
   const s = montarSerie(datas, '7d', AGORA)
-  ok('conta tudo que caiu na janela', s.total === 4, String(s.total))
+  ok('conta total que caiu na janela', s.total === 4, String(s.total))
   ok('duas no mesmo dia empilham no mesmo ponto', s.pontos[6].aberturas === 2, String(s.pontos[6].aberturas))
   ok('a de 2 dias atrás caiu no ponto certo', s.pontos[4].aberturas === 1, String(s.pontos[4].aberturas))
   ok('dia sem abertura fica zerado', s.pontos[5].aberturas === 0, String(s.pontos[5].aberturas))
@@ -55,29 +55,29 @@ const diasAtras = (n: number, hora = 10) =>
 }
 
 // ---------------------------------------------------------------------------
-// "Tudo": começa na primeira abertura e vira semanal quando estica
+// "Total": começa na primeira abertura e vira semanal quando estica
 // ---------------------------------------------------------------------------
 {
-  const s = montarSerie([diasAtras(3), diasAtras(0)], 'tudo', AGORA)
-  ok('tudo: começa no dia da primeira abertura', s.pontos.length === 4, String(s.pontos.length))
-  ok('tudo: não tem período anterior pra comparar', s.anterior === null, String(s.anterior))
-  ok('tudo: sabe a data da primeira abertura', s.primeiraAbertura?.getDate() === 6, String(s.primeiraAbertura))
-  ok('tudo: ainda é diário quando é curto', !s.porSemana)
+  const s = montarSerie([diasAtras(3), diasAtras(0)], 'total', AGORA)
+  ok('total: começa no dia da primeira abertura', s.pontos.length === 4, String(s.pontos.length))
+  ok('total: não tem período anterior pra comparar', s.anterior === null, String(s.anterior))
+  ok('total: sabe a data da primeira abertura', s.primeiraAbertura?.getDate() === 6, String(s.primeiraAbertura))
+  ok('total: ainda é diário quando é curto', !s.porSemana)
 
-  const longo = montarSerie([diasAtras(100), diasAtras(0)], 'tudo', AGORA)
-  ok('tudo: passou de um mês, agrupa por semana', longo.porSemana)
-  ok('tudo: semanal encurta a série', longo.pontos.length <= 16, String(longo.pontos.length))
-  ok('tudo: nenhuma abertura se perde ao agrupar', longo.total === 2, String(longo.total))
-  ok('tudo: o último balde termina hoje',
+  const longo = montarSerie([diasAtras(100), diasAtras(0)], 'total', AGORA)
+  ok('total: passou de um mês, agrupa por semana', longo.porSemana)
+  ok('total: semanal encurta a série', longo.pontos.length <= 16, String(longo.pontos.length))
+  ok('total: nenhuma abertura se perde ao agrupar', longo.total === 2, String(longo.total))
+  ok('total: o último balde termina hoje',
     longo.pontos[longo.pontos.length - 1].fim.getDate() === 9,
     String(longo.pontos[longo.pontos.length - 1].fim))
 
-  const limite = montarSerie([diasAtras(MAX_PONTOS_DIARIOS - 1)], 'tudo', AGORA)
-  ok('tudo: exatamente no limite ainda é diário', !limite.porSemana)
+  const limite = montarSerie([diasAtras(MAX_PONTOS_DIARIOS - 1)], 'total', AGORA)
+  ok('total: exatamente no limite ainda é diário', !limite.porSemana)
 
-  const vazio = montarSerie([], 'tudo', AGORA)
-  ok('tudo: sem nenhuma abertura, a série não fica vazia', vazio.pontos.length === 1, String(vazio.pontos.length))
-  ok('tudo: sem abertura, total zero', vazio.total === 0, String(vazio.total))
+  const vazio = montarSerie([], 'total', AGORA)
+  ok('total: sem nenhuma abertura, a série não fica vazia', vazio.pontos.length === 1, String(vazio.pontos.length))
+  ok('total: sem abertura, total zero', vazio.total === 0, String(vazio.total))
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ const diasAtras = (n: number, hora = 10) =>
   const nada = tendenciaDeAberturas(0, 0)
   ok('sem nada dos dois lados não inventa variação', nada.trend === '—', nada.trend)
 
-  ok('em "tudo" (anterior nulo) não há comparação', !tendenciaDeAberturas(9, null).hasPrevData)
+  ok('em "total" (anterior nulo) não há comparação', !tendenciaDeAberturas(9, null).hasPrevData)
 }
 
 // ---------------------------------------------------------------------------
@@ -135,11 +135,56 @@ const diasAtras = (n: number, hora = 10) =>
     String(s.pontos.filter((p) => p.emAndamento).length))
   ok('o ponto em andamento é o de hoje', s.pontos[6].emAndamento)
 
-  const longo = montarSerie([diasAtras(100), diasAtras(0)], 'tudo', AGORA)
+  const longo = montarSerie([diasAtras(100), diasAtras(0)], 'total', AGORA)
   const ultimo = longo.pontos[longo.pontos.length - 1]
   ok('no semanal, a semana que ainda corre vem marcada', ultimo.emAndamento)
   ok('as semanas fechadas não vêm marcadas',
     longo.pontos.slice(0, -1).every((p) => !p.emAndamento))
+}
+
+// ---------------------------------------------------------------------------
+// Intervalo escolhido no calendário
+// ---------------------------------------------------------------------------
+{
+  // 03/09 a 05/09 — três dias, terminados antes de hoje (09/09).
+  const janela = { from: new Date(2026, 8, 3), to: new Date(2026, 8, 5) }
+  const dentro = [diasAtras(6), diasAtras(5), diasAtras(4), diasAtras(4)] // 03, 04, 05, 05
+  const fora = [diasAtras(0), diasAtras(7)]                              // 09 e 02
+  const s = montarSerie([...dentro, ...fora], '7d', AGORA, janela)
+
+  ok('intervalo: a janela tem os dias escolhidos', s.pontos.length === 3, String(s.pontos.length))
+  ok('intervalo: conta só o que caiu dentro', s.total === 4, String(s.total))
+  ok('intervalo: começa no dia escolhido', s.inicio.getDate() === 3, String(s.inicio))
+  ok('intervalo: termina no dia escolhido, não hoje', s.fim.getDate() === 5, String(s.fim))
+  ok('intervalo: o atalho é ignorado quando há intervalo', s.pontos.length !== 7, String(s.pontos.length))
+  ok('intervalo: nada fica "ainda contando" numa janela que já fechou',
+    s.pontos.every((p) => !p.emAndamento))
+  ok('intervalo: compara com os 3 dias anteriores (31/08 a 02/09)', s.anterior === 1, String(s.anterior))
+
+  const umDia = montarSerie([diasAtras(6), diasAtras(6), diasAtras(5)], '7d', AGORA, { from: new Date(2026, 8, 3) })
+  ok('intervalo: sem data de fim é um dia só', umDia.pontos.length === 1, String(umDia.pontos.length))
+  ok('intervalo: um dia só conta o daquele dia', umDia.total === 2, String(umDia.total))
+
+  const invertido = montarSerie(dentro, '7d', AGORA, { from: new Date(2026, 8, 5), to: new Date(2026, 8, 3) })
+  ok('intervalo: digitado de trás pra frente, se acomoda', invertido.total === 4, String(invertido.total))
+  ok('intervalo: e endireita as pontas', invertido.inicio.getDate() === 3 && invertido.fim.getDate() === 5,
+    `${invertido.inicio} -> ${invertido.fim}`)
+
+  const longo = montarSerie([], '7d', AGORA, { from: new Date(2026, 5, 1), to: new Date(2026, 8, 5) })
+  ok('intervalo: janela longa também agrupa por semana', longo.porSemana)
+
+  const ateHoje = montarSerie([], '7d', AGORA, { from: new Date(2026, 8, 3), to: new Date(2026, 8, 9) })
+  ok('intervalo: se alcança hoje, o último dia fica "ainda contando"',
+    ateHoje.pontos[ateHoje.pontos.length - 1].emAndamento)
+}
+
+// O card mostra as pontas da janela — elas precisam existir sempre.
+{
+  for (const p of ['7d', '30d', 'total'] as const) {
+    const s = montarSerie([diasAtras(2)], p, AGORA)
+    ok(`${p}: a série sabe onde começa e termina`, !!s.inicio && !!s.fim, `${s.inicio} ${s.fim}`)
+    ok(`${p}: termina hoje quando não há intervalo`, s.fim.getDate() === 9, String(s.fim))
+  }
 }
 
 if (falhas > 0) {

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
@@ -29,7 +28,8 @@ import { BarraElemento } from '@/components/EditorCartaz'
 import { ImageCropper } from '@/components/ImageCropper'
 import { SeletorCor } from '@/components/SeletorCor'
 import { AberturasDoQr } from '@/components/AberturasDoQr'
-import { DIAS_DO_PERIODO, montarSerie, ROTULO_DO_PERIODO, type PeriodoQr } from '@/lib/aberturas-qr'
+import { DIAS_DO_PERIODO, montarSerie, PRESETS_QR, type IntervaloDeDatas, type PeriodoQr } from '@/lib/aberturas-qr'
+import { FiltroPeriodo } from '@/components/FiltroPeriodo'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { toast } from 'sonner'
 
@@ -134,6 +134,8 @@ export default function QRCodes() {
   const [aberturas, setAberturas] = useState<Date[]>([])
   const [carregandoAberturas, setCarregandoAberturas] = useState(true)
   const [periodo, setPeriodo] = useFiltroPersistente<PeriodoQr>('qrcodes:periodo', '7d')
+  /** Datas escolhidas no calendário. Quando existem, mandam no lugar do atalho. */
+  const [intervalo, setIntervalo] = useState<IntervaloDeDatas | undefined>()
   const [aba, setAba] = useState('config')
 
   // Elementos livres do cartaz (textos e logo do dono)
@@ -498,8 +500,21 @@ export default function QRCodes() {
    * devolve numa requisição. Com "Tudo" num restaurante movimentado dá pra
    * passar disso, e o gráfico sairia cortado sem avisar nada.
    */
-  const buscarAberturas = async (qrId: number, qual: PeriodoQr): Promise<Date[]> => {
-    const desde = qual === 'tudo' ? null : subDays(new Date(), DIAS_DO_PERIODO[qual] * 2)
+  const buscarAberturas = async (
+    qrId: number,
+    qual: PeriodoQr,
+    janela: IntervaloDeDatas | undefined,
+  ): Promise<Date[]> => {
+    // Com datas do calendário, o recuo é o dobro da janela escolhida — a
+    // metade de trás é o período anterior com que o card compara.
+    let desde: Date | null
+    if (janela) {
+      const fim = janela.to ?? janela.from
+      const dias = Math.max(1, Math.round(Math.abs(fim.getTime() - janela.from.getTime()) / 86400000) + 1)
+      desde = subDays(janela.from, dias)
+    } else {
+      desde = qual === 'total' ? null : subDays(new Date(), DIAS_DO_PERIODO[qual] * 2)
+    }
     const PAGINA = 1000
     const datas: Date[] = []
     for (let de = 0; ; de += PAGINA) {
@@ -510,6 +525,13 @@ export default function QRCodes() {
         .order('scanned_at', { ascending: true })
         .range(de, de + PAGINA - 1)
       if (desde) consulta = consulta.gte('scanned_at', desde.toISOString())
+      // Um intervalo antigo não precisa de tudo o que veio depois dele: sem
+      // este teto, olhar uma semana de março carregaria o ano inteiro.
+      if (janela) {
+        const ate = new Date(janela.to ?? janela.from)
+        ate.setHours(23, 59, 59, 999)
+        consulta = consulta.lte('scanned_at', ate.toISOString())
+      }
       const { data, error } = await consulta
       if (error) throw error
       const lote = data ?? []
@@ -526,7 +548,7 @@ export default function QRCodes() {
     if (!qrId) return
     let cancelado = false
     setCarregandoAberturas(true)
-    buscarAberturas(qrId, periodo)
+    buscarAberturas(qrId, periodo, intervalo)
       .then((datas) => { if (!cancelado) setAberturas(datas) })
       .catch((err: any) => {
         if (!cancelado) toast.error('Não foi possível carregar as aberturas', { description: err.message })
@@ -534,9 +556,12 @@ export default function QRCodes() {
       .finally(() => { if (!cancelado) setCarregandoAberturas(false) })
     return () => { cancelado = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrId, periodo])
+  }, [qrId, periodo, intervalo])
 
-  const serie = useMemo(() => montarSerie(aberturas, periodo), [aberturas, periodo])
+  const serie = useMemo(
+    () => montarSerie(aberturas, periodo, new Date(), intervalo),
+    [aberturas, periodo, intervalo],
+  )
 
   const salvarCfg = async () => {
     if (!restauranteId) return
@@ -1253,28 +1278,21 @@ export default function QRCodes() {
           </TabsList>
           <div className="flex-1" />
           {aba === 'info' && (
-            /* Ocupa o lugar que o botão de baixar deixa vago nesta aba, e é o
-               mesmo controle (e o mesmo desenho) do filtro da Visão Geral —
-               quem já usa o painel não precisa aprender outro.
+            /* O mesmo filtro da página de Feedbacks, com os atalhos desta tela.
+               Ele já traz as três formas de escolher num controle só: atalho,
+               arrastar no calendário e digitar as duas datas — e o dono aprende
+               o filtro uma vez, em vez de um por página.
 
-               A ordem é a do tempo: a semana, o mês, e então tudo. */
-            <ToggleGroup
-              type="single"
-              value={periodo}
-              onValueChange={(v) => v && setPeriodo(v as PeriodoQr)}
-              className="rounded-xl bg-muted p-1"
-            >
-              {(['7d', '30d', 'tudo'] as const).map((p) => (
-                <ToggleGroupItem
-                  key={p}
-                  value={p}
-                  aria-label={p === 'tudo' ? 'Desde o começo' : `Últimos ${ROTULO_DO_PERIODO[p]}`}
-                  className="h-9 px-4 text-sm data-[state=on]:bg-white data-[state=on]:shadow-sm"
-                >
-                  {ROTULO_DO_PERIODO[p]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+               Sem `<PeriodoQr>` explícito: o parâmetro de tipo é inferido de
+               `periodo` e `presets`, e escrevê-lo aqui quebra o transform do
+               dev server, que injeta atributos logo após o nome da tag. */
+            <FiltroPeriodo
+              periodo={periodo}
+              datas={intervalo}
+              onPeriodo={setPeriodo}
+              onDatas={setIntervalo}
+              presets={PRESETS_QR}
+            />
           )}
           {aba === 'config' && passo !== 'cliente' && (
             /* Mesmo botão dividido do "Baixar QRCodes" dos garçons: a ação
@@ -1320,7 +1338,7 @@ export default function QRCodes() {
               <Skeleton className="h-[380px] w-full" />
             </div>
           ) : (
-            <AberturasDoQr serie={serie} periodo={periodo} />
+            <AberturasDoQr serie={serie} periodo={periodo} intervalo={intervalo} />
           )}
         </TabsContent>
 

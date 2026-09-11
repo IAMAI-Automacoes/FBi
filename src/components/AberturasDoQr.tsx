@@ -7,12 +7,13 @@ import {
   escalaDoEixo,
   ROTULO_DO_PERIODO,
   tendenciaDeAberturas,
+  type IntervaloDeDatas,
   type PeriodoQr,
   type SerieDeAberturas,
 } from '@/lib/aberturas-qr'
 
 const chartConfig = {
-  aberturas: { label: 'Aberturas', color: 'hsl(var(--chart-2))' },
+  aberturas: { label: 'Aberturas', color: 'hsl(var(--chart-1))' },
 }
 
 /** Acima disto a linha vira um colar de contas — só o ponto sob o mouse. */
@@ -51,11 +52,11 @@ function BalaoDeAberturas({
     )
   }
   return (
-    <div className="flex flex-col items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs text-white shadow-md">
+    <div className="flex flex-col items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white shadow-md">
       <span className="whitespace-nowrap font-semibold">
         {d.aberturas} abertura{d.aberturas !== 1 ? 's' : ''}
       </span>
-      <span className="whitespace-nowrap text-[11px] text-blue-50/90">
+      <span className="whitespace-nowrap text-[11px] text-emerald-50/90">
         {d.intervalo}
         {aviso}
       </span>
@@ -66,6 +67,8 @@ function BalaoDeAberturas({
 interface Props {
   serie: SerieDeAberturas
   periodo: PeriodoQr
+  /** Preenchido quando o dono escolheu datas no calendário. */
+  intervalo?: IntervaloDeDatas
 }
 
 /**
@@ -78,8 +81,8 @@ interface Props {
  *
  * Agora o período é uma escolha só, e ela move o número e a curva juntos.
  */
-export function AberturasDoQr({ serie, periodo }: Props) {
-  const { pontos, total, anterior, porSemana, primeiraAbertura } = serie
+export function AberturasDoQr({ serie, periodo, intervalo }: Props) {
+  const { pontos, total, anterior, porSemana, primeiraAbertura, inicio, fim } = serie
   const tendencia = tendenciaDeAberturas(total, anterior)
   const nuncaAbriram = primeiraAbertura === null
 
@@ -100,16 +103,27 @@ export function AberturasDoQr({ serie, periodo }: Props) {
   const comBolinha = dados.length <= MAX_PONTOS_COM_BOLINHA
 
   const rotulo = ROTULO_DO_PERIODO[periodo]
-  const tituloKpi = periodo === 'tudo' ? 'Aberturas no total' : `Aberturas em ${rotulo}`
+  // Com datas escolhidas a mão, o atalho não vale mais e dizer "em 7 dias"
+  // seria mentira; e "Total" não é um período, é a soma de todos eles.
+  const tituloKpi = intervalo
+    ? 'Aberturas no período'
+    : periodo === 'total'
+      ? 'Aberturas no total'
+      : `Aberturas em ${rotulo}`
 
-  // Em "Tudo" a data de início já aparece embaixo do número ("Desde 08/06"),
-  // e repetir o intervalo do lado seria dizer a mesma coisa duas vezes.
-  const primeiro = pontos[0]
-  const ultimo = pontos[pontos.length - 1]
-  const intervaloDaJanela =
-    periodo === 'tudo' || !primeiro || nuncaAbriram
-      ? null
-      : `${dataCurta(primeiro.inicio)} – ${dataCurta(ultimo.fim)}`
+  // Quantos dias esta janela cobre — é o que o rodapé do card compara ("vs. os
+  // 12 dias anteriores"), e num intervalo do calendário só se sabe contando.
+  const diasNaJanela = Math.round((fim.getTime() - inicio.getTime()) / 86400000) + 1
+  const comparacao = diasNaJanela === 1 ? 'vs. o dia anterior' : `vs. os ${diasNaJanela} dias anteriores`
+
+  // As pontas da janela, do outro lado do card. Em "Total" sem nenhuma
+  // abertura não há janela nenhuma a mostrar.
+  // Só dá pra afirmar "nunca abriram" quando se está olhando tudo: com um
+  // recorte, o que a busca trouxe é só daquele pedaço, e dizer que o QR nunca
+  // foi escaneado seria falso — ele só não foi NAQUELES dias.
+  const olhandoTudo = periodo === 'total' && !intervalo
+  const semJanela = olhandoTudo && nuncaAbriram
+  const intervaloDaJanela = semJanela ? null : `${dataCurta(inicio)} – ${dataCurta(fim)}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,7 +136,7 @@ export function AberturasDoQr({ serie, periodo }: Props) {
             <div>
               <p className="text-sm font-bold text-muted-foreground">{tituloKpi}</p>
               <p className="mt-0.5 text-4xl font-bold tabular-nums text-foreground">{total}</p>
-              {periodo === 'tudo' ? (
+              {periodo === 'total' && !intervalo ? (
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   {primeiraAbertura
                     ? `Desde ${dataCurta(primeiraAbertura)}`
@@ -134,7 +148,7 @@ export function AberturasDoQr({ serie, periodo }: Props) {
                   hasPrevData={tendencia.hasPrevData}
                   prevConfiavel={tendencia.prevConfiavel}
                   prevTotal={tendencia.prevTotal}
-                  suffix={`vs. os ${rotulo} anteriores`}
+                  suffix={comparacao}
                   className="mt-1.5"
                 />
               )}
@@ -163,22 +177,29 @@ export function AberturasDoQr({ serie, periodo }: Props) {
           </p>
         </CardHeader>
         <CardContent className="p-5 pt-6">
-          {nuncaAbriram ? (
+          {total === 0 ? (
             <div className="flex h-[280px] flex-col items-center justify-center gap-1 text-center">
               <QrCode className="mb-1 h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-foreground">Nenhuma abertura ainda</p>
+              <p className="text-sm font-medium text-foreground">
+                {olhandoTudo ? 'Nenhuma abertura ainda' : 'Nenhuma abertura neste período'}
+              </p>
               <p className="max-w-xs text-xs text-muted-foreground">
-                Assim que alguém escanear o QR Code, as aberturas aparecem aqui.
+                {olhandoTudo
+                  ? 'Assim que alguém escanear o QR Code, as aberturas aparecem aqui.'
+                  : 'Escolha um período maior ou outras datas para ver o movimento.'}
               </p>
             </div>
           ) : (
             <div className="h-[280px] w-full">
               <ChartContainer config={chartConfig} className="h-full w-full">
-                <AreaChart data={dados} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                {/* `right` maior que os 10 da Visão Geral: lá o gráfico tem o painel de
+                    categorias ao lado, então o último rótulo do eixo nunca chega na
+                    borda. Aqui a curva ocupa a largura toda e "Dom" saía cortado. */}
+                <AreaChart data={dados} margin={{ top: 10, right: 24, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="corAberturas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid
@@ -205,12 +226,12 @@ export function AberturasDoQr({ serie, periodo }: Props) {
                   />
                   <ChartTooltip
                     content={<BalaoDeAberturas />}
-                    cursor={{ stroke: 'hsl(var(--chart-2))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    cursor={{ stroke: 'hsl(var(--chart-1))', strokeWidth: 1, strokeDasharray: '4 4' }}
                   />
                   <Area
                     type="monotone"
                     dataKey="aberturas"
-                    stroke="hsl(var(--chart-2))"
+                    stroke="hsl(var(--chart-1))"
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#corAberturas)"
@@ -219,7 +240,7 @@ export function AberturasDoQr({ serie, periodo }: Props) {
                       comBolinha
                         ? {
                             r: 4,
-                            fill: 'hsl(var(--chart-2))',
+                            fill: 'hsl(var(--chart-1))',
                             stroke: 'white',
                             strokeWidth: 2,
                           }
@@ -227,7 +248,7 @@ export function AberturasDoQr({ serie, periodo }: Props) {
                     }
                     activeDot={{
                       r: 6,
-                      fill: 'hsl(var(--chart-2))',
+                      fill: 'hsl(var(--chart-1))',
                       stroke: 'white',
                       strokeWidth: 2,
                     }}
