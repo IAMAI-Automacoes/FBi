@@ -127,14 +127,29 @@ export function AberturasDoQr({ serie, periodo, intervalo }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="shadow-subtle">
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+      <Card className="shadow-subtle w-full max-w-sm">
+        {/* `sm:p-5` junto do `p-5`: o CardContent padrão é `p-6 sm:p-8 pt-0
+            sm:pt-0`, feito para cards que têm CardHeader em cima. Este não tem,
+            e sem a variante responsiva o `sm:pt-0` sobrevivia — daí o título
+            colado no topo e 32px sobrando embaixo. */}
+        <CardContent className="flex items-center gap-3 p-5 sm:p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-slate-700">
               <QrCode className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-muted-foreground">{tituloKpi}</p>
+              <p className="text-sm font-bold text-muted-foreground">
+                {tituloKpi}
+                {/* As datas ao lado do título, que é de quem elas falam: num
+                    card estreito, soltas na outra ponta pareciam pertencer ao
+                    número. E "em 7 dias" não diz QUAIS sete — é o que separa
+                    esta janela de "esta semana". */}
+                {intervaloDaJanela && (
+                  <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">
+                    · {intervaloDaJanela}
+                  </span>
+                )}
+              </p>
               <p className="mt-0.5 text-4xl font-bold tabular-nums text-foreground">{total}</p>
               {periodo === 'total' && !intervalo ? (
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -155,13 +170,6 @@ export function AberturasDoQr({ serie, periodo, intervalo }: Props) {
             </div>
           </div>
 
-          {/* As datas exatas da janela, do outro lado do card.
-              Ocupam o vazio com a única coisa que faltava saber ali: "últimos
-              7 dias" não diz QUAIS sete dias, e é justamente isso que separa
-              esta janela de "esta semana". */}
-          {intervaloDaJanela && (
-            <p className="text-xs tabular-nums text-muted-foreground">{intervaloDaJanela}</p>
-          )}
         </CardContent>
       </Card>
 
@@ -170,11 +178,12 @@ export function AberturasDoQr({ serie, periodo, intervalo }: Props) {
           <CardTitle className="text-base font-semibold">
             Aberturas do QR Code
           </CardTitle>
-          <p className="text-[11px] text-muted-foreground">
-            {porSemana
-              ? 'Cada ponto é uma semana · uma abertura ≈ um cliente indo dar feedback'
-              : 'Cada abertura ≈ um cliente indo dar feedback'}
-          </p>
+          {/* Sem a frase explicativa: o título já diz o que é. Só fica o aviso
+              de agrupamento, que não explica nada — diz o que cada ponto É, e
+              sem ele uma semana pareceria um dia. */}
+          {porSemana && (
+            <p className="text-[11px] text-muted-foreground">Cada ponto é uma semana</p>
+          )}
         </CardHeader>
         <CardContent className="p-5 pt-6">
           {total === 0 ? (
