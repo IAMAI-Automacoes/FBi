@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Sparkles, Loader2, Settings2, Pin } from 'lucide-react'
+import { Sparkles, Loader2, Settings2, Pin, AlertTriangle, Flag, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RoletaNumerica } from '@/components/RoletaNumerica'
 import {
@@ -34,7 +34,15 @@ const FEEDBACKS_MAX = 30
 const FEEDBACKS_PADRAO = 10
 
 export default function Insights() {
-  const [filterPriority, setFilterPriority] = useFiltroPersistente<string>('insights:prioridade', 'Todos')
+  /**
+   * A aba aberta. Não existe mais um "Todos": cada importância é uma página
+   * própria, como as abas de caixa de entrada do Gmail.
+   *
+   * Quem já tinha "Todos" guardado do filtro antigo cai em URGENTE — é a
+   * primeira aba, e é o que alguém que abre a tela precisa ver primeiro.
+   */
+  const [prioridadeSalva, setFilterPriority] = useFiltroPersistente<string>('insights:prioridade', 'URGENTE')
+  const filterPriority = prioridadeSalva === 'Todos' ? 'URGENTE' : prioridadeSalva
   const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>('insights:categorias', [])
   const [showOnlyPinned, setShowOnlyPinned] = useFiltroPersistente('insights:fixados', false)
   const [busca, setBusca] = useFiltroPersistente('insights:busca', '')
@@ -307,13 +315,26 @@ export default function Insights() {
     }
   }
 
+  /**
+   * A qual aba um insight pertence.
+   *
+   * O banco tem as duas grafias de observação (com e sem cedilha/acento),
+   * herdadas de versões diferentes do gerador, e tudo que não é URGENTE nem
+   * IMPORTANTE é observação — inclusive prioridade nula. Sem esta normalização
+   * um insight ficaria fora das três abas e desapareceria da tela, que é o
+   * risco que abas trazem e o filtro "Todos" antes escondia.
+   */
+  const abaDoInsight = (prioridade?: string | null) => {
+    const v = (prioridade ?? '').toUpperCase().trim()
+    if (v === 'URGENTE') return 'URGENTE'
+    if (v === 'IMPORTANTE') return 'IMPORTANTE'
+    return 'OBSERVAÇÃO'
+  }
+
   const filteredInsights = useMemo(() => {
     return insights
       .filter((i) => {
-        const prioMatch =
-          filterPriority === 'Todos' ||
-          i.prioridade === filterPriority ||
-          (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
+        const prioMatch = abaDoInsight(i.prioridade) === filterPriority
         const catMatch = filterCategories.length === 0 || filterCategories.includes(i.categoria ?? '')
         const pinMatch = !showOnlyPinned || !!i.fixado
         // Busca no que o card mostra: título, descrição e sugestão. Procurar
@@ -339,7 +360,43 @@ export default function Insights() {
         if (porPrioridade !== 0) return porPrioridade
         return Number(!!b.fixado) - Number(!!a.fixado)
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, filterPriority, filterCategories, showOnlyPinned, busca])
+
+  /**
+   * Quantos insights cada aba tem, já descontando os OUTROS filtros.
+   *
+   * Conta com categoria, busca e "fixados" aplicados, mas sem a prioridade —
+   * senão a aba aberta mostraria o seu total e as outras duas, zero. O número
+   * serve justamente para dizer o que existe do lado de lá.
+   */
+  const totaisPorAba = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    const conta: Record<string, number> = { URGENTE: 0, IMPORTANTE: 0, 'OBSERVAÇÃO': 0 }
+    for (const i of insights) {
+      if (filterCategories.length > 0 && !filterCategories.includes(i.categoria ?? '')) continue
+      if (showOnlyPinned && !i.fixado) continue
+      if (termo && ![i.titulo, i.descricao, i.sugestao].some((c) => (c ?? '').toLowerCase().includes(termo))) continue
+      conta[abaDoInsight(i.prioridade)]++
+    }
+    return conta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insights, filterCategories, showOnlyPinned, busca])
+
+  /** Quantos cards cabem numa página da aba. */
+  const POR_PAGINA = 8
+  const [pagina, setPagina] = useState(1)
+  const totalDePaginas = Math.max(1, Math.ceil(filteredInsights.length / POR_PAGINA))
+
+  // Trocar de aba ou mexer num filtro devolve a lista à primeira página, e a
+  // página nunca pode ficar além do fim (apagar um insight encurta a lista).
+  useEffect(() => { setPagina(1) }, [filterPriority, filterCategories, showOnlyPinned, busca])
+  useEffect(() => { setPagina((p) => Math.min(p, totalDePaginas)) }, [totalDePaginas])
+
+  const insightsDaPagina = useMemo(
+    () => filteredInsights.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA),
+    [filteredInsights, pagina],
+  )
 
   // Ao trocar prioridade ou categoria, a lista volta pro topo sozinha.
   const topoRef = useRef<HTMLDivElement>(null)
@@ -352,60 +409,22 @@ export default function Insights() {
     topoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [filterPriority, filterCategories, showOnlyPinned])
 
-  // Mesma cor de cada prioridade usada nos cards de insight (ver `@/lib/prioridade`)
-  // — "Todos" é o único que não é uma prioridade real, fica com o azul do app.
-  const priorities = [
-    {
-      label: 'Todos',
-      value: 'Todos',
-      colors: 'text-[#1D4ED8]',
-      activeClass: 'border-[#1D4ED8] bg-blue-50/50',
-    },
-    {
-      label: 'Urgente',
-      value: 'URGENTE',
-      colors: PRIORIDADES.URGENTE.corTexto,
-      activeClass: cn(PRIORIDADES.URGENTE.corBorda, PRIORIDADES.URGENTE.corFundo),
-    },
-    {
-      label: 'Importante',
-      value: 'IMPORTANTE',
-      colors: PRIORIDADES.IMPORTANTE.corTexto,
-      activeClass: cn(PRIORIDADES.IMPORTANTE.corBorda, PRIORIDADES.IMPORTANTE.corFundo),
-    },
-    {
-      label: 'Observação',
-      value: 'OBSERVAÇÃO',
-      colors: PRIORIDADES.OBSERVACAO.corTexto,
-      activeClass: cn(PRIORIDADES.OBSERVACAO.corBorda, PRIORIDADES.OBSERVACAO.corFundo),
-    },
+  // As três abas, na ordem em que importam. A cor é a mesma que cada
+  // importância tem nos cards (ver `@/lib/prioridade`), então a aba aberta e
+  // o selo dos cards abaixo dela falam a mesma língua.
+  const abas = [
+    { label: 'Urgente', value: 'URGENTE', icone: AlertTriangle, cor: PRIORIDADES.URGENTE.corTexto, corBorda: 'border-[#EF4444]' },
+    { label: 'Importante', value: 'IMPORTANTE', icone: Flag, cor: PRIORIDADES.IMPORTANTE.corTexto, corBorda: 'border-[#F59E0B]' },
+    { label: 'Observação', value: 'OBSERVAÇÃO', icone: Eye, cor: PRIORIDADES.OBSERVACAO.corTexto, corBorda: 'border-[#9CA3AF]' },
   ]
 
   // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
   // filtros onde a lista rolando pudesse vazar por cima.
   const barraFiltros = (
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-white px-3 py-2.5 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1.5 bg-gray-50 px-2 py-1.5 rounded-full border border-gray-200 overflow-x-auto">
-              {priorities.map((p) => {
-                const isActive = filterPriority === p.value
-                return (
-                  <button
-                    key={p.value}
-                    onClick={() => setFilterPriority(p.value)}
-                    className={cn(
-                      'px-4 py-1.5 text-sm font-bold rounded-full transition-all border outline-none whitespace-nowrap',
-                      p.colors,
-                      isActive ? p.activeClass : 'border-transparent hover:bg-gray-100',
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                )
-              })}
-            </div>
-
             <FiltroCategorias
               contagens={contagemCategorias}
               rotuloItens="insights"
@@ -531,6 +550,47 @@ export default function Insights() {
             </AlertDialog>
           </div>
         </div>
+
+        {/* As abas, na linha de baixo — o mesmo desenho das caixas de entrada
+            do Gmail: ícone, nome, e um traço grosso da cor da aba aberta.
+            Elas não são mais um filtro entre outros; são três páginas, e cada
+            uma guarda a sua posição de paginação. A contagem ao lado do nome
+            evita a única dúvida que abas criam: a de que há algo importante
+            escondido na aba que não está aberta. */}
+        <div className="flex items-stretch gap-1 overflow-x-auto border-t border-gray-200 px-1">
+          {abas.map((aba) => {
+            const ativa = filterPriority === aba.value
+            const Icone = aba.icone
+            const quantos = totaisPorAba[aba.value] ?? 0
+            return (
+              <button
+                key={aba.value}
+                onClick={() => setFilterPriority(aba.value)}
+                aria-current={ativa ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 shrink-0 items-center gap-2 border-b-[3px] px-4 py-2.5 text-sm transition-colors',
+                  ativa
+                    ? cn(aba.corBorda, aba.cor, 'font-semibold')
+                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700',
+                )}
+              >
+                <Icone className={cn('h-4 w-4 shrink-0', ativa ? aba.cor : 'text-gray-400')} />
+                <span className="whitespace-nowrap">{aba.label}</span>
+                {quantos > 0 && (
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+                      ativa ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-500',
+                    )}
+                  >
+                    {quantos}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        </div>
   )
 
   // Precisa de deps de verdade (não pode rodar em todo render): `setExtra`
@@ -565,8 +625,8 @@ export default function Insights() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:gap-4">
-          {filteredInsights.length > 0 ? (
-            filteredInsights.map((insight) => (
+          {insightsDaPagina.length > 0 ? (
+            insightsDaPagina.map((insight) => (
               <InsightCard
                 key={insight.id}
                 insight={insight}
@@ -579,10 +639,44 @@ export default function Insights() {
             ))
           ) : (
             <div className="col-span-full py-16 text-center text-gray-500 bg-white rounded-xl border border-dashed">
-              <p className="text-lg font-medium">Nenhum insight encontrado</p>
+              <p className="text-lg font-medium">Nenhum insight nesta aba</p>
               <p className="text-sm mt-1">
-                Tente ajustar os filtros ou clique em "Gerar insights agora".
+                Veja as outras abas, ajuste os filtros, ou clique em "Gerar insights agora".
               </p>
+            </div>
+          )}
+
+          {/* Só aparece quando há mais de uma página: um rodapé de navegação
+              sozinho numa lista de três itens é ruído. */}
+          {totalDePaginas > 1 && (
+            <div className="col-span-full flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2">
+              <span className="text-[13px] tabular-nums text-gray-500">
+                {(pagina - 1) * POR_PAGINA + 1}–{Math.min(pagina * POR_PAGINA, filteredInsights.length)} de{' '}
+                {filteredInsights.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  disabled={pagina <= 1}
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Anterior
+                </Button>
+                <span className="px-2 text-[13px] tabular-nums text-gray-600">
+                  {pagina} / {totalDePaginas}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  disabled={pagina >= totalDePaginas}
+                  onClick={() => setPagina((p) => Math.min(totalDePaginas, p + 1))}
+                >
+                  Próxima <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
