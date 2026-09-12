@@ -335,7 +335,7 @@ export function ChatFab({
     if (renamingId && renameInputRef.current) renameInputRef.current.focus()
   }, [renamingId])
 
-  // Abre o chat. Se vier um insight no evento ("Discutir com IA"), começa uma
+  // Abre o chat. Se vier um insight no evento ("Conversar com a IA"), começa uma
   // conversa nova já com o insight e os feedbacks que o originaram no contexto.
   useEffect(() => {
     const handler = (e: Event) => {
@@ -370,7 +370,9 @@ export function ChatFab({
         setContextoInsight(contextoDoInsight)
 
         const contexto = { ...(await fetchContexto()), ...contextoDoInsight }
-        const texto = `Vamos discutir o insight: "${insight.titulo}".`
+        // "analisar", não "discutir": em português discutir é tanto debater
+        // quanto brigar, e era o verbo que aparecia no botão da tela.
+        const texto = `Vamos analisar o insight: "${insight.titulo}".`
         const result = await enviar(texto, contexto, undefined, undefined, {
           memoria: memoriaRef.current,
           modoAcao: modoAcaoRef.current,
@@ -841,7 +843,7 @@ export function ChatFab({
       insights: insightsRes.data || [],
       acoes: acoesRes.data || [],
       feedbacks: feedbacksRes.data || [],
-      // Quando a conversa nasceu de "Discutir com IA", o insight e os feedbacks
+      // Quando a conversa nasceu de "Conversar com a IA", o insight e os feedbacks
       // que o originaram acompanham TODAS as mensagens — não só a primeira.
       ...(contextoInsight ?? {}),
     }

@@ -86,7 +86,12 @@ export function InsightCard({
         title={insight.fixado ? 'Desafixar' : 'Fixar no topo da lista'}
         className={cn(
           'absolute top-3 right-11 h-7 w-7 flex items-center justify-center rounded transition-colors z-10',
-          insight.fixado ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100',
+          // `gray-300` sobre branco dá contraste de 1,5:1 — o ícone existia
+          // mas ninguém via, e só aparecia ao passar o mouse por cima, que é
+          // justamente quando já não é mais preciso descobrir que ele está
+          // lá. `gray-500` chega a 4,8:1; o hover escurece mais um degrau,
+          // então o retorno ao passar o mouse continua existindo.
+          insight.fixado ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100',
         )}
       >
         <Pin className={cn('h-4 w-4', insight.fixado && 'fill-current')} />
@@ -95,7 +100,10 @@ export function InsightCard({
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
-            className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors z-10"
+            /* Mesma correção do botão de fixar: era `gray-300`, invisível. O
+               hover troca de matiz (cinza → vermelho), então dá para o repouso
+               ser legível sem perder o aviso de que a ação é destrutiva. */
+            className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors z-10"
             title="Excluir insight"
           >
             <Trash2 className="h-4 w-4" />
@@ -183,7 +191,7 @@ export function InsightCard({
             onClick={onAiChat}
             className="w-full sm:w-auto bg-white text-blue-600 border-blue-600 hover:bg-blue-50 h-9 font-semibold"
           >
-            Discutir com IA
+            Conversar com a IA
           </Button>
         </div>
       </CardFooter>

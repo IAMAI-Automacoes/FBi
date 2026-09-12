@@ -200,10 +200,14 @@ function unreadCount(s: SugestaoAdmin): number {
   return s.respostas.slice(lastAdminIdx + 1).filter((r) => r.autor === 'usuario').length
 }
 
-function fmtDesconto(c: Cupon) {
-  return c.tipo_desconto === 'porcentagem'
-    ? `${c.porcentagem_desconto ?? 0}%`
-    : `R$ ${Number(c.valor_desconto ?? 0).toFixed(2)}`
+/** O que o cupom entrega a quem resgata — ver `Cupon` em queries/admin.ts. */
+function fmtLiberacao(c: Cupon) {
+  return c.dias_validade ? `${c.dias_validade} dias` : 'Acesso permanente'
+}
+
+/** Quantos resgates ainda cabem. */
+function fmtUsos(c: Cupon) {
+  return c.vezes_uso_maximo == null ? `${c.vezes_usado} / ilimitado` : `${c.vezes_usado} / ${c.vezes_uso_maximo}`
 }
 
 // ── ConvItem ──────────────────────────────────────────────────────────────────
@@ -1120,7 +1124,7 @@ const EMPTY_AFILIADO = {
   observacoes: '', ativo: true,
 }
 const EMPTY_CUPON = {
-  cupom: '', tipo_desconto: 'porcentagem' as 'porcentagem' | 'valor_fixo',
+  cupom: '', data_expiracao: '',
   valor: '', dias_validade: '', vezes_uso_maximo: '', ativo: true,
 }
 
@@ -1399,8 +1403,7 @@ export default function Admin() {
     setEditingCuponId(c.id)
     setCuponForm({
       cupom: c.cupom,
-      tipo_desconto: c.tipo_desconto,
-      valor: String(c.tipo_desconto === 'porcentagem' ? (c.porcentagem_desconto ?? '') : (c.valor_desconto ?? '')),
+      data_expiracao: c.data_expiracao ?? '',
       dias_validade: c.dias_validade != null ? String(c.dias_validade) : '',
       vezes_uso_maximo: String(c.vezes_uso_maximo),
       ativo: c.ativo,
@@ -1408,16 +1411,17 @@ export default function Admin() {
     setShowCuponDialog(true)
   }
   const saveCupon = async () => {
-    if (!cuponForm.cupom || !cuponForm.valor) return
+    // Só o código é obrigatório: um cupom sem dias é permanente de propósito,
+    // e sem limite de usos é ilimitado de propósito.
+    if (!cuponForm.cupom) return
     setSavingCupon(true)
     try {
       const p = {
         cupom: cuponForm.cupom.toUpperCase(),
-        tipo_desconto: cuponForm.tipo_desconto,
-        valor: Number(cuponForm.valor),
         dias_validade: cuponForm.dias_validade ? Number(cuponForm.dias_validade) : null,
         vezes_uso_maximo: cuponForm.vezes_uso_maximo ? Number(cuponForm.vezes_uso_maximo) : null,
         ativo: cuponForm.ativo,
+        data_expiracao: cuponForm.data_expiracao || null,
       }
       if (editingCuponId) await atualizarCupon(editingCuponId, p); else await criarCupon(p)
       setCupons(await buscarCupons()); setShowCuponDialog(false)
@@ -1729,7 +1733,7 @@ export default function Admin() {
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Tag className="h-5 w-5 text-gray-500" />
-                  <h2 className="text-base font-semibold text-gray-800">Cupons de Desconto</h2>
+                  <h2 className="text-base font-semibold text-gray-800">Cupons de Acesso</h2>
                 </div>
                 <Button size="sm" onClick={openAddCupon}><Plus className="h-4 w-4 mr-1" /> Novo cupom</Button>
               </div>
@@ -1743,7 +1747,7 @@ export default function Admin() {
               ) : (
                 <CrudTable>
                   <thead>
-                    <tr>{['Código','Desconto','Validade','Usos','Ativo',''].map((h) => <Th key={h}>{h}</Th>)}</tr>
+                    <tr>{['Código','Libera','Resgatável até','Usos','Ativo',''].map((h) => <Th key={h}>{h}</Th>)}</tr>
                   </thead>
                   <tbody>
                     {cupons.map((c) => (
@@ -1753,15 +1757,15 @@ export default function Admin() {
                             {c.cupom}
                           </span>
                         </Td>
-                        <Td className="font-semibold text-emerald-700">{fmtDesconto(c)}</Td>
+                        <Td className="font-semibold text-emerald-700">{fmtLiberacao(c)}</Td>
                         <Td>
-                          {c.dias_validade != null ? (
-                            <span className="text-[13px] text-gray-600">{c.dias_validade} dias</span>
-                          ) : <span className="text-gray-400 text-[13px]">Sem limite</span>}
+                          {c.data_expiracao ? (
+                            <span className="text-[13px] text-gray-600">
+                              {new Date(c.data_expiracao + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          ) : <span className="text-gray-400 text-[13px]">Sem prazo</span>}
                         </Td>
-                        <Td className="text-[13px] text-gray-600">
-                          {c.vezes_usado}/{c.vezes_uso_maximo ?? '∞'}
-                        </Td>
+                        <Td className="text-[13px] text-gray-600">{fmtUsos(c)}</Td>
                         <Td><BadgeBool v={c.ativo} /></Td>
                         <Td><RowActions onEdit={() => openEditCupon(c)} onDelete={() => deleteCupon(c.id)} deleting={deletingCuponId === c.id} /></Td>
                       </tr>
@@ -1903,33 +1907,29 @@ export default function Admin() {
               <Label className="text-[13px]">Código *</Label>
               <Input value={cuponForm.cupom} onChange={(e) => setCuponForm((p) => ({ ...p, cupom: e.target.value.toUpperCase() }))} placeholder="DESC20" className="mt-1 font-mono" />
             </div>
+            {/* O resgate só olha para estes campos. Havia aqui um "tipo de
+                desconto" e um "valor" obrigatórios que a edge function nunca
+                leu — quem preenchia "50%" criava um cupom que dava acesso
+                cheio, não meio preço. */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-[13px]">Tipo desconto</Label>
-                <Select value={cuponForm.tipo_desconto} onValueChange={(v) => setCuponForm((p) => ({ ...p, tipo_desconto: v as 'porcentagem' | 'valor_fixo' }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="porcentagem">Porcentagem (%)</SelectItem>
-                    <SelectItem value="valor_fixo">Valor fixo (R$)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[13px]">Valor *</Label>
-                <Input type="number" value={cuponForm.valor} onChange={(e) => setCuponForm((p) => ({ ...p, valor: e.target.value }))} placeholder={cuponForm.tipo_desconto === 'porcentagem' ? '20' : '50'} className="mt-1" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[13px]">Validade (dias)</Label>
+                <Label className="text-[13px]">Dias de acesso</Label>
                 <Input type="number" value={cuponForm.dias_validade} onChange={(e) => setCuponForm((p) => ({ ...p, dias_validade: e.target.value }))} placeholder="30" className="mt-1" />
-                <p className="text-[11px] text-gray-400 mt-1">Vazio = sem limite</p>
+                <p className="text-[11px] text-gray-400 mt-1">Vazio = acesso permanente</p>
               </div>
               <div>
                 <Label className="text-[13px]">Usos máximos</Label>
                 <Input type="number" value={cuponForm.vezes_uso_maximo} onChange={(e) => setCuponForm((p) => ({ ...p, vezes_uso_maximo: e.target.value }))} placeholder="Ilimitado" className="mt-1" />
                 <p className="text-[11px] text-gray-400 mt-1">Vazio = ilimitado</p>
               </div>
+            </div>
+            <div>
+              <Label className="text-[13px]">Resgatável até</Label>
+              <Input type="date" value={cuponForm.data_expiracao} onChange={(e) => setCuponForm((p) => ({ ...p, data_expiracao: e.target.value }))} className="mt-1" />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Vazio = sem prazo. Depois desta data o código para de ser aceito — não
+                tira o acesso de quem já resgatou.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="cupon-ativo" checked={cuponForm.ativo} onChange={(e) => setCuponForm((p) => ({ ...p, ativo: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
@@ -1938,7 +1938,7 @@ export default function Admin() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCuponDialog(false)}>Cancelar</Button>
-            <Button onClick={saveCupon} disabled={savingCupon || !cuponForm.cupom || !cuponForm.valor}>{savingCupon ? 'Salvando…' : 'Salvar'}</Button>
+            <Button onClick={saveCupon} disabled={savingCupon || !cuponForm.cupom}>{savingCupon ? 'Salvando…' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

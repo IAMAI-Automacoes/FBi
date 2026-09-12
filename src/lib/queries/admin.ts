@@ -312,26 +312,40 @@ export async function excluirAfiliado(id: string): Promise<void> {
 
 // ── Cupons ────────────────────────────────────────────────────────────────────
 
+/**
+ * Um cupom de ACESSO — não de desconto.
+ *
+ * O painel pedia "tipo de desconto" e "valor", e obrigava a preencher os dois.
+ * Só que `resgatar-cupom` nunca olhou para eles: o que ela faz é pôr a
+ * assinatura como ativa por `dias_validade` dias. Criar um "DESC50 — 50%" e
+ * esperar meio preço não acontecia, e o único cupom existente ("100%") na
+ * verdade libera acesso PERMANENTE, porque o que decide isso é o campo de
+ * dias estar vazio.
+ *
+ * As colunas de desconto continuam no banco (não se apaga o que já foi
+ * gravado), mas saíram do formulário: um campo que não faz nada é pior que
+ * campo nenhum, porque leva a decisão errada.
+ */
 export interface Cupon {
   id: number
   cupom: string
-  tipo_desconto: 'porcentagem' | 'valor_fixo'
-  porcentagem_desconto: number | null
-  valor_desconto: number | null
+  /** Dias de acesso liberados. `null` = acesso sem data para acabar. */
   dias_validade: number | null
+  /** Quantas vezes ainda pode ser resgatado. `null` = ilimitado. */
   vezes_uso_maximo: number | null
   vezes_usado: number
   ativo: boolean
+  /** Último dia em que o cupom pode ser RESGATADO. `null` = sempre. */
+  data_expiracao: string | null
   created_at: string
 }
 
 export type CuponInput = {
   cupom: string
-  tipo_desconto: 'porcentagem' | 'valor_fixo'
-  valor: number
   dias_validade: number | null
   vezes_uso_maximo: number | null
   ativo: boolean
+  data_expiracao: string | null
 }
 
 export async function buscarCupons(): Promise<Cupon[]> {
@@ -343,13 +357,11 @@ export async function buscarCupons(): Promise<Cupon[]> {
   return ((data ?? []) as any[]).map((c) => ({
     id: c.id,
     cupom: c.cupom ?? '',
-    tipo_desconto: (c.porcentagem_desconto != null ? 'porcentagem' : 'valor_fixo') as 'porcentagem' | 'valor_fixo',
-    porcentagem_desconto: c.porcentagem_desconto ?? null,
-    valor_desconto: c.valor_desconto ?? null,
     dias_validade: c.dias_validade ?? null,
     vezes_uso_maximo: c.vezes_uso_maximo ?? null,
     vezes_usado: c.vezes_usado ?? 0,
     ativo: c.ativo ?? true,
+    data_expiracao: c.data_expiracao ?? null,
     created_at: c.created_at,
   }))
 }
@@ -357,11 +369,10 @@ export async function buscarCupons(): Promise<Cupon[]> {
 function cuponToRow(input: CuponInput) {
   return {
     cupom: input.cupom,
-    porcentagem_desconto: input.tipo_desconto === 'porcentagem' ? input.valor : null,
-    valor_desconto: input.tipo_desconto === 'valor_fixo' ? input.valor : null,
     dias_validade: input.dias_validade,
     vezes_uso_maximo: input.vezes_uso_maximo,
     ativo: input.ativo,
+    data_expiracao: input.data_expiracao,
   }
 }
 
