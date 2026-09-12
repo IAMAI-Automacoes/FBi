@@ -389,7 +389,14 @@ export default function Insights() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, filterCategories, showOnlyPinned, busca])
 
-  /** Quantos cards cabem numa página da aba. */
+  /**
+   * Quantos cards cabem numa página da aba.
+   *
+   * É o mesmo 8 do teto que o banco aplica (`aparar_insights_da_aba`), então
+   * na prática a segunda página quase nunca existe. Ela continua aqui para o
+   * caso que o teto respeita: insights FIXADOS não são aparados, e quem fixar
+   * mais de 8 numa aba passa do teto de propósito.
+   */
   const POR_PAGINA = 8
   const [pagina, setPagina] = useState(1)
   const totalDePaginas = Math.max(1, Math.ceil(filteredInsights.length / POR_PAGINA))
