@@ -435,7 +435,11 @@ export default function Insights() {
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
   // filtros onde a lista rolando pudesse vazar por cima.
   const barraFiltros = (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        /* `border-b-0`: a borda inferior deste card corria a 13px da borda do
+           header, e as duas juntas viravam duas linhas paralelas logo abaixo
+           das abas. A do header é a que separa os filtros da lista — essa
+           fica; esta aqui era a repetida. */
+        <div className="bg-white rounded-xl shadow-sm border border-b-0 border-gray-200">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <FiltroCategorias
@@ -571,7 +575,11 @@ export default function Insights() {
             uma guarda a sua posição de paginação. A contagem ao lado do nome
             evita a única dúvida que abas criam: a de que há algo importante
             escondido na aba que não está aberta. */}
-        <div className="flex items-stretch gap-1 overflow-x-auto border-t border-gray-200 px-1">
+        {/* `flex-1` em cada aba (abaixo): elas repartem a largura da tela em
+            vez de ficarem amontoadas à esquerda, como as caixas de entrada do
+            Gmail. Sem `gap`, para que os traços da aba ativa e as áreas de
+            clique fiquem encostados, sem faixas mortas entre eles. */}
+        <div className="flex items-stretch border-t border-gray-200 px-1">
           {abas.map((aba) => {
             const ativa = filterPriority === aba.value
             const Icone = aba.icone
@@ -582,14 +590,14 @@ export default function Insights() {
                 onClick={() => setFilterPriority(aba.value)}
                 aria-current={ativa ? 'page' : undefined}
                 className={cn(
-                  'flex min-w-0 shrink-0 items-center gap-2 border-b-[3px] px-4 py-2.5 text-sm transition-colors',
+                  'flex min-w-0 flex-1 items-center justify-center gap-2 border-b-[3px] px-3 py-2.5 text-sm transition-colors',
                   ativa
                     ? cn(aba.corBorda, aba.cor, 'font-semibold')
                     : 'border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700',
                 )}
               >
                 <Icone className={cn('h-4 w-4 shrink-0', ativa ? aba.cor : 'text-gray-400')} />
-                <span className="whitespace-nowrap">{aba.label}</span>
+                <span className="truncate">{aba.label}</span>
                 {quantos > 0 && (
                   <span
                     className={cn(
