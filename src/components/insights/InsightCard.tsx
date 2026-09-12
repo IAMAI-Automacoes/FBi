@@ -89,9 +89,9 @@ export function InsightCard({
           // `gray-300` sobre branco dá contraste de 1,5:1 — o ícone existia
           // mas ninguém via, e só aparecia ao passar o mouse por cima, que é
           // justamente quando já não é mais preciso descobrir que ele está
-          // lá. `gray-500` chega a 4,8:1; o hover escurece mais um degrau,
-          // então o retorno ao passar o mouse continua existindo.
-          insight.fixado ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100',
+          // lá. `gray-600` chega a 7:1; o hover vai a quase preto, então o
+          // retorno ao passar o mouse continua existindo.
+          insight.fixado ? 'text-amber-500' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100',
         )}
       >
         <Pin className={cn('h-4 w-4', insight.fixado && 'fill-current')} />
@@ -100,10 +100,11 @@ export function InsightCard({
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
-            /* Mesma correção do botão de fixar: era `gray-300`, invisível. O
-               hover troca de matiz (cinza → vermelho), então dá para o repouso
-               ser legível sem perder o aviso de que a ação é destrutiva. */
-            className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors z-10"
+            /* Vermelho já em repouso, não só no hover: a cor é o que avisa
+               que a ação é destrutiva, e esse aviso chega tarde se só aparece
+               depois que o dedo já está em cima do botão. O hover escurece e
+               acende o fundo. */
+            className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors z-10"
             title="Excluir insight"
           >
             <Trash2 className="h-4 w-4" />
