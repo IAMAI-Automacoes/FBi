@@ -47,18 +47,28 @@ export function FiltroCategorias({
     )
   }
 
-  // Ordem oficial da paleta, mantendo só o que tem item. Ordenar por contagem
-  // faria a posição de cada categoria dançar a cada troca de período.
-  const visiveis = CATEGORIAS_FEEDBACK.filter((c) => (contagens[c] ?? 0) > 0)
+  // Ordem oficial da paleta, mantendo o que tem item — MAIS o que estiver
+  // selecionado, ainda que zerado no recorte atual. Ordenar por contagem faria
+  // a posição de cada categoria dançar a cada troca de período.
+  const visiveis = CATEGORIAS_FEEDBACK.filter(
+    (c) => (contagens[c] ?? 0) > 0 || selecionadas.includes(c),
+  )
 
-  // Sem nenhuma categoria no recorte, o filtro não tem o que oferecer.
-  if (visiveis.length === 0) return null
+  // Sem nenhuma categoria no recorte E sem nada escolhido, o filtro não tem o
+  // que oferecer. A segunda metade da condição importa: com uma categoria
+  // escolhida, sumir com o controle deixava a pessoa presa a um filtro
+  // invisível, sem onde clicar para desfazê-lo. Acontecia ao escolher uma
+  // categoria e trocar para uma aba onde ela não existe.
+  if (visiveis.length === 0 && selecionadas.length === 0) return null
 
   return (
     <Popover open={aberto} onOpenChange={setAberto}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
+          // O rótulo troca de "Categoria" para o nome do que está escolhido,
+          // então o texto não identifica este controle.
+          data-filtro="categorias"
           className={cn(
             'h-10 bg-white shadow-sm border-gray-200 font-normal justify-start max-w-[200px]',
             className,

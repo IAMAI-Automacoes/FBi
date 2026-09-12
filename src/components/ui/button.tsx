@@ -80,6 +80,30 @@ const buttonVariants = cva(
          * quando a página do QR passou a precisar do MESMO botão — duas
          * cópias da mesma receita divergem no primeiro ajuste.
          */
+        /**
+         * Pedir algo à IA — "Gerar insights agora".
+         *
+         * Mesma construção do `primario` e do `baixar` (linha de luz no topo,
+         * degradê curto, sombra baixa e apertada), então ele pertence
+         * visivelmente à mesma família e não parece um enfeite.
+         *
+         * Violeta porque as outras três cores já têm dono e diriam a coisa
+         * errada: preto decide um formulário, azul escuro leva um arquivo
+         * embora, terracota avança uma etapa. Nenhuma delas é "põe a IA para
+         * trabalhar e espera" — que é uma ação de outra natureza, com custo e
+         * demora, e merece ser reconhecida de longe.
+         *
+         * O botão inteiro, e não só o ícone: um ícone trocando de cor dentro
+         * de um botão neutro é um detalhe que quase ninguém nota, e esta é a
+         * ação mais importante da tela de Insights.
+         */
+        ia:
+          'bg-violet-700 bg-gradient-to-b from-violet-600 to-violet-800 text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-violet-500 hover:to-violet-700 ' +
+          'active:shadow-none active:from-violet-700 active:to-violet-700 ' +
+          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
+
         baixar:
           'bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 text-white ' +
           'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +

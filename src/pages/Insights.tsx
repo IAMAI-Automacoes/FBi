@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Sparkles, Loader2, Settings2, Pin, AlertTriangle, Flag, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { RoletaNumerica } from '@/components/RoletaNumerica'
 import {
   AlertDialog,
@@ -32,6 +32,26 @@ import { useToast } from '@/hooks/use-toast'
 const FEEDBACKS_MIN = 3
 const FEEDBACKS_MAX = 30
 const FEEDBACKS_PADRAO = 10
+
+/**
+ * A qual aba um insight pertence.
+ *
+ * O banco tem as duas grafias de observação (com e sem cedilha/acento),
+ * herdadas de versões diferentes do gerador, e tudo que não é URGENTE nem
+ * IMPORTANTE é observação — inclusive prioridade nula. Sem esta normalização
+ * um insight ficaria fora das três abas e desapareceria da tela, que é o risco
+ * que abas trazem e o filtro "Todos" antes escondia.
+ *
+ * Mora fora do componente porque é pura — e porque, declarada dentro, a
+ * contagem por categoria a usava antes da linha que a criava e a página
+ * inteira caía com "Cannot access 'abaDoInsight' before initialization".
+ */
+function abaDoInsight(prioridade?: string | null): string {
+  const v = (prioridade ?? '').toUpperCase().trim()
+  if (v === 'URGENTE') return 'URGENTE'
+  if (v === 'IMPORTANTE') return 'IMPORTANTE'
+  return 'OBSERVAÇÃO'
+}
 
 export default function Insights() {
   /**
@@ -153,21 +173,23 @@ export default function Insights() {
 
   // A contagem por categoria sai dos insights que ja estao em memoria — nao ha
   // consulta a fazer. Conta sobre a lista aplicando os OUTROS filtros
-  // (prioridade, fixados) mas nao o de categoria: senao, ao escolher uma, todas
-  // as demais mostrariam zero e o filtro deixaria de informar.
+  // (a aba aberta, fixados) mas nao o de categoria: senao, ao escolher uma,
+  // todas as demais mostrariam zero e o filtro deixaria de informar.
+  //
+  // Usa `abaDoInsight`, o mesmo critério das abas. Antes comparava a
+  // prioridade crua, então insight com prioridade nula ou com a grafia sem
+  // acento ficava de fora — a aba Observação dizia 3 e o filtro de categorias
+  // conhecia só 1.
   const contagemCategorias = useMemo(() => {
     const conta: Record<string, number> = {}
     for (const i of insights) {
-      const prioMatch =
-        filterPriority === 'Todos' ||
-        i.prioridade === filterPriority ||
-        (filterPriority === 'OBSERVAÇÃO' && i.prioridade === 'OBSERVACAO')
-      const pinMatch = !showOnlyPinned || !!i.fixado
-      if (!prioMatch || !pinMatch) continue
+      if (abaDoInsight(i.prioridade) !== filterPriority) continue
+      if (showOnlyPinned && !i.fixado) continue
       const c = i.categoria
       if (c) conta[c] = (conta[c] ?? 0) + 1
     }
     return conta
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insights, filterPriority, showOnlyPinned])
 
   const handleGerarInsights = async () => {
@@ -315,22 +337,6 @@ export default function Insights() {
     }
   }
 
-  /**
-   * A qual aba um insight pertence.
-   *
-   * O banco tem as duas grafias de observação (com e sem cedilha/acento),
-   * herdadas de versões diferentes do gerador, e tudo que não é URGENTE nem
-   * IMPORTANTE é observação — inclusive prioridade nula. Sem esta normalização
-   * um insight ficaria fora das três abas e desapareceria da tela, que é o
-   * risco que abas trazem e o filtro "Todos" antes escondia.
-   */
-  const abaDoInsight = (prioridade?: string | null) => {
-    const v = (prioridade ?? '').toUpperCase().trim()
-    if (v === 'URGENTE') return 'URGENTE'
-    if (v === 'IMPORTANTE') return 'IMPORTANTE'
-    return 'OBSERVAÇÃO'
-  }
-
   const filteredInsights = useMemo(() => {
     return insights
       .filter((i) => {
@@ -457,8 +463,9 @@ export default function Insights() {
               <AlertDialogTrigger asChild>
                 <Button
                   size="sm"
+                  variant="ia"
                   disabled={generating}
-                  className="w-full lg:w-auto bg-[#1D4ED8] hover:bg-blue-800 text-white font-medium shadow-sm transition-all"
+                  className="w-full lg:w-auto font-medium"
                 >
                   {generating ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -479,7 +486,7 @@ export default function Insights() {
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleGerarInsights}
-                    className="bg-[#1D4ED8] hover:bg-blue-800 text-white"
+                    className={cn(buttonVariants({ variant: 'ia' }))}
                   >
                     Gerar agora
                   </AlertDialogAction>
