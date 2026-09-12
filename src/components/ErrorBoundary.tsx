@@ -24,8 +24,36 @@ interface State {
  * clique ou em código assíncrono solto — aqueles não sobem até aqui, mas
  * continuam noutro lugar (`toast`/`console.error` de cada tela).
  */
-/** Marca que esta aba já tentou se recuperar, para não entrar em laço. */
+/** Quando esta aba tentou se recuperar pela última vez (ms desde a época). */
 const CHAVE_RECARGA = 'ef:recarga-por-versao'
+
+/**
+ * Por quanto tempo uma tentativa de recarga bloqueia a seguinte.
+ *
+ * Antes a marca era um booleano apagado dentro do `render` — a ideia era
+ * liberar a próxima visita, mas o efeito era desfazer a proteção no exato
+ * instante em que ela precisava valer: a tela de erro aparecia, a marca sumia,
+ * qualquer remontagem do boundary caía de novo em `componentDidCatch` sem
+ * marca nenhuma, e recarregava. Dava o laço de "erro → branco → carregando →
+ * erro" que não deixa nem ler a mensagem.
+ *
+ * Um carimbo de tempo resolve os dois lados: dentro da janela não recarrega
+ * (a pessoa vê o erro e o botão), e uma visita depois dela pode tentar de novo
+ * — que era a intenção original.
+ */
+const JANELA_SEM_RECARGA_MS = 60_000
+
+/** Já houve uma tentativa recente nesta aba? */
+function tentouAgoraPouco(): boolean {
+  try {
+    const marca = Number(sessionStorage.getItem(CHAVE_RECARGA) ?? 0)
+    return Number.isFinite(marca) && Date.now() - marca < JANELA_SEM_RECARGA_MS
+  } catch {
+    // Sem armazenamento não há como saber; assume que sim, porque repetir a
+    // recarga às cegas é justamente o que produz o laço.
+    return true
+  }
+}
 
 /**
  * O erro parece ser de versão obsoleta da página, e não bug no código?
@@ -64,14 +92,14 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary] erro não tratado:', error, info.componentStack)
 
-    // Uma recarga, e só uma: se o erro voltar, é bug de verdade e a pessoa
-    // precisa VER a mensagem em vez de assistir a página piscar em laço.
-    // `sessionStorage` (e não `localStorage`) porque a permissão para tentar
-    // de novo vale para esta aba e esta visita.
+    // Uma recarga por janela de tempo: se o erro voltar logo em seguida, é bug
+    // de verdade e a pessoa precisa VER a mensagem em vez de assistir a página
+    // piscar em laço. `sessionStorage` (e não `localStorage`) porque a
+    // permissão para tentar de novo vale para esta aba e esta visita.
     if (!pareceVersaoObsoleta(error)) return
+    if (tentouAgoraPouco()) return
     try {
-      if (sessionStorage.getItem(CHAVE_RECARGA)) return
-      sessionStorage.setItem(CHAVE_RECARGA, '1')
+      sessionStorage.setItem(CHAVE_RECARGA, String(Date.now()))
     } catch {
       // Aba anônima ou armazenamento bloqueado: sem como marcar a tentativa,
       // não recarrega — o risco de laço é pior que o de mostrar o erro.
@@ -82,13 +110,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
-      // Chegou aqui com o erro de versão obsoleta = a recarga já foi tentada e
-      // não resolveu. Some com a marca para que a PRÓXIMA visita possa tentar
-      // de novo; do contrário, uma falha de rede momentânea gastaria a única
-      // tentativa desta aba para sempre.
-      if (pareceVersaoObsoleta(this.state.error)) {
-        try { sessionStorage.removeItem(CHAVE_RECARGA) } catch { /* sem storage */ }
-      }
+      // A marca NÃO é apagada aqui. Era o que fazia a proteção evaporar assim
+      // que a tela de erro aparecia — e o laço nascia disso. Ela expira
+      // sozinha depois de `JANELA_SEM_RECARGA_MS`, que é o que libera uma
+      // tentativa nova mais tarde sem abrir a porta para o laço agora.
       return (
         <div className="flex min-h-[50vh] w-full flex-col items-center justify-center gap-4 p-6 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
