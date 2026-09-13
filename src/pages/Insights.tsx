@@ -572,28 +572,22 @@ export default function Insights() {
                   <Settings2 className="w-4 h-4" />
                 </Button>
               </AlertDialogTrigger>
-              {/* Uma pergunta só, e o número é a resposta — por isso a roleta é
-                  o centro da caixa e não um controle perdido embaixo de dois
-                  parágrafos. A explicação de "menor gera mais vezes" saiu: a
-                  própria frase ao redor do número já diz o que ele faz, e a
-                  pessoa que abre isto veio justamente para mexer nele.
-
-                  `max-w-[340px]`: a caixa tem uma linha de texto e um seletor;
-                  na largura padrão de 440px sobrava vazio dos dois lados do
-                  número, que é o que fazia parecer um formulário inacabado. */}
+              {/* Escrito para quem nunca abriu isto: título que diz o que é, uma
+                  frase sobre o que o sistema faz, dois rótulos sem jargão ("rodada"
+                  saiu) e, no fim, a escolha lida de volta em português comum —
+                  é essa frase que explica os números, então não precisa de mais
+                  texto em volta de cada um. */}
               <AlertDialogContent className="max-w-[420px] gap-4">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Gerar insights automaticamente</AlertDialogTitle>
-                  <AlertDialogDescription className="sr-only">
-                    De quantos em quantos feedbacks a análise roda, e quantos insights cada rodada entrega.
+                  <AlertDialogTitle>Insights automáticos</AlertDialogTitle>
+                  <AlertDialogDescription className="text-[13px] leading-snug">
+                    O sistema lê os feedbacks que chegam e transforma os assuntos mais importantes em insights.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
-                {/* Duas perguntas, lado a lado, com a mesma forma: quando roda e
-                    quanto entrega. A frase em volta de cada número é o rótulo. */}
                 <div className="grid grid-cols-2 gap-4 py-1">
                   <div className="flex flex-col items-center gap-1">
-                    <p className="text-[13px] text-gray-500">a cada</p>
+                    <p className="text-[13px] font-medium text-gray-700">Analisar a cada</p>
                     <RoletaNumerica
                       min={FEEDBACKS_MIN}
                       max={FEEDBACKS_MAX}
@@ -601,10 +595,10 @@ export default function Insights() {
                       onChange={setFeedbacksPorAnalise}
                       className="w-24"
                     />
-                    <p className="text-[13px] text-gray-500">novos feedbacks</p>
+                    <p className="text-[13px] text-gray-500">feedbacks novos</p>
                   </div>
                   <div className="flex flex-col items-center gap-1">
-                    <p className="text-[13px] text-gray-500">até</p>
+                    <p className="text-[13px] font-medium text-gray-700">Criar até</p>
                     <RoletaNumerica
                       min={INSIGHTS_RODADA_MIN}
                       max={INSIGHTS_RODADA_MAX}
@@ -612,9 +606,18 @@ export default function Insights() {
                       onChange={setInsightsPorRodada}
                       className="w-24"
                     />
-                    <p className="text-[13px] text-gray-500">insights por rodada</p>
+                    <p className="text-[13px] text-gray-500">
+                      {insightsPorRodada === 1 ? 'insight por vez' : 'insights por vez'}
+                    </p>
                   </div>
                 </div>
+
+                {/* A escolha lida de volta: acompanha as roletas enquanto giram. */}
+                <p data-resumo-config className="rounded-lg bg-gray-50 px-3 py-2 text-center text-[13px] leading-snug text-gray-600">
+                  A cada <strong className="text-gray-900">{feedbacksPorAnalise}</strong> feedbacks novos, o sistema
+                  cria até <strong className="text-gray-900">{insightsPorRodada}</strong>{' '}
+                  {insightsPorRodada === 1 ? 'insight' : 'insights'}.
+                </p>
 
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={savingConfig}>Cancelar</AlertDialogCancel>
