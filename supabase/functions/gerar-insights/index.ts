@@ -58,6 +58,51 @@ const corsHeaders = {
 const AGENTE = 'gerador_insights'
 const AGENTE_VERIFICADOR = 'verificador_insights'
 const AGENTE_AVALIADOR = 'avaliador_assunto'
+/** A IA que religa os feedbacks em liberdade condicional aos insights novos. */
+const AGENTE_RELIGADOR = 'religador_condicional'
+/** Quantos condicionais uma rodada oferece a essa IA — é o teto de custo dela. */
+const MAX_CONDICIONAIS = 40
+
+const PROMPT_RELIGAR = `Voce recebe insights que acabaram de ser criados para um restaurante e feedbacks ANTIGOS de clientes.
+
+## Insights novos
+{insights}
+
+## Feedbacks antigos
+{feedbacks}
+
+## Sua tarefa
+Para cada feedback antigo, diga se ele fala do MESMO problema de um dos insights novos. Se falar, ligue-o a esse insight. Se nao, deixe-o de fora.
+
+Regras:
+- Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e "a comida veio fria" sao problemas diferentes.
+- Um feedback marcado com [mesmo tema do insight X] foi agrupado pelo sistema no mesmo tema desse insight: ligue-o a ele, a menos que o texto trate claramente de outro problema.
+- Cada feedback vai para no maximo UM insight.
+- Na duvida, deixe de fora. Um vinculo errado faz o cliente receber aviso sobre algo que ele nunca relatou.
+- Use apenas ids que aparecem acima.
+
+Chame registrar_vinculos.`
+
+const SCHEMA_RELIGAR = {
+  type: 'object',
+  properties: {
+    vinculos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          feedback_id: { type: 'string' },
+          insight_id: { type: 'string' },
+        },
+        required: ['feedback_id', 'insight_id'],
+      },
+    },
+  },
+  required: ['vinculos'],
+}
+
+/** A PK de `insight_feedback` é o par: um vínculo repetido não derruba o lote. */
+const SEM_DUPLICAR = { onConflict: 'insight_id,feedback_restaurante_id', ignoreDuplicates: true }
 
 /**
  * Quantos insights uma rodada entrega, quando o dono não escolheu.
@@ -722,7 +767,38 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       (encerrados ?? []).map((i: { assunto_chave: string }) => i.assunto_chave),
     )
 
-    const assuntos = agruparEmAssuntos(livres as PontoBruto[], { reincidentes })
+    const todosOsAssuntos = agruparEmAssuntos(livres as PontoBruto[], { reincidentes })
+
+    // Os insights não são mais substituídos a cada rodada (ver o estágio 4):
+    // eles se acumulam, e cada aba guarda 8. Então um assunto que JÁ tem insight
+    // na tela não pode ganhar um segundo — os pontos livres dele (que só chegam
+    // aqui se a triagem da chegada não conseguiu ligá-los) vão para o que existe.
+    const { data: vivos } = await db
+      .from('insights')
+      .select('id, assunto_chave')
+      .eq('restaurante_id', restauranteId)
+      .eq('ativo', true)
+      .is('deletado_em', null)
+      .not('assunto_chave', 'is', null)
+    const vivoPorChave = new Map<string, string>(
+      (vivos ?? []).map((i: { id: string; assunto_chave: string }) => [i.assunto_chave, i.id]),
+    )
+    for (const a of todosOsAssuntos) {
+      const insightVivo = vivoPorChave.get(a.chave)
+      if (!insightVivo) continue
+      const { error: erroJuntar } = await db.from('insight_feedback').upsert(
+        a.pontos.map((p) => ({
+          insight_id: insightVivo,
+          feedback_restaurante_id: p.id,
+          feedback_original_id: p.origem_id,
+          restaurante_id: restauranteId,
+          origem: 'vinculo_novo',
+        })),
+        SEM_DUPLICAR,
+      )
+      if (erroJuntar) console.error(`[${a.chave}] falha ao juntar ao insight vivo:`, erroJuntar)
+    }
+    const assuntos = todosOsAssuntos.filter((a) => !vivoPorChave.has(a.chave))
 
     // Quem chega a ser AVALIADO. Este corte NÃO filtra elegibilidade: ela
     // depende da nota que a IA ainda vai dar, e cortar antes pelo léxico
@@ -873,41 +949,16 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       }
     }
 
-    // ---- ESTÁGIO 3b: feedbacks invalidados por exclusão manual, pra religar ----
-    //
-    // Um assunto que já teve insight excluído pelo dono não pode gerar insight
-    // sozinho de novo (por isso `feedbacks_para_geracao`/`feedbacks_livres` os
-    // exclui do agrupamento acima) — mas se ele voltar por conta de feedback
-    // NOVO e válido, o relato antigo entra junto: é o que mantém alcançável
-    // pelo motor de resposta o cliente que reclamou daquela vez. Ver
-    // `20260902000000_feedback_invalidado_por_exclusao.sql`.
-    //
-    // Buscado uma vez só, fora do loop de assuntos: mesmo restaurante para
-    // todos os aprovados desta rodada.
-    const { data: invalidados } = await db
-      .from('feedbacks_restaurante')
-      .select('id, origem_id, tema_id, categoria, sentimento, created_at')
-      .eq('restaurante_id', restauranteId)
-      .not('invalidado_em', 'is', null)
 
-    // ---- ESTÁGIO 4: substituir e gravar ----
-    // Só agora os antigos saem de cena, com o substituto pronto na mão. Precisa
-    // vir ANTES do insert: o trigger de vínculo usa `coalesce(usado_por_insight_id,
-    // novo)`, então um ponto ainda preso pelo insight velho ficaria marcado com
-    // o dono errado.
-    await db
-      .from('insights')
-      .update({
-        ativo: false,
-        desativado_em: new Date().toISOString(),
-        motivo_encerramento: 'substituido',
-      })
-      .eq('restaurante_id', restauranteId)
-      .eq('ativo', true)
-      .is('deletado_em', null)
-      .or('fixado.is.null,fixado.eq.false')
-
+    // ---- ESTÁGIO 4: gravar ----
+    // Os insights que já estão na tela FICAM. Até aqui cada rodada desativava
+    // todos os não fixados ('substituido') antes de gravar os novos — e isso
+    // anulava o teto de 8 por aba: a lista nunca enchia, era trocada inteira.
+    // Agora os novos se somam, e quem sai é o mais antigo da aba que passar de
+    // 8, pelo trigger `aparar_insights_da_aba` ('excedente'), que devolve os
+    // feedbacks dele ao pool.
     let gravados = 0
+    const criados: InsightCriado[] = []
     for (const { assunto, insight } of aprovados) {
       // Nota 10 é sempre urgente, doa a quem doer: é a regra que não pode ficar
       // a critério do modelo. A nota já passou pelo piso do léxico, então um
@@ -979,27 +1030,19 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       )
       if (erroVinculo) console.error(`[${assunto.chave}] falha ao vincular:`, erroVinculo)
 
-      // Do mesmo assunto, mas invalidados por uma exclusão manual anterior —
-      // não dispararam esta rodada (excluídos de `feedbacks_livres`), mas o
-      // insight que nasce agora sobre o mesmo assunto os representa também.
-      // `chaveDoAssunto` usa a MESMA regra de agrupamento do estágio 0, então
-      // a comparação é exata, não uma aproximação por categoria.
-      const reaproveitados = (invalidados ?? []).filter((p) => chaveDoAssunto(p) === assunto.chave)
-      if (reaproveitados.length > 0) {
-        const { error: erroReaproveitar } = await db.from('insight_feedback').insert(
-          reaproveitados.map((p) => ({
-            insight_id: novo.id,
-            feedback_restaurante_id: p.id,
-            feedback_original_id: p.origem_id,
-            restaurante_id: restauranteId,
-            origem: 'reaproveitado',
-          })),
-        )
-        if (erroReaproveitar) console.error(`[${assunto.chave}] falha ao reaproveitar:`, erroReaproveitar)
-      }
-
+      criados.push({
+        id: novo.id,
+        chave: assunto.chave,
+        titulo: insight.titulo,
+        descricao: insight.descricao ?? '',
+      })
       gravados++
     }
+
+    // ---- ESTÁGIO 5: os feedbacks em liberdade condicional ----
+    // Só DEPOIS de os insights desta rodada estarem gravados e escritos com os
+    // feedbacks livres: o texto nunca se baseia nos condicionais.
+    const religados = await religarCondicionais(db, ctx.prompts, restauranteId, criados)
 
     // Fecha a rodada reconstruindo o cache de uso a partir dos vínculos.
     //
@@ -1032,9 +1075,154 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       assuntos_encontrados: assuntos.length,
       candidatos: candidatos.length,
       descartados,
+      religados,
       status: 'sucesso',
     }
   }
+}
+
+interface InsightCriado {
+  id: string
+  chave: string
+  titulo: string
+  descricao: string
+}
+
+/**
+ * A segunda IA da rodada: religa os feedbacks em "liberdade condicional".
+ *
+ * Condicional é o feedback de um insight que o dono EXCLUIU (`invalidado_em`).
+ * Ele não entra na geração — senão o assunto que o dono mandou embora voltaria
+ * pelo mesmo relato —, mas se feedbacks NOVOS levantarem o mesmo problema, o
+ * relato antigo também pertence ao insight que nasceu agora. É o que mantém
+ * alcançável o cliente que reclamou daquela vez.
+ *
+ * A IA lê TODOS os condicionais soltos e decide. Os que têm a mesma chave de
+ * assunto de um insight novo chegam a ela marcados — é o critério exato que
+ * agrupou o próprio insight —, para ela só deixá-los de fora se o texto tratar
+ * claramente de outra coisa.
+ *
+ * O texto dos insights não é tocado. Sem a IA (desligada, sem crédito ou fora
+ * do ar), os de mesma chave ainda voltam, pelo critério exato; os outros ficam
+ * para a próxima rodada.
+ */
+async function religarCondicionais(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  prompts: Prompts,
+  restauranteId: number,
+  criados: InsightCriado[],
+): Promise<number> {
+  if (criados.length === 0) return 0
+
+  const { data: brutos } = await db
+    .from('feedbacks_restaurante')
+    .select('id, origem_id, tema_id, categoria, sentimento, texto_original, resumo')
+    .eq('restaurante_id', restauranteId)
+    .not('invalidado_em', 'is', null)
+    .is('usado_por_acao_id', null)
+    .order('created_at', { ascending: false })
+    .limit(MAX_CONDICIONAIS)
+  if (!brutos || brutos.length === 0) return 0
+
+  // Quem já está preso a um insight vivo não está solto para religar.
+  // deno-lint-ignore no-explicit-any
+  const ids = brutos.map((b: any) => b.id)
+  const { data: vinculos } = await db
+    .from('insight_feedback')
+    .select('feedback_restaurante_id, insight_id')
+    .in('feedback_restaurante_id', ids)
+  // deno-lint-ignore no-explicit-any
+  const insightIds = [...new Set((vinculos ?? []).map((v: any) => v.insight_id))]
+  const { data: ativos } = insightIds.length
+    ? await db.from('insights').select('id').in('id', insightIds).eq('ativo', true).is('deletado_em', null)
+    : { data: [] }
+  // deno-lint-ignore no-explicit-any
+  const ativosSet = new Set((ativos ?? []).map((i: any) => i.id))
+  const presos = new Set(
+    // deno-lint-ignore no-explicit-any
+    (vinculos ?? []).filter((v: any) => ativosSet.has(v.insight_id)).map((v: any) => v.feedback_restaurante_id),
+  )
+  // deno-lint-ignore no-explicit-any
+  const soltos = brutos.filter((b: any) => !presos.has(b.id))
+  if (soltos.length === 0) return 0
+
+  // deno-lint-ignore no-explicit-any
+  const soltosPorId = new Map<string, any>(soltos.map((p: any) => [String(p.id), p]))
+  const porChave = new Map(criados.map((c) => [c.chave, c.id]))
+  const mesmoTema = new Map<string, string>()
+  for (const p of soltos) {
+    const alvo = porChave.get(chaveDoAssunto(p))
+    if (alvo) mesmoTema.set(String(p.id), alvo)
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const ligacoes: { feedback: any; insightId: string }[] = []
+  let iaDecidiu = false
+
+  const params = await paramsDoAgente(db, AGENTE_RELIGADOR, { max_tokens: 700 })
+  if (params) {
+    const prompt = montarPrompt(prompts, 'ef_religar_condicional', PROMPT_RELIGAR, {
+      insights: criados.map((c) => `- id ${c.id}: ${c.titulo} — ${c.descricao.slice(0, 200)}`).join('\n'),
+      feedbacks: soltos
+        // deno-lint-ignore no-explicit-any
+        .map((p: any) => {
+          const alvo = mesmoTema.get(String(p.id))
+          const marca = alvo ? ` [mesmo tema do insight ${alvo}]` : ''
+          return `- id ${p.id}: "${String(p.texto_original || p.resumo || '').slice(0, 280)}"${marca}`
+        })
+        .join('\n'),
+    })
+    try {
+      const { result } = await chamarIA(db, {
+        messages: [{ role: 'user', content: prompt }],
+        params,
+        origem: 'gerar-insights:religar',
+        restauranteId,
+        agenteId: AGENTE_RELIGADOR,
+        calculadora: false,
+        saida: {
+          nome: 'registrar_vinculos',
+          descricao: 'Registra quais feedbacks antigos pertencem a qual insight novo.',
+          schema: SCHEMA_RELIGAR,
+        },
+      })
+      iaDecidiu = true
+      const insightsValidos = new Set(criados.map((c) => c.id))
+      const pendentes = new Set(soltosPorId.keys())
+      for (const v of ((result?.vinculos ?? []) as { feedback_id: string; insight_id: string }[])) {
+        const fid = String(v.feedback_id)
+        if (!pendentes.has(fid) || !insightsValidos.has(String(v.insight_id))) continue
+        ligacoes.push({ feedback: soltosPorId.get(fid), insightId: String(v.insight_id) })
+        pendentes.delete(fid) // um feedback, um insight
+      }
+    } catch (err) {
+      console.error('religar condicionais: IA falhou, ficam só os de mesmo tema', err)
+    }
+  }
+
+  if (!iaDecidiu) {
+    for (const [fid, insightId] of mesmoTema) {
+      ligacoes.push({ feedback: soltosPorId.get(fid), insightId })
+    }
+  }
+
+  if (ligacoes.length === 0) return 0
+  const { error } = await db.from('insight_feedback').upsert(
+    ligacoes.map(({ feedback, insightId }) => ({
+      insight_id: insightId,
+      feedback_restaurante_id: feedback.id,
+      feedback_original_id: feedback.origem_id,
+      restaurante_id: restauranteId,
+      origem: 'reaproveitado',
+    })),
+    SEM_DUPLICAR,
+  )
+  if (error) {
+    console.error('religar condicionais: falha ao gravar', error)
+    return 0
+  }
+  return ligacoes.length
 }
 
 Deno.serve(async (req: Request) => {

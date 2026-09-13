@@ -618,6 +618,50 @@ Chame registrar_tema. Deixe tema_id como null se for um tema novo.`,
     }],
   },
   {
+    id: 'religador_condicional',
+    arquivo: 'supabase/functions/gerar-insights/index.ts',
+    camada: 'servidor',
+    params: { max_tokens: 700 },
+    desligavel: true,
+    nome: 'Religador de feedbacks em liberdade condicional (edge function)',
+    papel:
+      'Roda no fim de cada geração de insights. Pega os feedbacks de insights que o dono excluiu — que não servem de base para insight novo — e decide se algum deles fala do mesmo problema de um insight criado agora. Se falar, liga. Não reescreve o texto do insight.',
+    memoria: 'SEM memória. Vê só os insights desta rodada e os feedbacks em liberdade condicional.',
+    acessos: [
+      'Insights criados nesta rodada (título e descrição)',
+      'Feedbacks em liberdade condicional (até 40, os mais recentes)',
+      'Grava em: insight_feedback (origem reaproveitado)',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'Lê todos os condicionais soltos. Os que têm o mesmo tema de um insight novo chegam marcados, e ela só os deixa de fora se o texto for claramente outro problema. Desligada, os de mesmo tema ainda são ligados pelo critério exato; os outros ficam para a próxima rodada.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_religar_condicional',
+      conteudo:
+        `Voce recebe insights que acabaram de ser criados para um restaurante e feedbacks ANTIGOS de clientes.
+
+## Insights novos
+{insights}
+
+## Feedbacks antigos
+{feedbacks}
+
+## Sua tarefa
+Para cada feedback antigo, diga se ele fala do MESMO problema de um dos insights novos. Se falar, ligue-o a esse insight. Se nao, deixe-o de fora.
+
+Regras:
+- Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e "a comida veio fria" sao problemas diferentes.
+- Um feedback marcado com [mesmo tema do insight X] foi agrupado pelo sistema no mesmo tema desse insight: ligue-o a ele, a menos que o texto trate claramente de outro problema.
+- Cada feedback vai para no maximo UM insight.
+- Na duvida, deixe de fora. Um vinculo errado faz o cliente receber aviso sobre algo que ele nunca relatou.
+- Use apenas ids que aparecem acima.
+
+Chame registrar_vinculos.`,
+    }],
+  },
+  {
     id: 'vinculador_feedback',
     arquivo: 'supabase/functions/vincular-feedback/index.ts:39',
     camada: 'servidor',

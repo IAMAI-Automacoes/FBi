@@ -345,7 +345,7 @@ export default function Insights() {
       setInsights((prev) => prev.filter((i) => i.id !== id))
       toast({
         title: 'Insight excluído',
-        description: 'Os feedbacks dele não serão mais usados para gerar novos insights.',
+        description: 'Os feedbacks dele não geram insight sozinhos, mas podem entrar num insight novo sobre o mesmo problema.',
       })
     } catch (e: any) {
       toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' })
@@ -537,7 +537,7 @@ export default function Insights() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Gerar insights agora?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Os fixados são mantidos; os demais, substituídos.
+                    Os novos entram na lista. Quando uma aba passa de 8, o mais antigo sai — os fixados nunca saem.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
