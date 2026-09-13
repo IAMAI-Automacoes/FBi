@@ -54,12 +54,13 @@ export function FiltroCategorias({
     (c) => (contagens[c] ?? 0) > 0 || selecionadas.includes(c),
   )
 
-  // Sem nenhuma categoria no recorte E sem nada escolhido, o filtro não tem o
-  // que oferecer. A segunda metade da condição importa: com uma categoria
-  // escolhida, sumir com o controle deixava a pessoa presa a um filtro
-  // invisível, sem onde clicar para desfazê-lo. Acontecia ao escolher uma
-  // categoria e trocar para uma aba onde ela não existe.
-  if (visiveis.length === 0 && selecionadas.length === 0) return null
+  // O botão NUNCA some. Antes ele desaparecia quando o recorte não tinha
+  // categoria nenhuma — e era o único controle da barra a fazer isso: a busca e
+  // o "Fixados" ficavam. A barra mudava de forma a cada troca de aba, e numa aba
+  // vazia a pessoa não sabia se o filtro tinha acabado ou quebrado. Com uma
+  // categoria escolhida era pior: sumia a única forma de desfazê-la.
+  //
+  // Agora ele fica, e sem nada a oferecer diz isso por dentro do próprio popover.
 
   return (
     <Popover open={aberto} onOpenChange={setAberto}>
@@ -110,6 +111,11 @@ export function FiltroCategorias({
           Categoria
           <span className="float-right normal-case tracking-normal">{rotuloItens}</span>
         </div>
+        {visiveis.length === 0 && (
+          <p className="px-3 pb-3 pt-1 text-[13px] text-gray-500">
+            Nenhuma categoria para filtrar aqui.
+          </p>
+        )}
         <div className="max-h-80 overflow-y-auto p-1 pt-0">
           {visiveis.map((cat) => {
             const estilo = estiloCategoria(cat)

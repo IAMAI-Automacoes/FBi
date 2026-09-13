@@ -31,7 +31,12 @@ import { useToast } from '@/hooks/use-toast'
 // meio, não só 3 opções fixas).
 const FEEDBACKS_MIN = 3
 const FEEDBACKS_MAX = 30
-const FEEDBACKS_PADRAO = 10
+/** Igual ao padrão da coluna e ao de `deve_gerar_insights` — eram 10, 10 e 5. */
+const FEEDBACKS_PADRAO = 6
+/** Insights por rodada: de 1 até o teto de uma aba. Ver `gerar-insights`. */
+const INSIGHTS_RODADA_MIN = 1
+const INSIGHTS_RODADA_MAX = 8
+const INSIGHTS_RODADA_PADRAO = 2
 
 /**
  * A qual aba um insight pertence.
@@ -64,7 +69,15 @@ export default function Insights() {
   const [prioridadeSalva, setFilterPriority] = useFiltroPersistente<string>('insights:prioridade', 'URGENTE')
   const filterPriority = prioridadeSalva === 'Todos' ? 'URGENTE' : prioridadeSalva
   const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>('insights:categorias', [])
-  const [showOnlyPinned, setShowOnlyPinned] = useFiltroPersistente('insights:fixados', false)
+  /**
+   * "Fixados" é de CADA aba: ligar em Urgente não liga em Importante. As três
+   * abas são páginas independentes, e um filtro que atravessasse todas faria a
+   * aba seguinte abrir vazia sem motivo visível.
+   */
+  const [fixadosPorAba, setFixadosPorAba] = useFiltroPersistente<Record<string, boolean>>('insights:fixados-por-aba', {})
+  const showOnlyPinned = !!fixadosPorAba[filterPriority]
+  const setShowOnlyPinned = (muda: (atual: boolean) => boolean) =>
+    setFixadosPorAba((prev) => ({ ...prev, [filterPriority]: muda(!!prev[filterPriority]) }))
   const [busca, setBusca] = useFiltroPersistente('insights:busca', '')
 
   const [insights, setInsights] = useState<Insight[]>([])
@@ -76,8 +89,10 @@ export default function Insights() {
 
   // Configuração da geração automática (feedbacks acumulados que disparam análise)
   const [configOpen, setConfigOpen] = useState(false)
-  const [feedbacksPorAnalise, setFeedbacksPorAnalise] = useState(5)
-  const [savedFeedbacksPorAnalise, setSavedFeedbacksPorAnalise] = useState(5)
+  const [feedbacksPorAnalise, setFeedbacksPorAnalise] = useState(FEEDBACKS_PADRAO)
+  const [savedFeedbacksPorAnalise, setSavedFeedbacksPorAnalise] = useState(FEEDBACKS_PADRAO)
+  const [insightsPorRodada, setInsightsPorRodada] = useState(INSIGHTS_RODADA_PADRAO)
+  const [savedInsightsPorRodada, setSavedInsightsPorRodada] = useState(INSIGHTS_RODADA_PADRAO)
   const [savingConfig, setSavingConfig] = useState(false)
 
   const { usuario } = useAuth()
@@ -121,12 +136,20 @@ export default function Insights() {
       : FEEDBACKS_PADRAO
     setFeedbacksPorAnalise(valor)
     setSavedFeedbacksPorAnalise(valor)
+
+    const pedidos = Number((configInsights as any)?.max_insights_por_rodada)
+    const porRodada = Number.isFinite(pedidos)
+      ? Math.min(Math.max(Math.round(pedidos), INSIGHTS_RODADA_MIN), INSIGHTS_RODADA_MAX)
+      : INSIGHTS_RODADA_PADRAO
+    setInsightsPorRodada(porRodada)
+    setSavedInsightsPorRodada(porRodada)
   }, [configInsights])
 
   const handleSalvarConfig = async () => {
     if (!usuario?.restaurante_id) return
     // Defesa: garante valor dentro da faixa aceita pelo slider
     const valor = Math.min(Math.max(Math.round(feedbacksPorAnalise), FEEDBACKS_MIN), FEEDBACKS_MAX)
+    const porRodada = Math.min(Math.max(Math.round(insightsPorRodada), INSIGHTS_RODADA_MIN), INSIGHTS_RODADA_MAX)
     setSavingConfig(true)
     try {
       // Lê o jsonb atual para preservar as outras chaves
@@ -136,7 +159,11 @@ export default function Insights() {
         .eq('id', usuario.restaurante_id)
         .single()
 
-      const merged = { ...((cfg?.config_insights as any) || {}), feedbacks_por_analise: valor }
+      const merged = {
+        ...((cfg?.config_insights as any) || {}),
+        feedbacks_por_analise: valor,
+        max_insights_por_rodada: porRodada,
+      }
 
       const { error } = await supabase
         .from('restaurantes')
@@ -146,11 +173,12 @@ export default function Insights() {
       if (error) throw error
 
       setSavedFeedbacksPorAnalise(valor)
+      setSavedInsightsPorRodada(porRodada)
       setConfigOpen(false)
       refetchConfig() // propaga para o restante do site (MascotTab etc.)
       toast({
         title: 'Configuração salva',
-        description: `A análise automática será disparada a cada ${valor} novos feedbacks.`,
+        description: `A cada ${valor} novos feedbacks, até ${porRodada} insight${porRodada !== 1 ? 's' : ''} por rodada.`,
       })
     } catch (e: any) {
       toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' })
@@ -380,14 +408,16 @@ export default function Insights() {
     const termo = busca.trim().toLowerCase()
     const conta: Record<string, number> = { URGENTE: 0, IMPORTANTE: 0, 'OBSERVAÇÃO': 0 }
     for (const i of insights) {
+      const aba = abaDoInsight(i.prioridade)
       if (filterCategories.length > 0 && !filterCategories.includes(i.categoria ?? '')) continue
-      if (showOnlyPinned && !i.fixado) continue
+      // O "Fixados" de CADA aba vale só para a contagem dela.
+      if (fixadosPorAba[aba] && !i.fixado) continue
       if (termo && ![i.titulo, i.descricao, i.sugestao].some((c) => (c ?? '').toLowerCase().includes(termo))) continue
-      conta[abaDoInsight(i.prioridade)]++
+      conta[aba]++
     }
     return conta
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [insights, filterCategories, showOnlyPinned, busca])
+  }, [insights, filterCategories, fixadosPorAba, busca])
 
   /**
    * Quantos cards cabem numa página da aba.
@@ -405,6 +435,26 @@ export default function Insights() {
   // página nunca pode ficar além do fim (apagar um insight encurta a lista).
   useEffect(() => { setPagina(1) }, [filterPriority, filterCategories, showOnlyPinned, busca])
   useEffect(() => { setPagina((p) => Math.min(p, totalDePaginas)) }, [totalDePaginas])
+
+  /**
+   * A busca vale para as três abas, mas a tela continua mostrando UMA — e
+   * sempre a que está marcada, então nunca fica em dúvida de onde se está.
+   *
+   * O que a busca faz de diferente: as contagens das abas passam a contar os
+   * resultados de cada uma, e se a aba aberta não tem nenhum enquanto outra
+   * tem, a tela vai para a primeira que tem (na ordem Urgente → Importante →
+   * Observação). Só no momento em que o termo MUDA: trocar de aba à mão
+   * durante uma busca continua valendo, sem a tela puxar de volta.
+   */
+  const buscaAnteriorRef = useRef(busca)
+  useEffect(() => {
+    if (buscaAnteriorRef.current === busca) return
+    buscaAnteriorRef.current = busca
+    if (!busca.trim() || (totaisPorAba[filterPriority] ?? 0) > 0) return
+    const comResultado = abas.find((a) => (totaisPorAba[a.value] ?? 0) > 0)
+    if (comResultado) setFilterPriority(comResultado.value)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca])
 
   const insightsDaPagina = useMemo(
     () => filteredInsights.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA),
@@ -435,11 +485,8 @@ export default function Insights() {
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
   // filtros onde a lista rolando pudesse vazar por cima.
   const barraFiltros = (
-        /* `border-b-0`: a borda inferior deste card corria a 13px da borda do
-           header, e as duas juntas viravam duas linhas paralelas logo abaixo
-           das abas. A do header é a que separa os filtros da lista — essa
-           fica; esta aqui era a repetida. */
-        <div className="bg-white rounded-xl shadow-sm border border-b-0 border-gray-200">
+    <>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <FiltroCategorias
@@ -509,7 +556,10 @@ export default function Insights() {
               open={configOpen}
               onOpenChange={(open) => {
                 setConfigOpen(open)
-                if (open) setFeedbacksPorAnalise(savedFeedbacksPorAnalise)
+                if (open) {
+                  setFeedbacksPorAnalise(savedFeedbacksPorAnalise)
+                  setInsightsPorRodada(savedInsightsPorRodada)
+                }
               }}
             >
               <AlertDialogTrigger asChild>
@@ -531,24 +581,39 @@ export default function Insights() {
                   `max-w-[340px]`: a caixa tem uma linha de texto e um seletor;
                   na largura padrão de 440px sobrava vazio dos dois lados do
                   número, que é o que fazia parecer um formulário inacabado. */}
-              <AlertDialogContent className="max-w-[340px] gap-4">
+              <AlertDialogContent className="max-w-[420px] gap-4">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Gerar insights automaticamente</AlertDialogTitle>
                   <AlertDialogDescription className="sr-only">
-                    Escolha de quantos em quantos feedbacks a análise roda sozinha.
+                    De quantos em quantos feedbacks a análise roda, e quantos insights cada rodada entrega.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
-                <div className="flex flex-col items-center gap-1 py-1">
-                  <p className="text-[13px] text-gray-500">a cada</p>
-                  <RoletaNumerica
-                    min={FEEDBACKS_MIN}
-                    max={FEEDBACKS_MAX}
-                    value={feedbacksPorAnalise}
-                    onChange={setFeedbacksPorAnalise}
-                    className="w-24"
-                  />
-                  <p className="text-[13px] text-gray-500">novos feedbacks</p>
+                {/* Duas perguntas, lado a lado, com a mesma forma: quando roda e
+                    quanto entrega. A frase em volta de cada número é o rótulo. */}
+                <div className="grid grid-cols-2 gap-4 py-1">
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-[13px] text-gray-500">a cada</p>
+                    <RoletaNumerica
+                      min={FEEDBACKS_MIN}
+                      max={FEEDBACKS_MAX}
+                      value={feedbacksPorAnalise}
+                      onChange={setFeedbacksPorAnalise}
+                      className="w-24"
+                    />
+                    <p className="text-[13px] text-gray-500">novos feedbacks</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="text-[13px] text-gray-500">até</p>
+                    <RoletaNumerica
+                      min={INSIGHTS_RODADA_MIN}
+                      max={INSIGHTS_RODADA_MAX}
+                      value={insightsPorRodada}
+                      onChange={setInsightsPorRodada}
+                      className="w-24"
+                    />
+                    <p className="text-[13px] text-gray-500">insights por rodada</p>
+                  </div>
                 </div>
 
                 <AlertDialogFooter>
@@ -568,6 +633,7 @@ export default function Insights() {
             </AlertDialog>
           </div>
         </div>
+        </div>
 
         {/* As abas, na linha de baixo — o mesmo desenho das caixas de entrada
             do Gmail: ícone, nome, e um traço grosso da cor da aba aberta.
@@ -579,7 +645,10 @@ export default function Insights() {
             vez de ficarem amontoadas à esquerda, como as caixas de entrada do
             Gmail. Sem `gap`, para que os traços da aba ativa e as áreas de
             clique fiquem encostados, sem faixas mortas entre eles. */}
-        <div className="flex items-stretch border-t border-gray-200 px-1">
+        {/* Fora do card, sem borda nem fundo: são as páginas, não mais um
+            filtro. O `-mb-3` desce o traço da aba aberta até a linha do
+            header, que passa a ser o chão das abas — como no Gmail. */}
+        <div className="mt-2 -mb-3 flex items-stretch">
           {abas.map((aba) => {
             const ativa = filterPriority === aba.value
             const Icone = aba.icone
@@ -593,16 +662,16 @@ export default function Insights() {
                   'flex min-w-0 flex-1 items-center justify-center gap-2 border-b-[3px] px-3 py-2.5 text-sm transition-colors',
                   ativa
                     ? cn(aba.corBorda, aba.cor, 'font-semibold')
-                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700',
+                    : 'border-transparent font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900',
                 )}
               >
-                <Icone className={cn('h-4 w-4 shrink-0', ativa ? aba.cor : 'text-gray-400')} />
+                <Icone className={cn('h-4 w-4 shrink-0', ativa ? aba.cor : 'text-gray-500')} />
                 <span className="truncate">{aba.label}</span>
                 {quantos > 0 && (
                   <span
                     className={cn(
                       'rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
-                      ativa ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-500',
+                      ativa ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-600',
                     )}
                   >
                     {quantos}
@@ -612,7 +681,7 @@ export default function Insights() {
             )
           })}
         </div>
-        </div>
+    </>
   )
 
   // Precisa de deps de verdade (não pode rodar em todo render): `setExtra`
@@ -626,11 +695,17 @@ export default function Insights() {
   }, [
     filterPriority,
     filterCategories,
-    showOnlyPinned,
+    fixadosPorAba,
     busca,
     generating,
     configOpen,
     feedbacksPorAnalise,
+    insightsPorRodada,
+    // Sem estes dois, as contagens das abas e do filtro de categorias ficavam
+    // presas no valor da primeira pintura: a barra mora no header e só é
+    // refeita quando alguma destas dependências muda.
+    totaisPorAba,
+    contagemCategorias,
     savingConfig,
     mascote,
   ])

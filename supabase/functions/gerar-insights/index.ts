@@ -59,8 +59,16 @@ const AGENTE = 'gerador_insights'
 const AGENTE_VERIFICADOR = 'verificador_insights'
 const AGENTE_AVALIADOR = 'avaliador_assunto'
 
-/** Teto de insights por rodada — pedido explícito do dono. */
-const MAX_INSIGHTS = 5
+/**
+ * Quantos insights uma rodada entrega, quando o dono não escolheu.
+ *
+ * Era uma constante fixa em 5 que nenhuma configuração alcançava. Agora vem de
+ * `config_insights.max_insights_por_rodada`, que a engrenagem da tela grava.
+ */
+const INSIGHTS_POR_RODADA_PADRAO = 2
+/** O teto de uma aba (`aparar_insights_da_aba`): uma rodada maior que isso
+ *  empurraria para fora, na mesma hora, insights que ela própria acabou de criar. */
+const INSIGHTS_POR_RODADA_MAX = 8
 /**
  * Assuntos que chegam a ser redigidos. Acima do teto de insights de propósito:
  * a verificação descarta alguns, e sobrar candidato é melhor que devolver menos
@@ -632,6 +640,10 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
   if (config.excluida_em) return { insights_gerados: 0, status: 'conta_encerrada' }
 
   const configInsights = (config.config_insights as Record<string, unknown>) || {}
+  const pedidoPorRodada = Number(configInsights.max_insights_por_rodada)
+  const insightsPorRodada = Number.isFinite(pedidoPorRodada)
+    ? Math.min(Math.max(Math.round(pedidoPorRodada), 1), INSIGHTS_POR_RODADA_MAX)
+    : INSIGHTS_POR_RODADA_PADRAO
 
   // ---- O PORTÃO: quantos feedbacks livres se acumularam ----
   //
@@ -840,11 +852,11 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       }
     })
 
-    // Os candidatos já vêm ordenados por nota, então cortar em MAX_INSIGHTS
-    // aqui mantém os assuntos mais relevantes.
+    // Os candidatos já vêm ordenados por nota, então cortar no limite da
+    // rodada aqui mantém os assuntos mais relevantes.
     const aprovados = resultados
       .filter((r): r is typeof r & { insight: NonNullable<typeof r.insight> } => !!r.insight)
-      .slice(0, MAX_INSIGHTS)
+      .slice(0, insightsPorRodada)
     const descartados = resultados.length - aprovados.length
 
     if (aprovados.length === 0) {
