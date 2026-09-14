@@ -1577,7 +1577,7 @@ export default function QRCodes() {
                     size="forma"
                   >
                     {savingCfg && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {savingCfg ? 'Salvando…' : clienteJaConfigurado ? 'Salvar' : 'Continuar'}
+                    {savingCfg ? 'Salvando…' : clienteJaConfigurado ? 'Salvar' : 'Salvar'}
                     {!savingCfg && !clienteJaConfigurado && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>
