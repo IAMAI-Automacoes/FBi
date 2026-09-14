@@ -149,7 +149,17 @@ export function FeedbacksRelacionadosPopover({
           →
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[27rem] max-w-[92vw] max-h-[70vh] overflow-y-auto p-0">
+      {/* A altura vem do espaço que o Radix mediu (`--radix-popover-available-
+          height`), não de um `70vh` fixo. Com a altura fixa, um card perto do
+          rodapé fazia a telinha virar para cima e passar por cima do cabeçalho,
+          saindo pela borda de cima da tela — 70% da janela não cabem acima de um
+          gatilho que está a 200px do topo. `collisionPadding` guarda 12px de
+          folga em volta para ela nunca encostar na borda. */}
+      <PopoverContent
+        align="start"
+        collisionPadding={12}
+        className="flex max-h-[min(70vh,var(--radix-popover-content-available-height))] w-[27rem] max-w-[92vw] flex-col overflow-y-auto p-0"
+      >
         <div className="p-4 space-y-3">
           {carregando && (
             <div className="flex items-center justify-center py-8 text-gray-400">

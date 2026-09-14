@@ -1154,9 +1154,15 @@ export default function Garcons() {
           )}
 
           {garcons.length === 0 ? (
-            <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Nenhum garçom cadastrado. Clique em "Novo garçom" acima.
-            </CardContent></Card>
+            <Card>
+              {/* `sm:py-12` junto do `py-12`: o `sm:pt-0` que vem embutido no
+                  CardContent ganha de um `py-12` sozinho em telas ≥640px (mesma
+                  especificidade, e ele vem depois no CSS), e o texto colava na
+                  borda de cima do card — daí o aspecto esmagado. */}
+              <CardContent className="py-12 sm:py-12 text-center text-sm text-muted-foreground">
+                Nenhum garçom cadastrado. Clique em "Novo garçom" acima.
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               {/* `sm:p-0` também — mesmo motivo do card do Ranking logo
