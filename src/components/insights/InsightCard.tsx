@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_AZUL, BOTAO_PILULA_AZUL_VAZADO } from '@/lib/estilos-botao'
 import { totalPontos, type Insight } from '@/lib/tipos/insight'
 import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
 import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
@@ -180,7 +181,7 @@ export function InsightCard({
               size="sm"
               onClick={onCreateTask}
               disabled={criandoAcao}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white h-9"
+              className={cn(BOTAO_PILULA_AZUL, 'w-full sm:w-auto')}
             >
               {criandoAcao && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {criandoAcao ? 'Gerando...' : 'Criar Ação'}
@@ -190,7 +191,7 @@ export function InsightCard({
             variant="outline"
             size="sm"
             onClick={onAiChat}
-            className="w-full sm:w-auto bg-white text-blue-600 border-blue-600 hover:bg-blue-50 h-9 font-semibold"
+            className={cn(BOTAO_PILULA_AZUL_VAZADO, 'w-full sm:w-auto')}
           >
             Conversar com a IA
           </Button>

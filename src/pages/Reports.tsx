@@ -36,6 +36,7 @@ import { montarLinhasCsv, serializarCsv } from '@/lib/relatorio-csv'
 import { toast } from 'sonner'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_VERMELHA } from '@/lib/estilos-botao'
 
 const PERIOD_LABEL: Record<PeriodInfo, string> = {
   '7d': 'Últimos 7 dias',
@@ -472,7 +473,7 @@ function LayoutNovo({
             <Button
               onClick={handleExportPdf}
               disabled={semDados || gerandoPdf || gerandoCsv}
-              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-500 hover:to-blue-700 active:shadow-none active:from-blue-700 active:to-blue-700 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
             >
               {gerandoPdf ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -487,7 +488,7 @@ function LayoutNovo({
                 <Button
                   aria-label="Escolher formato"
                   disabled={semDados || gerandoPdf || gerandoCsv}
-                  className="h-9 rounded-l-none rounded-r-full bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-700 hover:to-blue-900 active:shadow-none active:from-blue-900 active:to-blue-900 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                  className="h-9 rounded-l-none rounded-r-full bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-500 hover:to-blue-700 active:shadow-none active:from-blue-700 active:to-blue-700 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
@@ -643,7 +644,7 @@ function LayoutNovo({
                   {/* Mesmo período selecionado agora em Relatórios + a
                       categoria deste tema crítico + só negativas — igual ao
                       que o dono está vendo aqui, sem precisar refiltrar. */}
-                  <Button asChild className="bg-red-600 text-white hover:bg-red-700">
+                  <Button asChild className={BOTAO_PILULA_VERMELHA}>
                     <Link
                       to={`/feedbacks?periodo=${period}&categoria=${encodeURIComponent(kpis.criticalTheme)}&sentimento=negativo`}
                     >

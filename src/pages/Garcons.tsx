@@ -43,6 +43,7 @@ import { desenharPoster, landingUrl, baixarBlob, POSTER_W, POSTER_H, type Poster
 import { lerElementos, lerEstiloDosTextos, type ElementoCartaz, type EstilosDosTextos } from '@/lib/cartaz-elementos'
 import { getIniciais, CORES_AVATAR } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { nomeDeArquivoSeguro } from '@/lib/nome-arquivo'
 import { CampoTelefone } from '@/components/CampoTelefone'
 import { telefoneNacionalValido, formatarExibicaoTelefone } from '@/lib/telefone'
@@ -255,26 +256,6 @@ const CLASSE_CHECKBOX_REGRA =
  *  mesma linguagem do resto do app pra "meta batida"/"tudo certo". */
 const CLASSE_BOTAO_PAGAR =
   'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 hover:text-emerald-800'
-
-/** A mesma pílula escura em degradê do botão de "Baixar" de Relatórios —
- *  compartilhada entre o botão normal (dividido, com dropdown) e o "Baixar
- *  (N)" do modo de seleção, pra nunca mais os dois divergirem de formato
- *  (só o arredondamento/padding muda conforme o contexto).
- *
- *  `slate` é cinza-azulado de BAIXA saturação — perto de preto, o olho lê
- *  só "preto", o azul quase some. `blue-800`/`blue-950` são a cor azul de
- *  verdade (bem mais saturada) só que escura o bastante pra continuar lendo
- *  como "preto" — assim o "azulado" fica óbvio sem precisar comparar lado a
- *  lado ou passar o mouse. */
-/** Mesma construção da variante `baixar` (degradê + luz no topo + sombra baixa,
- *  pra ter volume de botão de verdade em vez de um retângulo de cor chapada) —
- *  só que em azul claro, porque o azul escuro dali do lado já significa
- *  "baixar"; usar a mesma cor pra "criar" faria as duas ações parecerem uma
- *  coisa só lado a lado na barra. */
-const CLASSE_BOTAO_NOVO =
-  'bg-blue-600 bg-gradient-to-b from-blue-500 to-blue-700 text-white ' +
-  'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(16,24,40,0.20)] ' +
-  'hover:from-blue-400 hover:to-blue-600 active:shadow-none active:from-blue-600 active:to-blue-600'
 
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 function gerarSlug(n = 8) {
@@ -1108,9 +1089,9 @@ export default function Garcons() {
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={abrirCriar}
-                className={cn('h-7 gap-1 rounded-full px-2.5 text-sm', CLASSE_BOTAO_NOVO)}
+                className={cn(BOTAO_PILULA_AZUL, 'gap-1.5')}
               >
-                <Plus className="h-3.5 w-3.5" /> Novo garçom
+                <Plus className="h-4 w-4" /> Novo garçom
               </Button>
               <div className="flex-1" />
               {garcons.length > 0 && (

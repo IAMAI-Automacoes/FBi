@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Sparkles, Loader2, Settings2, Pin, AlertTriangle, Flag, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { RoletaNumerica } from '@/components/RoletaNumerica'
 import {
   AlertDialog,
@@ -18,6 +18,7 @@ import { FiltroCategorias } from '@/components/FiltroCategorias'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { CampoBusca } from '@/components/CampoBusca'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_AZUL, BOTAO_PILULA_AZUL_VAZADO } from '@/lib/estilos-botao'
 import { supabase } from '@/lib/supabase/client'
 import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
 import { PRIORIDADES, pesoPrioridade } from '@/lib/prioridade'
@@ -494,9 +495,18 @@ export default function Insights() {
               rotuloItens="insights"
               selecionadas={filterCategories}
               onChange={setFilterCategories}
+              // Vazado, como o "Conversar com a IA" dos cards: filtrar é ação
+              // secundária, e a pílula cheia deixava a barra pesando mais que a
+              // lista embaixo dela.
+              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'max-w-[200px] justify-start [&_svg]:text-blue-700/60')}
             />
 
-            <CampoBusca value={busca} onChange={setBusca} placeholder="Buscar nos insights" />
+            <CampoBusca
+              value={busca}
+              onChange={setBusca}
+              placeholder="Buscar nos insights"
+              inputClassName="h-9 rounded-full"
+            />
 
             <Button
               type="button"
@@ -505,10 +515,12 @@ export default function Insights() {
               aria-pressed={showOnlyPinned}
               title={showOnlyPinned ? 'Mostrando só os fixados' : 'Mostrar só os fixados'}
               className={cn(
-                'h-10 shrink-0 shadow-sm font-normal gap-1.5',
-                showOnlyPinned
-                  ? 'border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-50 hover:text-amber-600'
-                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+                BOTAO_PILULA_AZUL_VAZADO,
+                'gap-1.5',
+                // Ligado, o fundo azul-claro preenche a pílula — é o mesmo
+                // contorno, e o preenchimento diz que o filtro está valendo sem
+                // precisar de uma cor de fora da paleta.
+                showOnlyPinned && 'bg-blue-50',
               )}
             >
               <Pin className={cn('h-4 w-4', showOnlyPinned && 'fill-current')} />
@@ -521,9 +533,8 @@ export default function Insights() {
               <AlertDialogTrigger asChild>
                 <Button
                   size="sm"
-                  variant="ia"
                   disabled={generating}
-                  className="w-full lg:w-auto font-medium"
+                  className={cn(BOTAO_PILULA_AZUL, 'w-full lg:w-auto')}
                 >
                   {generating ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -544,7 +555,7 @@ export default function Insights() {
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleGerarInsights}
-                    className={cn(buttonVariants({ variant: 'ia' }))}
+                    className={BOTAO_PILULA_AZUL}
                   >
                     Gerar agora
                   </AlertDialogAction>

@@ -7,6 +7,8 @@ interface CampoBuscaProps {
   onChange: (valor: string) => void
   placeholder?: string
   className?: string
+  /** Classes do `<input>` em si (o `className` acima é do contêiner). */
+  inputClassName?: string
 }
 
 /**
@@ -28,12 +30,13 @@ export function CampoBusca({
   onChange,
   placeholder = 'Buscar…',
   className,
+  inputClassName,
 }: CampoBuscaProps) {
   return (
     <div className={cn('relative w-56 shrink-0', className)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
       <Input
-        className="h-10 border-gray-200 bg-white pl-9 pr-8 shadow-sm"
+        className={cn('h-10 border-gray-200 bg-white pl-9 pr-8 shadow-sm', inputClassName)}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}

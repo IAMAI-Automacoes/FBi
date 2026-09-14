@@ -56,15 +56,18 @@ const buttonVariants = cva(
          *
          * É uma variante só porque as duas telas são dois passos do mesmo
          * caminho: botões diferentes fariam parecer que uma decisão pesa mais
-         * que a outra. Terracota porque é a cor de quem edita o material do
-         * cliente — o azul do app já é a cor de tudo o que é clicável e não
-         * distinguiria nada ali.
+         * que a outra.
+         *
+         * Era terracota. Virou o mesmo azul do botão de ação do resto do site
+         * (`BOTAO_PILULA_AZUL`, em `@/lib/estilos-botao`) — a cor própria fazia
+         * o passo do QR parecer de outro produto. Mantém-se variante porque a
+         * forma aqui é a do `size="forma"`, não a da pílula.
          */
         etapa:
-          'bg-[#C2622C] bg-gradient-to-b from-[#CE7038] to-[#A9531F] text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-[#D67B44] hover:to-[#B85B24] ' +
-          'active:shadow-none active:from-[#A9531F] active:to-[#A9531F] ' +
+          'bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-blue-500 hover:to-blue-700 ' +
+          'active:shadow-none active:from-blue-700 active:to-blue-700 ' +
           'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
 
         /**
@@ -105,10 +108,10 @@ const buttonVariants = cva(
           'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
 
         baixar:
-          'bg-blue-900 bg-gradient-to-b from-blue-800 to-blue-950 text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-blue-700 hover:to-blue-900 ' +
-          'active:shadow-none active:from-blue-900 active:to-blue-900 ' +
+          'bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-blue-500 hover:to-blue-700 ' +
+          'active:shadow-none active:from-blue-700 active:to-blue-700 ' +
           'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
       },
       size: {

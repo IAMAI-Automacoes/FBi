@@ -1037,7 +1037,10 @@ export function ChatFab({
         <SheetTrigger asChild>
           <Button
             size="icon"
-            className="fixed bottom-6 right-6 h-11 w-11 rounded-full shadow-elevation hover:shadow-lg hover:scale-105 transition-all z-40 bg-[#1D4ED8]/80 hover:bg-[#1D4ED8]/90"
+            /* Mesmo azul do botão de ação do site (ver `BOTAO_PILULA_AZUL`):
+               degradê `blue-800 → blue-950`. Só a forma muda — aqui é redondo e
+               de 44px, não pílula. */
+            className="fixed bottom-6 right-6 h-11 w-11 rounded-full border-0 bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 shadow-elevation hover:from-blue-500 hover:to-blue-700 hover:shadow-lg hover:scale-105 transition-all z-40"
           >
             <MessageCircle className="h-5 w-5 text-white" />
           </Button>
