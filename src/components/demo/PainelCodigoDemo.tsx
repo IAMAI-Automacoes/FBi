@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { KeyRound } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
@@ -7,9 +6,45 @@ import { cn } from '@/lib/utils'
 import { PREFIXO_DEMO } from '@/lib/demo'
 import { buscarCodigoDemo, definirTesteDemo, type CodigoDemo } from '@/lib/queries/demo'
 
-const JANELA_S = 30
+const JANELA_MS = 30_000
 /** Nos últimos segundos o código ainda vale, mas não dá tempo de digitar com calma. */
-const QUASE_TROCANDO_S = 5
+const QUASE_TROCANDO_MS = 5_000
+// Fatia de pizza: um traço com a largura do diâmetro de um círculo de raio 8
+// cobre o disco inteiro; o `dashoffset` recolhe a fatia até sumir.
+const RAIO = 8
+const CIRCUNFERENCIA = 2 * Math.PI * RAIO
+
+/** O tempo até o código trocar. Desenhado a cada quadro direto no SVG, sem re-render. */
+function ContagemCircular({ fim, quaseTrocando }: { fim: number; quaseTrocando: boolean }) {
+  const fatia = useRef<SVGCircleElement>(null)
+
+  useEffect(() => {
+    let quadro = 0
+    const desenhar = () => {
+      const fracao = Math.min(1, Math.max(0, (fim - Date.now()) / JANELA_MS))
+      fatia.current?.setAttribute('stroke-dashoffset', String(CIRCUNFERENCIA * (1 - fracao)))
+      quadro = requestAnimationFrame(desenhar)
+    }
+    desenhar()
+    return () => cancelAnimationFrame(quadro)
+  }, [fim])
+
+  return (
+    <svg viewBox="0 0 32 32" className="h-14 w-14 shrink-0 -rotate-90" aria-hidden>
+      <circle cx="16" cy="16" r="16" className={cn('transition-colors', quaseTrocando ? 'fill-amber-50' : 'fill-blue-50')} />
+      <circle
+        ref={fatia}
+        cx="16"
+        cy="16"
+        r={RAIO}
+        fill="none"
+        strokeWidth={RAIO * 2}
+        strokeDasharray={CIRCUNFERENCIA}
+        className={cn('transition-colors', quaseTrocando ? 'stroke-amber-400' : 'stroke-[#1D4ED8]')}
+      />
+    </svg>
+  )
+}
 
 /**
  * O "autenticador" do vendedor, no perfil: o código de 6 dígitos que abre a
@@ -23,7 +58,8 @@ export function PainelCodigoDemo() {
   const { ehVendedor, sessaoDemo } = useAuth()
   const { toast } = useToast()
   const [dados, setDados] = useState<CodigoDemo | null>(null)
-  const [restante, setRestante] = useState(0)
+  const [fim, setFim] = useState(0)
+  const [agora, setAgora] = useState(() => Date.now())
   const [falhou, setFalhou] = useState(false)
   const [salvandoTeste, setSalvandoTeste] = useState(false)
   const ativo = ehVendedor && !sessaoDemo
@@ -41,7 +77,7 @@ export function PainelCodigoDemo() {
         setDados(novo)
         setFalhou(false)
         if (novo) {
-          setRestante(novo.segundosRestantes)
+          setFim(Date.now() + novo.segundosRestantes * 1000)
           proxima = setTimeout(buscar, novo.segundosRestantes * 1000 + 300)
         }
       } catch {
@@ -56,7 +92,7 @@ export function PainelCodigoDemo() {
     }
 
     buscar()
-    const relogio = setInterval(() => setRestante((r) => Math.max(0, r - 1)), 1000)
+    const relogio = setInterval(() => setAgora(Date.now()), 1000)
     document.addEventListener('visibilitychange', aoVoltar)
     return () => {
       vivo = false
@@ -68,8 +104,7 @@ export function PainelCodigoDemo() {
 
   if (!ativo) return null
 
-  const endereco = `${window.location.host}${PREFIXO_DEMO}`
-  const quaseTrocando = restante <= QUASE_TROCANDO_S
+  const quaseTrocando = dados !== null && fim - agora <= QUASE_TROCANDO_MS
   const teste = dados?.proximoAcessoTeste ?? false
 
   const alternarTeste = async (ligado: boolean) => {
@@ -89,72 +124,47 @@ export function PainelCodigoDemo() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200/75 bg-white p-5 sm:p-6 shadow-subtle" data-painel="codigo-demo">
-      <div className="flex items-start gap-3">
-        <KeyRound className="h-5 w-5 shrink-0 mt-0.5 text-[#1D4ED8]" />
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">Código da demonstração</h3>
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#1D4ED8]">
-              Conta de vendedor
-            </span>
-          </div>
-          <p className="text-[13px] text-gray-600 mt-1">
-            No computador do cliente, abra <b className="font-medium text-gray-800">{endereco}</b> e digite o
-            código. O acesso dura 2 horas e fecha sozinho.
+    <section
+      data-painel="codigo-demo"
+      className="overflow-hidden rounded-2xl border border-gray-200/75 bg-white shadow-subtle"
+    >
+      <div className="flex items-center justify-between gap-6 px-6 pb-6 pt-5 sm:px-10">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900">Código da demonstração</h3>
+          <p className="mt-0.5 text-[13px] text-gray-500">
+            {falhou ? (
+              'Sem conexão. Tentando de novo…'
+            ) : (
+              <>
+                Digite em <span className="font-medium text-gray-700">{window.location.host}{PREFIXO_DEMO}</span>
+              </>
+            )}
           </p>
-
-          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div
-              aria-live="polite"
-              data-codigo-demo={dados?.codigo ?? ''}
-              className={cn(
-                'text-4xl font-bold tracking-[0.18em] tabular-nums transition-colors',
-                quaseTrocando ? 'text-gray-400' : 'text-gray-900',
-              )}
-            >
-              {dados ? `${dados.codigo.slice(0, 3)} ${dados.codigo.slice(3)}` : '··· ···'}
-            </div>
-            <div className="flex-1 sm:max-w-xs">
-              <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-[width] duration-1000 ease-linear',
-                    quaseTrocando ? 'bg-amber-400' : 'bg-[#1D4ED8]',
-                  )}
-                  style={{ width: `${(Math.min(restante, JANELA_S) / JANELA_S) * 100}%` }}
-                />
-              </div>
-              <p className="mt-1.5 text-[12px] text-gray-500">
-                {falhou
-                  ? 'Sem conexão. Tentando de novo…'
-                  : quaseTrocando
-                    ? 'Trocando — espere o próximo código'
-                    : `Muda em ${restante} s`}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/70 p-3.5">
-            <Switch
-              id="teste-demo"
-              checked={teste}
-              onCheckedChange={alternarTeste}
-              disabled={salvandoTeste || !dados}
-              className="mt-0.5"
-            />
-            <div>
-              <label htmlFor="teste-demo" className="cursor-pointer text-[13px] font-medium text-gray-800">
-                Próximo acesso: teste de 3 minutos
-              </label>
-              <p className="mt-0.5 text-[12px] text-gray-500">
-                Para testar sozinho: ligue, abra outra aba em {endereco} e digite o código. Desliga sozinho
-                depois de usado.
-              </p>
-            </div>
-          </div>
+          <p
+            aria-live="polite"
+            data-codigo-demo={dados?.codigo ?? ''}
+            className={cn(
+              'mt-4 text-[44px] font-semibold leading-none tracking-[0.14em] tabular-nums transition-colors',
+              quaseTrocando ? 'text-gray-400' : 'text-gray-900',
+            )}
+          >
+            {dados ? `${dados.codigo.slice(0, 3)} ${dados.codigo.slice(3)}` : '––– –––'}
+          </p>
         </div>
+        {dados && <ContagemCircular fim={fim} quaseTrocando={quaseTrocando} />}
       </div>
-    </div>
+
+      <div className="flex items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/70 px-6 py-3 sm:px-10">
+        <label htmlFor="teste-demo" className="cursor-pointer text-[13px] text-gray-600">
+          Próximo acesso dura 3 minutos (para testar)
+        </label>
+        <Switch
+          id="teste-demo"
+          checked={teste}
+          onCheckedChange={alternarTeste}
+          disabled={salvandoTeste || !dados}
+        />
+      </div>
+    </section>
   )
 }

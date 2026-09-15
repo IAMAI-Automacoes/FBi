@@ -34,6 +34,7 @@ import {
   MessageSquare,
   MessageCircle,
   Bot,
+  BellRing,
   Check,
   LogOut,
   Upload,
@@ -41,7 +42,11 @@ import {
   ImagePlus,
 } from 'lucide-react'
 import { getIniciais } from '@/lib/iniciais'
-import { WhatsAppTab, NumeroDoDono } from '@/pages/settings/WhatsAppTab'
+import { WhatsAppTab, CartaoNumeroDoDono } from '@/pages/settings/WhatsAppTab'
+import { telefoneNacionalValido } from '@/lib/telefone'
+
+/** Restaurante, coleta, IA, avisos urgentes, WhatsApp e confirmação. */
+const TOTAL_PASSOS = 6
 
 interface OnboardingData {
   restaurante_nome: string
@@ -60,8 +65,12 @@ export default function Onboarding() {
 
   const [step, setStep] = useState(1)
   const [whatsappConectado, setWhatsappConectado] = useState(false)
+  // Número dos avisos urgentes: etapa própria, salva ao avançar (o cartão não tem botão).
+  const [numeroDono, setNumeroDono] = useState('')
+  const [numeroDonoSalvo, setNumeroDonoSalvo] = useState('')
+  const [numeroDonoTemDigitos, setNumeroDonoTemDigitos] = useState(false)
   const [loadingSubmit, setLoadingSubmit] = useState(false)
-  // Passo 5 conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
+  // Último passo conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
   const [autoProgresso, setAutoProgresso] = useState(0)
   // Logo: sobe pro Storage assim que é escolhida e já mostra o preview.
   // `logoUrl` é a URL pública salva; `logoPreview` é o objectURL local que
@@ -91,7 +100,7 @@ export default function Onboarding() {
     if (!usuario?.restaurante_id) return
     supabase
       .from('restaurantes')
-      .select('nome_restaurante, logo_url')
+      .select('nome_restaurante, logo_url, whatsapp_dono')
       .eq('id', usuario.restaurante_id)
       .single()
       .then(({ data: rest }) => {
@@ -99,6 +108,11 @@ export default function Onboarding() {
           setData((prev) => ({ ...prev, restaurante_nome: rest.nome_restaurante }))
         }
         if (rest?.logo_url) setLogoUrl(rest.logo_url)
+        if (rest?.whatsapp_dono) {
+          setNumeroDono(rest.whatsapp_dono)
+          setNumeroDonoSalvo(rest.whatsapp_dono)
+          setNumeroDonoTemDigitos(true)
+        }
       })
   }, [usuario?.restaurante_id])
 
@@ -155,8 +169,13 @@ export default function Onboarding() {
     setLogoUrl('')
   }
 
-  // Cada passo exige seus campos preenchidos; o passo 4 exige o WhatsApp conectado.
+  // Cada passo exige seus campos preenchidos; o 5 exige o WhatsApp conectado.
   const validarStep = (s: number): string | null => {
+    // Número pela metade nunca vira "sem número": seria gravado errado ou
+    // apagaria o que já estava salvo. Vale até para admin.
+    if (s === 4 && numeroDonoTemDigitos && !telefoneNacionalValido(numeroDono)) {
+      return 'Confira o número dos avisos urgentes: precisa ter DDD e telefone completos.'
+    }
     // Admin não é cliente: pode deixar tudo em branco e avançar/finalizar. Não há
     // botão de "pular tudo" — são os próprios campos (e o WhatsApp) que ficam
     // opcionais pra ele. Cliente comum continua com tudo obrigatório.
@@ -173,7 +192,7 @@ export default function Onboarding() {
     }
     // Vendedor pode pular: a conta dele serve para demonstrar, não para receber
     // feedback de cliente.
-    if (s === 4 && !whatsappConectado && !ehVendedor) return 'Conecte o WhatsApp para continuar.'
+    if (s === 5 && !whatsappConectado && !ehVendedor) return 'Conecte o WhatsApp para continuar.'
     return null
   }
 
@@ -192,6 +211,19 @@ export default function Onboarding() {
         .update({ nome_restaurante: data.restaurante_nome.trim() })
         .eq('id', usuario.restaurante_id)
     }
+    // Ao sair do passo 4, grava o número dos avisos urgentes — o cartão não tem
+    // botão próprio. Só quando mudou; vazio vira "sem número".
+    if (step === 4 && usuario?.restaurante_id && numeroDono !== numeroDonoSalvo) {
+      const { error } = await supabase
+        .from('restaurantes')
+        .update({ whatsapp_dono: numeroDono || null })
+        .eq('id', usuario.restaurante_id)
+      if (error) {
+        toast({ title: 'Não foi possível salvar o número', description: error.message, variant: 'destructive' })
+        return
+      }
+      setNumeroDonoSalvo(numeroDono)
+    }
     setStep((s) => s + 1)
   }
 
@@ -202,7 +234,7 @@ export default function Onboarding() {
   const handleComplete = async () => {
     if (!usuario?.restaurante_id) return
     // Garante que nenhum passo ficou incompleto (inclui WhatsApp conectado).
-    for (const s of [1, 2, 3, 4]) {
+    for (const s of [1, 2, 3, 4, 5]) {
       const erro = validarStep(s)
       if (erro) {
         toast({ title: 'Faltou preencher', description: erro, variant: 'destructive' })
@@ -248,17 +280,17 @@ export default function Onboarding() {
     }
   }
 
-  // Auto-finalizar no passo 5: o botão vai "preenchendo" e conclui sozinho se a
-  // pessoa não clicar nem voltar — evita conta parada no onboarding. Voltar
-  // (sair do passo 5) cancela e rearma; se a conclusão falhar, não fica em loop.
+  // Auto-finalizar no último passo: o botão vai "preenchendo" e conclui sozinho se
+  // a pessoa não clicar nem voltar — evita conta parada no onboarding. Voltar
+  // (sair do último passo) cancela e rearma; se a conclusão falhar, não fica em loop.
   const handleCompleteRef = useRef(handleComplete)
   handleCompleteRef.current = handleComplete
   const jaAutoFinalizou = useRef(false)
   const AUTO_FINALIZAR_MS = 6000
 
   useEffect(() => {
-    if (step !== 5 || loadingSubmit || jaAutoFinalizou.current) {
-      if (step !== 5) {
+    if (step !== TOTAL_PASSOS || loadingSubmit || jaAutoFinalizou.current) {
+      if (step !== TOTAL_PASSOS) {
         setAutoProgresso(0)
         jaAutoFinalizou.current = false
       }
@@ -277,7 +309,7 @@ export default function Onboarding() {
     return () => clearInterval(iv)
   }, [step, loadingSubmit])
 
-  const progress = (step / 5) * 100
+  const progress = (step / TOTAL_PASSOS) * 100
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -301,7 +333,7 @@ export default function Onboarding() {
       <Card className="w-full max-w-xl shadow-lg border-0 ring-1 ring-gray-200">
         <CardHeader>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-gray-500">Passo {step} de 5</span>
+            <span className="text-sm font-medium text-gray-500">Passo {step} de {TOTAL_PASSOS}</span>
             <span className="text-sm font-medium text-[#1D4ED8]">{Math.round(progress)}%</span>
           </div>
           <Progress value={progress} className="h-2 mb-6" />
@@ -324,10 +356,15 @@ export default function Onboarding() {
             )}
             {step === 4 && (
               <>
-                <MessageCircle className="h-6 w-6 text-[#1D4ED8]" /> Conectar WhatsApp
+                <BellRing className="h-6 w-6 text-[#1D4ED8]" /> Avisos urgentes
               </>
             )}
             {step === 5 && (
+              <>
+                <MessageCircle className="h-6 w-6 text-[#1D4ED8]" /> Conectar WhatsApp
+              </>
+            )}
+            {step === 6 && (
               <>
                 <CheckCircle className="h-6 w-6 text-[#1D4ED8]" /> Confirmação
               </>
@@ -337,8 +374,9 @@ export default function Onboarding() {
             {step === 1 && 'Conte-nos um pouco sobre o seu estabelecimento.'}
             {step === 2 && 'Como você costuma ouvir seus clientes hoje?'}
             {step === 3 && 'Vamos dar uma personalidade ao seu assistente.'}
-            {step === 4 && 'Conecte o WhatsApp que vai receber e responder os feedbacks dos clientes.'}
-            {step === 5 && 'Revise as informações antes de começarmos.'}
+            {step === 4 && 'Quem deve ficar sabendo na hora quando algo grave acontecer no restaurante?'}
+            {step === 5 && 'Conecte o WhatsApp que vai receber e responder os feedbacks dos clientes.'}
+            {step === 6 && 'Revise as informações antes de começarmos.'}
           </CardDescription>
         </CardHeader>
 
@@ -551,6 +589,19 @@ export default function Onboarding() {
 
           {step === 4 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Só o número, antes do WhatsApp. Sem botão no cartão: é gravado
+                  no "Próximo". Continua opcional. */}
+              <CartaoNumeroDoDono
+                numero={numeroDono}
+                aoMudar={(valor, tem) => { setNumeroDono(valor); setNumeroDonoTemDigitos(tem) }}
+                semNumero={!numeroDono}
+                semTitulo
+              />
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <WhatsAppTab
                 restauranteId={usuario?.restaurante_id ?? null}
                 embedded
@@ -561,18 +612,10 @@ export default function Onboarding() {
                   ? 'Conta de vendedor: dá para pular esta etapa e conectar o WhatsApp depois, em Configurações.'
                   : 'Conecte o WhatsApp para concluir o onboarding — é por ele que os feedbacks chegam.'}
               </p>
-              {/* Opcional de propósito: não entra em `validarStep`, então não
-                  trava o onboarding. Fica aqui (e também depois, em
-                  Configurações → WhatsApp) porque é a mesma tela que já fala
-                  de WhatsApp e feedback — perguntar de novo em outro lugar só
-                  faria o dono decorar dois formulários em vez de um. */}
-              <div className="mt-6">
-                <NumeroDoDono restauranteId={usuario?.restaurante_id ?? null} />
-              </div>
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-gray-50 p-5 rounded-xl border border-gray-300 space-y-5">
                 <div className="flex gap-3">
@@ -619,7 +662,7 @@ export default function Onboarding() {
           )}
         </CardContent>
 
-        {step === 5 && !loadingSubmit && (
+        {step === TOTAL_PASSOS && !loadingSubmit && (
           <p className="px-6 text-center text-xs text-gray-500">
             Concluindo sozinho em instantes — clique em{' '}
             <span className="font-semibold">Começar a usar</span> para finalizar agora, ou em{' '}
@@ -637,9 +680,9 @@ export default function Onboarding() {
             <div />
           )}
 
-          {step < 5 ? (
+          {step < TOTAL_PASSOS ? (
             <Button onClick={handleNext} className="bg-[#1D4ED8] hover:bg-blue-700 text-white">
-              {step === 4 && ehVendedor && !whatsappConectado ? 'Pular por agora' : 'Próximo'}
+              {step === 5 && ehVendedor && !whatsappConectado ? 'Pular por agora' : 'Próximo'}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (

@@ -316,12 +316,44 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
   if (carregando) return null
 
   return (
+    <CartaoNumeroDoDono
+      numero={numero}
+      aoMudar={(valor, tem) => { setNumero(valor); setTemDigitos(tem) }}
+      semNumero={!salvo}
+    >
+      <Button size="sm" onClick={salvar} disabled={salvando || numero === salvo}>
+        {salvando ? 'Salvando…' : 'Salvar'}
+      </Button>
+    </CartaoNumeroDoDono>
+  )
+}
+
+/**
+ * O cartão do número dos avisos urgentes, sem botão próprio. Em Configurações
+ * vem com "Salvar"; no onboarding ele é a etapa inteira e salva no "Próximo".
+ */
+export function CartaoNumeroDoDono({
+  numero,
+  aoMudar,
+  semNumero,
+  semTitulo = false,
+  children,
+}: {
+  numero: string
+  aoMudar: (valor: string, temDigitos: boolean) => void
+  /** Mostra o alerta de que, sem número, nenhum aviso urgente sai. */
+  semNumero: boolean
+  /** Sem o título "Avisos urgentes" — quando a tela em volta já tem esse título. */
+  semTitulo?: boolean
+  children?: React.ReactNode
+}) {
+  return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-800">Avisos urgentes</p>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
+          {!semTitulo && <p className="text-sm font-semibold text-gray-800">Avisos urgentes</p>}
+          <p className={cn('text-[13px] text-muted-foreground', !semTitulo && 'mt-0.5')}>
             Quando chegar um feedback grave — cliente passou mal, corpo estranho na comida,
             praga no salão — mandamos uma mensagem na hora para este número.
           </p>
@@ -329,15 +361,13 @@ export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <CampoTelefone
               value={numero}
-              onChange={(valor, tem) => { setNumero(valor); setTemDigitos(tem) }}
+              onChange={aoMudar}
               className="h-9 w-[210px] rounded-md border-gray-200 bg-white px-2.5 text-sm focus-within:border-amber-300 focus-within:ring-amber-300"
             />
-            <Button size="sm" onClick={salvar} disabled={salvando || numero === salvo}>
-              {salvando ? 'Salvando…' : 'Salvar'}
-            </Button>
+            {children}
           </div>
 
-          {!salvo && (
+          {semNumero && (
             <p className="mt-2 text-[12px] font-medium text-amber-700">
               Sem este número, nenhum aviso urgente é enviado.
             </p>

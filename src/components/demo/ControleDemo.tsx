@@ -3,18 +3,22 @@ import { Clock } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
-import { avisoAntesMs, PREFIXO_DEMO } from '@/lib/demo'
+import { avisoAntesMs, MODO_DEMO, PREFIXO_DEMO } from '@/lib/demo'
 import { demoEstaEncerrando, encerrarDemo } from '@/lib/queries/demo'
 import { cn } from '@/lib/utils'
+
+/** De quanto em quanto tempo a demonstração reconfere o banco. */
+const RECONFERIR_MS = 60_000
 
 /**
  * Fecha a demonstração na hora e avisa antes. Montado uma vez no App; sem
  * demonstração não faz nada.
  */
 export function ControleDemo() {
-  const { sessaoDemo } = useAuth()
+  const { sessaoDemo, recarregarAcesso } = useAuth()
   const { toast } = useToast()
   const avisou = useRef(false)
+  const tinhaDemo = useRef(false)
 
   const expiraMs = sessaoDemo?.expiraEm.getTime() ?? null
   const duracao = sessaoDemo?.duracaoMinutos ?? null
@@ -46,6 +50,26 @@ export function ControleDemo() {
     return () => clearInterval(id)
   }, [expiraMs, duracao, toast])
 
+  // O banco é quem manda: hora de fim alterada lá, marca de vendedor tirada ou
+  // sessão já encerrada chegam na aba aberta sem precisar recarregar a página.
+  useEffect(() => {
+    if (expiraMs === null) return
+    const id = setInterval(() => {
+      recarregarAcesso()
+    }, RECONFERIR_MS)
+    return () => clearInterval(id)
+  }, [expiraMs, recarregarAcesso])
+
+  // A demonstração deixou de existir com a aba aberta (ex.: marca de vendedor
+  // tirada): mostra a tela de fim, não a do código.
+  useEffect(() => {
+    if (sessaoDemo) {
+      tinhaDemo.current = true
+    } else if (tinhaDemo.current && MODO_DEMO) {
+      encerrarDemo()
+    }
+  }, [sessaoDemo])
+
   // Se o servidor derrubar a sessão antes (a renovação do login falha), a aba
   // fecha junto em vez de ficar numa tela quebrada.
   useEffect(() => {
@@ -53,7 +77,7 @@ export function ControleDemo() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((evento) => {
-      if (evento === 'SIGNED_OUT') window.location.replace(`${PREFIXO_DEMO}/encerrada`)
+      if (evento === 'SIGNED_OUT' && !demoEstaEncerrando()) window.location.replace(`${PREFIXO_DEMO}/encerrada`)
     })
     return () => subscription.unsubscribe()
   }, [expiraMs])

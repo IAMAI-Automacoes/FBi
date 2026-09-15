@@ -272,8 +272,6 @@ export default function MyAccount() {
             </p>
           </div>
 
-          <PainelCodigoDemo />
-
           <div className="bg-white rounded-xl border border-gray-200/75 shadow-subtle overflow-hidden">
             <div className="p-6 sm:p-10 space-y-10">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-8">
@@ -406,6 +404,8 @@ export default function MyAccount() {
               </Button>
             </div>
           </div>
+
+          <PainelCodigoDemo />
 
           {/* Assinatura */}
           <div className="rounded-2xl border border-gray-200/75 bg-white p-5 sm:p-6 shadow-subtle">

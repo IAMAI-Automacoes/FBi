@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import Vendas from '@/pages/Vendas'
 import { supabase } from '@/lib/supabase/client'
 import { MODO_DEMO, PREFIXO_DEMO, ROTAS_BLOQUEADAS_NA_DEMO } from '@/lib/demo'
+import { demoEstaEncerrando } from '@/lib/queries/demo'
 
 /* Rotas que uma conta sem plano ativo ainda precisa alcançar — é por elas que
    se paga. Barrar tudo deixaria a pessoa sem saída, inclusive quem só atrasou
@@ -41,6 +42,9 @@ function VoltarParaDemo({ caminho }: { caminho: string }) {
     Fecha nesta aba e volta para a tela do código. */
 function SairDoLoginComumNaDemo() {
   useEffect(() => {
+    // A demonstração já está fechando (tempo acabou, marca de vendedor tirada):
+    // quem leva à tela de fim é `encerrarDemo`, não esta volta ao código.
+    if (demoEstaEncerrando()) return
     supabase.auth
       .signOut({ scope: 'local' })
       .catch(() => {})

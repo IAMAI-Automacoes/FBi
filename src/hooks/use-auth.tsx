@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { MODO_DEMO } from '@/lib/demo'
-import { buscarMeuAcesso, type SessaoDemo } from '@/lib/queries/demo'
+import { buscarMeuAcesso, type AcessoConta, type SessaoDemo } from '@/lib/queries/demo'
 
 export interface UsuarioDados {
   id: string             // UUID do auth.users — usado em operações de auth
@@ -49,6 +49,9 @@ interface AuthContextType {
   /** Preenchido quando ESTA sessão é uma demonstração aberta por código — até
       quando ela vale. Nulo no login normal, inclusive no do próprio vendedor. */
   sessaoDemo: SessaoDemo | null
+  /** Relê vendedor e demonstração no banco sem mexer no resto. Falha de rede não
+      muda nada — uma demonstração em andamento não cai por instabilidade. */
+  recarregarAcesso: () => Promise<void>
   loading: boolean
   /** True enquanto o cadastro do restaurante está sendo buscado.
       Distingue "ainda carregando" de "carregou e não achou" — sem isso a tela
@@ -98,6 +101,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [ehVendedor, setEhVendedor] = useState(false)
   const [sessaoDemo, setSessaoDemo] = useState<SessaoDemo | null>(null)
 
+  const aplicarAcesso = useCallback((acesso: AcessoConta) => {
+    setEhVendedor(acesso.ehVendedor)
+    // Mantém o mesmo objeto quando nada mudou: esta busca se repete (renovação do
+    // token, reconferência da demonstração), e um objeto novo reiniciaria os
+    // cronômetros da demonstração.
+    setSessaoDemo((atual) =>
+      atual &&
+      acesso.demo &&
+      atual.expiraEm.getTime() === acesso.demo.expiraEm.getTime() &&
+      atual.duracaoMinutos === acesso.demo.duracaoMinutos
+        ? atual
+        : acesso.demo,
+    )
+  }, [])
+
+  const recarregarAcesso = useCallback(async () => {
+    try {
+      aplicarAcesso(await buscarMeuAcesso())
+    } catch (err) {
+      console.error('Erro ao reconferir vendedor e demonstração:', err)
+    }
+  }, [aplicarAcesso])
+
   useEffect(() => {
     // Resolvido junto do usuário, e não num hook separado por componente.
     // Antes cada consumidor de `usePlatformAdmin` disparava a própria consulta,
@@ -127,18 +153,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // com eles, então chegam junto do usuário.
     const buscarAcesso = async () => {
       try {
-        const acesso = await buscarMeuAcesso()
-        setEhVendedor(acesso.ehVendedor)
-        // Mantém o mesmo objeto quando nada mudou: a renovação do token refaz
-        // esta busca, e um objeto novo reiniciaria os cronômetros da demonstração.
-        setSessaoDemo((atual) =>
-          atual &&
-          acesso.demo &&
-          atual.expiraEm.getTime() === acesso.demo.expiraEm.getTime() &&
-          atual.duracaoMinutos === acesso.demo.duracaoMinutos
-            ? atual
-            : acesso.demo,
-        )
+        aplicarAcesso(await buscarMeuAcesso())
       } catch (err) {
         // Falha significa "não é demonstração": no /demo a aba fecha e pede o
         // código de novo; fora dele, a conta segue normal.
@@ -222,7 +237,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [aplicarAcesso])
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -316,7 +331,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

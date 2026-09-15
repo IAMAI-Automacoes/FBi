@@ -1,11 +1,14 @@
-import type { ReactNode, ComponentType } from 'react'
+import { useEffect, useState, type ReactNode, type ComponentType } from 'react'
 import { Link } from 'react-router-dom'
-import { WifiOff, Clock } from 'lucide-react'
+import { WifiOff, Clock, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase/client'
 
 /**
  * Faixa de aviso no topo do app (só clientes; admin não é cliente). Cobre:
- *  - WhatsApp desconectado (ex.: depois de reassinar, a instância foi derrubada)
+ *  - WhatsApp sem conexão: "conectar" para conta que nunca recebeu feedback
+ *    (acabou de ser criada, ou pulou a etapa no onboarding), "reconectar" para
+ *    quem já recebia (ex.: depois de reassinar, a instância foi derrubada)
  *  - Assinatura cancelada mas com acesso até a data paga
  *  - Assinatura prestes a acabar (cupom/plano vencendo)
  *
@@ -14,6 +17,26 @@ import { useAuth } from '@/hooks/use-auth'
  */
 export function AvisoAssinatura() {
   const { usuario, ehAdminPlataforma, sessaoDemo } = useAuth()
+  const restauranteId = usuario?.restaurante_id ?? null
+  const semWhatsapp = usuario?.onboarding_completo === true && !usuario?.whatsapp_token
+  // null enquanto não sabe: não pisca "reconectar" para quem nunca conectou.
+  const [jaRecebeuFeedback, setJaRecebeuFeedback] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!semWhatsapp || !restauranteId) return
+    let vivo = true
+    supabase
+      .from('feedbacks_originais')
+      .select('id', { count: 'exact', head: true })
+      .eq('restaurante_id', restauranteId)
+      .then(({ count, error }) => {
+        if (vivo) setJaRecebeuFeedback(error ? false : (count ?? 0) > 0)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [semWhatsapp, restauranteId])
+
   // Na demonstração os avisos seriam sobre a conta do vendedor, não do cliente
   // que está olhando ("seu WhatsApp está desconectado — reconectar").
   if (!usuario || ehAdminPlataforma || sessaoDemo) return null
@@ -21,7 +44,6 @@ export function AvisoAssinatura() {
 
   const expira = usuario.assinatura_expira_em ? new Date(usuario.assinatura_expira_em) : null
   const cancelada = !!usuario.assinatura_cancelada_em
-  const desconectado = usuario.onboarding_completo === true && !usuario.whatsapp_token
   const dias = expira ? Math.ceil((expira.getTime() - Date.now()) / 86_400_000) : null
   const fmt = (d: Date) => d.toLocaleDateString('pt-BR')
 
@@ -29,10 +51,17 @@ export function AvisoAssinatura() {
   let texto: ReactNode = null
   let cta: { to: string; label: string } | null = null
 
-  if (desconectado) {
-    Icon = WifiOff
-    texto = <>Seu <b>WhatsApp está desconectado</b> — reconecte para voltar a receber os feedbacks dos clientes.</>
-    cta = { to: '/configuracoes', label: 'Reconectar' }
+  if (semWhatsapp) {
+    if (jaRecebeuFeedback === null) return null
+    if (jaRecebeuFeedback) {
+      Icon = WifiOff
+      texto = <>Seu <b>WhatsApp está desconectado</b> — reconecte para voltar a receber os feedbacks dos clientes.</>
+      cta = { to: '/configuracoes', label: 'Reconectar' }
+    } else {
+      Icon = MessageCircle
+      texto = <>Seu <b>WhatsApp ainda não está conectado</b> — conecte para começar a receber os feedbacks dos clientes.</>
+      cta = { to: '/configuracoes', label: 'Conectar' }
+    }
   } else if (cancelada && expira && dias !== null && dias >= 0) {
     Icon = Clock
     texto = <>Você cancelou a assinatura. Seu acesso continua até <b>{fmt(expira)}</b>.</>
