@@ -1099,20 +1099,19 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
+type Tab = 'suporte' | 'contas' | 'vendedores' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
 
 const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA', motor: 'Motor de resposta',
+  suporte: 'Suporte', contas: 'Contas', vendedores: 'Vendedores', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA', motor: 'Motor de resposta',
 }
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
 // admin achar rápido cada situação.
-type FiltroConta = 'todas' | 'pagantes' | 'nao_pagantes' | 'vendedores' | 'excluidas'
+type FiltroConta = 'todas' | 'pagantes' | 'nao_pagantes' | 'excluidas'
 const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
   { key: 'todas', label: 'Todas' },
   { key: 'pagantes', label: 'Pagantes' },
   { key: 'nao_pagantes', label: 'Não pagantes' },
-  { key: 'vendedores', label: 'Vendedores' },
   { key: 'excluidas', label: 'Excluídas' },
 ]
 
@@ -1179,6 +1178,7 @@ export default function Admin() {
   const [vendedores, setVendedores] = useState<VendedorAdmin[]>([])
   const [salvandoVendedor, setSalvandoVendedor] = useState<string | null>(null)
   const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
+  const [loadingVendedores, setLoadingVendedores] = useState(false)
 
   // ── Cupons ──
   const [cupons, setCupons] = useState<Cupon[]>([])
@@ -1243,8 +1243,14 @@ export default function Admin() {
     }
   }, [])
 
-  // Vendedor: conta normal que não paga e abre demonstração por código. A marca
-  // é por email — vale antes de a pessoa criar a conta.
+  // Vendedores: carrega ao entrar na aba. A marca é por email — vale antes de a
+  // pessoa criar a conta.
+  const loadVendedores = useCallback(async () => {
+    setLoadingVendedores(true)
+    try { setVendedores(await buscarVendedores()) } finally { setLoadingVendedores(false) }
+  }, [])
+  useEffect(() => { if (isAdmin && activeTab === 'vendedores') loadVendedores() }, [isAdmin, activeTab, loadVendedores])
+
   const alternarVendedor = useCallback(async (email: string, virar: boolean) => {
     if (!virar) {
       const ok = await confirmar({
@@ -1258,14 +1264,14 @@ export default function Admin() {
     setSalvandoVendedor(email)
     try {
       await definirVendedor(email, virar)
-      await loadContas()
+      await loadVendedores()
       setEmailNovoVendedor('')
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Não foi possível alterar o vendedor.')
     } finally {
       setSalvandoVendedor(null)
     }
-  }, [confirmar, loadContas])
+  }, [confirmar, loadVendedores])
   useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
 
 
@@ -1490,7 +1496,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor'] as Tab[]).map((tab) => (
+          {(['suporte', 'contas', 'vendedores', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor'] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
@@ -1571,7 +1577,8 @@ export default function Admin() {
           const contasBusca = contas.filter((c) =>
             !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
           )
-          // Vendedor paga (com cupom) como qualquer conta: a marca é só um rótulo a mais.
+          // Vendedor paga (com cupom) como qualquer conta; aqui ele só ganha um rótulo.
+          // Marcar e desmarcar fica na aba Vendedores.
           const emailsVendedores = new Set(vendedores.map((v) => v.email))
           const ehVendedorConta = (c: ContaAdmin) => !!c.email && emailsVendedores.has(c.email.toLowerCase())
           const casaFiltro = (c: ContaAdmin, f: FiltroConta) => {
@@ -1580,80 +1587,14 @@ export default function Admin() {
             if (f === 'excluidas') return excluida
             if (f === 'pagantes') return !excluida && pagante
             if (f === 'nao_pagantes') return !excluida && !pagante
-            if (f === 'vendedores') return !excluida && ehVendedorConta(c)
             return true
           }
-          // Emails marcados como vendedor que ainda não criaram a conta.
-          const vendedoresSemConta = vendedores.filter((v) => !v.temConta)
           const contasFiltradas = contasBusca.filter((c) => casaFiltro(c, filtroConta))
 
           return (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-gray-800">Contas</h2>
-                <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
-                  São duas coisas diferentes. <b className="text-gray-700">Pagamento</b>: parar de
-                  pagar tira o acesso ao software (a conta cai na tela de planos), mas guarda tudo — a
-                  pessoa pode voltar a pagar quando quiser. <b className="text-gray-700">Excluir</b>:
-                  remove o acesso de vez — a pessoa não recupera sozinha, nem criando conta com o mesmo
-                  email. Os dados ficam no banco e só você restaura.
-                </p>
-              </div>
-
-              {/* Vendedores: conta normal que não paga e abre demonstração por código */}
-              <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
-                <form
-                  className="flex flex-wrap items-center gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    const email = emailNovoVendedor.trim().toLowerCase()
-                    if (email) alternarVendedor(email, true)
-                  }}
-                >
-                  <span className="text-[12px] font-medium text-gray-700">Marcar vendedor</span>
-                  <input
-                    type="email"
-                    value={emailNovoVendedor}
-                    onChange={(e) => setEmailNovoVendedor(e.target.value)}
-                    placeholder="email do vendedor"
-                    className="h-8 min-w-[220px] flex-1 rounded-md border border-gray-200 px-2.5 text-[13px] outline-none focus:border-[#1D4ED8]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!emailNovoVendedor.trim() || salvandoVendedor !== null}
-                    className="h-8 rounded-md bg-[#1D4ED8] px-3 text-[12px] font-semibold text-white disabled:opacity-40"
-                  >
-                    Marcar
-                  </button>
-                </form>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
-                  Vendedor tem conta igual à de qualquer restaurante e paga com cupom. A marca só libera o código
-                  da demonstração no Perfil (/demo) e deixa pular o WhatsApp no onboarding. Dá para marcar antes
-                  de a pessoa criar a conta.
-                </p>
-                {vendedoresSemConta.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {vendedoresSemConta.map((v) => (
-                      <span
-                        key={v.email}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700"
-                      >
-                        {v.email} · ainda não criou a conta
-                        <button
-                          type="button"
-                          onClick={() => alternarVendedor(v.email, false)}
-                          disabled={salvandoVendedor === v.email}
-                          title="Tirar de vendedor"
-                          className="text-violet-400 hover:text-violet-700 disabled:opacity-40"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <h2 className="mb-4 text-base font-semibold text-gray-800">Contas</h2>
 
               {/* Busca */}
               <div className="relative mb-3">
@@ -1749,23 +1690,11 @@ export default function Admin() {
                             )}
                           </Td>
 
-                          {/* Ações: vendedor e exclusão reversível. O acesso pago
-                              é controlado por pagamento real ou cupom — não há
+                          {/* Ação: só exclusão reversível. O acesso pago é
+                              controlado por pagamento real ou cupom — não há
                               como "tornar pagante" pelo painel. */}
                           <Td>
                             <div className="flex items-center gap-2">
-                              {c.email && !excluida && (
-                                <button
-                                  onClick={() => alternarVendedor((c.email ?? '').toLowerCase(), !ehVendedorConta(c))}
-                                  disabled={salvandoVendedor !== null}
-                                  title={ehVendedorConta(c)
-                                    ? 'Tira o código da demonstração do Perfil. A assinatura não muda.'
-                                    : 'Libera o código da demonstração no Perfil. A assinatura não muda.'}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors disabled:opacity-40"
-                                >
-                                  {ehVendedorConta(c) ? 'Tirar de vendedor' : 'Tornar vendedor'}
-                                </button>
-                              )}
                               <button
                                 onClick={() => alternarExclusao(c)}
                                 disabled={salvando}
@@ -1797,6 +1726,94 @@ export default function Admin() {
           </div>
           )
         })()}
+
+        {/* ── VENDEDORES ── */}
+        {activeTab === 'vendedores' && (
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-gray-800">Vendedores</h2>
+                <p className="mt-1 text-[12px] text-gray-500">
+                  Têm o código da demonstração no Perfil e podem pular o WhatsApp. Pagam com o cupom VENDEDOR100.
+                </p>
+              </div>
+
+              <form
+                className="mb-4 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const email = emailNovoVendedor.trim().toLowerCase()
+                  if (email) alternarVendedor(email, true)
+                }}
+              >
+                <input
+                  type="email"
+                  value={emailNovoVendedor}
+                  onChange={(e) => setEmailNovoVendedor(e.target.value)}
+                  placeholder="Email do vendedor"
+                  className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]"
+                />
+                <button
+                  type="submit"
+                  disabled={!emailNovoVendedor.trim() || salvandoVendedor !== null}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" /> Adicionar
+                </button>
+              </form>
+
+              {loadingVendedores ? (
+                <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
+              ) : vendedores.length === 0 ? (
+                <p className="text-center py-10 text-sm text-gray-400">Nenhum vendedor ainda.</p>
+              ) : (
+                <CrudTable>
+                  <thead>
+                    <tr>
+                      <Th>Vendedor</Th>
+                      <Th>Conta</Th>
+                      <Th>Última demonstração</Th>
+                      <Th>Ações</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendedores.map((v) => (
+                      <tr key={v.email} className="border-t border-gray-300">
+                        <Td>
+                          <span className="font-medium text-gray-800">{v.email}</span>
+                        </Td>
+                        <Td>
+                          {v.temConta ? (
+                            <span className="text-[13px] text-gray-700">{v.nomeRestaurante || 'Sem nome'}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">
+                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                              Ainda não criou a conta
+                            </span>
+                          )}
+                        </Td>
+                        <Td className="text-[13px] text-gray-600">
+                          {v.ultimaDemoEm
+                            ? format(new Date(v.ultimaDemoEm), "dd/MM/yyyy 'às' HH:mm")
+                            : <span className="text-gray-400">Nunca</span>}
+                        </Td>
+                        <Td>
+                          <button
+                            onClick={() => alternarVendedor(v.email, false)}
+                            disabled={salvandoVendedor === v.email}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remover
+                          </button>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </CrudTable>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── PAGAMENTOS ── */}
         {activeTab === 'pagamentos' && (
