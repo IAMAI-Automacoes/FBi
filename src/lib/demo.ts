@@ -20,7 +20,7 @@ export const MODO_DEMO = typeof window !== 'undefined' && ehEnderecoDemo(window.
 /** Rotas que não abrem na demonstração: mexem na conta de verdade do vendedor. */
 export const ROTAS_BLOQUEADAS_NA_DEMO = ['/minha-conta', '/assinatura', '/checkout', '/checkout/sucesso', '/admin']
 
-/** Quanto antes do fim aparece o aviso: 5 min na demonstração, 1 min no teste de 3 min. */
+/** Quanto antes do fim aparece o aviso: 5 min; numa demonstração encurtada para 5 min ou menos, 1 min. */
 export function avisoAntesMs(duracaoMinutos: number): number {
   return (duracaoMinutos <= 5 ? 1 : 5) * 60_000
 }

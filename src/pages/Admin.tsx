@@ -1868,6 +1868,11 @@ export default function Admin() {
                           <span className="font-mono font-semibold text-[13px] bg-gray-100 px-2 py-0.5 rounded text-gray-800">
                             {c.cupom}
                           </span>
+                          {c.somente_vendedores && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
+                              SÓ VENDEDORES
+                            </span>
+                          )}
                         </Td>
                         <Td className="font-semibold text-emerald-700">{fmtLiberacao(c)}</Td>
                         <Td>

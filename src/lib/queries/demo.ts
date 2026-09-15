@@ -65,24 +65,14 @@ export async function buscarMeuAcesso(): Promise<AcessoConta> {
 export interface CodigoDemo {
   codigo: string
   segundosRestantes: number
-  proximoAcessoTeste: boolean
 }
 
 export async function buscarCodigoDemo(): Promise<CodigoDemo | null> {
   const { data, error } = await rpcSemTipo('meu_codigo_demo')
   if (error) throw new Error(error.message)
-  const linha = primeiraLinha<{ codigo: string; segundos_restantes: number; proximo_acesso_teste: boolean }>(data)
+  const linha = primeiraLinha<{ codigo: string; segundos_restantes: number }>(data)
   if (!linha) return null
-  return {
-    codigo: linha.codigo,
-    segundosRestantes: linha.segundos_restantes,
-    proximoAcessoTeste: linha.proximo_acesso_teste,
-  }
-}
-
-export async function definirTesteDemo(ligado: boolean): Promise<void> {
-  const { error } = await rpcSemTipo('definir_teste_demo', { p_ligado: ligado })
-  if (error) throw new Error(error.message)
+  return { codigo: linha.codigo, segundosRestantes: linha.segundos_restantes }
 }
 
 // ── Entrar e sair ─────────────────────────────────────────────────────────────

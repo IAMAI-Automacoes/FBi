@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Switch } from '@/components/ui/switch'
+import { Check, Copy } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { PREFIXO_DEMO } from '@/lib/demo'
-import { buscarCodigoDemo, definirTesteDemo, type CodigoDemo } from '@/lib/queries/demo'
+import { buscarCodigoDemo, type CodigoDemo } from '@/lib/queries/demo'
 
 const JANELA_MS = 30_000
 /** Nos últimos segundos o código ainda vale, mas não dá tempo de digitar com calma. */
@@ -48,7 +48,7 @@ function ContagemCircular({ fim, quaseTrocando }: { fim: number; quaseTrocando: 
 
 /**
  * O "autenticador" do vendedor, no perfil: o código de 6 dígitos que abre a
- * demonstração em outro computador.
+ * demonstração em outro computador. Clicar no código copia.
  *
  * O código é calculado no banco e só ele chega aqui — a semente nunca sai de
  * lá. Busca de novo a cada virada de 30 s e quando a aba volta a ficar visível
@@ -61,7 +61,7 @@ export function PainelCodigoDemo() {
   const [fim, setFim] = useState(0)
   const [agora, setAgora] = useState(() => Date.now())
   const [falhou, setFalhou] = useState(false)
-  const [salvandoTeste, setSalvandoTeste] = useState(false)
+  const [copiado, setCopiado] = useState(false)
   const ativo = ehVendedor && !sessaoDemo
 
   useEffect(() => {
@@ -102,69 +102,74 @@ export function PainelCodigoDemo() {
     }
   }, [ativo])
 
+  useEffect(() => {
+    if (!copiado) return
+    const id = setTimeout(() => setCopiado(false), 1800)
+    return () => clearTimeout(id)
+  }, [copiado])
+
   if (!ativo) return null
 
   const quaseTrocando = dados !== null && fim - agora <= QUASE_TROCANDO_MS
-  const teste = dados?.proximoAcessoTeste ?? false
 
-  const alternarTeste = async (ligado: boolean) => {
-    setSalvandoTeste(true)
+  const copiar = async () => {
+    if (!dados) return
     try {
-      await definirTesteDemo(ligado)
-      setDados((d) => (d ? { ...d, proximoAcessoTeste: ligado } : d))
-    } catch (e) {
+      await navigator.clipboard.writeText(dados.codigo)
+      setCopiado(true)
+    } catch {
       toast({
-        title: 'Não foi possível mudar',
-        description: e instanceof Error ? e.message : undefined,
+        title: 'Não foi possível copiar',
+        description: 'Selecione o código e copie à mão.',
         variant: 'destructive',
       })
-    } finally {
-      setSalvandoTeste(false)
     }
   }
 
   return (
     <section
       data-painel="codigo-demo"
-      className="overflow-hidden rounded-2xl border border-gray-200/75 bg-white shadow-subtle"
+      className="flex items-center justify-between gap-6 rounded-2xl border border-gray-200/75 bg-white px-6 py-5 shadow-subtle sm:px-10"
     >
-      <div className="flex items-center justify-between gap-6 px-6 pb-6 pt-5 sm:px-10">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">Código da demonstração</h3>
-          <p className="mt-0.5 text-[13px] text-gray-500">
-            {falhou ? (
-              'Sem conexão. Tentando de novo…'
-            ) : (
-              <>
-                Digite em <span className="font-medium text-gray-700">{window.location.host}{PREFIXO_DEMO}</span>
-              </>
-            )}
-          </p>
-          <p
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-gray-900">Código da demonstração</h3>
+        <p className={cn('mt-0.5 flex items-center gap-1 text-[13px]', copiado ? 'text-emerald-600' : 'text-gray-500')}>
+          {copiado ? (
+            <>
+              <Check className="h-3.5 w-3.5" /> Código copiado
+            </>
+          ) : falhou ? (
+            'Sem conexão. Tentando de novo…'
+          ) : (
+            <>
+              Digite em <span className="font-medium text-gray-700">{window.location.host}{PREFIXO_DEMO}</span>
+            </>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={copiar}
+          disabled={!dados}
+          title="Clique para copiar"
+          aria-label={dados ? `Copiar o código ${dados.codigo}` : 'Carregando o código'}
+          data-codigo-demo={dados?.codigo ?? ''}
+          className="group -mx-2 mt-3 flex items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4ED8]/40 disabled:cursor-default"
+        >
+          <span
             aria-live="polite"
-            data-codigo-demo={dados?.codigo ?? ''}
             className={cn(
-              'mt-4 text-[44px] font-semibold leading-none tracking-[0.14em] tabular-nums transition-colors',
+              'text-[44px] font-semibold leading-none tracking-[0.14em] tabular-nums transition-colors',
               quaseTrocando ? 'text-gray-400' : 'text-gray-900',
             )}
           >
             {dados ? `${dados.codigo.slice(0, 3)} ${dados.codigo.slice(3)}` : '––– –––'}
-          </p>
-        </div>
-        {dados && <ContagemCircular fim={fim} quaseTrocando={quaseTrocando} />}
+          </span>
+          {dados && (
+            <Copy className="h-4 w-4 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+          )}
+        </button>
       </div>
-
-      <div className="flex items-center justify-between gap-4 border-t border-gray-100 bg-gray-50/70 px-6 py-3 sm:px-10">
-        <label htmlFor="teste-demo" className="cursor-pointer text-[13px] text-gray-600">
-          Próximo acesso dura 3 minutos (para testar)
-        </label>
-        <Switch
-          id="teste-demo"
-          checked={teste}
-          onCheckedChange={alternarTeste}
-          disabled={salvandoTeste || !dados}
-        />
-      </div>
+      {dados && <ContagemCircular fim={fim} quaseTrocando={quaseTrocando} />}
     </section>
   )
 }
