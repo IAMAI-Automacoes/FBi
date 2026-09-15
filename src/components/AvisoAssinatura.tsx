@@ -13,8 +13,10 @@ import { useAuth } from '@/hooks/use-auth'
  * RotaProtegida manda pra /assinatura (que mostra "Sua assinatura foi encerrada").
  */
 export function AvisoAssinatura() {
-  const { usuario, ehAdminPlataforma } = useAuth()
-  if (!usuario || ehAdminPlataforma) return null
+  const { usuario, ehAdminPlataforma, sessaoDemo } = useAuth()
+  // Na demonstração os avisos seriam sobre a conta do vendedor, não do cliente
+  // que está olhando ("seu WhatsApp está desconectado — reconectar").
+  if (!usuario || ehAdminPlataforma || sessaoDemo) return null
   if (usuario.assinatura_status !== 'ativa') return null // não-ativa é barrada antes
 
   const expira = usuario.assinatura_expira_em ? new Date(usuario.assinatura_expira_em) : null

@@ -7,7 +7,7 @@ import { RestaurantTab, RestauranteForm } from './settings/RestaurantTab'
 import { MascotTab, MascoteForm } from './settings/MascotTab'
 import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/PerfilNegocioTab'
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
-import { WhatsAppTab } from './settings/WhatsAppTab'
+import { SecaoWhatsApp } from '@/components/demo/SecaoWhatsApp'
 import { EXPIRACAO_PADRAO, FeedbacksTab } from './settings/FeedbacksTab'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useAuth } from '@/hooks/use-auth'
@@ -298,7 +298,7 @@ export default function Settings() {
                 <ConhecimentoTab restauranteId={restauranteId} />
               </section>
               <section id="whatsapp" className="scroll-mt-28">
-                <WhatsAppTab restauranteId={restauranteId} />
+                <SecaoWhatsApp restauranteId={restauranteId} />
               </section>
               <section id="feedbacks" className="scroll-mt-28">
                 <FeedbacksTab value={expiracaoFeedback} onChange={setExpiracaoFeedback} />

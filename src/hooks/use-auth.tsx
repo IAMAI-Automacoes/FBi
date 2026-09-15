@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
+import { MODO_DEMO } from '@/lib/demo'
+import { buscarMeuAcesso, type SessaoDemo } from '@/lib/queries/demo'
 
 export interface UsuarioDados {
   id: string             // UUID do auth.users — usado em operações de auth
@@ -40,6 +42,12 @@ interface AuthContextType {
       Diferente de `usuario.cargo === 'admin'`, que é papel DENTRO de um
       restaurante. Quem administra a plataforma não precisa de assinatura. */
   ehAdminPlataforma: boolean
+  /** Conta de vendedor (tabela `vendedores`, casada por email): não paga e tem
+      o código da demonstração no perfil. */
+  ehVendedor: boolean
+  /** Preenchido quando ESTA sessão é uma demonstração aberta por código — até
+      quando ela vale. Nulo no login normal, inclusive no do próprio vendedor. */
+  sessaoDemo: SessaoDemo | null
   loading: boolean
   /** True enquanto o cadastro do restaurante está sendo buscado.
       Distingue "ainda carregando" de "carregou e não achou" — sem isso a tela
@@ -86,6 +94,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const [buscandoUsuario, setBuscandoUsuario] = useState(false)
   const [ehAdminPlataforma, setEhAdminPlataforma] = useState(false)
+  const [ehVendedor, setEhVendedor] = useState(false)
+  const [sessaoDemo, setSessaoDemo] = useState<SessaoDemo | null>(null)
 
   useEffect(() => {
     // Resolvido junto do usuário, e não num hook separado por componente.
@@ -112,10 +122,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setEhAdminPlataforma(!!data)
     }
 
+    // Vendedor e demonstração, pelo mesmo motivo do admin: o gate de rota decide
+    // com eles, então chegam junto do usuário.
+    const buscarAcesso = async () => {
+      try {
+        const acesso = await buscarMeuAcesso()
+        setEhVendedor(acesso.ehVendedor)
+        // Mantém o mesmo objeto quando nada mudou: a renovação do token refaz
+        // esta busca, e um objeto novo reiniciaria os cronômetros da demonstração.
+        setSessaoDemo((atual) =>
+          atual &&
+          acesso.demo &&
+          atual.expiraEm.getTime() === acesso.demo.expiraEm.getTime() &&
+          atual.duracaoMinutos === acesso.demo.duracaoMinutos
+            ? atual
+            : acesso.demo,
+        )
+      } catch (err) {
+        // Falha significa "não é demonstração": no /demo a aba fecha e pede o
+        // código de novo; fora dele, a conta segue normal.
+        console.error('Erro ao verificar vendedor e demonstração:', err)
+        setEhVendedor(false)
+        setSessaoDemo(null)
+      }
+    }
+
     const fetchUsuario = async (userAuth: User) => {
       setBuscandoUsuario(true)
       try {
-        await buscarAdminPlataforma(userAuth.email)
+        await Promise.all([buscarAdminPlataforma(userAuth.email), buscarAcesso()])
         const { data, error } = await supabase
           .from('restaurantes')
           .select('*')
@@ -169,6 +204,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setUsuario(null)
         setEhAdminPlataforma(false)
+        setEhVendedor(false)
+        setSessaoDemo(null)
         setLoading(false)
       }
     })
@@ -241,10 +278,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Marca de "admin pulou pagamento" é por sessão de uso — some ao sair, pra o
     // admin ver a tela de assinatura de novo no próximo login.
     sessionStorage.removeItem('admin_pulou_pagamento')
-    const { error } = await supabase.auth.signOut()
+    // Na demonstração o login é do vendedor: fecha só nesta aba. O padrão do
+    // supabase-js ('global') derrubaria a conta dele em todos os aparelhos.
+    const { error } = await supabase.auth.signOut(MODO_DEMO || sessaoDemo ? { scope: 'local' } : undefined)
     setUsuario(null)
     setUser(null)
     setSession(null)
+    setEhVendedor(false)
+    setSessaoDemo(null)
     setLoading(false)
     return { error }
   }
@@ -274,7 +315,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, ehAdminPlataforma, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

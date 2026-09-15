@@ -1,7 +1,10 @@
+import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
 import Vendas from '@/pages/Vendas'
+import { supabase } from '@/lib/supabase/client'
+import { MODO_DEMO, PREFIXO_DEMO, ROTAS_BLOQUEADAS_NA_DEMO } from '@/lib/demo'
 
 /* Rotas que uma conta sem plano ativo ainda precisa alcançar — é por elas que
    se paga. Barrar tudo deixaria a pessoa sem saída, inclusive quem só atrasou
@@ -16,8 +19,38 @@ const ROTAS_DE_PAGAMENTO = ['/assinatura', '/checkout', '/checkout/sucesso']
    tem conta, então o padrão é abrir em "criar conta". */
 const ROTAS_DE_COMPRA = ['/checkout', '/checkout/sucesso']
 
+function Carregando() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <Loader2 className="h-10 w-10 animate-spin text-[#1D4ED8]" />
+      <p className="mt-4 text-sm text-gray-500 font-medium">Carregando...</p>
+    </div>
+  )
+}
+
+/** Sessão de demonstração fora do /demo (alguém tirou o prefixo do endereço):
+    volta para o mesmo lugar, com o prefixo. */
+function VoltarParaDemo({ caminho }: { caminho: string }) {
+  useEffect(() => {
+    window.location.replace(`${PREFIXO_DEMO}${caminho}`)
+  }, [caminho])
+  return <Carregando />
+}
+
+/** Login que não é de demonstração dentro do /demo: ali só se entra por código.
+    Fecha nesta aba e volta para a tela do código. */
+function SairDoLoginComumNaDemo() {
+  useEffect(() => {
+    supabase.auth
+      .signOut({ scope: 'local' })
+      .catch(() => {})
+      .finally(() => window.location.replace(`${PREFIXO_DEMO}/login`))
+  }, [])
+  return <Carregando />
+}
+
 export function RotaProtegida() {
-  const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, logout } = useAuth()
+  const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, sessaoDemo, logout } = useAuth()
   const location = useLocation()
 
   // `buscandoUsuario && !usuario` cobre a janela do login: ali `loading` já é
@@ -26,15 +59,12 @@ export function RotaProtegida() {
   // aparecia por um instante. O `!usuario` evita que a renovação de token,
   // que também refaz a busca, pisque o spinner no meio do uso.
   if (loading || (buscandoUsuario && !usuario)) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-[#1D4ED8]" />
-        <p className="mt-4 text-sm text-gray-500 font-medium">Carregando...</p>
-      </div>
-    )
+    return <Carregando />
   }
 
   if (!session) {
+    // Na demonstração não há site nem login comum: sem sessão, é a tela do código.
+    if (MODO_DEMO) return <Navigate to="/login" replace />
     // A raiz do site (easyfeed.com.br) é a página de vendas para quem ainda não
     // tem conta — em vez de jogar direto no login. Quem está logado continua
     // vendo o painel em `/` (mais abaixo, via Outlet). As demais rotas seguem
@@ -107,6 +137,19 @@ export function RotaProtegida() {
     )
   }
 
+  // ── Demonstração ──
+  // Quem decide é a SESSÃO, não o endereço: sem o /demo na URL ela continua
+  // valendo, e um login comum não entra pelo /demo.
+  if (sessaoDemo && !MODO_DEMO) {
+    return <VoltarParaDemo caminho={`${location.pathname}${location.search}`} />
+  }
+  if (MODO_DEMO && !sessaoDemo) {
+    return <SairDoLoginComumNaDemo />
+  }
+  if (sessaoDemo && ROTAS_BLOQUEADAS_NA_DEMO.includes(location.pathname)) {
+    return <Navigate to="/" replace />
+  }
+
   // Login por restaurante é único (não existe mais "membro convidado").
   const naRotaDePagamento = ROTAS_DE_PAGAMENTO.includes(location.pathname)
   const semPlanoAtivo = usuario.assinatura_status !== 'ativa'
@@ -126,6 +169,7 @@ export function RotaProtegida() {
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
   // que o dinheiro entrou (ou, para o admin, depois que ele optou por pular).
+  // Vendedor não cai aqui: a conta dele fica 'ativa' pelo banco.
   if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
   }

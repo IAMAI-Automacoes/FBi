@@ -8,6 +8,12 @@
 //
 // A flag fica em localStorage e é definida no login (setRememberMe) ANTES de o
 // Supabase persistir a sessão, garantindo que ela vá para o storage correto.
+//
+// DEMONSTRAÇÃO (/demo): o login é de um vendedor, aberto por código no
+// computador de outra pessoa. Ali a sessão fica SÓ nesta aba, sempre — nenhum
+// "Lembrar-me" ou app instalado muda isso. A chave também é outra (`client.ts`),
+// então a demonstração nunca lê nem apaga um login normal do mesmo navegador.
+import { MODO_DEMO } from '@/lib/demo'
 
 const REMEMBER_KEY = 'fib.remember-me'
 const OPT_OUT = 'off'
@@ -48,10 +54,15 @@ function shouldPersist(): boolean {
 // Adapter compatível com a interface de storage do supabase-js.
 export const rememberMeStorage = {
   getItem: (key: string): string | null => {
+    if (MODO_DEMO) return sessionStorage.getItem(key)
     // Lê de onde a sessão estiver salva (localStorage tem prioridade).
     return localStorage.getItem(key) ?? sessionStorage.getItem(key)
   },
   setItem: (key: string, value: string): void => {
+    if (MODO_DEMO) {
+      sessionStorage.setItem(key, value)
+      return
+    }
     if (shouldPersist()) {
       localStorage.setItem(key, value)
       sessionStorage.removeItem(key)
@@ -61,6 +72,10 @@ export const rememberMeStorage = {
     }
   },
   removeItem: (key: string): void => {
+    if (MODO_DEMO) {
+      sessionStorage.removeItem(key)
+      return
+    }
     localStorage.removeItem(key)
     sessionStorage.removeItem(key)
   },

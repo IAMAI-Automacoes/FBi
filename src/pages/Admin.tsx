@@ -34,6 +34,7 @@ import {
   definirExclusaoConta,
   type ContaAdmin,
 } from '@/lib/queries/admin'
+import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -1106,11 +1107,12 @@ const TAB_LABELS: Record<Tab, string> = {
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
 // admin achar rápido cada situação.
-type FiltroConta = 'todas' | 'pagantes' | 'nao_pagantes' | 'excluidas'
+type FiltroConta = 'todas' | 'pagantes' | 'nao_pagantes' | 'vendedores' | 'excluidas'
 const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
   { key: 'todas', label: 'Todas' },
   { key: 'pagantes', label: 'Pagantes' },
   { key: 'nao_pagantes', label: 'Não pagantes' },
+  { key: 'vendedores', label: 'Vendedores' },
   { key: 'excluidas', label: 'Excluídas' },
 ]
 
@@ -1174,6 +1176,9 @@ export default function Admin() {
   const [salvandoContaId, setSalvandoContaId] = useState<number | null>(null)
   const [buscaConta, setBuscaConta] = useState('')
   const [filtroConta, setFiltroConta] = useState<FiltroConta>('todas')
+  const [vendedores, setVendedores] = useState<VendedorAdmin[]>([])
+  const [salvandoVendedor, setSalvandoVendedor] = useState<string | null>(null)
+  const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
 
   // ── Cupons ──
   const [cupons, setCupons] = useState<Cupon[]>([])
@@ -1226,11 +1231,41 @@ export default function Admin() {
   }, [])
   useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadDivisoes() }, [isAdmin, activeTab, loadDivisoes])
 
-  // Contas: carrega ao entrar na aba
+  // Contas: carrega ao entrar na aba (junto da lista de vendedores, que é por email)
   const loadContas = useCallback(async () => {
     setLoadingContas(true)
-    try { setContas(await buscarContas()) } finally { setLoadingContas(false) }
+    try {
+      const [listaContas, listaVendedores] = await Promise.all([buscarContas(), buscarVendedores()])
+      setContas(listaContas)
+      setVendedores(listaVendedores)
+    } finally {
+      setLoadingContas(false)
+    }
   }, [])
+
+  // Vendedor: conta normal que não paga e abre demonstração por código. A marca
+  // é por email — vale antes de a pessoa criar a conta.
+  const alternarVendedor = useCallback(async (email: string, virar: boolean) => {
+    if (!virar) {
+      const ok = await confirmar({
+        titulo: `Tirar ${email} de vendedor?`,
+        descricao: 'As demonstrações abertas fecham na hora e a conta volta para a situação de pagamento que tinha antes.',
+        confirmar: 'Tirar de vendedor',
+        destrutivo: true,
+      })
+      if (!ok) return
+    }
+    setSalvandoVendedor(email)
+    try {
+      await definirVendedor(email, virar)
+      await loadContas()
+      setEmailNovoVendedor('')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível alterar o vendedor.')
+    } finally {
+      setSalvandoVendedor(null)
+    }
+  }, [confirmar, loadContas])
   useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
 
 
@@ -1536,14 +1571,21 @@ export default function Admin() {
           const contasBusca = contas.filter((c) =>
             !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
           )
+          // Vendedor fica 'ativa' sem pagar: não entra em "Pagantes".
+          const emailsVendedores = new Set(vendedores.map((v) => v.email))
+          const ehVendedorConta = (c: ContaAdmin) => !!c.email && emailsVendedores.has(c.email.toLowerCase())
           const casaFiltro = (c: ContaAdmin, f: FiltroConta) => {
             const excluida = !!c.excluida_em
-            const pagante = c.assinatura_status === 'ativa'
+            const vendedor = ehVendedorConta(c)
+            const pagante = c.assinatura_status === 'ativa' && !vendedor
             if (f === 'excluidas') return excluida
             if (f === 'pagantes') return !excluida && pagante
-            if (f === 'nao_pagantes') return !excluida && !pagante
+            if (f === 'nao_pagantes') return !excluida && !pagante && !vendedor
+            if (f === 'vendedores') return !excluida && vendedor
             return true
           }
+          // Emails marcados como vendedor que ainda não criaram a conta.
+          const vendedoresSemConta = vendedores.filter((v) => !v.temConta)
           const contasFiltradas = contasBusca.filter((c) => casaFiltro(c, filtroConta))
 
           return (
@@ -1558,6 +1600,59 @@ export default function Admin() {
                   remove o acesso de vez — a pessoa não recupera sozinha, nem criando conta com o mesmo
                   email. Os dados ficam no banco e só você restaura.
                 </p>
+              </div>
+
+              {/* Vendedores: conta normal que não paga e abre demonstração por código */}
+              <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+                <form
+                  className="flex flex-wrap items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const email = emailNovoVendedor.trim().toLowerCase()
+                    if (email) alternarVendedor(email, true)
+                  }}
+                >
+                  <span className="text-[12px] font-medium text-gray-700">Marcar vendedor</span>
+                  <input
+                    type="email"
+                    value={emailNovoVendedor}
+                    onChange={(e) => setEmailNovoVendedor(e.target.value)}
+                    placeholder="email do vendedor"
+                    className="h-8 min-w-[220px] flex-1 rounded-md border border-gray-200 px-2.5 text-[13px] outline-none focus:border-[#1D4ED8]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!emailNovoVendedor.trim() || salvandoVendedor !== null}
+                    className="h-8 rounded-md bg-[#1D4ED8] px-3 text-[12px] font-semibold text-white disabled:opacity-40"
+                  >
+                    Marcar
+                  </button>
+                </form>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+                  Vendedor usa uma conta normal, sem pagar, e tem no Perfil o código de 6 dígitos que abre a
+                  demonstração em /demo. Dá para marcar antes de a pessoa criar a conta.
+                </p>
+                {vendedoresSemConta.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {vendedoresSemConta.map((v) => (
+                      <span
+                        key={v.email}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700"
+                      >
+                        {v.email} · ainda não criou a conta
+                        <button
+                          type="button"
+                          onClick={() => alternarVendedor(v.email, false)}
+                          disabled={salvandoVendedor === v.email}
+                          title="Tirar de vendedor"
+                          className="text-violet-400 hover:text-violet-700 disabled:opacity-40"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Busca */}
@@ -1634,13 +1729,20 @@ export default function Admin() {
 
                           {/* Pagamento */}
                           <Td>
-                            <span className={cn(
-                              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
-                              pagante ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
-                            )}>
-                              <span className={cn('h-1.5 w-1.5 rounded-full', pagante ? 'bg-emerald-500' : 'bg-gray-400')} />
-                              {pagante ? 'Pagante' : 'Não pagante'}
-                            </span>
+                            {ehVendedorConta(c) ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                                Vendedor
+                              </span>
+                            ) : (
+                              <span className={cn(
+                                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
+                                pagante ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
+                              )}>
+                                <span className={cn('h-1.5 w-1.5 rounded-full', pagante ? 'bg-emerald-500' : 'bg-gray-400')} />
+                                {pagante ? 'Pagante' : 'Não pagante'}
+                              </span>
+                            )}
                             {(c.assinatura_status === 'inadimplente' || c.assinatura_status === 'cancelada') && (
                               <span className="ml-1.5 text-[10px] text-gray-400">{c.assinatura_status}</span>
                             )}
@@ -1649,11 +1751,23 @@ export default function Admin() {
                             )}
                           </Td>
 
-                          {/* Ação: só exclusão reversível. O acesso pago é
-                              controlado por pagamento real ou cupom — não há
+                          {/* Ações: vendedor e exclusão reversível. O acesso pago
+                              é controlado por pagamento real ou cupom — não há
                               como "tornar pagante" pelo painel. */}
                           <Td>
                             <div className="flex items-center gap-2">
+                              {c.email && !excluida && (
+                                <button
+                                  onClick={() => alternarVendedor((c.email ?? '').toLowerCase(), !ehVendedorConta(c))}
+                                  disabled={salvandoVendedor !== null}
+                                  title={ehVendedorConta(c)
+                                    ? 'Volta a ser conta comum, com a situação de pagamento de antes'
+                                    : 'Conta sem cobrança, com o código da demonstração no Perfil'}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors disabled:opacity-40"
+                                >
+                                  {ehVendedorConta(c) ? 'Tirar de vendedor' : 'Tornar vendedor'}
+                                </button>
+                              )}
                               <button
                                 onClick={() => alternarExclusao(c)}
                                 disabled={salvando}
