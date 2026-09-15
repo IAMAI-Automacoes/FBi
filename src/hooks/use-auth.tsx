@@ -42,8 +42,9 @@ interface AuthContextType {
       Diferente de `usuario.cargo === 'admin'`, que é papel DENTRO de um
       restaurante. Quem administra a plataforma não precisa de assinatura. */
   ehAdminPlataforma: boolean
-  /** Conta de vendedor (tabela `vendedores`, casada por email): não paga e tem
-      o código da demonstração no perfil. */
+  /** Conta de vendedor (tabela `vendedores`, casada por email). Paga com cupom
+      como qualquer conta; a diferença é o código da demonstração no perfil e
+      poder pular a conexão do WhatsApp no onboarding. */
   ehVendedor: boolean
   /** Preenchido quando ESTA sessão é uma demonstração aberta por código — até
       quando ela vale. Nulo no login normal, inclusive no do próprio vendedor. */

@@ -169,7 +169,6 @@ export function RotaProtegida() {
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
   // que o dinheiro entrou (ou, para o admin, depois que ele optou por pular).
-  // Vendedor não cai aqui: a conta dele fica 'ativa' pelo banco.
   if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
   }

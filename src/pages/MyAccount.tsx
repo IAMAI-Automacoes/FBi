@@ -18,7 +18,7 @@ import { PainelCodigoDemo } from '@/components/demo/PainelCodigoDemo'
 
 export default function MyAccount() {
   const { confirmar, dialogo } = useConfirmacao()
-  const { usuario, refetchUsuario, logout, ehVendedor } = useAuth()
+  const { usuario, refetchUsuario, logout } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
@@ -414,9 +414,7 @@ export default function MyAccount() {
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-gray-900">Assinatura</h3>
                 <p className="text-[13px] text-gray-600 mt-1">
-                  {ehVendedor ? (
-                    <>Conta de vendedor · sem cobrança.</>
-                  ) : usuario.assinatura_cancelada_em && usuario.assinatura_status === 'ativa' ? (
+                  {usuario.assinatura_cancelada_em && usuario.assinatura_status === 'ativa' ? (
                     <>
                       Cancelada — seu acesso continua até{' '}
                       <span className="font-medium text-gray-800">
@@ -452,8 +450,7 @@ export default function MyAccount() {
                     </Link>
                   )}
               </div>
-              {!ehVendedor &&
-                (usuario.assinatura_status === 'ativa' ||
+              {(usuario.assinatura_status === 'ativa' ||
                 usuario.assinatura_status === 'inadimplente') &&
                 !usuario.assinatura_cancelada_em && (
                   <Button

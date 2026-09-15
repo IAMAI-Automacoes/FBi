@@ -54,7 +54,7 @@ interface OnboardingData {
 }
 
 export default function Onboarding() {
-  const { usuario, logout, ehAdminPlataforma } = useAuth()
+  const { usuario, logout, ehAdminPlataforma, ehVendedor } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
 
@@ -171,7 +171,9 @@ export default function Onboarding() {
       if (!data.ia_tom) return 'Selecione o tom de comunicação.'
       if (data.ia_focos.length === 0) return 'Selecione ao menos uma área de foco.'
     }
-    if (s === 4 && !whatsappConectado) return 'Conecte o WhatsApp para continuar.'
+    // Vendedor pode pular: a conta dele serve para demonstrar, não para receber
+    // feedback de cliente.
+    if (s === 4 && !whatsappConectado && !ehVendedor) return 'Conecte o WhatsApp para continuar.'
     return null
   }
 
@@ -555,7 +557,9 @@ export default function Onboarding() {
                 onConnectedChange={setWhatsappConectado}
               />
               <p className="text-xs text-gray-500 mt-4 text-center">
-                Conecte o WhatsApp para concluir o onboarding — é por ele que os feedbacks chegam.
+                {ehVendedor
+                  ? 'Conta de vendedor: dá para pular esta etapa e conectar o WhatsApp depois, em Configurações.'
+                  : 'Conecte o WhatsApp para concluir o onboarding — é por ele que os feedbacks chegam.'}
               </p>
               {/* Opcional de propósito: não entra em `validarStep`, então não
                   trava o onboarding. Fica aqui (e também depois, em
@@ -635,7 +639,7 @@ export default function Onboarding() {
 
           {step < 5 ? (
             <Button onClick={handleNext} className="bg-[#1D4ED8] hover:bg-blue-700 text-white">
-              Próximo
+              {step === 4 && ehVendedor && !whatsappConectado ? 'Pular por agora' : 'Próximo'}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (

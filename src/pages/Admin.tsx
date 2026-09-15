@@ -1249,7 +1249,7 @@ export default function Admin() {
     if (!virar) {
       const ok = await confirmar({
         titulo: `Tirar ${email} de vendedor?`,
-        descricao: 'As demonstrações abertas fecham na hora e a conta volta para a situação de pagamento que tinha antes.',
+        descricao: 'As demonstrações abertas fecham na hora e o código some do perfil. A assinatura da conta não muda.',
         confirmar: 'Tirar de vendedor',
         destrutivo: true,
       })
@@ -1571,17 +1571,16 @@ export default function Admin() {
           const contasBusca = contas.filter((c) =>
             !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
           )
-          // Vendedor fica 'ativa' sem pagar: não entra em "Pagantes".
+          // Vendedor paga (com cupom) como qualquer conta: a marca é só um rótulo a mais.
           const emailsVendedores = new Set(vendedores.map((v) => v.email))
           const ehVendedorConta = (c: ContaAdmin) => !!c.email && emailsVendedores.has(c.email.toLowerCase())
           const casaFiltro = (c: ContaAdmin, f: FiltroConta) => {
             const excluida = !!c.excluida_em
-            const vendedor = ehVendedorConta(c)
-            const pagante = c.assinatura_status === 'ativa' && !vendedor
+            const pagante = c.assinatura_status === 'ativa'
             if (f === 'excluidas') return excluida
             if (f === 'pagantes') return !excluida && pagante
-            if (f === 'nao_pagantes') return !excluida && !pagante && !vendedor
-            if (f === 'vendedores') return !excluida && vendedor
+            if (f === 'nao_pagantes') return !excluida && !pagante
+            if (f === 'vendedores') return !excluida && ehVendedorConta(c)
             return true
           }
           // Emails marcados como vendedor que ainda não criaram a conta.
@@ -1629,8 +1628,9 @@ export default function Admin() {
                   </button>
                 </form>
                 <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
-                  Vendedor usa uma conta normal, sem pagar, e tem no Perfil o código de 6 dígitos que abre a
-                  demonstração em /demo. Dá para marcar antes de a pessoa criar a conta.
+                  Vendedor tem conta igual à de qualquer restaurante e paga com cupom. A marca só libera o código
+                  da demonstração no Perfil (/demo) e deixa pular o WhatsApp no onboarding. Dá para marcar antes
+                  de a pessoa criar a conta.
                 </p>
                 {vendedoresSemConta.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1717,6 +1717,11 @@ export default function Admin() {
                               <span className={cn('font-medium', excluida ? 'text-gray-500' : 'text-gray-800')}>
                                 {c.nome_restaurante || 'Sem nome'}
                                 {c.nome && <span className="text-gray-400 font-normal"> · {c.nome}</span>}
+                                {ehVendedorConta(c) && (
+                                  <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
+                                    VENDEDOR
+                                  </span>
+                                )}
                                 {excluida && (
                                   <span className="ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold tracking-wide align-middle">
                                     EXCLUÍDA
@@ -1729,20 +1734,13 @@ export default function Admin() {
 
                           {/* Pagamento */}
                           <Td>
-                            {ehVendedorConta(c) ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700">
-                                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-                                Vendedor
-                              </span>
-                            ) : (
-                              <span className={cn(
-                                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
-                                pagante ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
-                              )}>
-                                <span className={cn('h-1.5 w-1.5 rounded-full', pagante ? 'bg-emerald-500' : 'bg-gray-400')} />
-                                {pagante ? 'Pagante' : 'Não pagante'}
-                              </span>
-                            )}
+                            <span className={cn(
+                              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold',
+                              pagante ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
+                            )}>
+                              <span className={cn('h-1.5 w-1.5 rounded-full', pagante ? 'bg-emerald-500' : 'bg-gray-400')} />
+                              {pagante ? 'Pagante' : 'Não pagante'}
+                            </span>
                             {(c.assinatura_status === 'inadimplente' || c.assinatura_status === 'cancelada') && (
                               <span className="ml-1.5 text-[10px] text-gray-400">{c.assinatura_status}</span>
                             )}
@@ -1761,8 +1759,8 @@ export default function Admin() {
                                   onClick={() => alternarVendedor((c.email ?? '').toLowerCase(), !ehVendedorConta(c))}
                                   disabled={salvandoVendedor !== null}
                                   title={ehVendedorConta(c)
-                                    ? 'Volta a ser conta comum, com a situação de pagamento de antes'
-                                    : 'Conta sem cobrança, com o código da demonstração no Perfil'}
+                                    ? 'Tira o código da demonstração do Perfil. A assinatura não muda.'
+                                    : 'Libera o código da demonstração no Perfil. A assinatura não muda.'}
                                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors disabled:opacity-40"
                                 >
                                   {ehVendedorConta(c) ? 'Tirar de vendedor' : 'Tornar vendedor'}
