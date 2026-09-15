@@ -38,6 +38,7 @@ import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
 import { ControleDemo } from './components/demo/ControleDemo'
+import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
 import { MODO_DEMO, PREFIXO_DEMO } from './lib/demo'
 import DemoLogin from './pages/demo/DemoLogin'
 import DemoEncerrada from './pages/demo/DemoEncerrada'
@@ -51,6 +52,8 @@ const App = () => (
         <Toaster />
         {/* Fecha a demonstração na hora e avisa antes; sem demonstração, não faz nada. */}
         <ControleDemo />
+        {/* Deploy novo com a aba aberta: recarrega na próxima troca de página. */}
+        <AtualizacaoDoApp />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
         {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}
