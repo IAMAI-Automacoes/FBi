@@ -19,7 +19,7 @@ Páginas do painel que o dono usa:
 - Visão Geral: resumo com indicadores e tendência.
 - Feedbacks: lista das avaliações recebidas.
 - Insights: padrões detectados pela IA, com prioridade (URGENTE, IMPORTANTE, OBSERVACAO).
-- Ações: plano de ações operacionais (SUGERIDA, PENDENTE, EM_ANDAMENTO, CONCLUIDO).
+- Ações: plano de ações operacionais (PENDENTE, EM_ANDAMENTO, CONCLUIDO).
 - Relatórios: consolidado do período, com exportação em PDF e CSV.
 - QR Codes: a arte impressa que leva o cliente à avaliação (geral e por garçom).
 - Garçons: equipe cadastrada e ranking por avaliações recebidas.

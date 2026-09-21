@@ -18,6 +18,10 @@
  *
  * - **Isolamento por ação.** Uma invocação de IA por insight, com histórico
  *   zerado, e as mesmas três camadas anti-contaminação do gerador.
+ *
+ * - **Só com `insight_id`.** O ciclo automático (sem insight), que o gatilho das
+ *   ações SUGERIDA chamava, saiu junto com esse status: ação só nasce quando o
+ *   dono clica "Criar Ação".
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
@@ -44,8 +48,6 @@ const CATEGORIAS = [
   'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
 ]
 
-/** Quantos insights o ciclo automático converte de uma vez. */
-const MAX_ACOES_CICLO = 3
 /** Insights convertidos em paralelo (150s de teto na edge function). */
 const CONCORRENCIA = 3
 
@@ -462,10 +464,11 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json().catch(() => ({}))
     const restauranteId = body.restaurante_id
-    // Com `insight_id`, é o dono clicando "Criar Ação" naquele insight.
+    // É o dono clicando "Criar Ação" naquele insight.
     const insightSolicitado: string | undefined = body.insight_id
 
     if (!restauranteId) return json({ error: 'restaurante_id é obrigatório' }, 400)
+    if (!insightSolicitado) return json({ error: 'insight_id é obrigatório' }, 400)
 
     const db = clienteAdmin()
 
@@ -478,16 +481,13 @@ Deno.serve(async (req: Request) => {
     const configInsights = (config?.config_insights as Record<string, unknown>) || {}
     const expiracaoDias = Number(configInsights.expiracao_feedback_dias ?? 14)
 
-    let query = db
+    const { data: insights, error: erroInsights } = await db
       .from('insights')
       .select('*')
       .eq('restaurante_id', restauranteId)
       .eq('ativo', true)
       .is('deletado_em', null)
-
-    if (insightSolicitado) query = query.eq('id', insightSolicitado)
-
-    const { data: insights, error: erroInsights } = await query
+      .eq('id', insightSolicitado)
     if (erroInsights) throw erroInsights
     if (!insights || insights.length === 0) {
       return json({ status: 'sem_insights', acoes_criadas: 0 })
@@ -506,7 +506,7 @@ Deno.serve(async (req: Request) => {
     const ordenados = pendentes.sort((a: any, b: any) =>
       (peso[b.prioridade?.toUpperCase()] || 0) - (peso[a.prioridade?.toUpperCase()] || 0)
     )
-    const alvos = insightSolicitado ? ordenados : ordenados.slice(0, MAX_ACOES_CICLO)
+    const alvos = ordenados
 
     // Busca na web ligada, como no `gerar-plano-acao`: esta funcao escreve o
     // plano que a equipe vai EXECUTAR, e quando o assunto tem norma estabelecida

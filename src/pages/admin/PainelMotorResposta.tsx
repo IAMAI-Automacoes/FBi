@@ -215,7 +215,7 @@ export function PainelMotorResposta() {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="cooldown">Intervalo mínimo entre mensagens (dias)</Label>
+            <Label htmlFor="cooldown">Dias de espera entre mensagens</Label>
             <Input
               id="cooldown"
               type="number"
@@ -225,7 +225,9 @@ export function PainelMotorResposta() {
               onChange={(e) => setConfig((c) => ({ ...c, cooldown_dias: Number(e.target.value) }))}
             />
             <p className="text-xs text-muted-foreground">
-              Padrão: 3 dias. É um só por pessoa — não um por etapa.
+              Padrão: 3. O cliente só volta para a fila depois de passarem <strong>mais</strong> de 3
+              dias: recebeu na segunda, pode receber de novo na sexta. A espera é por pessoa, não por
+              etapa nem por ação.
             </p>
           </div>
 

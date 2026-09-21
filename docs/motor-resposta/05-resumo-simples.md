@@ -68,6 +68,8 @@ o gatilho que avisa "essa tarefa mudou, alguém precisa saber".
 | `contato_id` | Quem vai receber |
 | `restaurante_id` | De qual restaurante |
 | `acao_id` | Sobre qual tarefa |
+| `feedback_restaurante_id` | Qual ponto do feedback desse cliente ligou ele à tarefa (um aviso por ponto) |
+| `titulo_acao`, `plano_detalhado`, `categoria`, `prioridade`, `concluida_em` | Cópia dos dados da tarefa. Quando o dono edita a tarefa, os avisos dela são atualizados na hora |
 | `etapa` | `em_andamento` ou `concluida` — em que fase a tarefa estava quando o aviso nasceu |
 | `status` | `na_fila`, `enviado`, `cancelado` ou `expirado` |
 | `criado_em` | Quando o aviso entrou na fila |

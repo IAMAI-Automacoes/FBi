@@ -3,12 +3,11 @@ import { supabase } from '@/lib/supabase/client'
 const CAMPOS_ACAO =
   'id, titulo_acao, plano_detalhado, status, prioridade, categoria, texto, feedback_id, restaurante_id, created_at, ordem, insight_id, arquivada_em, responsavel, prazo, fixado'
 
-export async function buscarAcoes(restauranteId: number, apenasAprovadas = true) {
+export async function buscarAcoes(restauranteId: number) {
   const { data, error } = await supabase
     .from('acoes_operacionais')
     .select(CAMPOS_ACAO)
     .eq('restaurante_id', restauranteId)
-    .in('status', apenasAprovadas ? ['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDO'] : ['SUGERIDA'])
     // Arquivadas somem do quadro; elas vivem em /acoes/arquivadas.
     .is('arquivada_em', null)
     .order('ordem', { ascending: true })
@@ -110,12 +109,10 @@ export async function excluirAcao(acaoId: number) {
 }
 
 /**
- * Pede sugestões de ação à IA.
- *
- * Com `insightId`, gera UMA ação para aquele insight específico (é o botão
- * "Criar Ação"); sem ele, roda o ciclo automático sobre os insights ativos.
+ * Botão "Criar Ação": a IA transforma o insight numa ação com plano, que já
+ * nasce PENDENTE no quadro.
  */
-export async function sugerirAcoesManualmente(restauranteId: number, insightId?: string) {
+export async function criarAcaoDoInsight(restauranteId: number, insightId: string) {
   const { data, error } = await supabase.functions.invoke('sugerir-acoes', {
     body: { restaurante_id: restauranteId, insight_id: insightId },
   })

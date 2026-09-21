@@ -20,7 +20,7 @@ import { CampoBusca } from '@/components/CampoBusca'
 import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL, BOTAO_PILULA_AZUL_VAZADO } from '@/lib/estilos-botao'
 import { supabase } from '@/lib/supabase/client'
-import { sugerirAcoesManualmente } from '@/lib/queries/acoes'
+import { criarAcaoDoInsight } from '@/lib/queries/acoes'
 import { PRIORIDADES, pesoPrioridade } from '@/lib/prioridade'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
@@ -278,8 +278,7 @@ export default function Insights() {
 
   /**
    * "Criar Ação" não abre mais formulário: pede para a IA montar a ação a
-   * partir deste insight. Ela nasce com status SUGERIDA, e o dono confirma ou
-   * rejeita em Ações › Sugestões da IA.
+   * partir deste insight. Ela já nasce PENDENTE no quadro de Ações.
    */
   /**
    * O insight VIRA a ação: sai da lista e leva os feedbacks junto.
@@ -293,7 +292,7 @@ export default function Insights() {
     if (!usuario?.restaurante_id) return
     setCriandoAcaoId(insight.id)
     try {
-      await sugerirAcoesManualmente(usuario.restaurante_id, insight.id)
+      await criarAcaoDoInsight(usuario.restaurante_id, insight.id)
       setInsights((prev) => prev.filter((i) => i.id !== insight.id))
       toast({
         title: 'Ação criada',

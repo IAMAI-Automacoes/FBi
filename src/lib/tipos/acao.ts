@@ -6,7 +6,7 @@
  * chave `_original` que não existia em lugar nenhum — por isso o Plano de Ação
  * aparecia sempre vazio.
  */
-export type StatusAcao = 'SUGERIDA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
+export type StatusAcao = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
 
 /**
  * `OBSERVACAO` é o nível mais baixo, igual ao dos insights — a ação herda a

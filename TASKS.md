@@ -143,8 +143,8 @@
 - [x] Verificar que `insights` são criados com campos obrigatórios
 - [x] Verificar que `restaurantes.ultima_analise_insights` é atualizado (era `config_restaurantes`)
 - [x] Revisar `sugerir-acoes` Edge Function
-- [ ] Verificar trigger `trg_check_sugestoes_acoes` dispara `sugerir-acoes` *(não confirmado nesta análise)*
-- [ ] Verificar que `acoes_operacionais` com status `SUGERIDA` aparecem na sidebar *(insert confirmado; exibição no frontend não confirmada)*
+- [x] ~~Verificar trigger `trg_check_sugestoes_acoes` dispara `sugerir-acoes`~~ — removido em 16/09/2026 junto com o status `SUGERIDA`
+- [x] ~~Verificar que `acoes_operacionais` com status `SUGERIDA` aparecem na sidebar~~ — status removido em 16/09/2026
 - [x] Revisar `gerar-plano-acao` Edge Function
 - [ ] Testar geração de plano de ação para um insight *(requer teste manual em runtime)*
 - [x] Revisar `gerar-perguntas-direcionadas` Edge Function

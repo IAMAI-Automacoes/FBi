@@ -144,7 +144,7 @@ export function TaskCard({
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" className="px-1.5 py-0.5 text-[11px]">
-                Sugerida pela IA
+                Criada pela IA
               </TooltipContent>
             </Tooltip>
           )}

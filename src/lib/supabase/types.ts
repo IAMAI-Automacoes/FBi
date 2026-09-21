@@ -320,45 +320,54 @@ export type Database = {
       aviso_pendente: {
         Row: {
           acao_id: number
+          categoria: string | null
+          concluida_em: string | null
           contato_id: string
           criado_em: string
           etapa: Database["public"]["Enums"]["aviso_etapa"]
           expira_em: string
-          feedback_restaurante_id: number | null
-          feedbacks_originais_ids: string[]
-          feedbacks_restaurante_ids: number[]
+          feedback_restaurante_id: number
           id: string
           mensagem_id: string | null
+          plano_detalhado: string | null
+          prioridade: string | null
           restaurante_id: number
           status: Database["public"]["Enums"]["aviso_status"]
+          titulo_acao: string | null
         }
         Insert: {
           acao_id: number
+          categoria?: string | null
+          concluida_em?: string | null
           contato_id: string
           criado_em?: string
           etapa: Database["public"]["Enums"]["aviso_etapa"]
           expira_em: string
-          feedback_restaurante_id?: number | null
-          feedbacks_originais_ids?: string[]
-          feedbacks_restaurante_ids?: number[]
+          feedback_restaurante_id: number
           id?: string
           mensagem_id?: string | null
+          plano_detalhado?: string | null
+          prioridade?: string | null
           restaurante_id: number
           status?: Database["public"]["Enums"]["aviso_status"]
+          titulo_acao?: string | null
         }
         Update: {
           acao_id?: number
+          categoria?: string | null
+          concluida_em?: string | null
           contato_id?: string
           criado_em?: string
           etapa?: Database["public"]["Enums"]["aviso_etapa"]
           expira_em?: string
-          feedback_restaurante_id?: number | null
-          feedbacks_originais_ids?: string[]
-          feedbacks_restaurante_ids?: number[]
+          feedback_restaurante_id?: number
           id?: string
           mensagem_id?: string | null
+          plano_detalhado?: string | null
+          prioridade?: string | null
           restaurante_id?: number
           status?: Database["public"]["Enums"]["aviso_status"]
+          titulo_acao?: string | null
         }
         Relationships: [
           {
@@ -492,7 +501,6 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          nome: string | null
           opt_out_em: string | null
           restaurante_id: number
           telefone: string
@@ -501,7 +509,6 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          nome?: string | null
           opt_out_em?: string | null
           restaurante_id: number
           telefone: string
@@ -510,7 +517,6 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          nome?: string | null
           opt_out_em?: string | null
           restaurante_id?: number
           telefone?: string
@@ -2309,14 +2315,15 @@ export type Database = {
           aviso_id: string | null
           categoria: string | null
           categoria_do_ponto: string | null
+          concluida_em: string | null
           contato_id: string | null
           etapa: Database["public"]["Enums"]["aviso_etapa"] | null
           feedback_em: string | null
           feedback_original_id: string | null
           feedback_restaurante_id: number | null
-          nome_cliente: string | null
           nome_restaurante: string | null
           plano_detalhado: string | null
+          prioridade: string | null
           restaurante_id: number | null
           telefone: string | null
           texto_do_ponto: string | null
