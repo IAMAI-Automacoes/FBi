@@ -50,13 +50,21 @@ function VoltarLogin() {
   )
 }
 
+// O link do email volta com os dados no hash: `#access_token=...&type=recovery`
+// quando deu certo, `#error_code=otp_expired&...` quando venceu ou já foi usado.
+const hashDoLink = () => new URLSearchParams(window.location.hash.slice(1))
+
 export default function RecuperarSenha() {
   const [email, setEmail] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmarSenha, setConfirmarSenha] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSent, setIsSent] = useState(false)
-  const [modoRedefinir, setModoRedefinir] = useState(false)
+  // Lido na primeira renderização, antes de o supabase-js limpar o hash. Assim a
+  // tela abre em "Criar nova senha" mesmo que o evento PASSWORD_RECOVERY dispare
+  // antes do listener abaixo existir.
+  const [modoRedefinir, setModoRedefinir] = useState(() => hashDoLink().get('type') === 'recovery')
+  const [linkInvalido] = useState(() => hashDoLink().has('error_code'))
 
   const { recuperarSenha } = useAuth()
   const { toast } = useToast()
@@ -213,6 +221,11 @@ export default function RecuperarSenha() {
             <p style={{ fontSize: '14px', color: '#64748B', lineHeight: 1.6 }}>
               Digite seu email e enviaremos um link para redefinir sua senha.
             </p>
+            {linkInvalido && (
+              <p role="alert" style={{ marginTop: '14px', padding: '10px 12px', borderRadius: '10px', backgroundColor: 'rgba(220,38,38,0.08)', color: '#B91C1C', fontSize: '13px', lineHeight: 1.5 }}>
+                Esse link expirou ou já foi usado. Peça um novo abaixo.
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleEnviarLink}>
