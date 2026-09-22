@@ -173,8 +173,54 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
       currentMessages = adicionarMensagemUsuario(texto, anexos)
     }
 
+    // Estes dois ficam FORA do try porque o catch também usa `mostrarEPersistir`
+    // (crédito esgotado e assinatura inativa viram resposta na conversa, não
+    // erro vermelho), e ela lê `contextoFinal`. Declarados dentro do try, o
+    // catch quebrava com ReferenceError e o aviso nunca aparecia.
+    const contextoFinal = { ...contextoDadosIniciais, ...contextoDadosAdicionais }
+
+    // Mostra uma resposta da IA, persiste no banco e grava a memória.
+    const mostrarEPersistir = async (resposta: string, fontes: FonteWeb[] = []) => {
+      aplicar((prev) => [...prev, { uid: novoUid(), role: 'assistant', text: resposta, fontes }])
+      setLoading(false)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        if (texto || anexos?.length) {
+          await supabase.from('mensagens_chat').insert({
+            usuario_id: user.id,
+            sessao_id: sessaoId,
+            mensagem: texto,
+            papel: 'usuario',
+            contexto_pagina: contextoPagina,
+            contexto_dados: {
+              anexos: (anexos || []).map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url ?? null })),
+              respondendoA: opcoes.respondendoA ?? null,
+            },
+          })
+        }
+        await supabase.from('mensagens_chat').insert({
+          usuario_id: user.id,
+          sessao_id: sessaoId,
+          mensagem: resposta,
+          papel: 'assistente',
+          contexto_pagina: contextoPagina,
+          contexto_dados: {},
+        })
+      }
+      if (texto) {
+        // A IA aprende em segundo plano na SUA memória própria
+        // (`memoria_assistente`). Os campos de texto livre do usuário
+        // (`perfil_notas`, `detalhes`) são só dele — a IA não escreve neles.
+        void memorizarDaConversa(
+          contextoFinal.restaurante_id ?? null,
+          texto,
+          resposta,
+          opcoes.memoria ?? contextoFinal.memoria ?? [],
+        )
+      }
+    }
+
     try {
-      const contextoFinal = { ...contextoDadosIniciais, ...contextoDadosAdicionais }
       const nomeAssistente = () =>
         (contextoFinal?.mascote_config?.nome || '').trim() || 'Chef Pepê'
 
@@ -211,47 +257,6 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
           return { role: m.role, content: m.text }
         }),
       ]
-
-      // Mostra uma resposta da IA, persiste no banco e grava a memória.
-      const mostrarEPersistir = async (resposta: string, fontes: FonteWeb[] = []) => {
-        aplicar((prev) => [...prev, { uid: novoUid(), role: 'assistant', text: resposta, fontes }])
-        setLoading(false)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          if (texto || anexos?.length) {
-            await supabase.from('mensagens_chat').insert({
-              usuario_id: user.id,
-              sessao_id: sessaoId,
-              mensagem: texto,
-              papel: 'usuario',
-              contexto_pagina: contextoPagina,
-              contexto_dados: {
-                anexos: (anexos || []).map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url ?? null })),
-                respondendoA: opcoes.respondendoA ?? null,
-              },
-            })
-          }
-          await supabase.from('mensagens_chat').insert({
-            usuario_id: user.id,
-            sessao_id: sessaoId,
-            mensagem: resposta,
-            papel: 'assistente',
-            contexto_pagina: contextoPagina,
-            contexto_dados: {},
-          })
-        }
-        if (texto) {
-          // A IA aprende em segundo plano na SUA memória própria
-          // (`memoria_assistente`). Os campos de texto livre do usuário
-          // (`perfil_notas`, `detalhes`) são só dele — a IA não escreve neles.
-          void memorizarDaConversa(
-            contextoFinal.restaurante_id ?? null,
-            texto,
-            resposta,
-            opcoes.memoria ?? contextoFinal.memoria ?? [],
-          )
-        }
-      }
 
       // ══ FASE 1: a IA principal decide — responde em texto OU emite um comando ══
       const sysPrompt1 =

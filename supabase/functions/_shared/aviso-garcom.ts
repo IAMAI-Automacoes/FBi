@@ -247,6 +247,22 @@ async function dispararWebhook(db: Db, marcoIds: number[], payload: Record<strin
     await db.from('bonificacao_marco').update(campos).in('id', marcoIds)
   }
 
+  // Sem telefone do garçom, ou sem WhatsApp conectado, o n8n recebe, para no
+  // "Tem telefone?" e mesmo assim responde 200 — o marco ficaria gravado como
+  // enviado sem ninguém ter recebido nada, e ele só é avisado uma vez (UNIQUE
+  // no banco), então a conquista sumiria calada. Aqui o motivo fica registrado.
+  const telefoneGarcom = String(payload.telefone_garcom ?? '').trim()
+  if (!telefoneGarcom) {
+    await marcar({ erro: 'garçom sem telefone cadastrado' })
+    console.warn('[bonificacao] garçom sem telefone; marco registrado sem envio')
+    return false
+  }
+  if (!payload.whatsapp_token || !payload.whatsapp_base_url) {
+    await marcar({ erro: 'restaurante sem WhatsApp conectado' })
+    console.warn('[bonificacao] restaurante sem WhatsApp; marco registrado sem envio')
+    return false
+  }
+
   const urlProducao = Deno.env.get('N8N_BONIFICACAO_GARCOM')
   const urlTeste = Deno.env.get('N8N_BONIFICACAO_GARCOM_TESTE')
 
