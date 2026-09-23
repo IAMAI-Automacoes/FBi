@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { supabase } from '@/lib/supabase/client'
+import { SELECT_PILULA_FILTRO } from '@/lib/estilos-botao'
 
 const LIMIT = 10
 
@@ -218,7 +219,7 @@ export default function Feedbacks() {
             value={filtros.sentimento}
             onValueChange={(val) => setFiltros((prev) => ({ ...prev, sentimento: val }))}
           >
-            <SelectTrigger className="w-[168px] h-10 shrink-0 bg-white shadow-sm border-gray-200">
+            <SelectTrigger className={SELECT_PILULA_FILTRO}>
               <SelectValue placeholder="Todos Sentimentos" />
             </SelectTrigger>
             <SelectContent>
@@ -233,7 +234,7 @@ export default function Feedbacks() {
             value={filtros.ordenacao}
             onValueChange={(val: any) => setFiltros((prev) => ({ ...prev, ordenacao: val }))}
           >
-            <SelectTrigger className="w-[136px] h-10 shrink-0 bg-white shadow-sm border-gray-200">
+            <SelectTrigger className={SELECT_PILULA_FILTRO}>
               <SelectValue placeholder="Ordenar" />
             </SelectTrigger>
             <SelectContent>
@@ -339,7 +340,7 @@ export default function Feedbacks() {
           <Button
             variant="outline"
             onClick={carregarMais}
-            className="h-[44px] rounded-[8px] px-6 font-semibold shadow-sm hover:bg-gray-50 text-gray-700 bg-white border-gray-200"
+            className="h-[44px] px-6 font-semibold"
           >
             Carregar mais feedbacks
           </Button>

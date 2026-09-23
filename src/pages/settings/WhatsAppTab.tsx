@@ -172,8 +172,7 @@ export function WhatsAppTab({
                 <RefreshCw className={cn('h-4 w-4 mr-1', reiniciando && 'animate-spin')} />
                 {reiniciando ? 'Reiniciando…' : 'Reiniciar'}
               </Button>
-              <Button variant="outline" onClick={desconectar} disabled={desconectando}
-                className="text-red-600 border-red-200 hover:bg-red-50">
+              <Button variant="destrutivoVazado" onClick={desconectar} disabled={desconectando}>
                 {desconectando ? 'Desconectando…' : 'Desconectar'}
               </Button>
             </div>
@@ -210,7 +209,7 @@ export function WhatsAppTab({
                 Conecte um número para começar a receber feedbacks.
               </p>
             </div>
-            <Button onClick={iniciarConexao} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={iniciarConexao}>
               <MessageCircle className="h-4 w-4 mr-1.5" /> Conectar WhatsApp
             </Button>
             {loading && (

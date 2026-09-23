@@ -50,6 +50,7 @@ import { Label } from '@/components/ui/label'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { FormattedMessage, parseInline, LINK_ESCURO } from '@/lib/chat-utils'
 import { useChat, AnexoMensagem } from '@/hooks/use-chat'
 import {
@@ -1085,7 +1086,7 @@ export function ChatFab({
                   >
                     <FolderPlus className="h-4 w-4" />
                   </button>
-                  <button onClick={handleNovaConversa} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#1D4ED8] rounded-full hover:bg-blue-700 transition-colors">
+                  <button onClick={handleNovaConversa} className={cn(BOTAO_PILULA_AZUL, 'h-8 gap-1.5 px-3 text-xs')}>
                     <Plus className="h-3.5 w-3.5" /> Nova
                   </button>
                 </>
@@ -1777,7 +1778,7 @@ export function ChatFab({
                     <div className="flex-1" />
                     <Button
                       size="icon"
-                      className="h-7 w-7 bg-[#1D4ED8] hover:bg-blue-800 text-white rounded-md disabled:opacity-40"
+                      className="h-7 w-7 disabled:opacity-40"
                       onClick={() => handleSend(message)}
                       disabled={(!message.trim() && !anexos.length) || loading || enviandoImagem || creditoEsgotado}
                     >

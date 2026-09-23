@@ -116,18 +116,77 @@ export async function gerarPdfRelatorio(
     return doc.splitTextToSize(t, larg).length
   }
 
-  /** Título de seção com filete azul. Marca a seção como "em andamento". */
+  /**
+   * Título de seção. Marca a seção como "em andamento".
+   *
+   * O respiro ANTES é maior que o depois (9mm contra 7) de propósito: é o que
+   * separa uma seção da anterior. Com o espaço igual dos dois lados, o título
+   * flutuava no meio do vão e parecia pertencer tanto ao bloco de cima quanto
+   * ao de baixo — era essa a sensação de "tudo corrido" do arquivo.
+   *
+   * A régua fina sob o título fecha o cabeçalho da seção e dá a ela um chão
+   * visível, do jeito que a faixa azul faz no topo da primeira página.
+   */
   const secao = (titulo: string) => {
     secaoAtual = titulo
-    espaco(16)
-    y += 4
+    espaco(20)
+    y += 9
     setFundo(AZUL)
-    doc.rect(M, y - 3.2, 2.6, 4.4, 'F')
-    doc.setFontSize(12)
+    doc.rect(M, y - 3.4, 2.6, 4.6, 'F')
+    doc.setFontSize(12.5)
     doc.setFont('helvetica', 'bold')
     setCor(TINTA)
     doc.text(limpar(titulo), M + 5.5, y)
-    y += 6
+    y += 2.6
+    doc.setDrawColor(LINHA[0], LINHA[1], LINHA[2])
+    doc.setLineWidth(0.3)
+    doc.line(M, y, M + UTIL, y)
+    doc.setLineWidth(0.2)
+    y += 4.4
+  }
+
+  /**
+   * O estilo único das tabelas do relatório.
+   *
+   * Antes cada tabela tinha o seu (a de horários era `plain` com zebra quase
+   * invisível; insights e ações nem tabela eram — saíam como lista de traços,
+   * com a prioridade colada no meio do texto). Um estilo só: cabeçalho azul
+   * claro em caixa alta, zebra visível, e as colunas de número alinhadas à
+   * direita por quem chama.
+   */
+  const estiloTabela = {
+    theme: 'plain' as const,
+    styles: {
+      fontSize: 8.5,
+      cellPadding: { top: 2.2, right: 2.5, bottom: 2.2, left: 2.5 },
+      textColor: TINTA,
+      lineColor: LINHA,
+      lineWidth: 0.1,
+      overflow: 'linebreak' as const,
+    },
+    headStyles: {
+      fontStyle: 'bold' as const,
+      fontSize: 7.5,
+      textColor: CINZA,
+      fillColor: FUNDO_SUAVE,
+      lineColor: LINHA,
+      lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 },
+    },
+    alternateRowStyles: { fillColor: [250, 251, 253] as [number, number, number] },
+    margin: { left: M, right: M, bottom: 22 },
+  }
+
+  /**
+   * Desenha uma tabela e devolve o `y` logo abaixo dela.
+   *
+   * Centraliza o `didDrawPage` que repõe a legenda "(continuação)" quando a
+   * própria tabela quebra de página — sem isso, uma tabela longa começava a
+   * página seguinte com o cabeçalho repetido mas sem dizer de que seção era.
+   */
+  const tabela = (opts: Record<string, unknown>) => {
+    autoTable(doc, { ...estiloTabela, startY: y, ...opts })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    y = (doc as any).lastAutoTable.finalY + 4
   }
 
   /**
@@ -341,14 +400,18 @@ export async function gerarPdfRelatorio(
     const notaEvolucao =
       'Linha: satisfação do dia. Barras ao fundo: quantas avaliações houve. Dia sem avaliação não recebe ponto.'
     const alturaParagrafo = linhasDe(notaEvolucao, 9) * 4.5 + 2
-    blocoUnido(16 + alturaParagrafo + 44)
+    // 42mm de altura, não 30: num gráfico de 30mm uma queda de 8 pontos de
+    // satisfação virava um degrau de 2mm, indistinguível de ruído. Mais alto,
+    // a mesma variação passa a ser visível — que é o único motivo de o gráfico
+    // existir em vez de uma coluna de números.
+    blocoUnido(16 + alturaParagrafo + 56)
     secao('Evolução da satisfação')
     paragrafo(notaEvolucao, { tamanho: 9, cor: CINZA, lh: 4.5 })
     y = linhaEvolucao(doc, {
       x: M + 6,
-      y: y + 2,
+      y: y + 3,
       largura: UTIL - 6,
-      altura: 30,
+      altura: 42,
       pontos: tendencia.map((t: any) => ({
         rotulo: limpar(t.date),
         valor: t.sentiment ?? null,
@@ -427,7 +490,7 @@ export async function gerarPdfRelatorio(
         doc.setFontSize(7)
         doc.setFont('helvetica', 'italic')
         setCor(CINZA)
-        doc.text(`+ ${total - itens.length} outros na planilha (CSV).`, M, y + 2)
+        doc.text(`+ ${total - itens.length} outros na planilha (aba "Temas").`, M, y + 2)
         y += 4
       }
       y += 1
@@ -462,12 +525,14 @@ export async function gerarPdfRelatorio(
         String(d.total ?? 0),
         d.satisfacao == null ? '-' : String(d.satisfacao),
       ])
+    // Números à DIREITA (não centralizados): com o alinhamento à direita as
+    // unidades ficam uma sobre a outra e dá para comparar 7 com 112 de relance.
     const estilo = {
-      theme: 'plain' as const,
-      styles: { fontSize: 8.5, cellPadding: 2, textColor: TINTA },
-      headStyles: { fontStyle: 'bold' as const, textColor: CINZA, fillColor: FUNDO_SUAVE },
-      alternateRowStyles: { fillColor: [252, 253, 254] as [number, number, number] },
-      columnStyles: { 1: { halign: 'center' as const }, 2: { halign: 'center' as const } },
+      ...estiloTabela,
+      columnStyles: {
+        1: { halign: 'right' as const, cellWidth: 16 },
+        2: { halign: 'right' as const, cellWidth: 20 },
+      },
     }
 
     if (porDia.length > 0) {
@@ -476,7 +541,7 @@ export async function gerarPdfRelatorio(
         startY: topoTabelas,
         head: [['Dia', 'Aval.', 'Satisf.']],
         body: corpo(porDia),
-        margin: { left: M },
+        margin: { ...estiloTabela.margin, left: M },
         tableWidth: meiaTab,
       })
     }
@@ -488,7 +553,7 @@ export async function gerarPdfRelatorio(
         startY: topoTabelas,
         head: [['Horario', 'Aval.', 'Satisf.']],
         body: corpo(porHora),
-        margin: { left: M + meiaTab + 6 },
+        margin: { ...estiloTabela.margin, left: M + meiaTab + 6 },
         tableWidth: meiaTab,
       })
     }
@@ -544,14 +609,20 @@ export async function gerarPdfRelatorio(
   const insights = dadosRelatorio.insights || []
   if (insights.length > 0) {
     secao('Insights do sistema')
-    doc.setFontSize(9.5)
-    for (const ins of insights) {
-      espaco(7)
-      setCor(TINTA)
-      doc.text(`-  ${limpar(ins.titulo)} [${limpar(ins.prioridade)}]`, M + 1, y)
-      y += 5
-    }
-    y += 2
+    paragrafo('O que a IA concluiu a partir dos feedbacks deste período.', {
+      tamanho: 9,
+      cor: CINZA,
+      lh: 4.5,
+    })
+    // Tabela e não lista de traços: a prioridade ficava presa no fim da frase,
+    // entre colchetes, e não dava para varrer a coluna atrás dos urgentes.
+    tabela({
+      head: [['Prioridade', 'Insight']],
+      body: insights.map((i: any) => [limpar(i.prioridade || '-'), limpar(i.titulo || '-')]),
+      columnStyles: {
+        0: { cellWidth: 26, fontStyle: 'bold' as const, textColor: CINZA, fontSize: 7.5 },
+      },
+    })
   }
 
   // ── Ações em andamento ────────────────────────────────────────────────────
@@ -570,26 +641,23 @@ export async function gerarPdfRelatorio(
       'O que o restaurante decidiu fazer. Não depende do período — são as ações abertas hoje.',
       { tamanho: 9, cor: CINZA, lh: 4.5 },
     )
-    for (const a of acoes) {
-      const linhasTitulo = doc.splitTextToSize(limpar(a.titulo_acao || '-'), UTIL - 4)
-      espaco(linhasTitulo.length * 4.4 + 9)
-      doc.setFontSize(7.5)
-      doc.setFont('helvetica', 'bold')
-      setCor(AZUL)
-      doc.text(
-        limpar(
-          `${situacaoLegivel(a.status).toUpperCase()} · ${(a.categoria || 'OUTROS').toUpperCase()} · ${(a.prioridade || '').toUpperCase()}`,
-        ),
-        M + 1,
-        y,
-      )
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'normal')
-      setCor(TINTA)
-      doc.text(linhasTitulo, M + 1, y + 4.4)
-      y += linhasTitulo.length * 4.4 + 6
-    }
-    y += 2
+    // Cada ação era um par "etiqueta azul + título" empilhado, e com 14 delas
+    // virava uma parede de texto sem coluna nenhuma para seguir. Em tabela, dá
+    // para correr o olho pela situação sem ler os títulos.
+    tabela({
+      head: [['Situação', 'Prioridade', 'Categoria', 'Ação']],
+      body: acoes.map((a: any) => [
+        limpar(situacaoLegivel(a.status)),
+        limpar(a.prioridade || '-'),
+        limpar(a.categoria || 'Outros'),
+        limpar(a.titulo_acao || '-'),
+      ]),
+      columnStyles: {
+        0: { cellWidth: 26, fontSize: 7.5, textColor: CINZA },
+        1: { cellWidth: 20, fontSize: 7.5, textColor: CINZA },
+        2: { cellWidth: 26, fontSize: 7.5, textColor: CINZA },
+      },
+    })
   }
 
   // ── Avaliações do período ────────────────────────────────────────────────

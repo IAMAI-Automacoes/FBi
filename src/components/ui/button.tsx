@@ -5,122 +5,111 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
+/**
+ * O desenho de botão do site inteiro, tirado da barra de /insights: PÍLULA
+ * (cantos totalmente arredondados), em duas versões — cheia em azul com
+ * degradê curto, para a ação da tela; vazada em branco com contorno e letra
+ * azuis, para tudo que acompanha.
+ *
+ * As três camadas do preenchimento (luz por dentro da quina de cima, degradê
+ * `blue-600 → blue-800`, sombra baixa por fora) somem ao apertar, o que dá a
+ * leitura de afundar. Estão escritas aqui e repetidas em
+ * `@/lib/estilos-botao` para os componentes que só aceitam `className` — as
+ * duas cópias existem porque uma é `cva` e a outra é string solta, e precisam
+ * bater na cor.
+ */
+const PILULA_CHEIA =
+  'bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 text-white ' +
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
+  'hover:from-blue-500 hover:to-blue-700 ' +
+  'active:shadow-none active:from-blue-700 active:to-blue-700 ' +
+  'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none'
+
+const PILULA_VAZADA =
+  'border border-blue-700 bg-white text-blue-700 ' +
+  // O ícone acompanha a letra. Sem isto, cada chamada decidia a cor do seu
+  // ícone e sobrava um `text-gray-400` de antes: o botão saía com contorno
+  // azul, texto azul e um ícone cinza no meio, que é o "incompleto" que se vê.
+  '[&_svg]:text-blue-700 ' +
+  'shadow-[0_1px_2px_rgba(16,24,40,0.20)] ' +
+  'hover:bg-blue-50 hover:text-blue-700 active:shadow-none ' +
+  'disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:[&_svg]:text-gray-400 disabled:shadow-none'
+
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  // `rounded-full` na base: a pílula é a forma de TODO botão do site, inclusive
+  // os fantasmas e os de ícone. Antes era `rounded-md`, e o raio de 6px
+  // aparecia em qualquer botão que não tivesse recebido classe própria.
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
-        outline:
-          'border border-input bg-transparent shadow-sm text-foreground hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+        /** A ação da tela — o "Gerar insights agora" da imagem de referência. */
+        default: PILULA_CHEIA,
+        /**
+         * Destrutivo continua vermelho: a pílula uniformiza a FORMA, não
+         * apaga a diferença entre confirmar e apagar.
+         */
+        destructive:
+          'bg-red-700 bg-gradient-to-b from-red-600 to-red-800 text-white ' +
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:from-red-500 hover:to-red-700 ' +
+          'active:shadow-none active:from-red-700 active:to-red-700 ' +
+          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
+        /** O que acompanha a ação — "Categoria" e "Fixados" da referência. */
+        outline: PILULA_VAZADA,
+        /**
+         * A pílula vazada em vermelho: destruir sem ser a ação principal da
+         * tela — "Excluir", "Cancelar assinatura", "Desconectar".
+         *
+         * Cheia, uma fileira delas (a coluna "Ações" da tabela do admin) faria
+         * a tela inteira parecer um alerta; o contorno guarda a cor do aviso
+         * sem virar o assunto da página.
+         */
+        destrutivoVazado:
+          'border border-red-600 bg-white text-red-600 [&_svg]:text-red-600 ' +
+          'shadow-[0_1px_2px_rgba(16,24,40,0.20)] ' +
+          'hover:bg-red-50 hover:text-red-700 active:shadow-none ' +
+          'disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:[&_svg]:text-gray-400 disabled:shadow-none',
+        secondary: PILULA_VAZADA,
+        /**
+         * Terciário: sem contorno e sem preenchimento em repouso. Fica fora do
+         * par cheia/vazada de propósito — um X de fechar ou um "Cancelar" com
+         * contorno azul competiria com a ação que está do lado.
+         */
         ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
         link: 'text-foreground underline-offset-4 hover:underline',
 
         /**
-         * Botão de confirmar de formulário — "Salvar", "Criar ação".
+         * As variantes antigas, agora apelidos do mesmo par.
          *
-         * O `default` é um retângulo de cor chapada: fundo sólido, raio de
-         * 6px, nada mais. Chapado, ele não parece um botão, parece uma
-         * etiqueta colorida — não há nada na forma que diga que aquilo
-         * afunda quando é apertado.
+         * Cada uma nasceu com a sua cor — `primario` preto, `etapa` terracota,
+         * `ia` violeta, `baixar` azul escuro — e a tela virava um mostruário:
+         * quatro botões da mesma família com quatro cores, cada um dizendo por
+         * conta própria o quanto era importante. O site passou a ter UM
+         * desenho de botão (a pílula de /insights), e o que distingue uma ação
+         * da outra é o texto dela e a posição na tela, não um tom de fundo.
          *
-         * O que dá volume sem cair em relevo antigo são três camadas finas,
-         * na ordem em que a luz cairia: uma linha clara no alto de dentro
-         * (`inset 0 1px 0` em branco a 12%), que lê como a quina do botão
-         * pegando luz; um degradê curto de gray-800 para gray-950, que faz a
-         * superfície não ser plana; e uma sombra baixa e apertada por fora,
-         * que o descola do fundo branco sem borrão.
-         *
-         * Ao apertar, as três somem de uma vez (`active:`) — é a mesma
-         * quina, agora sem luz, o que dá a leitura de afundar.
-         *
-         * Preto e não o azul da marca: azul é a cor de tudo que é clicável no
-         * app, então em um rodapé de dois botões ele não distinguia o que
-         * decide do que desiste.
+         * Continuam existindo como nomes para não reescrever ~50 chamadas, e
+         * porque `variant="baixar"` ainda diz o que aquele botão faz.
          */
-        primario:
-          'bg-gray-900 bg-gradient-to-b from-gray-800 to-gray-950 text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-gray-700 hover:to-gray-900 ' +
-          'active:shadow-none active:from-gray-900 active:to-gray-900 ' +
-          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
+        primario: PILULA_CHEIA,
+        etapa: PILULA_CHEIA,
+        ia: PILULA_CHEIA,
+        baixar: PILULA_CHEIA,
 
-        /** O par do `primario`: desistir não se oferece com peso. */
+        /** O par de desistir: sem peso, para não competir com o que decide. */
         neutro: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-
-        /**
-         * Concluir uma etapa da personalização do QR — o "Continuar" do cartaz
-         * impresso e o "Salvar" da página do cliente.
-         *
-         * É uma variante só porque as duas telas são dois passos do mesmo
-         * caminho: botões diferentes fariam parecer que uma decisão pesa mais
-         * que a outra.
-         *
-         * Era terracota. Virou o mesmo azul do botão de ação do resto do site
-         * (`BOTAO_PILULA_AZUL`, em `@/lib/estilos-botao`) — a cor própria fazia
-         * o passo do QR parecer de outro produto. Mantém-se variante porque a
-         * forma aqui é a do `size="forma"`, não a da pílula.
-         */
-        etapa:
-          'bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-blue-500 hover:to-blue-700 ' +
-          'active:shadow-none active:from-blue-700 active:to-blue-700 ' +
-          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
-
-        /**
-         * Baixar um material pronto — o PDF dos garçons, o cartaz do QR.
-         *
-         * Mesma construção do `primario` (luz no topo, degradê curto, sombra
-         * baixa), em azul escuro. A cor separa as duas famílias: preto decide
-         * um formulário, azul escuro leva um arquivo embora. Numa barra em que
-         * as duas aparecem lado a lado, cor chapada igual faria as duas ações
-         * lerem como uma coisa só.
-         *
-         * Estava escrita à mão dentro da página dos garçons; virou variante
-         * quando a página do QR passou a precisar do MESMO botão — duas
-         * cópias da mesma receita divergem no primeiro ajuste.
-         */
-        /**
-         * Pedir algo à IA — "Gerar insights agora".
-         *
-         * Mesma construção do `primario` e do `baixar` (linha de luz no topo,
-         * degradê curto, sombra baixa e apertada), então ele pertence
-         * visivelmente à mesma família e não parece um enfeite.
-         *
-         * Violeta porque as outras três cores já têm dono e diriam a coisa
-         * errada: preto decide um formulário, azul escuro leva um arquivo
-         * embora, terracota avança uma etapa. Nenhuma delas é "põe a IA para
-         * trabalhar e espera" — que é uma ação de outra natureza, com custo e
-         * demora, e merece ser reconhecida de longe.
-         *
-         * O botão inteiro, e não só o ícone: um ícone trocando de cor dentro
-         * de um botão neutro é um detalhe que quase ninguém nota, e esta é a
-         * ação mais importante da tela de Insights.
-         */
-        ia:
-          'bg-violet-700 bg-gradient-to-b from-violet-600 to-violet-800 text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-violet-500 hover:to-violet-700 ' +
-          'active:shadow-none active:from-violet-700 active:to-violet-700 ' +
-          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
-
-        baixar:
-          'bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 text-white ' +
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.20)] ' +
-          'hover:from-blue-500 hover:to-blue-700 ' +
-          'active:shadow-none active:from-blue-700 active:to-blue-700 ' +
-          'disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none',
       },
+      // Nenhum tamanho define raio: quem manda na forma é a base
+      // (`rounded-full`). O `sm`, o `lg` e o `forma` reimpunham `rounded-md` e
+      // desmanchavam a pílula justamente nos botões menores, que são a maioria.
       size: {
         default: 'h-10 px-4 py-2',
-        sm: 'h-9 rounded-md px-3 text-xs',
-        lg: 'h-11 rounded-md px-8',
+        sm: 'h-9 px-3.5 text-xs',
+        lg: 'h-11 px-8',
         icon: 'h-10 w-10',
         /** Altura de formulário: 34px, entre o `sm` e o `default`. */
-        forma: 'h-[34px] rounded-[6px] px-3.5 text-[13px]',
+        forma: 'h-[34px] px-4 text-[13px]',
       },
     },
     defaultVariants: {

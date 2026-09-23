@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
 import Vendas from '@/pages/Vendas'
+import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 
 /* Rotas que uma conta sem plano ativo ainda precisa alcançar — é por elas que
    se paga. Barrar tudo deixaria a pessoa sem saída, inclusive quem só atrasou
@@ -61,7 +62,7 @@ export function RotaProtegida() {
         <div className="mt-6 flex gap-3">
           <button
             onClick={() => window.location.reload()}
-            className="h-10 rounded-lg bg-[#1D4ED8] px-4 text-sm font-semibold text-white"
+            className={BOTAO_PILULA_AZUL}
           >
             Recarregar
           </button>
@@ -92,7 +93,7 @@ export function RotaProtegida() {
             href="https://wa.me/5511952138636"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-10 items-center rounded-lg bg-[#1D4ED8] px-4 text-sm font-semibold text-white no-underline"
+            className={`${BOTAO_PILULA_AZUL} inline-flex items-center no-underline`}
           >
             Falar com o suporte
           </a>

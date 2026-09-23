@@ -71,11 +71,11 @@ export function FiltroCategorias({
           // então o texto não identifica este controle.
           data-filtro="categorias"
           className={cn(
-            'h-10 bg-white shadow-sm border-gray-200 font-normal justify-start max-w-[200px]',
+            'h-10 font-normal justify-start max-w-[200px]',
             className,
           )}
         >
-          <Tags className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
+          <Tags className="mr-2 h-4 w-4 shrink-0" />
           <span className="truncate">
             {selecionadas.length === 0
               ? 'Categoria'

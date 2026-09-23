@@ -451,7 +451,9 @@ export function EditorDaPaginaDoCliente({
           <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 text-[12px]" onClick={adicionarTexto}>
             <Plus className="h-3 w-3" /> <Type className="h-3.5 w-3.5" /> Texto
           </Button>
-          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-input bg-transparent px-2.5 text-[12px] font-medium shadow-sm hover:bg-accent">
+          {/* É um `<label>` porque abre o seletor de arquivo, mas para quem
+              olha é um botão — então veste a pílula vazada como os outros. */}
+          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-full border border-blue-700 bg-white px-3 text-[12px] font-medium text-blue-700 shadow-[0_1px_2px_rgba(16,24,40,0.20)] hover:bg-blue-50">
             {enviandoImagem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3 w-3" />}
             <ImagePlus className="h-3.5 w-3.5" /> Imagem
             <input

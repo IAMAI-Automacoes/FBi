@@ -43,6 +43,7 @@ import { MessageMenu } from '@/components/MessageMenu'
 import { EmojiInputButton } from '@/components/EmojiPicker'
 import { QuoteBox, type QuoteInfo } from '@/components/QuoteBox'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
+import { BOTAO_PILULA_VERDE_VAZADA, BOTAO_PILULA_VERMELHA_VAZADA } from '@/lib/estilos-botao'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -1661,10 +1662,8 @@ export default function Admin() {
                                   ? 'Restaurar: devolve o acesso e os dados'
                                   : 'Excluir: remove o acesso de vez, mas guarda os dados no banco'}
                                 className={cn(
-                                  'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium transition-colors disabled:opacity-40',
-                                  excluida
-                                    ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                                    : 'border border-red-200 text-red-600 hover:bg-red-50',
+                                  'h-8 text-[12px]',
+                                  excluida ? BOTAO_PILULA_VERDE_VAZADA : BOTAO_PILULA_VERMELHA_VAZADA,
                                 )}
                               >
                                 {excluida ? (
@@ -1974,8 +1973,7 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
         {onDelete && (
-          <Button variant="outline" size="sm" onClick={onDelete} disabled={deleting}
-            className="text-red-600 border-red-200 hover:bg-red-50">
+          <Button variant="destrutivoVazado" size="sm" onClick={onDelete} disabled={deleting}>
             <Trash2 className="h-4 w-4 mr-1" /> {deleting ? 'Excluindo…' : 'Excluir'}
           </Button>
         )}

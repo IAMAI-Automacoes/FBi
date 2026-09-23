@@ -85,6 +85,21 @@ import { useAuth } from '@/hooks/use-auth'
 import { estiloStatus } from '@/lib/status-acao'
 import { cn } from '@/lib/utils'
 
+/**
+ * Os ícones de apoio no cabeçalho de cada coluna — organizar, adicionar, ver
+ * arquivadas.
+ *
+ * Cinza, e não a pílula azul do resto do site: o título da coluna ao lado já
+ * tem a cor do estado ("EM ANDAMENTO" em azul, "CONCLUÍDO" em verde), e um
+ * contorno azul em volta do ícone competia com ele — a cabeça de coluna virava
+ * duas informações coloridas disputando o olho. Redondos, porque a forma
+ * continua sendo a do site.
+ */
+const ICONE_CABECALHO_COLUNA =
+  'h-7 w-7 shrink-0 rounded-full border border-gray-200 bg-white p-0 text-gray-500 ' +
+  'hover:bg-gray-100 hover:text-gray-700 [&_svg]:text-current'
+
+
 export type ExtendedActionTask = {
   id: string
   titulo_acao: string
@@ -908,8 +923,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   {(col.status === 'PENDENTE' || col.status === 'EM_ANDAMENTO') && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      variant="ghost"
+                      className={ICONE_CABECALHO_COLUNA}
                       onClick={() => handleOrganizar(col.status)}
                       disabled={organizarDesabilitado}
                       title={
@@ -930,8 +945,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                   {col.status === 'PENDENTE' && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      variant="ghost"
+                      className={ICONE_CABECALHO_COLUNA}
                       onClick={() => handleOpenModal(col.status)}
                       title="Adicionar Ação"
                     >
@@ -942,8 +957,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                     <Button
                       asChild
                       size="sm"
-                      variant="outline"
-                      className="h-7 w-7 p-0 shrink-0 bg-white"
+                      variant="ghost"
+                      className={ICONE_CABECALHO_COLUNA}
                       title="Ver ações arquivadas"
                     >
                       <Link to="/acoes/arquivadas">

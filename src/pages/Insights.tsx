@@ -498,7 +498,7 @@ export default function Insights() {
               // Vazado, como o "Conversar com a IA" dos cards: filtrar é ação
               // secundária, e a pílula cheia deixava a barra pesando mais que a
               // lista embaixo dela.
-              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'max-w-[200px] justify-start [&_svg]:text-blue-700/60')}
+              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'max-w-[200px] justify-start')}
             />
 
             <CampoBusca
@@ -638,7 +638,7 @@ export default function Insights() {
                       handleSalvarConfig()
                     }}
                     disabled={savingConfig}
-                    className="bg-gray-900 text-white hover:bg-gray-800"
+                    className={BOTAO_PILULA_AZUL}
                   >
                     {savingConfig ? 'Salvando…' : 'Salvar'}
                   </AlertDialogAction>

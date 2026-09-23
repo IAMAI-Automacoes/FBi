@@ -32,11 +32,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { montarLinhasCsv, serializarCsv } from '@/lib/relatorio-csv'
 import { toast } from 'sonner'
 import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { cn } from '@/lib/utils'
-import { BOTAO_PILULA_VERMELHA } from '@/lib/estilos-botao'
+import { BOTAO_PILULA_VERMELHA, SELECT_PILULA_FILTRO } from '@/lib/estilos-botao'
 
 const PERIOD_LABEL: Record<PeriodInfo, string> = {
   '7d': 'Últimos 7 dias',
@@ -127,7 +126,11 @@ export default function Reports() {
 
   const semDados = !!kpis && kpis.totalFeedbacks === 0
 
-  // ── CSV completo (várias seções + lista de avaliações) ─────────────────────
+  // ── Planilha completa (.xlsx, uma aba por seção) ───────────────────────────
+  // Era um CSV único, com todas as seções empilhadas na mesma coluna A. Virou
+  // Excel de verdade: cada seção numa aba, número como número (soma e ordena
+  // sem conversão), cabeçalho congelado e filtro. A montagem dos dados é a
+  // mesma — só o formato de saída mudou.
   const handleExportCSV = async () => {
     if (!kpis || !stats) return
     setGerandoCsv(true)
@@ -166,29 +169,31 @@ export default function Reports() {
           : Promise.resolve({ data: [] as any[] }),
       ])
 
-      const csv = serializarCsv(
-        montarLinhasCsv({
-          nomeRestaurante,
-          rotuloPeriodo: PERIOD_LABEL[period],
-          inicio: currentStart,
-          fim: new Date(),
-          kpis,
-          stats,
-          tendencia,
-          temas,
-          insights: insRes.data || [],
-          acoes: acoesRes.data || [],
-          avaliacoes: brutosRes.data || [],
-          // Só entra se a leitura da IA já foi gerada na tela: o CSV não vai
-          // chamar a IA por conta própria — baixar uma planilha não deveria
-          // custar uma chamada nem a espera dela.
-          resumoIa: analise?.resumo ?? null,
-        }),
-      )
+      // Carregado só aqui: o `exceljs` é grande e não tem por que entrar no
+      // bundle de quem abre a página e nunca baixa a planilha.
+      const { gerarXlsxRelatorio } = await import('@/lib/relatorio-xlsx')
+
+      const blob = await gerarXlsxRelatorio({
+        nomeRestaurante,
+        rotuloPeriodo: PERIOD_LABEL[period],
+        inicio: currentStart,
+        fim: new Date(),
+        kpis,
+        stats,
+        tendencia,
+        temas,
+        insights: insRes.data || [],
+        acoes: acoesRes.data || [],
+        avaliacoes: brutosRes.data || [],
+        // Só entra se a leitura da IA já foi gerada na tela: a planilha não vai
+        // chamar a IA por conta própria — baixar um arquivo não deveria custar
+        // uma chamada nem a espera dela.
+        resumoIa: analise?.resumo ?? null,
+      })
 
       baixar(
-        new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
-        `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.csv`,
+        blob,
+        `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.xlsx`,
       )
       toast.success('Planilha baixada')
     } catch (e: any) {
@@ -441,7 +446,7 @@ function LayoutNovo({
         <div />
         <div className="flex items-center gap-1.5 w-full sm:w-auto">
           <Select value={period} onValueChange={(v) => setPeriod(v as PeriodInfo)}>
-            <SelectTrigger className="h-9 w-[170px] rounded-md border-gray-200 bg-white">
+            <SelectTrigger className={cn(SELECT_PILULA_FILTRO, 'h-9')}>
               <SelectValue placeholder="Período" />
             </SelectTrigger>
             <SelectContent>
@@ -473,7 +478,7 @@ function LayoutNovo({
             <Button
               onClick={handleExportPdf}
               disabled={semDados || gerandoPdf || gerandoCsv}
-              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 pl-4 pr-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-500 hover:to-blue-700 active:shadow-none active:from-blue-700 active:to-blue-700 disabled:border-transparent disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+              className="h-9 gap-1.5 rounded-l-full rounded-r-none border-r border-white/10 pl-4 pr-3 disabled:border-transparent"
             >
               {gerandoPdf ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -488,7 +493,7 @@ function LayoutNovo({
                 <Button
                   aria-label="Escolher formato"
                   disabled={semDados || gerandoPdf || gerandoCsv}
-                  className="h-9 rounded-l-none rounded-r-full bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 px-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(16,24,40,0.20)] hover:from-blue-500 hover:to-blue-700 active:shadow-none active:from-blue-700 active:to-blue-700 disabled:bg-none disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                  className="h-9 rounded-l-none rounded-r-full px-2.5"
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
@@ -508,9 +513,9 @@ function LayoutNovo({
                 <DropdownMenuItem onClick={handleExportCSV} disabled={gerandoCsv} className="gap-3 py-2.5">
                   <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Planilha (CSV)</p>
+                    <p className="text-sm font-medium text-gray-900">Planilha (Excel)</p>
                     <p className="text-xs leading-snug text-gray-500">
-                      Todos os dados, para abrir no Excel
+                      Uma aba por seção: resumo, categorias, temas, avaliações
                     </p>
                   </div>
                 </DropdownMenuItem>

@@ -116,11 +116,11 @@ export function FiltroPeriodo<P extends string = PeriodoPreset>({
         <Button
           variant="outline"
           className={cn(
-            'h-10 shrink-0 justify-start border-gray-200 bg-white font-normal shadow-sm',
+            'h-10 shrink-0 justify-start font-normal',
             className,
           )}
         >
-          <CalendarDays className="mr-2 h-4 w-4 text-gray-400" />
+          <CalendarDays className="mr-2 h-4 w-4" />
           {rotuloPeriodo(periodo, datas, lista)}
           {/* Limpar sem abrir o popover: um X dentro do próprio botão. Não é um
               <button> aninhado — botão dentro de botão é HTML inválido e o

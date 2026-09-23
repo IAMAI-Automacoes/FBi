@@ -129,7 +129,7 @@ export default function Index() {
               ? 'Seu WhatsApp está conectado. Compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'
               : 'Configure o WhatsApp nas configurações do restaurante e compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'}
           </p>
-          <Button asChild className="bg-[#1D4ED8] hover:bg-blue-700">
+          <Button asChild>
             <Link to="/configuracoes">
               <Settings className="mr-2 h-4 w-4" />
               Ir para Configurações

@@ -18,7 +18,12 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      // `rounded-full` e `px-4`: o gatilho de um select é um botão para quem
+      // olha, e o site inteiro usa pílula. A COR não vem junto de propósito —
+      // metade destes selects está dentro de formulário, e texto azul num
+      // campo de formulário lê como link. Quem é filtro pede o azul pela
+      // classe (ver a barra de /feedbacks).
+      'flex h-10 w-full items-center justify-between rounded-full border border-input bg-background px-4 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       className,
     )}
     {...props}

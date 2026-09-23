@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 
 interface Props {
   children: ReactNode
@@ -133,7 +134,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="flex items-center gap-2 rounded-lg bg-[#1D4ED8] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-800"
+            className={`${BOTAO_PILULA_AZUL} inline-flex items-center gap-2`}
           >
             <RefreshCw className="h-4 w-4" />
             Recarregar

@@ -634,7 +634,7 @@ export default function Onboarding() {
           )}
 
           {step < 5 ? (
-            <Button onClick={handleNext} className="bg-[#1D4ED8] hover:bg-blue-700 text-white">
+            <Button onClick={handleNext}>
               Próximo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -645,7 +645,7 @@ export default function Onboarding() {
                 handleComplete()
               }}
               disabled={loadingSubmit}
-              className="relative overflow-hidden bg-[#1D4ED8] hover:bg-blue-700 text-white"
+              className="relative overflow-hidden"
             >
               {/* Preenchimento do auto-finalizar (fica atrás do texto). */}
               {!loadingSubmit && (

@@ -451,10 +451,10 @@ export default function MyAccount() {
                 usuario.assinatura_status === 'inadimplente') &&
                 !usuario.assinatura_cancelada_em && (
                   <Button
-                    variant="outline"
+                    variant="destrutivoVazado"
                     onClick={handleCancelarAssinatura}
                     disabled={cancelando}
-                    className="shrink-0 text-red-600 border-red-200 hover:bg-red-50"
+                    className="shrink-0"
                   >
                     {cancelando ? 'Cancelando…' : 'Cancelar assinatura'}
                   </Button>

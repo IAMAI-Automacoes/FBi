@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -b deploy -d dist --dotfiles",
-    "test": "node --experimental-strip-types supabase/functions/_shared/__testes__/vinculo-refs.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/gravidade-limiar.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/assuntos.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/prompts.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/avaliacao.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/marcos-bonificacao.teste.ts && node --experimental-strip-types src/lib/__testes__/texto-rico.teste.ts && node --experimental-strip-types src/lib/__testes__/telefone.teste.ts && node --experimental-strip-types src/lib/__testes__/nome-arquivo.teste.ts && node --experimental-strip-types src/lib/__testes__/cartaz-elementos.teste.ts && node --experimental-strip-types src/lib/__testes__/redimensionar-cartaz.teste.ts && node --experimental-strip-types src/lib/__testes__/aberturas-qr.teste.ts",
+    "test": "node --experimental-strip-types supabase/functions/_shared/__testes__/vinculo-refs.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/gravidade-limiar.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/assuntos.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/prompts.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/avaliacao.teste.ts && node --experimental-strip-types supabase/functions/_shared/__testes__/marcos-bonificacao.teste.ts && node --experimental-strip-types src/lib/__testes__/texto-rico.teste.ts && node --experimental-strip-types src/lib/__testes__/telefone.teste.ts && node --experimental-strip-types src/lib/__testes__/nome-arquivo.teste.ts && node --experimental-strip-types src/lib/__testes__/cartaz-elementos.teste.ts && node --experimental-strip-types src/lib/__testes__/redimensionar-cartaz.teste.ts && node --experimental-strip-types src/lib/__testes__/aberturas-qr.teste.ts && node --experimental-strip-types src/lib/__testes__/relatorio-xlsx.teste.ts",
     "test:watch": "node --watch --experimental-strip-types supabase/functions/_shared/__testes__/motor-agrupamento.teste.ts",
     "typecheck:funcoes": "tsc -p supabase/functions/_tipos/tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
@@ -62,6 +62,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "input-otp": "^1.4.2",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",
