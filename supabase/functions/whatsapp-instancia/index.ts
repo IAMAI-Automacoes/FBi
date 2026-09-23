@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,6 +93,8 @@ Deno.serve(async (req: Request) => {
 
     const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
     if (userErr || !userData?.user) return json({ error: 'Invalid token' }, 401)
+    // Na demonstração o WhatsApp é o da conta de verdade do vendedor.
+    if (await ehSessaoDemo(admin, jwt)) return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
     const userId = userData.user.id
 
     const { data: rest, error: restErr } = await admin

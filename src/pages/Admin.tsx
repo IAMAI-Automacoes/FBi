@@ -34,6 +34,7 @@ import {
   definirExclusaoConta,
   type ContaAdmin,
 } from '@/lib/queries/admin'
+import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -1099,10 +1100,10 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'contas' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
+type Tab = 'suporte' | 'contas' | 'vendedores' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
 
 const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', contas: 'Contas', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA', motor: 'Motor de resposta',
+  suporte: 'Suporte', contas: 'Contas', vendedores: 'Vendedores', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA', motor: 'Motor de resposta',
 }
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
@@ -1175,6 +1176,10 @@ export default function Admin() {
   const [salvandoContaId, setSalvandoContaId] = useState<number | null>(null)
   const [buscaConta, setBuscaConta] = useState('')
   const [filtroConta, setFiltroConta] = useState<FiltroConta>('todas')
+  const [vendedores, setVendedores] = useState<VendedorAdmin[]>([])
+  const [salvandoVendedor, setSalvandoVendedor] = useState<string | null>(null)
+  const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
+  const [loadingVendedores, setLoadingVendedores] = useState(false)
 
   // ── Cupons ──
   const [cupons, setCupons] = useState<Cupon[]>([])
@@ -1227,11 +1232,47 @@ export default function Admin() {
   }, [])
   useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadDivisoes() }, [isAdmin, activeTab, loadDivisoes])
 
-  // Contas: carrega ao entrar na aba
+  // Contas: carrega ao entrar na aba (junto da lista de vendedores, que é por email)
   const loadContas = useCallback(async () => {
     setLoadingContas(true)
-    try { setContas(await buscarContas()) } finally { setLoadingContas(false) }
+    try {
+      const [listaContas, listaVendedores] = await Promise.all([buscarContas(), buscarVendedores()])
+      setContas(listaContas)
+      setVendedores(listaVendedores)
+    } finally {
+      setLoadingContas(false)
+    }
   }, [])
+
+  // Vendedores: carrega ao entrar na aba. A marca é por email — vale antes de a
+  // pessoa criar a conta.
+  const loadVendedores = useCallback(async () => {
+    setLoadingVendedores(true)
+    try { setVendedores(await buscarVendedores()) } finally { setLoadingVendedores(false) }
+  }, [])
+  useEffect(() => { if (isAdmin && activeTab === 'vendedores') loadVendedores() }, [isAdmin, activeTab, loadVendedores])
+
+  const alternarVendedor = useCallback(async (email: string, virar: boolean) => {
+    if (!virar) {
+      const ok = await confirmar({
+        titulo: `Tirar ${email} de vendedor?`,
+        descricao: 'As demonstrações abertas fecham na hora e o código some do perfil. A assinatura da conta não muda.',
+        confirmar: 'Tirar de vendedor',
+        destrutivo: true,
+      })
+      if (!ok) return
+    }
+    setSalvandoVendedor(email)
+    try {
+      await definirVendedor(email, virar)
+      await loadVendedores()
+      setEmailNovoVendedor('')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível alterar o vendedor.')
+    } finally {
+      setSalvandoVendedor(null)
+    }
+  }, [confirmar, loadVendedores])
   useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
 
 
@@ -1456,7 +1497,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'contas', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor'] as Tab[]).map((tab) => (
+          {(['suporte', 'contas', 'vendedores', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor'] as Tab[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
@@ -1537,6 +1578,10 @@ export default function Admin() {
           const contasBusca = contas.filter((c) =>
             !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
           )
+          // Vendedor paga (com cupom) como qualquer conta; aqui ele só ganha um rótulo.
+          // Marcar e desmarcar fica na aba Vendedores.
+          const emailsVendedores = new Set(vendedores.map((v) => v.email))
+          const ehVendedorConta = (c: ContaAdmin) => !!c.email && emailsVendedores.has(c.email.toLowerCase())
           const casaFiltro = (c: ContaAdmin, f: FiltroConta) => {
             const excluida = !!c.excluida_em
             const pagante = c.assinatura_status === 'ativa'
@@ -1550,16 +1595,7 @@ export default function Admin() {
           return (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-gray-800">Contas</h2>
-                <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
-                  São duas coisas diferentes. <b className="text-gray-700">Pagamento</b>: parar de
-                  pagar tira o acesso ao software (a conta cai na tela de planos), mas guarda tudo — a
-                  pessoa pode voltar a pagar quando quiser. <b className="text-gray-700">Excluir</b>:
-                  remove o acesso de vez — a pessoa não recupera sozinha, nem criando conta com o mesmo
-                  email. Os dados ficam no banco e só você restaura.
-                </p>
-              </div>
+              <h2 className="mb-4 text-base font-semibold text-gray-800">Contas</h2>
 
               {/* Busca */}
               <div className="relative mb-3">
@@ -1623,6 +1659,11 @@ export default function Admin() {
                               <span className={cn('font-medium', excluida ? 'text-gray-500' : 'text-gray-800')}>
                                 {c.nome_restaurante || 'Sem nome'}
                                 {c.nome && <span className="text-gray-400 font-normal"> · {c.nome}</span>}
+                                {ehVendedorConta(c) && (
+                                  <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
+                                    VENDEDOR
+                                  </span>
+                                )}
                                 {excluida && (
                                   <span className="ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold tracking-wide align-middle">
                                     EXCLUÍDA
@@ -1684,6 +1725,94 @@ export default function Admin() {
           </div>
           )
         })()}
+
+        {/* ── VENDEDORES ── */}
+        {activeTab === 'vendedores' && (
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-gray-800">Vendedores</h2>
+                <p className="mt-1 text-[12px] text-gray-500">
+                  Têm o código da demonstração no Perfil e podem pular o WhatsApp. Pagam com o cupom VENDEDOR100.
+                </p>
+              </div>
+
+              <form
+                className="mb-4 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const email = emailNovoVendedor.trim().toLowerCase()
+                  if (email) alternarVendedor(email, true)
+                }}
+              >
+                <input
+                  type="email"
+                  value={emailNovoVendedor}
+                  onChange={(e) => setEmailNovoVendedor(e.target.value)}
+                  placeholder="Email do vendedor"
+                  className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]"
+                />
+                <button
+                  type="submit"
+                  disabled={!emailNovoVendedor.trim() || salvandoVendedor !== null}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" /> Adicionar
+                </button>
+              </form>
+
+              {loadingVendedores ? (
+                <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
+              ) : vendedores.length === 0 ? (
+                <p className="text-center py-10 text-sm text-gray-400">Nenhum vendedor ainda.</p>
+              ) : (
+                <CrudTable>
+                  <thead>
+                    <tr>
+                      <Th>Vendedor</Th>
+                      <Th>Conta</Th>
+                      <Th>Última demonstração</Th>
+                      <Th>Ações</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendedores.map((v) => (
+                      <tr key={v.email} className="border-t border-gray-300">
+                        <Td>
+                          <span className="font-medium text-gray-800">{v.email}</span>
+                        </Td>
+                        <Td>
+                          {v.temConta ? (
+                            <span className="text-[13px] text-gray-700">{v.nomeRestaurante || 'Sem nome'}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">
+                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                              Ainda não criou a conta
+                            </span>
+                          )}
+                        </Td>
+                        <Td className="text-[13px] text-gray-600">
+                          {v.ultimaDemoEm
+                            ? format(new Date(v.ultimaDemoEm), "dd/MM/yyyy 'às' HH:mm")
+                            : <span className="text-gray-400">Nunca</span>}
+                        </Td>
+                        <Td>
+                          <button
+                            onClick={() => alternarVendedor(v.email, false)}
+                            disabled={salvandoVendedor === v.email}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remover
+                          </button>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </CrudTable>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── PAGAMENTOS ── */}
         {activeTab === 'pagamentos' && (
@@ -1755,6 +1884,11 @@ export default function Admin() {
                           <span className="font-mono font-semibold text-[13px] bg-gray-100 px-2 py-0.5 rounded text-gray-800">
                             {c.cupom}
                           </span>
+                          {c.somente_vendedores && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
+                              SÓ VENDEDORES
+                            </span>
+                          )}
                         </Td>
                         <Td className="font-semibold text-emerald-700">{fmtLiberacao(c)}</Td>
                         <Td>

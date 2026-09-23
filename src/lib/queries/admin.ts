@@ -337,6 +337,8 @@ export interface Cupon {
   ativo: boolean
   /** Último dia em que o cupom pode ser RESGATADO. `null` = sempre. */
   data_expiracao: string | null
+  /** Só email marcado como vendedor resgata (ex.: VENDEDOR100). Não é editado pelo formulário. */
+  somente_vendedores: boolean
   created_at: string
 }
 
@@ -362,6 +364,7 @@ export async function buscarCupons(): Promise<Cupon[]> {
     vezes_usado: c.vezes_usado ?? 0,
     ativo: c.ativo ?? true,
     data_expiracao: c.data_expiracao ?? null,
+    somente_vendedores: c.somente_vendedores === true,
     created_at: c.created_at,
   }))
 }

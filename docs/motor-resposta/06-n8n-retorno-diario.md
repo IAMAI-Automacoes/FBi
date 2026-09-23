@@ -15,12 +15,15 @@ envio.
 | Regra | Onde mora |
 |---|---|
 | Espera de 2 h depois que o dono move o card (se ele desfizer antes, não avisa) | `acao_status_historico` + cron de 10 em 10 min |
-| 3 dias de calendário desde a última mensagem (recebeu segunda → pode de novo quinta) | `contatos.ultimo_envio_em` + `cooldown_dias` |
+| Mais de 3 dias de calendário desde a última mensagem (recebeu segunda → pode de novo sexta) | `contatos.ultimo_envio_em` + `cooldown_dias` |
 | Aviso vence em 14 dias | `aviso_pendente.expira_em` → vira `expirado` |
 | Cliente pediu pra não receber | `contatos.opt_out_em` |
 | Assinatura ativa e motor ligado no restaurante | `restaurantes` |
 | Juntar tudo de um cliente numa mensagem; "concluída" substitui "em andamento" da mesma ação | `fila_retorno_por_cliente` |
 | Feedback ligado a uma ação que já estava em andamento também é avisado | trigger em `feedback_acao` |
+| Feedback desligado da ação: o aviso dele sai da fila | trigger em `feedback_acao` |
+| Título, plano, categoria, prioridade e data de conclusão da ação ficam no aviso e acompanham cada edição do dono | triggers em `aviso_pendente` e `acoes_operacionais` |
+| Dono desfaz e refaz o card: o cliente é avisado de novo (só se o primeiro aviso não tinha saído) | índice único de `aviso_pendente` só entre avisos vivos |
 
 ## De onde o n8n lê
 
@@ -76,7 +79,6 @@ Cada item:
 {
   "contato_id": "7d77f767-…",
   "telefone": "55119…3005",            // só dígitos, pronto para a uazapi
-  "nome_cliente": null,                 // quase sempre null
   "restaurante_id": 11,
   "nome_restaurante": "Camelo",
   "whatsapp_base_url": "https://iamai-ia.uazapi.com",
@@ -89,6 +91,8 @@ Cada item:
       "titulo_acao": "Padronizar receitas e porcionamento para garantir consistência e controle de custos",
       "categoria": "Ambiente",
       "etapa": "concluida",             // ou "em_andamento"
+      "plano_detalhado": "1. Levantar todas as receitas atuais do cardápio.\n2. …",
+      "concluida_em": "2026-09-12T01:31:18Z",   // null se ainda em andamento
       "feedbacks": [                    // só do PRÓPRIO cliente, sem repetir frase
         { "texto": "O garçom foi super mal educado…", "feedback_em": "2026-08-25T13:20:13Z" }
       ]
@@ -130,14 +134,15 @@ Prompt (Basic LLM Chain ou nó da OpenAI/OpenRouter):
 ```
 Você escreve UMA mensagem de WhatsApp em nome do restaurante {{ $json.nome_restaurante }} para um cliente que deixou feedback. O objetivo é mostrar que o feedback dele foi ouvido.
 
-Nome do cliente: {{ $json.nome_cliente || 'não sabemos o nome' }}
+Não sabemos o nome do cliente: comece a mensagem só com "Oi!".
 
 O que o cliente disse e o que o restaurante fez:
-{{ $json.acoes.map(a => '- ' + (a.etapa === 'concluida' ? 'JÁ RESOLVIDO' : 'EM ANDAMENTO') + ': ' + a.titulo_acao + '\n  O cliente disse: ' + (a.feedbacks.map(f => '"' + f.texto + '"').join(' / ') || '(sem texto)')).join('\n') }}
+{{ $json.acoes.map(a => '- ' + (a.etapa === 'concluida' ? 'JÁ RESOLVIDO' : 'EM ANDAMENTO') + ': ' + a.titulo_acao + '\n  O que o restaurante planejou: ' + (a.plano_detalhado || '(sem plano)').replace(/\n/g, ' ') + '\n  O cliente disse: ' + (a.feedbacks.map(f => '"' + f.texto + '"').join(' / ') || '(sem texto)')).join('\n') }}
 
 Regras:
 - No máximo 6 linhas curtas. Tom simples e caloroso, sem exagero.
 - Não copie o título da ação: diga em palavras do dia a dia o que mudou, ligado ao que o cliente contou.
+- Use o plano só para entender o que foi feito. Não liste os passos; cite no máximo uma mudança concreta por assunto.
 - JÁ RESOLVIDO = já foi feito. EM ANDAMENTO = estamos cuidando. Nunca prometa prazo nem desconto.
 - Não invente nada que não esteja acima e não mencione outros clientes.
 - Se não souber o nome, comece só com "Olá!".
@@ -192,8 +197,12 @@ O que faz, tudo de uma vez:
 2. marca os avisos como `enviado`;
 3. põe `contatos.ultimo_envio_em = agora` — é isso que tira o cliente da fila por 3 dias.
 
-Resposta: o id da mensagem gravada. `null` = nada a confirmar (os avisos já estavam
-fechados, ou não são desse contato). Não é erro.
+Resposta: o id da mensagem gravada. `null` = nada a confirmar (essa lista já foi
+confirmada, ou os avisos não são desse contato). Não é erro.
+
+Se o dono desfizer o card ou o aviso vencer entre a leitura da fila e a confirmação, a
+mensagem **é gravada mesmo assim** e o aviso vira `enviado` — ela já chegou ao cliente, e
+sem o registro ele poderia receber outra no dia seguinte.
 
 - Retry On Fail: **ligado** (3 tentativas, 5 s). Pode repetir sem medo: a segunda
   chamada devolve `null` e não grava nada.

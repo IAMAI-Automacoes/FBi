@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -37,13 +37,23 @@ import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
+import { ControleDemo } from './components/demo/ControleDemo'
+import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
+import { MODO_DEMO, PREFIXO_DEMO } from './lib/demo'
+import DemoLogin from './pages/demo/DemoLogin'
+import DemoEncerrada from './pages/demo/DemoEncerrada'
 
 const App = () => (
   <AuthProvider>
     <RestauranteConfigProvider>
-      <BrowserRouter>
+      {/* Na demonstração o app inteiro vive sob /demo: /garcons vira /demo/garcons. */}
+      <BrowserRouter basename={MODO_DEMO ? PREFIXO_DEMO : undefined}>
         <TooltipProvider>
         <Toaster />
+        {/* Fecha a demonstração na hora e avisa antes; sem demonstração, não faz nada. */}
+        <ControleDemo />
+        {/* Deploy novo com a aba aberta: recarrega na próxima troca de página. */}
+        <AtualizacaoDoApp />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
         {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}
@@ -62,14 +72,28 @@ const App = () => (
               não remonta. Como `modo`, `email` e `aviso` são inicializados via
               useState, eles congelariam nos valores antigos — navegar de
               /cadastro para /login trocaria a URL sem mudar nada na tela. */}
-          <Route path="/login" element={<Autenticacao key="entrar" modoInicial="entrar" />} />
-          <Route path="/cadastro" element={<Autenticacao key="criar" modoInicial="criar" />} />
-          <Route path="/recuperar-senha" element={<RecuperarSenha />} />
-          {/* A página pública do QR (/f/:slug) é servida por um bundle leve
-              próprio (f.html), fora do app — ver .htaccess e vite.config. */}
-          {/* Landing de vendas — pública. `/` mostra Vendas para visitante
-              (deslogado) e o painel para quem está logado (ver RotaProtegida). */}
-          <Route path="/vendas" element={<Vendas />} />
+          {MODO_DEMO ? (
+            <>
+              {/* Demonstração: a entrada é o código, não o login. Não há
+                  cadastro, recuperação de senha nem site aqui dentro. */}
+              <Route path="/login" element={<DemoLogin />} />
+              <Route path="/encerrada" element={<DemoEncerrada />} />
+              <Route path="/cadastro" element={<Navigate to="/login" replace />} />
+              <Route path="/recuperar-senha" element={<Navigate to="/login" replace />} />
+              <Route path="/vendas" element={<Navigate to="/login" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/login" element={<Autenticacao key="entrar" modoInicial="entrar" />} />
+              <Route path="/cadastro" element={<Autenticacao key="criar" modoInicial="criar" />} />
+              <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+              {/* A página pública do QR (/f/:slug) é servida por um bundle leve
+                  próprio (f.html), fora do app — ver .htaccess e vite.config. */}
+              {/* Landing de vendas — pública. `/` mostra Vendas para visitante
+                  (deslogado) e o painel para quem está logado (ver RotaProtegida). */}
+              <Route path="/vendas" element={<Vendas />} />
+            </>
+          )}
 
           <Route element={<RotaProtegida />}>
             {/* Assinatura: exige conta, mas roda antes do onboarding */}

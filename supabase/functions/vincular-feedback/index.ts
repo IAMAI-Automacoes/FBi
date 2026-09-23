@@ -351,9 +351,31 @@ Deno.serve(async (req: Request) => {
       vivoDoTema = (doTema ?? []).find((i: any) => i.ativo && !i.deletado_em) ?? null
     }
     // deno-lint-ignore no-explicit-any
-    const acoesCat = (acoes ?? []).filter((a: any) => a.categoria === fb.categoria)
+    // Elogio não entra em ação, e insight de problema não recebe elogio.
+    //
+    // A lista de candidatos era filtrada só por CATEGORIA, e a IA decidia o
+    // resto. Foi assim que "A parmegiana é gostosa" acabou dentro de um insight
+    // de higiene. Ação operacional conserta problema, então elogio nunca vai
+    // para ação; e o insight carrega a polaridade na `assunto_chave`
+    // (`tema:<id>|neg` ou `|pos`), que precisa bater com a do feedback.
+    //
+    // Mesma decisão já tomada em `categorizar-acao`: filtro de código, porque a
+    // regra é absoluta e prompt não segura.
+    const feedbackNegativo = String(fb.sentimento ?? '').toLowerCase().includes('negativ')
     // deno-lint-ignore no-explicit-any
-    const insightsCat = (insights ?? []).filter((i: any) => i.categoria === fb.categoria)
+    const polaridadeBate = (i: any) => {
+      const chave = String(i.assunto_chave ?? '')
+      if (chave.endsWith('|neg')) return feedbackNegativo
+      if (chave.endsWith('|pos')) return !feedbackNegativo
+      return true // insight antigo, sem chave: segue valendo só a categoria
+    }
+
+    const acoesCat = feedbackNegativo
+      // deno-lint-ignore no-explicit-any
+      ? (acoes ?? []).filter((a: any) => a.categoria === fb.categoria)
+      : []
+    // deno-lint-ignore no-explicit-any
+    const insightsCat = (insights ?? []).filter((i: any) => i.categoria === fb.categoria && polaridadeBate(i))
 
     // ---- 2. Insight do mesmo tema: direto só se nenhuma ação puder ser melhor ----
     //

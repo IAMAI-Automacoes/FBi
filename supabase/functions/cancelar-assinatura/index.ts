@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 
 // Cancela a assinatura do restaurante do usuário logado. O dono não pode mexer
 // nos campos de assinatura (trigger bloqueia), então isso roda com service_role.
@@ -34,6 +35,8 @@ Deno.serve(async (req: Request) => {
 
     const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
     if (userErr || !userData?.user) return json({ error: 'Invalid token' }, 401)
+    // Na demonstração a assinatura é a da conta de verdade do vendedor.
+    if (await ehSessaoDemo(admin, jwt)) return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
 
     const { data: rest, error: restErr } = await admin
       .from('restaurantes')

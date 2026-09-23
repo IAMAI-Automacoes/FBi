@@ -117,18 +117,14 @@ export async function talvezAlertarDono(
 
     const textoOriginal = (original?.texto_original || texto).trim()
 
-    // Nome de verdade quando existir — a maioria dos contatos de WhatsApp não
-    // tem nome capturado, então isto é frequentemente null, e o n8n decide
-    // como tratar isso na mensagem (ex.: "Cliente" no lugar do nome).
-    let nomeCliente: string | null = null
-    if (original?.contato_id) {
-      const { data: contato } = await db
-        .from('contatos')
-        .select('nome')
-        .eq('id', original.contato_id)
-        .maybeSingle()
-      nomeCliente = contato?.nome?.trim() || null
-    }
+    // O cliente é identificado pelo telefone, e só.
+    //
+    // `contatos.nome` foi removido em 21/09/2026: o fluxo de entrada nunca
+    // preencheu esse campo, e o que havia era dado de teste. O `nome_cliente`
+    // continua no payload, sempre null, porque o n8n já sabe tratar isso
+    // ("um cliente" no lugar do nome) e mexer no prompt de lá não é problema
+    // desta função.
+    const nomeCliente: string | null = null
 
     const triagem = await confirmarComIa(db, fb.restaurante_id, textoOriginal, texto, termos)
     if (!triagem.urgente) return { urgente: false, motivo: triagem.motivo }
@@ -191,7 +187,7 @@ export async function talvezAlertarDono(
     const mensagemSugerida = [
       `Alerta urgente — ${resumo}`,
       '',
-      `Cliente: ${nomeCliente ?? '(sem nome)'} — ${original?.telefone_cliente ?? '(sem telefone)'}`,
+      `Cliente: ${original?.telefone_cliente ?? '(sem telefone)'}`,
       `Relato: "${texto}"`,
     ].join('\n')
 
@@ -300,7 +296,7 @@ async function confirmarComIa(
  *     termos_detectados: string[],
  *     mensagem_sugerida,         // texto PRONTO pra mandar como está, já montado
  *
- *     nome_cliente,              // null quando o contato não tem nome salvo
+ *     nome_cliente,              // sempre null: o cliente é identificado pelo telefone
  *     telefone_cliente,          // quem relatou — pra eventual retorno
  *     texto_original,            // a mensagem INTEIRA que o cliente mandou
  *     trecho_urgente,            // só o pedaço que disparou o alerta

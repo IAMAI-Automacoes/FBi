@@ -313,7 +313,6 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
  */
 export function situacaoLegivel(status: string): string {
   const mapa: Record<string, string> = {
-    SUGERIDA: 'Sugerida pela IA',
     PENDENTE: 'A fazer',
     EM_ANDAMENTO: 'Em andamento',
     CONCLUIDO: 'Concluída',

@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
 import { excluirMinhaConta } from '@/lib/queries/conta'
 import { ImageCropper } from '@/components/ImageCropper'
+import { PainelCodigoDemo } from '@/components/demo/PainelCodigoDemo'
 
 export default function MyAccount() {
   const { confirmar, dialogo } = useConfirmacao()
@@ -403,6 +404,8 @@ export default function MyAccount() {
               </Button>
             </div>
           </div>
+
+          <PainelCodigoDemo />
 
           {/* Assinatura */}
           <div className="rounded-2xl border border-gray-200/75 bg-white p-5 sm:p-6 shadow-subtle">

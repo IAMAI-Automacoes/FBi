@@ -69,7 +69,7 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 
 ### `acoes_operacionais.status` (CHECK constraint)
 ```
-'SUGERIDA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
+'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO'
 ```
 
 ### `insights.prioridade` (CHECK constraint)

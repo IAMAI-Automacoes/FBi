@@ -11,6 +11,8 @@ import { useUserProfile } from '@/hooks/use-user-profile'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { getIniciais } from '@/lib/iniciais'
 import { easyFeedLogoInterna } from '@/assets/brand'
+import { PilulaDemo } from '@/components/demo/ControleDemo'
+import { encerrarDemo } from '@/lib/queries/demo'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +45,7 @@ const routeTitles: Record<string, string> = {
 export function TopHeader() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { usuario, logout } = useAuth()
+  const { usuario, logout, sessaoDemo } = useAuth()
   const { profile } = useUserProfile()
   const title = routeTitles[location.pathname] || 'Dashboard'
 
@@ -81,6 +83,11 @@ export function TopHeader() {
   }, [isAdmin])
 
   const handleLogout = async () => {
+    // Na demonstração, "sair" fecha só esta aba e mostra a tela de fim.
+    if (sessaoDemo) {
+      await encerrarDemo()
+      return
+    }
     await logout()
     navigate('/login')
   }
@@ -113,7 +120,9 @@ export function TopHeader() {
           </Link>
 
           <div className="flex items-center gap-4">
-            {isAdmin && (
+            <PilulaDemo />
+            {/* Na demonstração o painel admin fica fora, mesmo se o vendedor for admin. */}
+            {isAdmin && !sessaoDemo && (
               <Link
                 to="/admin"
                 title="Painel Admin"
@@ -165,15 +174,19 @@ export function TopHeader() {
                 </div>
                 <DropdownMenuSeparator className="m-0" />
                 <DropdownMenuGroup className="p-1.5">
-                  <DropdownMenuItem
-                    asChild
-                    className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
-                  >
-                    <Link to="/minha-conta">
-                      <UserIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
-                      <span>Perfil</span>
-                    </Link>
-                  </DropdownMenuItem>
+                  {/* O perfil é a conta de verdade do vendedor (e mostra o código):
+                      fica fora da demonstração. */}
+                  {!sessaoDemo && (
+                    <DropdownMenuItem
+                      asChild
+                      className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
+                    >
+                      <Link to="/minha-conta">
+                        <UserIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
+                        <span>Perfil</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     asChild
                     className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
@@ -191,7 +204,7 @@ export function TopHeader() {
                     onSelect={() => setShowLogoutDialog(true)}
                   >
                     <LogOut className="mr-2.5 h-[15px] w-[15px]" />
-                    <span>Sair da conta</span>
+                    <span>{sessaoDemo ? 'Encerrar demonstração' : 'Sair da conta'}</span>
                   </DropdownMenuItem>
                 </div>
               </DropdownMenuContent>
@@ -205,12 +218,14 @@ export function TopHeader() {
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sair da conta?</AlertDialogTitle>
-            <AlertDialogDescription>Você vai precisar entrar de novo.</AlertDialogDescription>
+            <AlertDialogTitle>{sessaoDemo ? 'Encerrar a demonstração?' : 'Sair da conta?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sessaoDemo ? 'O acesso fecha agora neste computador.' : 'Você vai precisar entrar de novo.'}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLogout}>Sair</AlertDialogAction>
+            <AlertDialogAction onClick={handleLogout}>{sessaoDemo ? 'Encerrar' : 'Sair'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

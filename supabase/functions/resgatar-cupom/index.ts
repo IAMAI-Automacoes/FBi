@@ -7,6 +7,9 @@
 // achava estar dando meio preço e estava dando acesso inteiro. O formulário
 // foi alinhado a esta função; as colunas ficaram no banco, sem uso.
 //
+// Cupom com `somente_vendedores` só é resgatado por conta cujo email está
+// marcado como vendedor: é o cupom do vendedor, e o nome é fácil de adivinhar.
+//
 // Estava publicada só no painel do Supabase, sem fonte no repositório. Este
 // arquivo é o que está rodando (versão 3), trazido para cá para que um deploy
 // geral não a apague e para que dê para revisar o que ela faz.
@@ -55,14 +58,30 @@ Deno.serve(async (req: Request) => {
     const codigo = String(body.codigo ?? '').trim()
     if (!codigo) return json({ error: 'Informe o código do cupom.' }, 400)
 
+    // `ilike` trata `%`, `*` e `_` como curinga: um código "%" casava com o
+    // primeiro cupom ativo e liberava acesso de graça. Só letras, números, hífen
+    // e sublinhado — e o sublinhado vai escapado, para valer como ele mesmo.
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(codigo)) return json({ error: 'Cupom inválido ou inativo.' }, 404)
+
     // Busca o cupom (sem diferenciar maiúscula/minúscula)
     const { data: cupons } = await admin
       .from('cupons')
       .select('*')
-      .ilike('cupom', codigo)
+      .ilike('cupom', codigo.replace(/_/g, '\\_'))
       .limit(1)
     const cupom = cupons?.[0]
     if (!cupom || cupom.ativo !== true) return json({ error: 'Cupom inválido ou inativo.' }, 404)
+
+    // Cupom de vendedor: só para email marcado como vendedor.
+    if (cupom.somente_vendedores === true) {
+      const email = String(userData.user.email ?? '').trim().toLowerCase()
+      const { data: vendedor } = await admin
+        .from('vendedores')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle()
+      if (!vendedor) return json({ error: 'Este cupom é exclusivo para vendedores do Easy Feed.' }, 403)
+    }
 
     // Passou do último dia em que podia ser resgatado?
     if (cupom.data_expiracao) {

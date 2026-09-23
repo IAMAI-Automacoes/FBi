@@ -143,9 +143,9 @@ function ehCriadaPelaIA(task: ExtendedActionTask): boolean {
 
 /** Ordem usada pelo botão "Organizar": prioridade primeiro (Urgente >
  *  Importante > Observação); empatando, ação criada pelo usuário vem antes
- *  da sugerida por IA; empatando ainda (mesma origem), a mais antiga vem
+ *  da criada pela IA; empatando ainda (mesma origem), a mais antiga vem
  *  primeiro — quem está esperando há mais tempo não deve ser empurrada pra
- *  trás só porque surgiu uma sugestão mais nova no mesmo nível. */
+ *  trás só porque surgiu uma ação mais nova no mesmo nível. */
 function compararParaOrganizar(a: ExtendedActionTask, b: ExtendedActionTask): number {
   const pesoA = pesoPrioridade(a.prioridade)
   const pesoB = pesoPrioridade(b.prioridade)
@@ -320,7 +320,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     }
     try {
       if (!silencioso) setLoading(true)
-      const data = await buscarAcoes(usuario.restaurante_id, true)
+      const data = await buscarAcoes(usuario.restaurante_id)
       if (data) {
         const mapped: ExtendedActionTask[] = data.map((d) => ({
           id: d.id.toString(),

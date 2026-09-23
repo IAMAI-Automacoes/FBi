@@ -78,6 +78,8 @@ Regras:
 - Tem que ser o MESMO problema, nao apenas a mesma area. "A comida demorou" e "a comida veio fria" sao problemas diferentes.
 - Um feedback marcado com [mesmo tema do insight X] foi agrupado pelo sistema no mesmo tema desse insight: ligue-o a ele, a menos que o texto trate claramente de outro problema.
 - Cada feedback vai para no maximo UM insight.
+- NUNCA ligue um elogio a um insight de problema, nem uma reclamacao a um insight de elogio.
+- So ligue feedback da MESMA area do insight. Se a categoria for outra e o assunto tambem, deixe de fora.
 - Na duvida, deixe de fora. Um vinculo errado faz o cliente receber aviso sobre algo que ele nunca relatou.
 - Use apenas ids que aparecem acima.
 
@@ -1035,6 +1037,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
         chave: assunto.chave,
         titulo: insight.titulo,
         descricao: insight.descricao ?? '',
+        categoria,
       })
       gravados++
     }
@@ -1086,6 +1089,40 @@ interface InsightCriado {
   chave: string
   titulo: string
   descricao: string
+  categoria: string
+}
+
+/**
+ * A trava do religador: o vínculo que a IA propôs faz sentido?
+ *
+ * Regra de código, e não de prompt, porque a IA já violou: ligou treze elogios
+ * à comida ("A parmegiana é gostosa", "O molho de quatro queijos estava
+ * divino") ao insight "Higiene dos pratos". Quem elogiou receberia, depois, um
+ * "resolvemos o seu problema" sobre algo que nunca reclamou.
+ *
+ * Duas condições, as duas objetivas:
+ *   - a polaridade tem que bater. Elogio só entra em insight de elogio.
+ *   - o ponto tem que dividir com o insight o TEMA (o mesmo critério que
+ *     agrupou o insight) ou, na falta dele, a CATEGORIA.
+ */
+// deno-lint-ignore no-explicit-any
+function vinculoPlausivel(ponto: any, insight: InsightCriado): boolean {
+  if (!ponto) return false
+
+  const polaridadeInsight = insight.chave.endsWith('|pos')
+    ? 'pos'
+    : insight.chave.endsWith('|neg')
+    ? 'neg'
+    : null
+  const polaridadePonto = String(ponto.sentimento ?? '').toLowerCase().includes('negativ') ? 'neg' : 'pos'
+  if (polaridadeInsight && polaridadeInsight !== polaridadePonto) return false
+
+  const temaInsight = insight.chave.startsWith('tema:')
+    ? insight.chave.slice('tema:'.length).split('|')[0]
+    : null
+  if (temaInsight && String(ponto.tema_id ?? '') === temaInsight) return true
+
+  return !!ponto.categoria && ponto.categoria === insight.categoria
 }
 
 /**
@@ -1188,12 +1225,22 @@ async function religarCondicionais(
         },
       })
       iaDecidiu = true
-      const insightsValidos = new Set(criados.map((c) => c.id))
       const pendentes = new Set(soltosPorId.keys())
       for (const v of ((result?.vinculos ?? []) as { feedback_id: string; insight_id: string }[])) {
         const fid = String(v.feedback_id)
-        if (!pendentes.has(fid) || !insightsValidos.has(String(v.insight_id))) continue
-        ligacoes.push({ feedback: soltosPorId.get(fid), insightId: String(v.insight_id) })
+        const insight = criados.find((c) => c.id === String(v.insight_id))
+        if (!pendentes.has(fid) || !insight) continue
+
+        const ponto = soltosPorId.get(fid)
+        if (!vinculoPlausivel(ponto, insight)) {
+          console.warn(
+            `religar: recusado ponto ${fid} (${ponto?.sentimento}/${ponto?.categoria}) -> ` +
+              `insight ${insight.id} (${insight.chave}/${insight.categoria})`,
+          )
+          continue
+        }
+
+        ligacoes.push({ feedback: ponto, insightId: insight.id })
         pendentes.delete(fid) // um feedback, um insight
       }
     } catch (err) {

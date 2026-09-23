@@ -11,6 +11,7 @@
 // pago — conta bloqueada não deve segurar uma instância) e limpa o token. Se a
 // conta for restaurada depois, é só reconectar o WhatsApp.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +74,11 @@ Deno.serve(async (req) => {
 
     // Soft-delete só da própria conta, e só se ainda não estiver excluída.
     const admin = createClient(url, service)
+
+    // Na demonstração a conta é do vendedor, aberta no computador de outra pessoa.
+    if (await ehSessaoDemo(admin, authHeader.replace('Bearer ', ''))) {
+      return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
+    }
     const { data, error } = await admin
       .from('restaurantes')
       .update({ excluida_em: new Date().toISOString() })
