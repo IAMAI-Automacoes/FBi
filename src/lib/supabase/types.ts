@@ -1934,6 +1934,7 @@ export type Database = {
           qr_titulo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
+          telefone_contato: string | null
           texto_banner: string | null
           tipo_culinaria: string | null
           ultima_analise_insights: string | null
@@ -1983,6 +1984,7 @@ export type Database = {
           qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          telefone_contato?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null
@@ -2032,6 +2034,7 @@ export type Database = {
           qr_titulo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          telefone_contato?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
           ultima_analise_insights?: string | null

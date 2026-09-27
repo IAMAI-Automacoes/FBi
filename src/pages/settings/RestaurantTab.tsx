@@ -11,12 +11,15 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { getIniciais } from '@/lib/iniciais'
-import { Upload, Store, Loader2, X } from 'lucide-react'
+import { Upload, Store, Loader2, X, Phone } from 'lucide-react'
 import { ImageCropper } from '@/components/ImageCropper'
+import { CampoTelefone } from '@/components/CampoTelefone'
 
 export interface RestauranteForm {
   nome_restaurante: string
   logo_url: string
+  /** Canônico ('55' + DDD + número) ou '' quando não há número configurado. */
+  telefone_contato: string
 }
 
 export function RestaurantTab({
@@ -176,6 +179,28 @@ export function RestaurantTab({
                 <b> Sobre o restaurante</b>.
               </p>
             </div>
+          </div>
+        </section>
+
+        <section className="space-y-5 border-t border-gray-200 pt-8">
+          <div className="flex items-center gap-2">
+            <Phone className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-gray-900">Contato para os clientes</h3>
+          </div>
+          <div className="space-y-2 max-w-md">
+            <Label htmlFor="telefone_contato" className="text-gray-700">
+              Telefone de contato do restaurante
+            </Label>
+            <CampoTelefone
+              id="telefone_contato"
+              value={value.telefone_contato}
+              onChange={(v) => onChange({ ...value, telefone_contato: v })}
+            />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              O WhatsApp do feedback só recebe opiniões. Quando um cliente manda outra coisa por
+              ali — horário, reserva, pedido — a resposta automática indica este número. Deixe em
+              branco e a resposta apenas avisa que o canal é só de feedback, sem indicar contato.
+            </p>
           </div>
         </section>
       </CardContent>

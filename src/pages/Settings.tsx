@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
-const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '' }
+const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
 
 /**
@@ -74,7 +74,7 @@ export default function Settings() {
     const carregar = async () => {
       const { data } = await supabase
         .from('restaurantes')
-        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights')
+        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights, telefone_contato')
         .eq('id', restauranteId)
         .single()
 
@@ -92,6 +92,7 @@ export default function Settings() {
         const r: RestauranteForm = {
           nome_restaurante: data.nome_restaurante || '',
           logo_url: (data as any).logo_url || '',
+          telefone_contato: (data as any).telefone_contato || '',
         }
         const pf = ((data as any).perfil_restaurante as any) || {}
         const p: PerfilNegocioForm = {
@@ -139,6 +140,9 @@ export default function Settings() {
       .update({
         nome_restaurante: restaurante.nome_restaurante,
         logo_url: restaurante.logo_url || null,
+        // Campo vazio grava null: é assim que o n8n sabe que não deve indicar
+        // contato nenhum na resposta a quem manda algo que não é feedback.
+        telefone_contato: restaurante.telefone_contato || null,
         mascote_config: { ...mascoteBruto.current, nome: mascote.nome, personalidade: mascote.personalidade, foto_url: mascote.foto_url },
         ia_modo_acao: mascote.modo_acao,
         // campos que já existem como coluna continuam nelas
