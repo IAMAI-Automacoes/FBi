@@ -127,6 +127,17 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
+| `get-prices` | Preços atuais do Stripe por lookup_key (pública, cache 5 min) |
+| `create-checkout-session` | Abre o Stripe Checkout (landing sem conta ou usuário logado) |
+| `stripe-webhook` | Eventos do Stripe → tabelas `stripe_*` → `restaurantes` (idempotente) |
+| `consultar-compra` | Estado de uma Checkout Session para o cadastro pós-pagamento |
+| `vincular-compra` | Liga assinatura paga à conta (confere tudo no Stripe) |
+| `create-portal-session` | Customer Portal (trocar ciclo, cartão, cancelar) |
+| `cancelar-assinatura` | Cancela no Stripe (`cancel_at_period_end`) ou no legado |
+
+**Stripe:** ver `docs/stripe/README.md`. Preço NUNCA fixo em código/banco — só
+lookup_key (`easyfeed_mensal|semestral|anual`); trocar preço = `scripts/stripe/trocar-preco.ts`.
+Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SITE_URL`, `STRIPE_PORTAL_CONFIGURATION_ID`.
 
 **NOTA:** Não existe `analyze-message` — está implementado como `chamar-ia`.
 
