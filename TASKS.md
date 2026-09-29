@@ -198,112 +198,44 @@
 
 ---
 
-## Sessão 11 — Landing Page de Vendas + Checkout Stripe
+## Sessão 11 — Landing Page de Vendas + Checkout Stripe ✅ (código) / ⏳ (configuração)
 
-**Objetivo:** Visitante converte em assinante pagante. Fluxo **auth-first**: landing → login/cadastro → Stripe Checkout → webhook ativa assinatura → onboarding.
+**Objetivo:** Visitante converte em assinante pagante. Fluxo **pay-first**: landing → Stripe Checkout → cria a conta na volta → vínculo seguro no servidor → onboarding. Documentação completa (modelo de dados, Dashboard, descritor, e-mails, testes): **`docs/stripe/README.md`**.
 
-### Fluxo definitivo (auth ANTES do pagamento)
+### Fluxo definitivo (pagamento ANTES da conta)
 
 ```
-/vendas → clica "Assinar" (ciclo X)
-  → navega pra /checkout?ciclo=X   [ROTA PROTEGIDA]
-      ├─ sem sessão → RotaProtegida joga pra /login (guarda state.from)
-      │     ├─ tem conta → login → volta pra /checkout?ciclo=X
-      │     └─ não tem  → "Criar conta" → /cadastro → volta pra /checkout?ciclo=X
-      └─ com sessão → chama criar-checkout-session → redirect Stripe
-  → Stripe Checkout (hosted) → pagamento aprovado
-  → webhook stripe-webhook → atualiza `restaurantes` (ativo=true, assinatura_status='ativa', expira_em)
-  → redirect /checkout/sucesso
-      ├─ onboarding_completo=false → /onboarding (campos já pré-preenchidos)
-      └─ onboarding_completo=true  → / (reativação de conta antiga)
+/vendas → "Assinar" (ciclo X) → create-checkout-session (anon) → Stripe Checkout
+  → success_url = /cadastro?sessao={CHECKOUT_SESSION_ID}
+      → consultar-compra pré-preenche/trava o e-mail do pagador
+      → cria a conta → /checkout/sucesso?sessao=... → vincular-compra (JWT)
+          confere no Stripe: paga + e-mail igual + sessão nunca usada → liga
+      → assinatura_status='ativa' → /onboarding
+Conta sem plano (/assinatura) → mesma função com JWT → webhook vincula sozinho.
 ```
 
-**Renovação/inadimplência:** webhook `invoice.payment_failed` / `customer.subscription.deleted` → `ativo=false`. Conta **continua existindo e continua conseguindo logar** — só não acessa o app. Ao logar, cai em `/assinatura` (tela de reativação) → clica pagar → mesmo `/checkout` → Stripe reusa o `stripe_customer_id` → volta ativo, com todos os dados preservados.
+### Feito nesta sessão
 
-> ⚠️ **Ponto crítico de segurança/UX:** o bloqueio do inadimplente é **por rota, nunca no login**. Se bloquear no `signInWithPassword`, o cliente fica impedido de pagar de novo — perde a venda de reativação.
+- [x] Migration `20260929000000_stripe_assinaturas.sql`: `stripe_clientes`, `stripe_assinaturas`, `stripe_checkout_sessions`, `stripe_eventos_webhook`, RLS, `aplicar_assinatura_stripe()`, cron de expiração ignora assinante Stripe
+- [x] `get-prices` (Stripe por lookup_key, cache 5 min) — nenhum valor fixo em código/banco
+- [x] `create-checkout-session` (Zod, lookup_key → price, `allow_promotion_codes`, metadata `product_code=easyfeed`)
+- [x] `stripe-webhook` (`constructEventAsync`, idempotência por `event.id`, relê a assinatura no Stripe)
+- [x] `consultar-compra` + `vincular-compra` (vínculo pagamento → conta, anti-reuso do session_id)
+- [x] `create-portal-session` (Customer Portal com configuração própria)
+- [x] `cancelar-assinatura` passa a cancelar no Stripe (`cancel_at_period_end`)
+- [x] Frontend: `Planos`, `Assinatura`, `Checkout`, `Autenticacao` (`?sessao=`), `CheckoutSucesso` (polling), `MyAccount` (portal), `usePrecos`
+- [x] Scripts locais (Deno): `scripts/stripe/bootstrap.ts`, `trocar-preco.ts` (dry-run), `migrar-assinantes.ts`, `configurar-portal.ts`
 
-### O que mudou vs. o PRD original (fluxo era pay-first)
+### Falta (configuração, fora do código)
 
-**Removido — deixou de ser necessário:**
-- ~~Tabela `assinaturas_pendentes`~~ — existia só pra segurar uma assinatura paga sem dono. Como agora o usuário já está autenticado antes de pagar, o webhook já sabe o `restaurante_id` (via `client_reference_id` do Stripe) e escreve direto em `restaurantes`.
-- ~~Página `/criar-conta`~~ — **`/cadastro` já existe** (`src/pages/auth/Cadastro.tsx`) e faz exatamente isso. Reaproveitar, não duplicar.
-- ~~RPC `validar_sessao_pagamento`~~ — não há mais sessão anônima pra validar.
-- ~~`/checkout/sucesso` com `session_id`~~ — vira tela simples de confirmação + redirect.
+- [ ] `supabase db push` (migration) e `supabase functions deploy` das 7 funções (ver README: quais vão com `--no-verify-jwt`)
+- [ ] Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SITE_URL`, `STRIPE_PORTAL_CONFIGURATION_ID`
+- [ ] `bootstrap.ts` (Product + 3 Prices) e `configurar-portal.ts --criar` em test mode; depois em live
+- [ ] Endpoint de webhook no Dashboard apontando para `stripe-webhook`, com os eventos listados no README
+- [ ] Dashboard: descritor e prefixo curto, marca, termos/privacidade, desligar e-mails automáticos (ver README)
+- [ ] Roteiro de testes do README com Stripe CLI (falha de pagamento, troca de ciclo, troca de preço, cupom)
+- [ ] Confirmar no `npm run build` que nenhuma chave `sk_` / `whsec_` aparece no bundle
 
-**Adicionado — necessário pelo novo fluxo:**
-- Rota `/checkout` protegida (é o portão de auth, ganho de graça via `RotaProtegida`).
-- Gate de conta inativa em `RotaProtegida` — hoje `restaurantes.ativo` **existe no schema mas não é verificado em lugar nenhum do app** (só aparece em `src/lib/queries/admin.ts` pra listagem). Precisa passar a valer.
-- Tela `/assinatura` (reativação) para conta inativa.
-- Eventos de ciclo de vida no webhook (renovação, falha de pagamento, cancelamento) — não só `checkout.session.completed`.
-
-**Mantido:** `/vendas` como rota da landing (`/` continua sendo o dashboard), `integracao_config` pros price IDs, nomes `stripe-webhook` / `criar-checkout-session`.
-
-> ✅ **Conflitos já auditados:** `processar-pagamento`/`convidar-membro` não existem no repo (nada a remover). Colunas `stripe_*`/`plano_ciclo`/`assinatura_status` não existem em `restaurantes` (auditado `Row`/`Insert`/`Update`). `ativo` e `é_pagante` já existem. Rotas `/vendas`, `/checkout`, `/checkout/sucesso`, `/assinatura` livres em `src/App.tsx`.
-
-### Fase 1 — Schema Supabase (migration)
-
-- [ ] Adicionar colunas em `restaurantes`: `stripe_customer_id text`, `stripe_subscription_id text`, `plano_ciclo text` (`mensal`/`semestral`/`anual`), `assinatura_status text` (`ativa`/`inadimplente`/`cancelada`), `assinatura_expira_em timestamptz`
-- [ ] **Não criar tabela nova** — o estado da assinatura mora em `restaurantes`. `ativo` (já existe) = chave mestra de acesso; `é_pagante` (já existe) mantido em sinc com `assinatura_status`
-- [ ] Índice em `stripe_customer_id` e `stripe_subscription_id` (webhook busca por eles)
-- [ ] RLS: o usuário pode **ler** suas colunas de assinatura, mas **não escrever** — update só via `service_role` (webhook). Senão dá pra se auto-ativar pelo client
-- [ ] Migration versionada em `supabase/migrations/`
-
-### Fase 2 — Stripe (conta + produtos)
-
-- [ ] Criar produto no Stripe com 3 prices recorrentes (mensal, semestral, anual) — valores placeholder, desconto nos ciclos maiores
-- [ ] `supabase secrets set STRIPE_SECRET_KEY=...`
-- [ ] Configurar endpoint de webhook no painel Stripe → Edge Function `stripe-webhook`, copiar `STRIPE_WEBHOOK_SIGNING_SECRET`
-- [ ] Guardar os 3 `price_id` em `integracao_config` (`chave`/`valor`) — sem tabela/coluna nova
-
-### Fase 3 — Edge Functions novas
-
-- [ ] `criar-checkout-session`: lê o JWT do usuário logado (nunca confia em `restaurante_id` vindo do body), resolve `price_id` do ciclo via `integracao_config`, cria Checkout Session `mode: 'subscription'` com `client_reference_id = restaurante_id` e `customer = stripe_customer_id` (se já existir, pro caso de reativação), retorna `session.url`
-- [ ] `stripe-webhook`: valida assinatura com `STRIPE_WEBHOOK_SIGNING_SECRET` (usar `constructEventAsync` — Deno é async)
-- [ ] `stripe-webhook` → `checkout.session.completed`: grava `stripe_customer_id`, `stripe_subscription_id`, `plano_ciclo`, `assinatura_status='ativa'`, `ativo=true`, `é_pagante=true`, `assinatura_expira_em`
-- [ ] `stripe-webhook` → `invoice.paid`: renovação, empurra `assinatura_expira_em`
-- [ ] `stripe-webhook` → `invoice.payment_failed`: `assinatura_status='inadimplente'` (ainda não desativa — Stripe ainda vai tentar de novo)
-- [ ] `stripe-webhook` → `customer.subscription.deleted`: `ativo=false`, `é_pagante=false`, `assinatura_status='cancelada'` — **nunca apagar dados do restaurante**
-- [ ] `stripe-webhook`: idempotência por `event.id` (Stripe reentrega evento; não pode aplicar duas vezes)
-
-### Fase 4 — Ajustes no fluxo de auth existente
-
-- [ ] `src/App.tsx`: adicionar `/vendas` (pública) e `/checkout`, `/checkout/sucesso`, `/assinatura` (dentro de `RotaProtegida`)
-- [ ] `RotaProtegida`: liberar `/checkout` mesmo com `onboarding_completo=false` (hoje ele força redirect pra `/onboarding` — travaria quem acabou de criar conta e ainda vai pagar). Mesmo padrão da exceção que já existe pra `/onboarding-membro`
-- [ ] `RotaProtegida`: novo gate — se `ativo=false`, redirecionar pra `/assinatura`, **exceto** nas rotas `/assinatura`, `/checkout`, `/checkout/sucesso` e `/minha-conta`
-- [ ] `Cadastro.tsx`: hoje faz `navigate('/onboarding')` fixo (linha ~65) — passar a respeitar o retorno pra `/checkout?ciclo=X` quando veio da landing
-- [ ] `Cadastro.tsx` + `use-auth.tsx` (`cadastro`, linhas 120-151): hoje grava `nome_restaurante: 'Meu Restaurante'` hardcoded. Gravar o nome real informado → o pré-preenchimento do onboarding **já funciona sozinho** (`Onboarding.tsx:74-87` só ignora o valor quando ele é literalmente `'Meu Restaurante'`)
-- [ ] `Login.tsx`: **nenhuma mudança necessária** — já lê `location.state.from` (linha 28) e volta pra origem após login. Só conferir que o link "criar conta" propaga o destino
-
-### Fase 5 — Landing page (`/vendas`)
-
-- [ ] Header — logo FBi, CTA "Assinar" (scroll até Planos)
-- [ ] Hero — proposta de valor + CTA primário
-- [ ] Como funciona — 4 passos (QR na mesa → cliente responde → IA gera insight → restaurante age)
-- [ ] Benefícios/features
-- [ ] Planos — card único, toggle mensal/semestral/anual, desconto nos ciclos maiores (placeholder), botão → `/checkout?ciclo=X`
-- [ ] FAQ
-- [ ] CTA final + footer
-- [ ] Responsivo mobile (landing recebe tráfego frio, maioria mobile)
-- [ ] Link discreto "Já sou cliente / Entrar" no header → `/login`
-
-### Fase 6 — Telas de checkout e reativação
-
-- [ ] `/checkout`: spinner + chama `criar-checkout-session` com o ciclo da query string, redireciona pro Stripe. Se der erro, mensagem + botão voltar pra `/vendas`
-- [ ] `/checkout/sucesso`: confirma pagamento, aguarda o webhook processar (pequeno polling em `restaurantes.assinatura_status`, com timeout e fallback amigável), depois manda pra `/onboarding` ou `/`
-- [ ] `/assinatura`: tela de conta inativa — explica situação, mostra ciclo anterior, botão "Reativar" → `/checkout?ciclo=X`, botão sair
-
-### Fase 7 — Testes
-
-- [ ] Cartão de teste (`4242 4242 4242 4242`) nos 3 ciclos, em Stripe test mode
-- [ ] Webhook local: `stripe listen --forward-to <url da function>`
-- [ ] Fluxo visitante novo: `/vendas` → cadastro → pagamento → onboarding pré-preenchido
-- [ ] Fluxo cliente existente deslogado: `/vendas` → login → pagamento (sem passar por onboarding de novo)
-- [ ] Fluxo reativação: forçar `ativo=false` no banco → logar → deve cair em `/assinatura`, conseguir pagar e voltar com **todos os dados antigos intactos**
-- [ ] Abandono no meio: fechar aba no Stripe → conta fica criada e inativa, sem lixo no banco, e dá pra retomar
-- [ ] Tentar burlar: com sessão de usuário comum, tentar `update` direto em `restaurantes.ativo`/`assinatura_status` pelo client → RLS deve barrar
-- [ ] Confirmar que `STRIPE_SECRET_KEY` e `STRIPE_WEBHOOK_SIGNING_SECRET` não aparecem no bundle (`npm run build`)
-
-**Concluído quando:** visitante em `/vendas` cria conta, paga, cai no onboarding pré-preenchido; e um cliente com conta desativada consegue logar, reativar pagando e recuperar todos os dados.
 
 ---
 

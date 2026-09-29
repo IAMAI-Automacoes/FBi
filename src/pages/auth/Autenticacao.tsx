@@ -9,7 +9,14 @@ import { supabase } from '@/lib/supabase/client'
 import { destinoPosAuth } from '@/lib/auth-destino'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { ehRotaDeCompra } from '@/components/compra/etapas'
-import { ArrowLeft, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react'
+import {
+  consultarCompra,
+  guardarSessaoCheckout,
+  lerSessaoCheckout,
+  limparSessaoCheckout,
+  type Compra,
+} from '@/lib/queries/stripe'
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, Sparkles } from 'lucide-react'
 import {
   AuthLayout,
   WhatsAppIcon,
@@ -54,6 +61,52 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
 
   const criando = modo === 'criar'
 
+  // ── Volta do Stripe Checkout (pagou ANTES de ter conta) ──
+  // O `?sessao=cs_...` vem da success_url. Só o navegador que concluiu o
+  // pagamento tem esse id; ele é guardado na aba para sobreviver à ida ao
+  // /login (e-mail já cadastrado). O vínculo em si é feito no servidor
+  // (`vincular-compra`), na tela /checkout/sucesso, nunca aqui.
+  const sessaoDaUrl = new URLSearchParams(location.search).get('sessao')
+  const sessaoCheckout = /^cs_(test|live)_[A-Za-z0-9]{10,}$/.test(sessaoDaUrl ?? '')
+    ? sessaoDaUrl
+    : lerSessaoCheckout()
+  const [compra, setCompra] = useState<Compra | null>(null)
+  const [consultandoCompra, setConsultandoCompra] = useState(Boolean(sessaoCheckout))
+
+  useEffect(() => {
+    if (!sessaoCheckout) return
+    guardarSessaoCheckout(sessaoCheckout)
+    let vivo = true
+    consultarCompra(sessaoCheckout)
+      .then((c) => {
+        if (!vivo) return
+        setCompra(c)
+        // O e-mail da conta PRECISA ser o do pagamento (o servidor confere).
+        if (c.email && (c.estado === 'paga' || c.estado === 'pendente')) setEmail(c.email)
+        if (c.estado === 'vinculada') {
+          setModo('entrar')
+          setAviso('Este pagamento já está ligado a uma conta. Entre para continuar.')
+        }
+        // Sessão que não serve mais não pode ficar grudada na aba, senão todo
+        // /login futuro tentaria ligá-la de novo.
+        if (c.estado !== 'paga' && c.estado !== 'pendente') limparSessaoCheckout()
+      })
+      .catch(() => {
+        if (vivo) setCompra(null)
+      })
+      .finally(() => {
+        if (vivo) setConsultandoCompra(false)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [sessaoCheckout])
+
+  const compraPaga = compra?.estado === 'paga' || compra?.estado === 'pendente'
+  // Com compra em mãos o e-mail fica travado: digitar outro só geraria o erro
+  // "crie a conta com o mesmo e-mail" lá na frente.
+  const emailTravado = compraPaga && Boolean(compra?.email)
+
   // As rotas /login e /cadastro montam ESTE mesmo componente. Os `key` em
   // App.tsx forçam a remontagem ao trocar de rota, mas depender só disso é
   // frágil: se a remontagem não acontecer, `modo`, `aviso` e `email` ficam
@@ -71,14 +124,17 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
   }, [location.key, location.state])
 
   // Esta tela não sabe nada sobre planos — só autentica e devolve a pessoa para
-  // onde ela ia. Quem exibe e confirma o plano é o /checkout, logo adiante.
-  const destino = destinoPosAuth(location.state, criando ? '/onboarding' : '/')
+  // onde ela ia. Com uma compra paga em mãos, o destino é a tela que liga o
+  // pagamento à conta e espera a ativação (/checkout/sucesso).
+  const destino = sessaoCheckout && compra?.estado !== 'vinculada'
+    ? `/checkout/sucesso?sessao=${encodeURIComponent(sessaoCheckout)}`
+    : destinoPosAuth(location.state, criando ? '/onboarding' : '/')
 
   // Booleano, não dado: só interessa se veio comprando, nunca qual plano.
   // `ehRotaDeCompra` corta a query string antes de consultar o mapa — o destino
   // chega como `/checkout?ciclo=anual`. Também cobre quem cai aqui indo para
   // `/assinatura`, caso que o `startsWith('/checkout')` anterior deixava passar.
-  const vindoDaCompra = ehRotaDeCompra(destino)
+  const vindoDaCompra = ehRotaDeCompra(destino) || Boolean(sessaoCheckout)
 
   const trocarModo = (novo: ModoAuth) => {
     setModo(novo)
@@ -234,6 +290,26 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
         </div>
       )}
 
+      {sessaoCheckout && (consultandoCompra || compraPaga) && (
+        <div
+          role="status"
+          style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', backgroundColor: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '12px', padding: '11px 13px', fontSize: '13px', lineHeight: 1.5, color: '#166534', marginBottom: '18px' }}
+        >
+          {consultandoCompra ? (
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" style={{ marginTop: '1px' }} />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0" style={{ marginTop: '1px' }} />
+          )}
+          <span>
+            {consultandoCompra
+              ? 'Conferindo seu pagamento...'
+              : compra?.estado === 'pendente'
+                ? 'Pagamento em processamento. Crie sua conta com o e-mail do pagamento; o acesso libera assim que ele for confirmado.'
+                : 'Pagamento confirmado. Crie sua conta com o mesmo e-mail para liberar o acesso.'}
+          </span>
+        </div>
+      )}
+
       {aviso && (
         <div
           role="status"
@@ -266,7 +342,9 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
             <input
               id="email" type="email" placeholder="seu@email.com"
               value={email} onChange={(e) => setEmail(e.target.value)}
-              required disabled={carregando} style={authInputStyle}
+              required disabled={carregando || emailTravado} readOnly={emailTravado}
+              title={emailTravado ? 'E-mail usado no pagamento' : undefined}
+              style={emailTravado ? { ...authInputStyle, color: '#64748B' } : authInputStyle}
               onFocus={authInputFocus} onBlur={authInputBlur}
             />
           </div>

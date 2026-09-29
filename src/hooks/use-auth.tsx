@@ -28,6 +28,11 @@ export interface UsuarioDados {
       quando o usuário pediu o cancelamento (null = não pediu). */
   assinatura_expira_em?: string | null
   assinatura_cancelada_em?: string | null
+  /** Stripe: preenchidos pelo webhook quando a assinatura é do Stripe (null =
+      cupom de acesso ou liberação manual). Só o servidor escreve. */
+  stripe_customer_id?: string | null
+  stripe_subscription_id?: string | null
+  plano_ciclo?: 'mensal' | 'semestral' | 'anual' | null
 }
 
 interface AuthContextType {

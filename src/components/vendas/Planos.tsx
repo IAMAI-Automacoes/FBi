@@ -1,12 +1,32 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, ChevronRight, ShieldCheck } from 'lucide-react'
+import { Check, ChevronRight, Loader2, ShieldCheck } from 'lucide-react'
 import { ancora, cores, orbe, rotuloSecao, tituloSecao, TRANSICAO } from './tokens'
-import { CICLOS, RECURSOS_INCLUSOS, buscarCiclo, type Ciclo } from './ciclos-plano'
+import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from './ciclos-plano'
+import { usePrecos } from '@/hooks/use-precos'
+import { criarCheckout } from '@/lib/queries/stripe'
 
+/* Preços vêm do Stripe (get-prices) — nenhum valor fixo aqui. O botão abre o
+   Stripe Checkout direto: o pagamento vem antes da conta, e a conta é criada
+   na volta (/cadastro?sessao=...). */
 export function Planos() {
   const [ciclo, setCiclo] = useState<Ciclo>('semestral')
-  const atual = buscarCiclo(ciclo)
+  const { planos, carregando, erro, porCiclo, recarregar } = usePrecos()
+  const atual = porCiclo(ciclo)
+  const [abrindo, setAbrindo] = useState(false)
+  const [erroCheckout, setErroCheckout] = useState<string | null>(null)
+
+  const assinar = async () => {
+    if (abrindo || !atual) return
+    setAbrindo(true)
+    setErroCheckout(null)
+    try {
+      const url = await criarCheckout(ciclo)
+      window.location.assign(url)
+    } catch (e) {
+      setErroCheckout(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
+      setAbrindo(false)
+    }
+  }
 
   return (
     <section
@@ -59,6 +79,7 @@ export function Planos() {
           >
             {CICLOS.map((c) => {
               const ativo = c.id === ciclo
+              const desconto = porCiclo(c.id)?.descontoPercentual ?? null
               return (
                 <button
                   key={c.id}
@@ -82,7 +103,7 @@ export function Planos() {
                   }}
                 >
                   {c.rotulo}
-                  {c.descontoPercentual !== null && (
+                  {desconto !== null && (
                     <span
                       style={{
                         fontSize: '11px',
@@ -93,7 +114,7 @@ export function Planos() {
                         background: ativo ? 'rgba(255,255,255,0.22)' : 'rgba(22,163,74,0.12)',
                       }}
                     >
-                      −{c.descontoPercentual}%
+                      −{desconto}%
                     </span>
                   )}
                 </button>
@@ -144,51 +165,95 @@ export function Planos() {
               </span>
             </div>
 
-            <div className="flex items-baseline" style={{ gap: '8px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '18px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
-              <span
+            {atual ? (
+              <>
+                <div className="flex items-baseline" style={{ gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
+                  <span
+                    style={{
+                      fontSize: 'clamp(44px, 6vw, 56px)',
+                      fontWeight: 700,
+                      letterSpacing: '-0.03em',
+                      lineHeight: 1,
+                      color: cores.tinta,
+                    }}
+                  >
+                    {atual.mensalEquivalente}
+                  </span>
+                  <span style={{ fontSize: '16px', fontWeight: 500, color: cores.corpoSuave }}>
+                    /mês
+                  </span>
+                </div>
+
+                <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginBottom: '24px' }}>
+                  {atual.descricao}
+                  {atual.descontoPercentual !== null && (
+                    <span style={{ color: cores.verde, fontWeight: 600 }}>
+                      {' '}
+                      · economia de {atual.descontoPercentual}%
+                    </span>
+                  )}
+                </p>
+              </>
+            ) : erro || (!carregando && planos.length === 0) ? (
+              <div
+                role="alert"
                 style={{
-                  fontSize: 'clamp(44px, 6vw, 56px)',
-                  fontWeight: 700,
-                  letterSpacing: '-0.03em',
-                  lineHeight: 1,
-                  color: cores.tinta,
+                  background: 'rgba(239,68,68,0.08)',
+                  border: '1px solid rgba(239,68,68,0.22)',
+                  borderRadius: '12px',
+                  padding: '13px 15px',
+                  fontSize: '13.5px',
+                  color: '#B91C1C',
+                  marginBottom: '24px',
                 }}
               >
-                {atual.mensalEquivalente}
-              </span>
-              <span style={{ fontSize: '16px', fontWeight: 500, color: cores.corpoSuave }}>
-                /mês
-              </span>
-            </div>
+                Não conseguimos carregar os preços agora.{' '}
+                <button
+                  type="button"
+                  onClick={recarregar}
+                  style={{ background: 'none', border: 'none', color: 'inherit', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                >
+                  Tentar de novo
+                </button>
+              </div>
+            ) : (
+              // Esqueleto enquanto o Stripe responde: nunca um valor fixo.
+              <div aria-busy="true" style={{ marginBottom: '24px' }}>
+                <div style={{ height: '52px', width: '180px', borderRadius: '12px', background: cores.superficieAlt, marginBottom: '10px' }} />
+                <div style={{ height: '14px', width: '220px', borderRadius: '8px', background: cores.superficieAlt }} />
+              </div>
+            )}
 
-            <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginBottom: '24px' }}>
-              {atual.descricaoCobranca}
-              {atual.descontoPercentual !== null && (
-                <span style={{ color: cores.verde, fontWeight: 600 }}>
-                  {' '}
-                  · economia de {atual.descontoPercentual}%
-                </span>
-              )}
-            </p>
+            {erroCheckout && (
+              <p role="alert" style={{ fontSize: '13px', color: '#B91C1C', marginBottom: '10px' }}>
+                {erroCheckout}
+              </p>
+            )}
 
-            <Link
-              to={`/checkout?ciclo=${ciclo}`}
+            <button
+              type="button"
+              onClick={assinar}
+              disabled={abrindo || !atual}
               className="flex items-center justify-center"
               style={{
                 height: '54px',
                 width: '100%',
+                gap: '8px',
                 fontSize: '15px',
                 fontWeight: 600,
                 color: '#FFFFFF',
                 backgroundColor: cores.azul,
+                border: 'none',
                 borderRadius: '13px',
-                textDecoration: 'none',
+                cursor: abrindo || !atual ? 'not-allowed' : 'pointer',
+                opacity: abrindo || !atual ? 0.7 : 1,
                 boxShadow: '0 12px 30px rgba(37,99,235,0.30)',
                 transition: TRANSICAO,
                 marginBottom: '10px',
               }}
               onMouseEnter={(e) => {
+                if (abrindo || !atual) return
                 e.currentTarget.style.transform = 'translateY(-2px)'
                 e.currentTarget.style.boxShadow = '0 18px 40px rgba(37,99,235,0.36)'
               }}
@@ -197,17 +262,24 @@ export function Planos() {
                 e.currentTarget.style.boxShadow = '0 12px 30px rgba(37,99,235,0.30)'
               }}
             >
-              Assinar plano {atual.rotulo.toLowerCase()}
-            </Link>
+              {abrindo ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Abrindo pagamento...
+                </>
+              ) : (
+                `Assinar plano ${atual?.rotulo.toLowerCase() ?? ''}`.trim()
+              )}
+            </button>
 
-            {/* Define a expectativa ANTES do clique: quem aperta "assinar"
-                espera um campo de cartão e recebe um cadastro. Avisar aqui sai
-                mais barato do que explicar na tela seguinte. */}
+            {/* Define a expectativa ANTES do clique: paga no Stripe, cria a
+                conta na volta. Avisar aqui sai mais barato do que explicar na
+                tela seguinte. */}
             <div
               className="flex items-center justify-center flex-wrap"
               style={{ gap: '6px', marginBottom: '8px' }}
             >
-              {['Conta', 'Pagamento', 'Acesso imediato'].map((etapa, i) => (
+              {['Pagamento', 'Conta', 'Acesso imediato'].map((etapa, i) => (
                 <span key={etapa} className="inline-flex items-center" style={{ gap: '6px' }}>
                   {i > 0 && (
                     <ChevronRight

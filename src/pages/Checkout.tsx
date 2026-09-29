@@ -7,10 +7,12 @@ import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
 import { RECURSOS_INCLUSOS, buscarCiclo, ehCiclo } from '@/components/vendas/ciclos-plano'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { resgatarCupom } from '@/lib/queries/cupom'
+import { usePrecos } from '@/hooks/use-precos'
+import { criarCheckout } from '@/lib/queries/stripe'
 
-/* Confirmação do plano antes de mandar para o Stripe.
-   Rota protegida: quem chega aqui já está autenticado — o portão de login é o
-   próprio `RotaProtegida`, então este é o primeiro passo depois da conta criada. */
+/* Confirmação do plano antes de mandar para o Stripe, para quem JÁ tem conta e
+   ainda não tem plano. Rota protegida: quem chega aqui está autenticado.
+   O caminho da landing (sem conta) não passa por aqui — vai direto ao Stripe. */
 export default function Checkout() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -25,7 +27,9 @@ export default function Checkout() {
 
   const cicloParam = params.get('ciclo')
   const ciclo = ehCiclo(cicloParam) ? cicloParam : 'mensal'
-  const plano = buscarCiclo(ciclo)
+  const definicao = buscarCiclo(ciclo)
+  const { porCiclo, carregando: carregandoPreco } = usePrecos()
+  const plano = porCiclo(ciclo)
 
   const aplicarCupom = async () => {
     const codigo = cupom.trim()
@@ -48,11 +52,10 @@ export default function Checkout() {
     setEnviando(true)
     setErro(null)
     try {
-      // TODO(stripe): chamar a Edge Function `criar-checkout-session`, que
-      // resolve o price_id do ciclo no servidor e devolve a URL hospedada.
-      throw new Error(
-        'O pagamento ainda não foi configurado. Falta criar os produtos no Stripe e publicar a função criar-checkout-session.',
-      )
+      // A função lê o JWT: grava o restaurante na metadata da sessão e o
+      // webhook vincula a assinatura sozinho. Volta em /checkout/sucesso.
+      const url = await criarCheckout(ciclo)
+      window.location.assign(url)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
       setEnviando(false)
@@ -146,7 +149,7 @@ export default function Checkout() {
           >
             <ShieldCheck className="h-3.5 w-3.5" style={{ color: cores.azul }} />
             <span style={{ fontSize: '12px', fontWeight: 600, color: cores.azul }}>
-              Plano {plano.rotulo.toLowerCase()}
+              Plano {definicao.rotulo.toLowerCase()}
             </span>
           </div>
 
@@ -178,32 +181,45 @@ export default function Checkout() {
               marginBottom: '22px',
             }}
           >
-            <div className="flex items-baseline" style={{ gap: '7px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
-              <span
-                style={{
-                  fontSize: '40px',
-                  fontWeight: 700,
-                  letterSpacing: '-0.03em',
-                  lineHeight: 1,
-                  color: cores.tinta,
-                }}
-              >
-                {plano.mensalEquivalente}
-              </span>
-              <span style={{ fontSize: '15px', fontWeight: 500, color: cores.corpoSuave }}>
-                /mês
-              </span>
-            </div>
-            <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginTop: '8px' }}>
-              {plano.descricaoCobranca}
-              {plano.descontoPercentual !== null && (
-                <span style={{ color: cores.verde, fontWeight: 600 }}>
-                  {' '}
-                  · economia de {plano.descontoPercentual}%
-                </span>
-              )}
-            </p>
+            {plano ? (
+              <>
+                <div className="flex items-baseline" style={{ gap: '7px' }}>
+                  <span style={{ fontSize: '16px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
+                  <span
+                    style={{
+                      fontSize: '40px',
+                      fontWeight: 700,
+                      letterSpacing: '-0.03em',
+                      lineHeight: 1,
+                      color: cores.tinta,
+                    }}
+                  >
+                    {plano.mensalEquivalente}
+                  </span>
+                  <span style={{ fontSize: '15px', fontWeight: 500, color: cores.corpoSuave }}>
+                    /mês
+                  </span>
+                </div>
+                <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginTop: '8px' }}>
+                  {plano.descricao}
+                  {plano.descontoPercentual !== null && (
+                    <span style={{ color: cores.verde, fontWeight: 600 }}>
+                      {' '}
+                      · economia de {plano.descontoPercentual}%
+                    </span>
+                  )}
+                </p>
+              </>
+            ) : carregandoPreco ? (
+              <div aria-busy="true">
+                <div style={{ height: '40px', width: '150px', borderRadius: '10px', background: cores.superficieAlt, marginBottom: '10px' }} />
+                <div style={{ height: '13px', width: '200px', borderRadius: '6px', background: cores.superficieAlt }} />
+              </div>
+            ) : (
+              <p style={{ fontSize: '13.5px', color: '#B91C1C' }}>
+                O valor exato aparece na tela de pagamento do Stripe.
+              </p>
+            )}
           </div>
 
           {erro && (

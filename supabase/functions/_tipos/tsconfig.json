@@ -11,17 +11,27 @@
     "skipLibCheck": true,
     "paths": {
       "https://deno.land/std@0.168.0/http/server.ts": ["./stubs/server.ts"],
-      "jsr:@supabase/supabase-js@2": ["./stubs/supabase.ts"]
+      "jsr:@supabase/supabase-js@2": ["./stubs/supabase.ts"],
+      "npm:stripe@22.6.2": ["./stubs/stripe.ts"],
+      "npm:zod@4.3.6": ["./stubs/zod.ts"]
     }
   },
   "include": [
     "./deno.d.ts",
     "../_shared/*.ts",
+    "../_shared/stripe/*.ts",
     "../gerar-insights/*.ts",
     "../sugerir-acoes/*.ts",
     "../categorizar-acao/*.ts",
     "../motor-retorno-worker/*.ts",
     "../motor-retorno-callback/*.ts",
-    "../vincular-feedback/*.ts"
+    "../vincular-feedback/*.ts",
+    "../get-prices/*.ts",
+    "../create-checkout-session/*.ts",
+    "../stripe-webhook/*.ts",
+    "../consultar-compra/*.ts",
+    "../vincular-compra/*.ts",
+    "../create-portal-session/*.ts",
+    "../cancelar-assinatura/*.ts"
   ]
 }

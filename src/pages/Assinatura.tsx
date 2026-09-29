@@ -1,10 +1,13 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
-import { CICLOS, RECURSOS_INCLUSOS } from '@/components/vendas/ciclos-plano'
+import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from '@/components/vendas/ciclos-plano'
 import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
-import { Check, LogOut } from 'lucide-react'
+import { usePrecos } from '@/hooks/use-precos'
+import { criarCheckout } from '@/lib/queries/stripe'
+import { Check, Loader2, LogOut } from 'lucide-react'
 
 /* Destino de toda conta sem plano ativo. Cobre três situações com uma tela só:
    nunca assinou, abandonou o checkout no meio, ou a assinatura venceu.
@@ -13,6 +16,24 @@ export default function Assinatura() {
   const { usuario, logout, ehAdminPlataforma } = useAuth()
   const navigate = useNavigate()
   const status = usuario?.assinatura_status ?? 'sem_assinatura'
+  const { planos, carregando, erro, porCiclo, recarregar } = usePrecos()
+  const [abrindo, setAbrindo] = useState<Ciclo | null>(null)
+  const [erroCheckout, setErroCheckout] = useState<string | null>(null)
+
+  // Usuário logado: a função lê o JWT, grava o restaurante na metadata e o
+  // webhook vincula sozinho. Volta em /checkout/sucesso.
+  const assinar = async (ciclo: Ciclo) => {
+    if (abrindo) return
+    setAbrindo(ciclo)
+    setErroCheckout(null)
+    try {
+      const url = await criarCheckout(ciclo)
+      window.location.assign(url)
+    } catch (e) {
+      setErroCheckout(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
+      setAbrindo(null)
+    }
+  }
 
   // Admin não é cliente: pode ver esta tela mas seguir sem pagar. A marca de
   // sessão libera o gate (RotaProtegida) até o fim da sessão; num novo login ele
@@ -76,40 +97,80 @@ export default function Assinatura() {
           </p>
         </div>
 
-        {/* Ciclos — cada um leva direto ao checkout já com o plano escolhido */}
+        {(erro || (!carregando && planos.length === 0)) && (
+          <div role="alert" className="text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', borderRadius: '12px', padding: '13px 15px', fontSize: '13.5px', color: '#B91C1C', marginBottom: '20px' }}>
+            Não conseguimos carregar os preços agora.{' '}
+            <button type="button" onClick={recarregar} style={{ background: 'none', border: 'none', color: 'inherit', fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+              Tentar de novo
+            </button>
+          </div>
+        )}
+        {erroCheckout && (
+          <p role="alert" className="text-center" style={{ fontSize: '13.5px', color: '#B91C1C', marginBottom: '16px' }}>
+            {erroCheckout}
+          </p>
+        )}
+
+        {/* Ciclos — cada card abre o Stripe Checkout já com o plano escolhido.
+            Valores vêm do Stripe (usePrecos); enquanto carregam, esqueleto. */}
         <div className="grid gap-4 sm:grid-cols-3" style={{ marginBottom: '32px' }}>
-          {CICLOS.map((c) => (
-            <Link
-              key={c.id}
-              to={`/checkout?ciclo=${c.id}`}
-              style={{ display: 'block', background: '#FFFFFF', border: `1px solid ${cores.borda}`, borderRadius: '18px', padding: '22px 20px', textDecoration: 'none', boxShadow: '0 1px 2px rgba(15,23,42,0.04)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-3px)'
-                e.currentTarget.style.boxShadow = '0 18px 40px rgba(37,99,235,0.14)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'none'
-                e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,0.04)'
-              }}
-            >
-              <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: cores.tinta }}>{c.rotulo}</span>
-                {c.descontoPercentual !== null && (
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: cores.verde, background: 'rgba(22,163,74,0.12)', borderRadius: '999px', padding: '2px 8px' }}>
-                    −{c.descontoPercentual}%
-                  </span>
+          {CICLOS.map((c) => {
+            const plano = porCiclo(c.id)
+            const ocupado = abrindo !== null
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => assinar(c.id)}
+                disabled={ocupado || !plano}
+                aria-busy={abrindo === c.id}
+                style={{ display: 'block', textAlign: 'left', width: '100%', background: '#FFFFFF', border: `1px solid ${cores.borda}`, borderRadius: '18px', padding: '22px 20px', cursor: ocupado || !plano ? 'not-allowed' : 'pointer', opacity: ocupado && abrindo !== c.id ? 0.6 : 1, boxShadow: '0 1px 2px rgba(15,23,42,0.04)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
+                onMouseEnter={(e) => {
+                  if (ocupado || !plano) return
+                  e.currentTarget.style.transform = 'translateY(-3px)'
+                  e.currentTarget.style.boxShadow = '0 18px 40px rgba(37,99,235,0.14)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none'
+                  e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,0.04)'
+                }}
+              >
+                <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: cores.tinta }}>{c.rotulo}</span>
+                  {plano?.descontoPercentual != null && (
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: cores.verde, background: 'rgba(22,163,74,0.12)', borderRadius: '999px', padding: '2px 8px' }}>
+                      −{plano.descontoPercentual}%
+                    </span>
+                  )}
+                </div>
+                {plano ? (
+                  <>
+                    <div className="flex items-baseline" style={{ gap: '4px', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
+                      <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1, color: cores.tinta }}>
+                        {plano.mensalEquivalente}
+                      </span>
+                      <span style={{ fontSize: '13px', color: cores.corpoSuave }}>/mês</span>
+                    </div>
+                    <p style={{ fontSize: '12.5px', color: cores.corpoSuave }}>
+                      {abrindo === c.id ? (
+                        <span className="inline-flex items-center" style={{ gap: '6px' }}>
+                          <Loader2 className="h-3 w-3 animate-spin" /> Abrindo pagamento...
+                        </span>
+                      ) : (
+                        plano.descricao
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <div aria-busy="true">
+                    <div style={{ height: '30px', width: '110px', borderRadius: '8px', background: cores.superficieAlt, marginBottom: '8px' }} />
+                    <div style={{ height: '12px', width: '150px', borderRadius: '6px', background: cores.superficieAlt }} />
+                  </div>
                 )}
-              </div>
-              <div className="flex items-baseline" style={{ gap: '4px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: cores.corpoSuave }}>R$</span>
-                <span style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1, color: cores.tinta }}>
-                  {c.mensalEquivalente}
-                </span>
-                <span style={{ fontSize: '13px', color: cores.corpoSuave }}>/mês</span>
-              </div>
-              <p style={{ fontSize: '12.5px', color: cores.corpoSuave }}>{c.descricaoCobranca}</p>
-            </Link>
-          ))}
+              </button>
+            )
+          })}
         </div>
 
         <div style={{ background: 'rgba(255,255,255,0.75)', border: `1px solid ${cores.borda}`, borderRadius: '18px', padding: '24px' }}>
