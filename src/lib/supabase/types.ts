@@ -1513,6 +1513,92 @@ export type Database = {
         }
         Relationships: []
       }
+      mensagens_whatsapp: {
+        Row: {
+          atualizado_em: string
+          chat_id: string
+          criado_em: string
+          de_mim: boolean
+          enviada_em: string
+          grupo: boolean
+          id: number
+          message_id: string
+          midia_id: string | null
+          midia_mime: string | null
+          midia_nome: string | null
+          midia_url: string | null
+          nome_exibicao: string | null
+          payload: Json | null
+          por_api: boolean
+          reacao: string | null
+          responde_message_id: string | null
+          restaurante_id: number
+          status: string | null
+          telefone: string | null
+          texto: string | null
+          tipo: string
+          transcricao: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          chat_id: string
+          criado_em?: string
+          de_mim?: boolean
+          enviada_em: string
+          grupo?: boolean
+          id?: number
+          message_id: string
+          midia_id?: string | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_url?: string | null
+          nome_exibicao?: string | null
+          payload?: Json | null
+          por_api?: boolean
+          reacao?: string | null
+          responde_message_id?: string | null
+          restaurante_id: number
+          status?: string | null
+          telefone?: string | null
+          texto?: string | null
+          tipo: string
+          transcricao?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          chat_id?: string
+          criado_em?: string
+          de_mim?: boolean
+          enviada_em?: string
+          grupo?: boolean
+          id?: number
+          message_id?: string
+          midia_id?: string | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_url?: string | null
+          nome_exibicao?: string | null
+          payload?: Json | null
+          por_api?: boolean
+          reacao?: string | null
+          responde_message_id?: string | null
+          restaurante_id?: number
+          status?: string | null
+          telefone?: string | null
+          texto?: string | null
+          tipo?: string
+          transcricao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_whatsapp_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modelos_ia: {
         Row: {
           ativo: boolean

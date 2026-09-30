@@ -136,6 +136,50 @@ Deno.serve(async (req: Request) => {
       return 'ok'
     }
 
+    // ── Webhook de registro de mensagens (uazapi → n8n) ─────────────────────────
+    //
+    // Este é um webhook DE INSTÂNCIA, e não o global da conta. A diferença
+    // importa: o global é único (`POST /globalwebhook` sobrescreve o que houver)
+    // e já está ocupado pelo fluxo de feedback em `/webhook/easyfeed`. A
+    // instância, essa sim, aceita vários destinos — é o `action: "add"` da
+    // documentação da uazapiGO (POST /webhook).
+    //
+    // Aqui não se exclui nada de propósito: o registro quer o histórico inteiro,
+    // incluindo `wasSentByApi` (as mensagens que o próprio sistema envia) e os
+    // grupos. Quem precisa excluir isso é o fluxo de feedback, para não entrar em
+    // laço respondendo as próprias respostas.
+    //
+    // Idempotente porque roda a cada conexão: instância antiga se conserta
+    // sozinha na próxima vez que o dono conectar o WhatsApp, sem script nenhum.
+    const URL_REGISTRO = (Deno.env.get('N8N_REGISTRO_MENSAGENS') ?? '').trim()
+    async function configurarWebhookRegistro(): Promise<void> {
+      if (!URL_REGISTRO || !token) return
+      try {
+        const resp = await fetch(`${BASE}/webhook`, { headers: { token: token as string } })
+        const atuais = await resp.json().catch(() => null)
+        // GET /webhook devolve um array (mesmo com um destino só), ou null.
+        if (Array.isArray(atuais) && atuais.some((w: any) => w?.url === URL_REGISTRO)) return
+
+        await fetch(`${BASE}/webhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token: token as string },
+          body: JSON.stringify({
+            action: 'add',
+            url: URL_REGISTRO,
+            enabled: true,
+            events: ['messages', 'messages_update', 'connection'],
+            excludeMessages: [],
+            addUrlEvents: false,
+            addUrlTypesMessages: false,
+          }),
+        })
+      } catch (err) {
+        // Best-effort de propósito: falhar aqui não pode impedir o dono de
+        // conectar o WhatsApp — sem registro o produto funciona, sem conexão não.
+        console.warn('[whatsapp-instancia] webhook de registro não configurado:', err)
+      }
+    }
+
     async function callInstance(path: string, method = 'POST'): Promise<{ status: number; data: any }> {
       const resp = await fetch(`${BASE}/instance/${path}`, {
         method,
@@ -186,6 +230,10 @@ Deno.serve(async (req: Request) => {
       if (status === 429) {
         return json({ error: 'Limite de conexões simultâneas atingido. Tente novamente em instantes.' }, 429)
       }
+      // Depois de garantir a instância: o webhook de registro. Fica aqui, e não
+      // só na criação, para as instâncias antigas se acertarem ao reconectar.
+      await configurarWebhookRegistro()
+
       const connected = extractConnected(data)
       const numero = extractNumero(data)
       if (connected && numero) await setNumero(numero)
