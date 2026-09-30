@@ -31,7 +31,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-midia-secret',
 }
 
 const json = (body: unknown, status = 200) =>
@@ -69,11 +70,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ erro: 'Use POST' }, 405)
 
+  // Segredo próprio, no header `x-midia-secret`, em vez de comparar com a chave
+  // de serviço: o projeto está no meio da troca de chaves do Supabase (a
+  // service_role antiga é um JWT, a nova é `sb_secret_*`) e o que a plataforma
+  // injeta em SUPABASE_SERVICE_ROLE_KEY não é o mesmo valor que o painel mostra.
+  // Comparar com aquilo dava 401 em chamada legítima. Este segredo é só desta
+  // função e pode ser trocado sem mexer em mais nada.
+  const segredo = Deno.env.get('MIDIA_SECRET') ?? ''
+  const enviado = (req.headers.get('x-midia-secret') ?? '').trim()
+  if (!segredo || enviado !== segredo) return json({ erro: 'Não autorizado' }, 401)
+
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  const autorizacao = (req.headers.get('Authorization') ?? '').replace('Bearer ', '').trim()
-  // Só o n8n (chave de serviço) grava mídia. Sem isso, qualquer um com o link
-  // da função encheria o bucket.
-  if (!serviceKey || autorizacao !== serviceKey) return json({ erro: 'Não autorizado' }, 401)
+  if (!serviceKey) return json({ caminho: null, erro: 'SUPABASE_SERVICE_ROLE_KEY ausente' })
 
   try {
     const body = await req.json().catch(() => ({}))
