@@ -269,8 +269,11 @@ Eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded
 para `STRIPE_WEBHOOK_SECRET` (o do `stripe listen` local é outro).
 
 Segundo endpoint, mesma URL, com **"Listen to events on Connected accounts"** marcado e
-o evento `account.updated` — é por ele que o status Connect do afiliado muda para
-`ativo`. O segredo dele vai em `STRIPE_CONNECT_WEBHOOK_SECRET`.
+os eventos `account.updated` e `capability.updated` (qualquer um dos dois basta; o
+segundo dispara quando a capacidade `transfers` do afiliado fica ativa e aparece mesmo
+onde o Dashboard não lista `account.updated`). É por eles que o status Connect do
+afiliado muda para `ativo`. O segredo vai em `STRIPE_CONNECT_WEBHOOK_SECRET`. Sem
+esse endpoint, o botão "Atualizar status" no painel admin faz o mesmo manualmente.
 
 ### Descritor na fatura do cartão ("IAMAI* EASYFEED")
 
