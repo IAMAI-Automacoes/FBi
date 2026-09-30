@@ -19,6 +19,7 @@ import { json, preflight } from '../_shared/cors.ts'
 import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
 import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 import Stripe, { stripe } from '../_shared/stripe/cliente.ts'
+import { configuracao, siteUrl } from '../_shared/stripe/config.ts'
 
 const Entrada = z.object({
   /** Atalho direto para uma ação do portal. Sem isso abre a página inicial. */
@@ -54,16 +55,16 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Sua conta ainda não tem uma assinatura pelo Stripe.', sem_cliente: true }, 400)
     }
 
-    const site = Deno.env.get('SITE_URL')?.replace(/\/+$/, '')
-    if (!site) throw new Error('SITE_URL não configurada')
+    const site = await siteUrl(admin)
 
     const params: Stripe.BillingPortal.SessionCreateParams = {
       customer: customerId,
       return_url: `${site}/minha-conta`,
       locale: 'pt-BR',
     }
-    const configuracao = Deno.env.get('STRIPE_PORTAL_CONFIGURATION_ID')
-    if (configuracao) params.configuration = configuracao
+    // `integracao_config` primeiro, secret depois (config.ts).
+    const portalId = await configuracao(admin, 'STRIPE_PORTAL_CONFIGURATION_ID')
+    if (portalId) params.configuration = portalId
 
     const subId: string | null = rest.stripe_subscription_id ?? null
     switch (entrada.data.fluxo) {

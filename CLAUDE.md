@@ -134,10 +134,15 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `vincular-compra` | Liga assinatura paga à conta (confere tudo no Stripe) |
 | `create-portal-session` | Customer Portal (trocar ciclo, cartão, cancelar) |
 | `cancelar-assinatura` | Cancela no Stripe (`cancel_at_period_end`) ou no legado |
+| `conectar-afiliado` | (admin) cria a conta Stripe Connect do afiliado e devolve o link de cadastro |
 
 **Stripe:** ver `docs/stripe/README.md`. Preço NUNCA fixo em código/banco — só
 lookup_key (`easyfeed_mensal|semestral|anual`); trocar preço = `scripts/stripe/trocar-preco.ts`.
-Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SITE_URL`, `STRIPE_PORTAL_CONFIGURATION_ID`.
+Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (+ `STRIPE_CONNECT_WEBHOOK_SECRET` para o
+endpoint de contas conectadas). Config não secreta em `integracao_config`: `SITE_URL`,
+`STRIPE_PORTAL_CONFIGURATION_ID`. Tabelas `stripe_*`: assinaturas, faturas, checkout_sessions,
+eventos_webhook (payload apagado após 90 dias), repasses (livro-razão: sócios por Pix via
+`divisao_receita`; afiliados por Connect via `afiliados.stripe_account_id`).
 
 **NOTA:** Não existe `analyze-message` — está implementado como `chamar-ia`.
 

@@ -28,6 +28,7 @@ import {
   marcarAdminLeu, resetClienteLeu, reagirAdmin,
   buscarDivisoes, criarDivisao, atualizarDivisao, excluirDivisao,
   buscarAfiliados, criarAfiliado, atualizarAfiliado, excluirAfiliado,
+  buscarRepasses, marcarRepassePago, repasseParaPix, type Repasse,
   buscarCupons, criarCupon, atualizarCupon, excluirCupon,
   type SugestaoAdmin, type DivisaoReceita, type Afiliado, type Cupon, type ReacaoAdmin,
   buscarContas,
@@ -35,6 +36,8 @@ import {
   type ContaAdmin,
 } from '@/lib/queries/admin'
 import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
+import { conectarAfiliado, statusConnectAfiliado } from '@/lib/queries/stripe'
+import { formatarReais } from '@/components/vendas/ciclos-plano'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -1232,6 +1235,50 @@ export default function Admin() {
   }, [])
   useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadDivisoes() }, [isAdmin, activeTab, loadDivisoes])
 
+  // Repasses (livro-razão): o que cada sócio/afiliado tem a receber por fatura paga.
+  const [repasses, setRepasses] = useState<Repasse[]>([])
+  const [loadingRep, setLoadingRep] = useState(false)
+  const [filtroRep, setFiltroRep] = useState<'pendente' | 'pago' | 'falhou' | 'todos'>('pendente')
+  const [acaoRepId, setAcaoRepId] = useState<string | null>(null)
+  const loadRepasses = useCallback(async () => {
+    setLoadingRep(true)
+    try { setRepasses(await buscarRepasses(filtroRep === 'todos' ? undefined : filtroRep)) }
+    catch (err) { console.error(err) }
+    finally { setLoadingRep(false) }
+  }, [filtroRep])
+  useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadRepasses() }, [isAdmin, activeTab, loadRepasses])
+  const pagarRepasse = async (r: Repasse) => {
+    const ok = await confirmar({
+      titulo: 'Marcar como pago?',
+      descricao: `${r.descricao}: R$ ${formatarReais(r.valor_centavos)}. Confirme só depois de fazer o Pix pela conta da empresa.`,
+      confirmar: 'Já paguei',
+    })
+    if (!ok) return
+    setAcaoRepId(r.id)
+    try {
+      const { data } = await supabase.auth.getUser()
+      await marcarRepassePago(r.id, data.user?.email ?? 'admin')
+      await loadRepasses()
+    } catch (err) { console.error(err) } finally { setAcaoRepId(null) }
+  }
+  const repasseViraPix = async (r: Repasse) => {
+    setAcaoRepId(r.id)
+    try { await repasseParaPix(r.id); await loadRepasses() }
+    catch (err) { console.error(err) } finally { setAcaoRepId(null) }
+  }
+
+  // Volta do cadastro Stripe Connect do afiliado (/admin?afiliado=ID&connect=retorno):
+  // relê o status no Stripe e abre a aba de afiliados.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search)
+    const afId = q.get('afiliado')
+    if (!isAdmin || !afId || !q.get('connect')) return
+    statusConnectAfiliado(afId).catch((err) => console.error(err)).finally(() => {
+      setActiveTab('afiliados')
+      navigate('/admin', { replace: true })
+    })
+  }, [isAdmin, location.search, navigate])
+
   // Contas: carrega ao entrar na aba (junto da lista de vendedores, que é por email)
   const loadContas = useCallback(async () => {
     setLoadingContas(true)
@@ -1850,6 +1897,78 @@ export default function Admin() {
                   </tbody>
                 </CrudTable>
               )}
+
+              {/* ── Repasses (livro-razão) ── */}
+              <div className="flex items-start justify-between mt-10 mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-800">Repasses</h2>
+                  <p className="text-[12px] text-gray-500 mt-0.5">
+                    Gerados a cada fatura paga no Stripe. Sócios/empresa: pague por Pix pela conta da empresa e marque aqui.
+                    Afiliado com Stripe Connect ativo recebe sozinho.
+                  </p>
+                </div>
+                <Select value={filtroRep} onValueChange={(v) => setFiltroRep(v as typeof filtroRep)}>
+                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendentes</SelectItem>
+                    <SelectItem value="falhou">Com falha</SelectItem>
+                    <SelectItem value="pago">Pagos</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {loadingRep ? (
+                <p className="text-center py-8 text-sm text-gray-400">Carregando…</p>
+              ) : repasses.length === 0 ? (
+                <p className="text-center py-8 text-sm text-gray-400">Nenhum repasse {filtroRep === 'todos' ? '' : filtroRep === 'falhou' ? 'com falha' : filtroRep}.</p>
+              ) : (
+                <CrudTable>
+                  <thead><tr>{['Data','Fatura','Para','Regra','Valor','Método','Status',''].map((h) => <Th key={h}>{h}</Th>)}</tr></thead>
+                  <tbody>
+                    {repasses.map((r) => (
+                      <tr key={r.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
+                        <Td className="text-gray-500 text-[13px] whitespace-nowrap">{format(new Date(r.created_at), 'dd/MM/yy')}</Td>
+                        <Td className="text-[13px]">
+                          {r.fatura?.hosted_invoice_url ? (
+                            <a href={r.fatura.hosted_invoice_url} target="_blank" rel="noopener noreferrer" className="text-[#1D4ED8] hover:underline">{r.fatura.numero ?? 'fatura'}</a>
+                          ) : (r.fatura?.numero ?? '—')}
+                          {r.fatura?.pago_centavos != null && <span className="text-gray-400"> · R$ {formatarReais(r.fatura.pago_centavos)}</span>}
+                        </Td>
+                        <Td className="font-medium text-gray-800">
+                          {r.descricao}
+                          <span className="ml-1 text-[10px] uppercase text-gray-400">{r.destino_tipo === 'afiliado' ? 'afiliado' : 'sócio'}</span>
+                        </Td>
+                        <Td className="text-gray-500 text-[13px]">{r.regra}</Td>
+                        <Td className="font-semibold text-gray-700 whitespace-nowrap">R$ {formatarReais(r.valor_centavos)}</Td>
+                        <Td className="text-gray-500 text-[13px]">{r.metodo === 'stripe_connect' ? 'Stripe' : 'Pix'}</Td>
+                        <Td>
+                          <span className={cn('text-[11px] font-semibold rounded-full px-2 py-0.5',
+                            r.status === 'pago' ? 'bg-emerald-50 text-emerald-700'
+                            : r.status === 'falhou' ? 'bg-red-50 text-red-700'
+                            : r.status === 'cancelado' ? 'bg-gray-100 text-gray-500'
+                            : 'bg-amber-50 text-amber-700')}>
+                            {r.status}
+                          </span>
+                          {r.erro && <p className="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title={r.erro}>{r.erro}</p>}
+                          {r.status === 'pago' && r.pago_por && <p className="text-[11px] text-gray-400 mt-0.5">{r.pago_por}</p>}
+                        </Td>
+                        <Td>
+                          {r.status === 'pendente' && r.metodo === 'pix' && (
+                            <Button size="sm" variant="outline" disabled={acaoRepId === r.id} onClick={() => pagarRepasse(r)}>
+                              {acaoRepId === r.id ? '…' : 'Marcar pago'}
+                            </Button>
+                          )}
+                          {r.status === 'falhou' && (
+                            <Button size="sm" variant="outline" disabled={acaoRepId === r.id} onClick={() => repasseViraPix(r)}>
+                              {acaoRepId === r.id ? '…' : 'Pagar por Pix'}
+                            </Button>
+                          )}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </CrudTable>
+              )}
             </div>
           </div>
         )}
@@ -1916,6 +2035,8 @@ export default function Admin() {
             {afilDetailId ? (
               <AfiliadoDetalhe
                 novo={afilDetailId === 'new'}
+                afiliado={afiliados.find((a) => a.id === afilDetailId) ?? null}
+                onConnectAtualizado={loadAfiliados}
                 form={afilForm}
                 setForm={setAfilForm}
                 saving={savingAfil}
@@ -2089,8 +2210,11 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
     </div>
   )
 }
-function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack, onDelete }: {
+function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, saving, deleting, onSave, onBack, onDelete }: {
   novo: boolean
+  /** Afiliado já salvo (null ao criar): dá o id e o status do Stripe Connect. */
+  afiliado: Afiliado | null
+  onConnectAtualizado: () => void
   form: AfilForm
   setForm: React.Dispatch<React.SetStateAction<AfilForm>>
   saving: boolean
@@ -2100,6 +2224,35 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
   onDelete?: () => void
 }) {
   const set = (patch: Partial<AfilForm>) => setForm((p) => ({ ...p, ...patch }))
+
+  // Stripe Connect: o admin gera o link de cadastro e o afiliado preenche no
+  // Stripe. A conta e o status são gravados pelo servidor (conectar-afiliado).
+  const [connectBusy, setConnectBusy] = useState<'link' | 'status' | null>(null)
+  const [connectErro, setConnectErro] = useState<string | null>(null)
+  const [connectLink, setConnectLink] = useState<string | null>(null)
+  const connectStatus = afiliado?.stripe_connect_status ?? 'nao_conectado'
+  const gerarLinkConnect = async () => {
+    if (!afiliado) return
+    setConnectBusy('link'); setConnectErro(null)
+    try { setConnectLink(await conectarAfiliado(afiliado.id)); onConnectAtualizado() }
+    catch (e) { setConnectErro(e instanceof Error ? e.message : 'Falha ao gerar o link.') }
+    finally { setConnectBusy(null) }
+  }
+  const atualizarStatusConnect = async () => {
+    if (!afiliado) return
+    setConnectBusy('status'); setConnectErro(null)
+    try { await statusConnectAfiliado(afiliado.id); onConnectAtualizado() }
+    catch (e) { setConnectErro(e instanceof Error ? e.message : 'Falha ao consultar o Stripe.') }
+    finally { setConnectBusy(null) }
+  }
+  const ROTULO_CONNECT: Record<string, { texto: string; classe: string }> = {
+    nao_conectado: { texto: 'Não conectado', classe: 'bg-gray-100 text-gray-600' },
+    pendente: { texto: 'Cadastro pendente', classe: 'bg-amber-50 text-amber-700' },
+    ativo: { texto: 'Ativo — recebe automaticamente', classe: 'bg-emerald-50 text-emerald-700' },
+    restrito: { texto: 'Restrito — pendências no Stripe', classe: 'bg-red-50 text-red-700' },
+  }
+  const rotuloConnect = ROTULO_CONNECT[connectStatus] ?? ROTULO_CONNECT.nao_conectado
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-5">
@@ -2155,16 +2308,40 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
           </div>
         </div>
 
-        {/* Pagamento via Stripe */}
+        {/* Pagamento via Stripe Connect */}
         <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Pagamento (Stripe)</p>
-          <div className="space-y-3">
-            <Campo label="Stripe Connect Account ID">
-              <Input value={form.stripe_account_id} onChange={(e) => set({ stripe_account_id: e.target.value })} placeholder="acct_1AbC..." className="mt-1 font-mono" />
-              <p className="text-[11px] text-gray-400 mt-1">Conta conectada do afiliado — usada para depositar a comissão via transferência.</p>
-            </Campo>
-            <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
-          </div>
+          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Pagamento automático (Stripe Connect)</p>
+          {novo ? (
+            <p className="text-[12px] text-gray-500">Salve o afiliado primeiro; depois gere o link de cadastro no Stripe.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn('text-[11px] font-semibold rounded-full px-2 py-0.5', rotuloConnect.classe)}>{rotuloConnect.texto}</span>
+                {form.stripe_account_id && <span className="font-mono text-[11px] text-gray-400">{form.stripe_account_id}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={gerarLinkConnect} disabled={connectBusy !== null}>
+                  {connectBusy === 'link' ? 'Gerando…' : connectStatus === 'nao_conectado' ? 'Gerar link de cadastro' : 'Novo link de cadastro'}
+                </Button>
+                {connectStatus !== 'nao_conectado' && (
+                  <Button size="sm" variant="ghost" onClick={atualizarStatusConnect} disabled={connectBusy !== null}>
+                    {connectBusy === 'status' ? 'Consultando…' : 'Atualizar status'}
+                  </Button>
+                )}
+              </div>
+              {connectLink && (
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-2.5">
+                  <p className="text-[11px] text-gray-500 mb-1">Envie este link ao afiliado (vale por pouco tempo; gere outro se expirar):</p>
+                  <a href={connectLink} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[#1D4ED8] break-all hover:underline">{connectLink}</a>
+                </div>
+              )}
+              {connectErro && <p className="text-[12px] text-red-600">{connectErro}</p>}
+              <p className="text-[11px] text-gray-400">
+                Com a conta ativa, a comissão de cada fatura paga é transferida sozinha. Sem ela, a comissão entra em Repasses (aba Pagamentos) para pagar por Pix.
+              </p>
+              <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
+            </div>
+          )}
         </div>
 
         {/* Conta bancária (Brasil) */}

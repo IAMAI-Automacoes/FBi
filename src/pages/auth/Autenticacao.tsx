@@ -280,7 +280,7 @@ export default function Autenticacao({ modoInicial }: { modoInicial: ModoAuth })
       {/* Quem chegou comprando vê onde está no fluxo; quem só quer entrar
           continua vendo a prova social. */}
       {vindoDaCompra ? (
-        <EtapasCompra etapa={1} densidade="compacto" />
+        <EtapasCompra etapa={2} densidade="compacto" />
       ) : (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F1F5F9', border: '1px solid #E9EEF5', borderRadius: '999px', padding: '4px 11px', marginBottom: '28px' }}>
           <Sparkles className="h-3 w-3" style={{ color: '#8B5CF6' }} />

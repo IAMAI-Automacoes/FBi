@@ -225,11 +225,15 @@ Conta sem plano (/assinatura) → mesma função com JWT → webhook vincula soz
 - [x] `cancelar-assinatura` passa a cancelar no Stripe (`cancel_at_period_end`)
 - [x] Frontend: `Planos`, `Assinatura`, `Checkout`, `Autenticacao` (`?sessao=`), `CheckoutSucesso` (polling), `MyAccount` (portal), `usePrecos`
 - [x] Scripts locais (Deno): `scripts/stripe/bootstrap.ts`, `trocar-preco.ts` (dry-run), `migrar-assinantes.ts`, `configurar-portal.ts`
+- [x] Migration `20260930030000`: `stripe_faturas` (histórico), `stripe_repasses` (livro-razão), `afiliado_id` na assinatura, payload dos eventos (90 dias), `gerar_repasses_da_fatura()`
+- [x] Divisão de receita: sócios/empresa por Pix (marcar pago no painel); afiliados por Stripe Connect (`conectar-afiliado`, transferência em `invoice.paid`)
+- [x] Código de indicação (`?ref=` ou digitado) na landing e em /assinatura; painel admin com Repasses e Connect do afiliado; "Cobranças" em /minha-conta
 
 ### Falta (configuração, fora do código)
 
 - [ ] `supabase db push` (migration) e `supabase functions deploy` das 7 funções (ver README: quais vão com `--no-verify-jwt`)
-- [ ] Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SITE_URL`, `STRIPE_PORTAL_CONFIGURATION_ID`
+- [ ] Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`; em `integracao_config`: `SITE_URL`, `STRIPE_PORTAL_CONFIGURATION_ID`
+- [ ] Stripe Connect: ativar na conta (Dashboard → Connect), conferir se Express/BR está liberado (VERIFICAR)
 - [ ] `bootstrap.ts` (Product + 3 Prices) e `configurar-portal.ts --criar` em test mode; depois em live
 - [ ] Endpoint de webhook no Dashboard apontando para `stripe-webhook`, com os eventos listados no README
 - [ ] Dashboard: descritor e prefixo curto, marca, termos/privacidade, desligar e-mails automáticos (ver README)

@@ -271,6 +271,9 @@ export interface Afiliado {
   comissao_valor: number
   // Dados para payout via Stripe (Brasil)
   stripe_account_id: string | null
+  /** nao_conectado | pendente | ativo | restrito — atualizado pelo servidor
+      (`conectar-afiliado` e webhook `account.updated`). Só leitura no painel. */
+  stripe_connect_status: string
   cpf_cnpj: string | null
   chave_pix: string | null
   codigo_banco: string | null
@@ -292,7 +295,10 @@ export async function buscarAfiliados(): Promise<Afiliado[]> {
   return (data ?? []) as Afiliado[]
 }
 
-export async function criarAfiliado(input: Omit<Afiliado, 'id' | 'created_at'>): Promise<void> {
+// `stripe_connect_status` nasce com o default do banco e só o servidor muda.
+export async function criarAfiliado(
+  input: Omit<Afiliado, 'id' | 'created_at' | 'stripe_connect_status'>,
+): Promise<void> {
   const { error } = await supabase.from('afiliados').insert(input)
   if (error) throw error
 }
@@ -307,6 +313,72 @@ export async function atualizarAfiliado(
 
 export async function excluirAfiliado(id: string): Promise<void> {
   const { error } = await supabase.from('afiliados').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Repasses (livro-razão da divisão de receita) ─────────────────────────────
+//
+// Uma linha por (fatura paga × destinatário), criada pelo webhook do Stripe em
+// `invoice.paid` (função SQL `gerar_repasses_da_fatura`). Sócios/empresa
+// (`divisao_receita`) são pagos por Pix pela empresa e marcados aqui; afiliado
+// com Connect ativo recebe transferência automática (`metodo = stripe_connect`).
+
+export interface Repasse {
+  id: string
+  fatura_id: string
+  destino_tipo: 'divisao' | 'afiliado'
+  divisao_id: string | null
+  afiliado_id: string | null
+  descricao: string
+  base_centavos: number
+  valor_centavos: number
+  regra: string
+  metodo: 'pix' | 'stripe_connect'
+  status: 'pendente' | 'pago' | 'falhou' | 'cancelado'
+  stripe_transfer_id: string | null
+  erro: string | null
+  pago_em: string | null
+  pago_por: string | null
+  created_at: string
+  /** Da fatura (join): número legível, valor pago e restaurante. */
+  fatura?: {
+    numero: string | null
+    pago_centavos: number
+    pago_em: string | null
+    restaurante_id: number | null
+    hosted_invoice_url: string | null
+  } | null
+}
+
+export async function buscarRepasses(status?: Repasse['status']): Promise<Repasse[]> {
+  let q = supabase
+    .from('stripe_repasses')
+    .select(
+      '*, fatura:stripe_faturas(numero, pago_centavos, pago_em, restaurante_id, hosted_invoice_url)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (status) q = q.eq('status', status)
+  const { data, error } = await q
+  if (error) throw error
+  return (data ?? []) as unknown as Repasse[]
+}
+
+/** Admin pagou por Pix pela conta da empresa. */
+export async function marcarRepassePago(id: string, email: string): Promise<void> {
+  const { error } = await supabase
+    .from('stripe_repasses')
+    .update({ status: 'pago', pago_em: new Date().toISOString(), pago_por: email, erro: null })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Transferência automática falhou: passa a Pix manual para não travar. */
+export async function repasseParaPix(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('stripe_repasses')
+    .update({ metodo: 'pix', status: 'pendente', erro: null })
+    .eq('id', id)
   if (error) throw error
 }
 

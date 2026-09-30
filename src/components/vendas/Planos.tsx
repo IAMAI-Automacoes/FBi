@@ -3,7 +3,7 @@ import { Check, ChevronRight, Loader2, ShieldCheck } from 'lucide-react'
 import { ancora, cores, orbe, rotuloSecao, tituloSecao, TRANSICAO } from './tokens'
 import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from './ciclos-plano'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout } from '@/lib/queries/stripe'
+import { criarCheckout, ErroStripe, guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/queries/stripe'
 
 /* Preços vêm do Stripe (get-prices) — nenhum valor fixo aqui. O botão abre o
    Stripe Checkout direto: o pagamento vem antes da conta, e a conta é criada
@@ -14,16 +14,22 @@ export function Planos() {
   const atual = porCiclo(ciclo)
   const [abrindo, setAbrindo] = useState(false)
   const [erroCheckout, setErroCheckout] = useState<string | null>(null)
+  // Código do afiliado: vem do link `?ref=` (guardado 30 dias) ou é digitado.
+  const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
+  const [erroCodigo, setErroCodigo] = useState<string | null>(null)
 
   const assinar = async () => {
     if (abrindo || !atual) return
     setAbrindo(true)
     setErroCheckout(null)
+    setErroCodigo(null)
     try {
-      const url = await criarCheckout(ciclo)
+      guardarCodigoIndicacao(codigo)
+      const url = await criarCheckout(ciclo, { codigoAfiliado: codigo || undefined })
       window.location.assign(url)
     } catch (e) {
-      setErroCheckout(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
+      if (e instanceof ErroStripe && e.corpo?.codigo_afiliado_invalido) setErroCodigo(e.message)
+      else setErroCheckout(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
       setAbrindo(false)
     }
   }
@@ -224,6 +230,46 @@ export function Planos() {
                 <div style={{ height: '14px', width: '220px', borderRadius: '8px', background: cores.superficieAlt }} />
               </div>
             )}
+
+            {/* Código de indicação (afiliado). Opcional; validado no servidor. */}
+            <div style={{ marginBottom: '14px' }}>
+              <label
+                htmlFor="codigo-indicacao"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: cores.corpoSuave, marginBottom: '6px' }}
+              >
+                Código de indicação <span style={{ fontWeight: 400 }}>(opcional)</span>
+              </label>
+              <input
+                id="codigo-indicacao"
+                value={codigo}
+                onChange={(e) => {
+                  setCodigo(e.target.value.toUpperCase())
+                  setErroCodigo(null)
+                }}
+                placeholder="Ex.: JOAO10"
+                maxLength={30}
+                disabled={abrindo}
+                autoComplete="off"
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  padding: '0 14px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  color: cores.tinta,
+                  background: cores.superficie,
+                  border: `1px solid ${erroCodigo ? '#EF4444' : cores.borda}`,
+                  borderRadius: '11px',
+                  outline: 'none',
+                }}
+              />
+              {erroCodigo && (
+                <p role="alert" style={{ fontSize: '12.5px', color: '#B91C1C', marginTop: '6px' }}>
+                  {erroCodigo}
+                </p>
+              )}
+            </div>
 
             {erroCheckout && (
               <p role="alert" style={{ fontSize: '13px', color: '#B91C1C', marginBottom: '10px' }}>
