@@ -24,9 +24,11 @@ import {
   marcarCustomerNoStripe,
   registrarCheckoutSession,
   sincronizarAssinatura,
+  sincronizarFatura,
   upsertCliente,
 } from '../_shared/stripe/sincronizar.ts'
 import { notificarFatura } from '../_shared/stripe/emails.ts'
+import { processarRepasses } from '../_shared/stripe/repasses.ts'
 
 // deno-lint-ignore no-explicit-any
 type Db = any
@@ -52,6 +54,9 @@ async function reservar(db: Db, evento: Stripe.Event): Promise<Reserva> {
     tipo: evento.type,
     api_version: evento.api_version ?? null,
     status: 'processando',
+    // Evento inteiro, para investigar/reprocessar. Apagado após 90 dias
+    // pelo cron `limpar-payload-eventos-stripe` (dados pessoais).
+    payload: evento,
   })
   if (!error) return 'nova'
   if (String(error.code) !== '23505') throw new Error(`log de eventos: ${error.message}`)
@@ -137,8 +142,32 @@ async function aoMudarFatura(db: Db, tipo: string, fatura: Stripe.Invoice) {
     // paid / payment_failed / payment_action_required mudam status e período.
     await sincronizarAssinatura(db, subId)
   }
+  // Histórico de cobranças. Relê a fatura no Stripe para ter `payments`
+  // (o charge de origem) mesmo quando o evento veio sem expandir.
+  const completa = await stripe().invoices.retrieve(fatura.id, { expand: ['payments'] })
+  const faturaId = await sincronizarFatura(db, completa)
+
+  // Fatura paga → livro-razão + transferências de comissão (Connect).
+  if (tipo === 'invoice.paid') {
+    const r = await processarRepasses(db, faturaId)
+    console.info(`[stripe-webhook] repasses fatura=${fatura.id} criados=${r.criados} transferidos=${r.transferidos} falhas=${r.falhas}`)
+  }
+
   // Gancho de e-mails próprios (marca EasyFeed) e, no futuro, NFS-e.
-  await notificarFatura(db, tipo, fatura)
+  await notificarFatura(db, tipo, completa)
+}
+
+/** Conta Connect de afiliado mudou (cadastro concluído, restrição). */
+async function aoMudarContaConnect(db: Db, conta: Stripe.Account) {
+  const afiliadoId = conta.metadata?.afiliado_id
+  if (!afiliadoId) return
+  const ativo = Boolean(conta.payouts_enabled)
+  const pendencias = conta.requirements?.currently_due?.length ?? 0
+  const status = ativo ? 'ativo' : conta.details_submitted && (pendencias > 0 || conta.requirements?.disabled_reason) ? 'restrito' : 'pendente'
+  await db
+    .from('afiliados')
+    .update({ stripe_account_id: conta.id, stripe_connect_status: status })
+    .eq('id', afiliadoId)
 }
 
 async function processar(db: Db, evento: Stripe.Event) {
@@ -179,6 +208,10 @@ async function processar(db: Db, evento: Stripe.Event) {
       await aoMudarFatura(db, evento.type, evento.data.object as Stripe.Invoice)
       break
 
+    case 'account.updated':
+      await aoMudarContaConnect(db, evento.data.object as Stripe.Account)
+      break
+
     // Preço mudou: nada a gravar — `get-prices` lê o Stripe ao vivo (cache de
     // 5 min). Fica aqui só para o log mostrar que chegou.
     case 'price.created':
@@ -209,11 +242,23 @@ Deno.serve(async (req: Request) => {
   // O corpo precisa ser lido CRU: qualquer reserialização quebra a assinatura.
   const corpo = await req.text()
 
-  let evento: Stripe.Event
-  try {
-    evento = await stripe().webhooks.constructEventAsync(corpo, assinatura, segredo, undefined, cryptoProvider())
-  } catch (e) {
-    console.warn('[stripe-webhook] assinatura inválida:', (e as Error).message)
+  // Dois endpoints podem apontar para cá: o da conta (eventos da IAMAI) e o
+  // de "contas conectadas" (Connect: `account.updated` dos afiliados), cada um
+  // com o próprio segredo. Tenta o principal; se falhar e houver o do
+  // Connect, tenta ele. Qualquer outra coisa é assinatura inválida.
+  const segredos = [segredo, Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET')].filter((x): x is string => Boolean(x))
+  let evento: Stripe.Event | null = null
+  let ultimoErro = ''
+  for (const seg of segredos) {
+    try {
+      evento = await stripe().webhooks.constructEventAsync(corpo, assinatura, seg, undefined, cryptoProvider())
+      break
+    } catch (e) {
+      ultimoErro = (e as Error).message
+    }
+  }
+  if (!evento) {
+    console.warn('[stripe-webhook] assinatura inválida:', ultimoErro)
     return json({ error: 'assinatura inválida' }, 400)
   }
 

@@ -117,6 +117,10 @@ export async function sincronizarAssinatura(
   const restauranteDaMetadata = sub.metadata?.restaurante_id
     ? Number(sub.metadata.restaurante_id)
     : null
+  // Afiliado que indicou (validado pelo servidor na criação da sessão).
+  const afiliadoId = sub.metadata?.afiliado_id && /^[0-9a-f-]{36}$/.test(sub.metadata.afiliado_id)
+    ? sub.metadata.afiliado_id
+    : null
 
   const { data: existente } = await db
     .from('stripe_assinaturas')
@@ -150,6 +154,7 @@ export async function sincronizarAssinatura(
     ultimo_invoice_status: invoice?.status ?? null,
     product_code: sub.metadata?.product_code ?? PRODUCT_CODE,
     metadata: sub.metadata ?? {},
+    ...(afiliadoId ? { afiliado_id: afiliadoId } : {}),
   }
 
   const { error } = await db
@@ -205,4 +210,56 @@ export async function registrarCheckoutSession(
     .from('stripe_checkout_sessions')
     .upsert(linha, { onConflict: 'stripe_session_id' })
   if (error) throw new Error(`stripe_checkout_sessions upsert: ${error.message}`)
+}
+
+/**
+ * Espelha uma fatura em `stripe_faturas`. Devolve o id da linha.
+ *
+ * `restaurante_id` vem da assinatura já espelhada (que por sua vez vem do
+ * vínculo confirmado); uma fatura de assinatura ainda sem dono fica com
+ * restaurante nulo e é corrigida na próxima sincronização.
+ */
+export async function sincronizarFatura(db: Db, fatura: Stripe.Invoice): Promise<string> {
+  const subId = idDe(fatura.parent?.subscription_details?.subscription)
+  let restauranteId: number | null = null
+  if (subId) {
+    const { data: ass } = await db
+      .from('stripe_assinaturas')
+      .select('restaurante_id')
+      .eq('stripe_subscription_id', subId)
+      .maybeSingle()
+    restauranteId = ass?.restaurante_id ?? null
+  }
+
+  // Desde a API basil a cobrança mora em `payments`; o charge é a origem das
+  // transferências de comissão.
+  const pagamento = fatura.payments?.data?.find((p) => p.status === 'paid') ?? fatura.payments?.data?.[0]
+  const chargeId = idDe(pagamento?.payment?.charge as string | { id: string } | null | undefined)
+
+  const linha = {
+    stripe_invoice_id: fatura.id,
+    stripe_subscription_id: subId,
+    stripe_customer_id: idDe(fatura.customer),
+    restaurante_id: restauranteId,
+    numero: fatura.number ?? null,
+    status: fatura.status ?? 'draft',
+    billing_reason: fatura.billing_reason ?? null,
+    moeda: (fatura.currency ?? 'brl').toLowerCase(),
+    total_centavos: fatura.total ?? 0,
+    pago_centavos: fatura.amount_paid ?? 0,
+    periodo_inicio: isoDe(fatura.period_start),
+    periodo_fim: isoDe(fatura.period_end),
+    pago_em: isoDe(fatura.status_transitions?.paid_at),
+    hosted_invoice_url: fatura.hosted_invoice_url ?? null,
+    invoice_pdf: fatura.invoice_pdf ?? null,
+    stripe_charge_id: chargeId,
+  }
+
+  const { data, error } = await db
+    .from('stripe_faturas')
+    .upsert(linha, { onConflict: 'stripe_invoice_id' })
+    .select('id')
+    .single()
+  if (error) throw new Error(`stripe_faturas upsert: ${error.message}`)
+  return data.id as string
 }

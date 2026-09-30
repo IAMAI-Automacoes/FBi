@@ -18,6 +18,7 @@ declare namespace Stripe {
   type Invoice = any
   type Price = any
   type Product = any
+  type Account = any
   namespace Checkout {
     type Session = any
     type SessionCreateParams = any

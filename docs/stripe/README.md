@@ -22,7 +22,9 @@ antes de ir para live.
 
 ## 1. Modelo de dados
 
-Migration: `supabase/migrations/20260929000000_stripe_assinaturas.sql`.
+Migrations: `20260929000000_stripe_assinaturas.sql` (base) e
+`20260930030000_stripe_faturas_repasses_afiliados.sql` (faturas, repasses, afiliados).
+As duas ainda não foram aplicadas em produção; entram juntas.
 
 ```
 restaurantes  (já existia: assinatura_status, stripe_customer_id, stripe_subscription_id,
@@ -39,8 +41,22 @@ stripe_checkout_sessions   elo pagamento → conta
    stripe_session_id UNIQUE, email_pagador, restaurante_id_origem (JWT, quando logado),
    restaurante_id_vinculado (preenchido UMA vez), status criada→paga→vinculada|expirada
 
-stripe_eventos_webhook     idempotência: event_id PK, status processando→ok|erro
-                           (sem payload — LGPD; o event_id abre o evento no Dashboard)
+stripe_eventos_webhook     idempotência: event_id PK, status processando→ok|erro,
+                           payload jsonb (apagado após 90 dias pelo cron
+                           `limpar-payload-eventos-stripe` — LGPD)
+
+stripe_faturas             histórico de cobranças: uma linha por invoice (número, status,
+                           valor, período, pago_em, hosted_invoice_url, invoice_pdf,
+                           charge de origem). Dono lê as suas (/minha-conta → "Cobranças").
+
+stripe_repasses            livro-razão da divisão de receita: uma linha por
+                           (fatura paga × destinatário). Destinatário = linha de
+                           `divisao_receita` (sócio/empresa, pago por Pix) ou `afiliado`
+                           (Stripe Connect automático, ou Pix se não conectado).
+
+Reaproveitadas (já existiam): `afiliados` (comissão, chave Pix, stripe_account_id;
++ `stripe_connect_status`), `divisao_receita` (sócios: % ou valor fixo, chave Pix),
+`integracao_config` (SITE_URL, STRIPE_PORTAL_CONFIGURATION_ID).
 ```
 
 RLS: dono lê o próprio cliente/assinatura; admin da plataforma lê tudo; ninguém
@@ -201,16 +217,25 @@ sem Stripe).
 
 ## 5. Configuração no Dashboard
 
-### Secrets (Supabase)
+### Secrets (Supabase) e configuração
+
+Segredos, só em `supabase secrets`:
 
 ```bash
 supabase secrets set --project-ref lixrcruilisncfhfhndo \
   STRIPE_SECRET_KEY=sk_test_... \
-  STRIPE_WEBHOOK_SECRET=whsec_... \
-  SITE_URL=https://easyfeed.com.br \
-  STRIPE_PORTAL_CONFIGURATION_ID=bpc_...
+  STRIPE_WEBHOOK_SECRET=whsec_...            # endpoint da conta
+  STRIPE_CONNECT_WEBHOOK_SECRET=whsec_...    # endpoint "contas conectadas" (afiliados)
 # opcional, só com "Confirm email" ligado no Auth:
 supabase secrets set STRIPE_VINCULO_POR_EMAIL=true
+```
+
+Configuração NÃO secreta, em `integracao_config` (padrão da casa; a migration já
+cria as chaves; as funções leem daqui e caem na env se estiver vazio):
+
+```sql
+update public.integracao_config set valor = 'https://easyfeed.com.br' where chave = 'SITE_URL';
+update public.integracao_config set valor = 'bpc_...' where chave = 'STRIPE_PORTAL_CONFIGURATION_ID';
 ```
 
 `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já são injetadas pela plataforma. Nenhuma
@@ -221,7 +246,7 @@ destas vai para o `.env` do Vite.
 ```bash
 supabase db push
 supabase functions deploy get-prices create-checkout-session stripe-webhook consultar-compra --no-verify-jwt
-supabase functions deploy vincular-compra create-portal-session cancelar-assinatura
+supabase functions deploy vincular-compra create-portal-session cancelar-assinatura conectar-afiliado
 ```
 
 ### Catálogo e portal (scripts, test mode primeiro)
@@ -242,6 +267,10 @@ Eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded
 `customer.subscription.resumed`, `invoice.finalized`, `invoice.paid`,
 `invoice.payment_failed`, `invoice.payment_action_required`. Copiar o *Signing secret*
 para `STRIPE_WEBHOOK_SECRET` (o do `stripe listen` local é outro).
+
+Segundo endpoint, mesma URL, com **"Listen to events on Connected accounts"** marcado e
+o evento `account.updated` — é por ele que o status Connect do afiliado muda para
+`ativo`. O segredo dele vai em `STRIPE_CONNECT_WEBHOOK_SECRET`.
 
 ### Descritor na fatura do cartão ("IAMAI* EASYFEED")
 
@@ -306,6 +335,54 @@ personalizamos (nada, no caso do recibo — o hosted_invoice_url já serve de re
 sessão sem ele (o mesmo vale para `branding_settings`).
 
 ---
+
+## 5b. Divisão de receita: sócios por Pix, afiliados por Stripe Connect
+
+Decisão fechada: a receita entra **inteira** na conta da IAMAI. Sócios/empresa não
+recebem pelo Stripe (a receita é da PJ; lucro só existe depois de imposto e custo; o
+contador fecha a distribuição). Afiliados são terceiros prestando serviço e recebem
+comissão automática pelo Connect.
+
+**A cada `invoice.paid`** o webhook:
+
+1. espelha a fatura em `stripe_faturas` (com o `charge` de origem);
+2. chama `gerar_repasses_da_fatura(fatura)`: comissão do afiliado da assinatura
+   (`afiliados.comissao_tipo/valor`) sobre o valor pago; depois, sobre o que sobrou,
+   cada linha ativa de `divisao_receita` (% ou valor fixo por fatura). Idempotente;
+   valores congelados no momento do cálculo;
+3. para repasses `metodo = stripe_connect` (afiliado com `stripe_connect_status =
+   'ativo'`): `transfers.create({ amount, destination: acct_..., source_transaction:
+   charge, transfer_group: invoice })`, `idempotencyKey = repasse-<id>`. Sucesso →
+   `pago`/`pago_por = stripe`; erro → `falhou` com o motivo (o admin pode "Pagar por
+   Pix", que troca o método e volta a `pendente`);
+4. repasses `pix` ficam `pendente` no painel admin (aba Pagamentos → Repasses) até o
+   admin fazer o Pix pela conta da empresa e clicar "Marcar pago".
+
+**Atribuição da venda ao afiliado.** Campo "Código de indicação" na landing e em
+`/assinatura`, pré-preenchido pelo link `https://easyfeed.com.br/?ref=CODIGO`
+(guardado 30 dias no navegador) e editável. `create-checkout-session` resolve o
+código em `afiliados` (ativo) e grava só o **id** na metadata da Session e da
+Subscription; código inválido devolve erro visível ("Código de indicação inválido").
+`sincronizarAssinatura` copia `metadata.afiliado_id` para `stripe_assinaturas.afiliado_id`.
+
+**Conectar o afiliado.** Painel admin → Afiliados → abrir o afiliado → "Gerar link de
+cadastro" (`conectar-afiliado`: `accounts.create({ type: 'express', country: 'BR',
+capabilities: { transfers } })` + `accountLinks.create({ type: 'account_onboarding' })`).
+O admin envia o link; o afiliado preenche identidade e conta bancária no Stripe.
+`account.updated` (endpoint de contas conectadas) ou o botão "Atualizar status" gravam
+`stripe_connect_status` (`pendente` → `ativo` quando `payouts_enabled`; `restrito` se
+houver pendência). **VERIFICAR** na conta da IAMAI: Connect habilitado (Dashboard →
+Connect → Get started), tipo Express disponível para plataforma no Brasil, e taxas de
+Connect (por conta ativa e por saque). Transferência só BR → BR.
+
+**Teste (test mode).** Criar afiliado `JOAO10` (10%) e duas linhas em Divisão de
+Receita (ex.: Empresa 40%, Sócio A 30%, Sócio B 30%). Gerar link Connect e concluir
+o cadastro com os dados de teste do Stripe (CPF/valores de teste na doc do Connect) →
+status `ativo`. Assinar pela landing com `?ref=JOAO10`, pagar com `4242…` →
+`stripe_repasses`: 1 linha `afiliado/stripe_connect/pago` com `stripe_transfer_id`
+(ver em Dashboard → Connect → Transfers) e 3 linhas `divisao/pix/pendente`; marcar uma
+como paga no painel → `pago_por` = seu e-mail. Falha de transferência: apagar a conta
+conectada no Dashboard e pagar de novo → linha `falhou` com erro → "Pagar por Pix".
 
 ## 6. Brasil (comentários)
 

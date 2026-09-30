@@ -22,6 +22,7 @@ import { clienteAdmin } from '../_shared/auth.ts'
 import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 import Stripe, { stripe, LOOKUP_KEYS, PRODUCT_CODE, type Ciclo } from '../_shared/stripe/cliente.ts'
 import { registrarCheckoutSession, upsertCliente } from '../_shared/stripe/sincronizar.ts'
+import { siteUrl } from '../_shared/stripe/config.ts'
 
 const Entrada = z.object({
   ciclo: z.enum(['mensal', 'semestral', 'anual']),
@@ -30,15 +31,18 @@ const Entrada = z.object({
   /** Gerada pelo client (uuid) e reenviada no retry do MESMO clique: o Stripe
       devolve a mesma sessão em vez de criar duas. */
   chave_idempotencia: z.string().uuid().optional(),
+  /** Código de indicação (`afiliados.codigo`): digitado pelo comprador ou
+      preenchido pelo link `?ref=`. Validado aqui; inválido é erro, não
+      silêncio — quem digitou espera que conte. */
+  codigo_afiliado: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9_-]{2,30}$/))
+    .optional(),
 })
 
 const ROTULO: Record<Ciclo, string> = { mensal: 'Mensal', semestral: 'Semestral', anual: 'Anual' }
-
-function siteUrl(): string {
-  const url = Deno.env.get('SITE_URL')?.replace(/\/+$/, '')
-  if (!url || !/^https?:\/\//.test(url)) throw new Error('SITE_URL não configurada')
-  return url
-}
 
 async function priceDoCiclo(ciclo: Ciclo): Promise<Stripe.Price> {
   const lista = await stripe().prices.list({ lookup_keys: [LOOKUP_KEYS[ciclo]], active: true, limit: 1 })
@@ -130,13 +134,27 @@ Deno.serve(async (req: Request) => {
   try {
     const entrada = Entrada.safeParse(await req.json().catch(() => ({})))
     if (!entrada.success) return json({ error: 'Dados inválidos', detalhes: entrada.error.issues }, 400)
-    const { ciclo, email, chave_idempotencia } = entrada.data
+    const { ciclo, email, chave_idempotencia, codigo_afiliado } = entrada.data
 
     const admin = clienteAdmin()
     const comprador = await identificarComprador(req, admin)
     if (comprador === 'demo') return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
 
-    const site = siteUrl()
+    // Afiliado: o código é resolvido para o id AQUI; a metadata que segue
+    // para o Stripe (e volta pelo webhook) nunca carrega texto do cliente.
+    let afiliado: { id: string; codigo: string } | null = null
+    if (codigo_afiliado) {
+      const { data: af } = await admin
+        .from('afiliados')
+        .select('id, codigo')
+        .eq('codigo', codigo_afiliado)
+        .eq('ativo', true)
+        .maybeSingle()
+      if (!af) return json({ error: 'Código de indicação inválido.', codigo_afiliado_invalido: true }, 400)
+      afiliado = { id: af.id, codigo: af.codigo }
+    }
+
+    const site = await siteUrl(admin)
     const price = await priceDoCiclo(ciclo)
     const chave = chave_idempotencia ?? crypto.randomUUID()
 
@@ -144,6 +162,10 @@ Deno.serve(async (req: Request) => {
     if (comprador) {
       metadata.restaurante_id = String(comprador.restaurante_id)
       metadata.auth_user_id = comprador.auth_user_id
+    }
+    if (afiliado) {
+      metadata.afiliado_id = afiliado.id
+      metadata.afiliado_codigo = afiliado.codigo
     }
 
     const params: Stripe.Checkout.SessionCreateParams = {

@@ -125,7 +125,7 @@ export default function Checkout() {
         </Link>
 
         {/* Fora do card: dentro competiria com a pílula do plano e o h1. */}
-        <EtapasCompra etapa={2} marginBottom={20} />
+        <EtapasCompra etapa={1} marginBottom={20} />
 
         <div
           style={{

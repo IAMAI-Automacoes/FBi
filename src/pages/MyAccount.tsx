@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
 import { excluirMinhaConta } from '@/lib/queries/conta'
 import { abrirPortal } from '@/lib/queries/stripe'
+import { FaturasRecentes } from '@/components/conta/FaturasRecentes'
 import { ImageCropper } from '@/components/ImageCropper'
 import { PainelCodigoDemo } from '@/components/demo/PainelCodigoDemo'
 
@@ -486,6 +487,9 @@ export default function MyAccount() {
               </div>
             </div>
           </div>
+
+          {/* Histórico de cobranças (só assinatura pelo Stripe) */}
+          {usuario.stripe_customer_id && <FaturasRecentes />}
 
           {/* Zona de perigo — excluir a própria conta (reversível só pelo suporte) */}
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/40 p-5 sm:p-6">

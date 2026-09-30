@@ -157,6 +157,7 @@ export type Database = {
           nome: string
           observacoes: string | null
           stripe_account_id: string | null
+          stripe_connect_status: string
           telefone: string | null
           tipo_conta: string | null
         }
@@ -177,6 +178,7 @@ export type Database = {
           nome: string
           observacoes?: string | null
           stripe_account_id?: string | null
+          stripe_connect_status?: string
           telefone?: string | null
           tipo_conta?: string | null
         }
@@ -197,6 +199,7 @@ export type Database = {
           nome?: string
           observacoes?: string | null
           stripe_account_id?: string | null
+          stripe_connect_status?: string
           telefone?: string | null
           tipo_conta?: string | null
         }
@@ -1978,6 +1981,132 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_faturas: {
+        Row: {
+          billing_reason: string | null
+          created_at: string
+          hosted_invoice_url: string | null
+          id: string
+          invoice_pdf: string | null
+          moeda: string
+          numero: string | null
+          pago_centavos: number
+          pago_em: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          restaurante_id: number | null
+          status: string
+          stripe_charge_id: string | null
+          stripe_customer_id: string | null
+          stripe_invoice_id: string
+          stripe_subscription_id: string | null
+          total_centavos: number
+          updated_at: string
+        }
+        Insert: {
+          billing_reason?: string | null
+          created_at?: string
+          hosted_invoice_url?: string | null
+          id?: string
+          invoice_pdf?: string | null
+          moeda?: string
+          numero?: string | null
+          pago_centavos?: number
+          pago_em?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          restaurante_id?: number | null
+          status: string
+          stripe_charge_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id: string
+          stripe_subscription_id?: string | null
+          total_centavos?: number
+          updated_at?: string
+        }
+        Update: {
+          billing_reason?: string | null
+          created_at?: string
+          hosted_invoice_url?: string | null
+          id?: string
+          invoice_pdf?: string | null
+          moeda?: string
+          numero?: string | null
+          pago_centavos?: number
+          pago_em?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          restaurante_id?: number | null
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string
+          stripe_subscription_id?: string | null
+          total_centavos?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stripe_repasses: {
+        Row: {
+          afiliado_id: string | null
+          base_centavos: number
+          created_at: string
+          descricao: string
+          destino_tipo: string
+          divisao_id: string | null
+          erro: string | null
+          fatura_id: string
+          id: string
+          metodo: string
+          pago_em: string | null
+          pago_por: string | null
+          regra: string
+          status: string
+          stripe_transfer_id: string | null
+          updated_at: string
+          valor_centavos: number
+        }
+        Insert: {
+          afiliado_id?: string | null
+          base_centavos: number
+          created_at?: string
+          descricao: string
+          destino_tipo: string
+          divisao_id?: string | null
+          erro?: string | null
+          fatura_id: string
+          id?: string
+          metodo: string
+          pago_em?: string | null
+          pago_por?: string | null
+          regra: string
+          status?: string
+          stripe_transfer_id?: string | null
+          updated_at?: string
+          valor_centavos: number
+        }
+        Update: {
+          afiliado_id?: string | null
+          base_centavos?: number
+          created_at?: string
+          descricao?: string
+          destino_tipo?: string
+          divisao_id?: string | null
+          erro?: string | null
+          fatura_id?: string
+          id?: string
+          metodo?: string
+          pago_em?: string | null
+          pago_por?: string | null
+          regra?: string
+          status?: string
+          stripe_transfer_id?: string | null
+          updated_at?: string
+          valor_centavos?: number
+        }
+        Relationships: []
       }
       restaurantes: {
         Row: {

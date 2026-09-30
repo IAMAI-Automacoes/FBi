@@ -86,7 +86,9 @@ if (dry) {
 if (a.criar) {
   const cfg = await s.billingPortal.configurations.create(params)
   console.log(`\n✓ Configuração criada: ${cfg.id}`)
-  console.log(`  supabase secrets set STRIPE_PORTAL_CONFIGURATION_ID=${cfg.id}`)
+  console.log(`  Grave em integracao_config (padrão da casa) ou como secret:`)
+  console.log(`    update integracao_config set valor = '${cfg.id}' where chave = 'STRIPE_PORTAL_CONFIGURATION_ID';`)
+  console.log(`    supabase secrets set STRIPE_PORTAL_CONFIGURATION_ID=${cfg.id}`)
 } else {
   await s.billingPortal.configurations.update(a.id!, params)
   await sincronizarPortal(s, a.id!, false)
