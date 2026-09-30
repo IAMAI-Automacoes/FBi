@@ -136,47 +136,70 @@ Deno.serve(async (req: Request) => {
       return 'ok'
     }
 
-    // ── Webhook de registro de mensagens (uazapi → n8n) ─────────────────────────
+    // ── Webhooks da instância (uazapi → n8n) ───────────────────────────────────
     //
-    // Este é um webhook DE INSTÂNCIA, e não o global da conta. A diferença
-    // importa: o global é único (`POST /globalwebhook` sobrescreve o que houver)
-    // e já está ocupado pelo fluxo de feedback em `/webhook/easyfeed`. A
-    // instância, essa sim, aceita vários destinos — é o `action: "add"` da
-    // documentação da uazapiGO (POST /webhook).
+    // São webhooks DE INSTÂNCIA, não o global da conta. O global é único (um
+    // `POST /globalwebhook` sobrescreve o anterior) e foi desligado: cada
+    // instância carrega os próprios destinos, que é o que a uazapiGO permite
+    // com `action: "add"` no `POST /webhook`.
     //
-    // Aqui não se exclui nada de propósito: o registro quer o histórico inteiro,
-    // incluindo `wasSentByApi` (as mensagens que o próprio sistema envia) e os
-    // grupos. Quem precisa excluir isso é o fluxo de feedback, para não entrar em
-    // laço respondendo as próprias respostas.
+    // São dois destinos, com filtros opostos de propósito:
     //
-    // Idempotente porque roda a cada conexão: instância antiga se conserta
-    // sozinha na próxima vez que o dono conectar o WhatsApp, sem script nenhum.
+    // - FEEDBACK: só `messages`, excluindo o que a própria API enviou e os
+    //   grupos. Sem esse filtro o fluxo entraria em laço respondendo as
+    //   próprias respostas.
+    // - REGISTRO: `messages` e `messages_update`, sem exclusão nenhuma, porque
+    //   a tela de histórico quer tudo — o que o cliente mandou, o que o sistema
+    //   respondeu, o que o dono digitou no celular, e as mudanças de status
+    //   (entregue, lido, apagada).
+    //
+    // Idempotente porque roda a cada conexão: instância antiga se acerta sozinha
+    // na próxima vez que o dono conectar o WhatsApp.
+    const URL_FEEDBACK = (Deno.env.get('N8N_FEEDBACK_ENTRADA') ?? '').trim()
     const URL_REGISTRO = (Deno.env.get('N8N_REGISTRO_MENSAGENS') ?? '').trim()
-    async function configurarWebhookRegistro(): Promise<void> {
-      if (!URL_REGISTRO || !token) return
+
+    async function configurarWebhooks(): Promise<void> {
+      if (!token) return
+      const destinos = [
+        URL_FEEDBACK && {
+          url: URL_FEEDBACK,
+          events: ['messages'],
+          excludeMessages: ['wasSentByApi', 'isGroupYes'],
+        },
+        URL_REGISTRO && {
+          url: URL_REGISTRO,
+          events: ['messages', 'messages_update'],
+          excludeMessages: [] as string[],
+        },
+      ].filter(Boolean) as Array<{ url: string; events: string[]; excludeMessages: string[] }>
+      if (destinos.length === 0) return
+
       try {
         const resp = await fetch(`${BASE}/webhook`, { headers: { token: token as string } })
         const atuais = await resp.json().catch(() => null)
         // GET /webhook devolve um array (mesmo com um destino só), ou null.
-        if (Array.isArray(atuais) && atuais.some((w: any) => w?.url === URL_REGISTRO)) return
+        const jaTem = (url: string) =>
+          Array.isArray(atuais) && atuais.some((w: any) => w?.url === url)
 
-        await fetch(`${BASE}/webhook`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', token: token as string },
-          body: JSON.stringify({
-            action: 'add',
-            url: URL_REGISTRO,
-            enabled: true,
-            events: ['messages', 'messages_update', 'connection'],
-            excludeMessages: [],
-            addUrlEvents: false,
-            addUrlTypesMessages: false,
-          }),
-        })
+        for (const destino of destinos) {
+          if (jaTem(destino.url)) continue
+          await fetch(`${BASE}/webhook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', token: token as string },
+            body: JSON.stringify({
+              action: 'add',
+              enabled: true,
+              addUrlEvents: false,
+              addUrlTypesMessages: false,
+              ...destino,
+            }),
+          })
+        }
       } catch (err) {
         // Best-effort de propósito: falhar aqui não pode impedir o dono de
-        // conectar o WhatsApp — sem registro o produto funciona, sem conexão não.
-        console.warn('[whatsapp-instancia] webhook de registro não configurado:', err)
+        // conectar o WhatsApp — sem webhook o produto perde recurso, sem
+        // conexão não existe produto.
+        console.warn('[whatsapp-instancia] webhooks da instância não configurados:', err)
       }
     }
 
@@ -232,7 +255,7 @@ Deno.serve(async (req: Request) => {
       }
       // Depois de garantir a instância: o webhook de registro. Fica aqui, e não
       // só na criação, para as instâncias antigas se acertarem ao reconectar.
-      await configurarWebhookRegistro()
+      await configurarWebhooks()
 
       const connected = extractConnected(data)
       const numero = extractNumero(data)
