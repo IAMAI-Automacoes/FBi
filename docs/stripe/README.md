@@ -269,7 +269,7 @@ Eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded
 para `STRIPE_WEBHOOK_SECRET` (o do `stripe listen` local é outro).
 
 Segundo endpoint, mesma URL, com **"Listen to events on Connected accounts"** marcado e
-os eventos `account.updated` e `capability.updated` (qualquer um dos dois basta; o
+os eventos `account.updated`, `capability.updated` e/ou `v2.core.account.updated` (qualquer um basta; o
 segundo dispara quando a capacidade `transfers` do afiliado fica ativa e aparece mesmo
 onde o Dashboard não lista `account.updated`). É por eles que o status Connect do
 afiliado muda para `ativo`. O segredo vai em `STRIPE_CONNECT_WEBHOOK_SECRET`. Sem

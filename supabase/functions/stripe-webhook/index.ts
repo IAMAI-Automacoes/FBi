@@ -229,6 +229,14 @@ async function processar(db: Db, evento: Stripe.Event) {
       await aoMudarCapacidadeConnect(db, evento.data.object as Stripe.Capability)
       break
 
+    // Evento "fino" (API v2): só traz o id da conta em `related_object`;
+    // busca a conta inteira e aplica a mesma regra do `account.updated`.
+    case 'v2.core.account.updated': {
+      const rel = (evento as unknown as { related_object?: { id?: string } }).related_object
+      if (rel?.id) await aoMudarContaConnect(db, await stripe().accounts.retrieve(rel.id))
+      break
+    }
+
     // Preço mudou: nada a gravar — `get-prices` lê o Stripe ao vivo (cache de
     // 5 min). Fica aqui só para o log mostrar que chegou.
     case 'price.created':
