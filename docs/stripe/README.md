@@ -252,10 +252,14 @@ supabase functions deploy vincular-compra create-portal-session cancelar-assinat
 ### Catálogo e portal (scripts, test mode primeiro)
 
 ```bash
-deno run -A scripts/stripe/bootstrap.ts --mensal=197 --semestral=1002 --anual=1764 --descritor=EASYFEED
-deno run -A scripts/stripe/configurar-portal.ts --criar --site=https://easyfeed.com.br \
+# .env.stripe (ignorado pelo git) com STRIPE_SECRET_KEY=sk_test_...
+deno run -A --env-file=.env.stripe scripts/stripe/bootstrap.ts --mensal=197 --semestral=1002 --anual=1764 --descritor=EASYFEED
+deno run -A --env-file=.env.stripe scripts/stripe/configurar-portal.ts --criar --site=https://easyfeed.com.br \
   --termos=https://easyfeed.com.br/termos --privacidade=https://easyfeed.com.br/privacidade
 ```
+
+`scripts/stripe/deno.json` já desliga o `node_modules` do frontend para o Deno; se o
+erro "npm:stripe não encontrado" aparecer, acrescente `--node-modules-dir=none`.
 
 ### Webhook
 

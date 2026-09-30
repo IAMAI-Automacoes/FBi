@@ -1,0 +1,4 @@
+{
+  "//": "Os scripts rodam com Deno, mas o repositório tem package.json + node_modules do frontend. Sem isto o Deno tenta resolver `npm:stripe` no node_modules do projeto e falha. Equivale a passar --node-modules-dir=none.",
+  "nodeModulesDir": "none"
+}

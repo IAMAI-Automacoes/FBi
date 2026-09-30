@@ -1,8 +1,11 @@
 /**
  * Base dos scripts locais do Stripe (rodam na SUA máquina, com a chave secreta).
  *
- *   STRIPE_SECRET_KEY=sk_test_... deno run -A scripts/stripe/<script>.ts ...
- *   ou: deno run -A --env-file=.env.stripe scripts/stripe/<script>.ts ...
+ *   deno run -A --env-file=.env.stripe scripts/stripe/<script>.ts ...
+ *
+ * O `scripts/stripe/deno.json` (nodeModulesDir: none) evita que o Deno procure
+ * `npm:stripe` no node_modules do frontend. Se rodar de outra pasta e o erro
+ * voltar, passe `--node-modules-dir=none`.
  *
  * Mesma versão de API das edge functions: um price/produto criado aqui é lido
  * lá com o mesmo formato.
@@ -60,10 +63,14 @@ export function brl(centavos: number | null | undefined): string {
   return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-/** O Product do EasyFeed, achado pela metadata (nunca por id fixo). */
+/** O Product do EasyFeed, achado pela metadata (nunca por id fixo).
+    Usa `list` e não `search`: a busca do Stripe é indexada com atraso de
+    alguns segundos, e um produto recém-criado pelo bootstrap não aparecia. */
 export async function produtoEasyFeed(s: Stripe): Promise<Stripe.Product | null> {
-  const r = await s.products.search({ query: `metadata['product_code']:'${PRODUCT_CODE}' AND active:'true'`, limit: 1 })
-  return r.data[0] ?? null
+  for await (const p of s.products.list({ active: true, limit: 100 })) {
+    if (p.metadata?.product_code === PRODUCT_CODE) return p
+  }
+  return null
 }
 
 /** Price ATIVO que hoje responde pelo lookup_key do ciclo. */
