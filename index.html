@@ -31,18 +31,37 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Easy Feed" />
-    <script type="module" crossorigin src="/assets/main-hW0A2o88.js"></script>
+    <script>
+      // Mesmo critério do ManifestPorRota (src/components/ManifestPorRota.tsx),
+      // aplicado antes de o navegador ler o manifest.
+      (function () {
+        var p = location.pathname
+        var app = p.indexOf('/whatsapp') === 0 ? 'whatsapp' : p.indexOf('/admin') === 0 ? 'mensagens' : null
+        if (!app) return
+        var tags = {
+          whatsapp: ['/manifest-whatsapp.webmanifest', '/whatsapp-apple-touch.png', 'Whatsapp EasyFeed', '#128c7e'],
+          mensagens: ['/manifest-mensagens.webmanifest', '/mensagens-apple-touch.png', 'Mensagens', '#128c7e'],
+        }[app]
+        document.querySelector('link[rel="manifest"]').setAttribute('href', tags[0])
+        document.querySelector('link[rel="apple-touch-icon"]').setAttribute('href', tags[1])
+        document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', tags[2])
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', tags[3])
+      })()
+    </script>
+    <script type="module" crossorigin src="/assets/main-DHAnV5xv.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/chunk-aKtaBQYM.js">
     <link rel="modulepreload" crossorigin href="/assets/preload-helper-zJ_50EbN.js">
     <link rel="modulepreload" crossorigin href="/assets/client-10VqopyX.js">
     <link rel="modulepreload" crossorigin href="/assets/button-C99aHgB3.js">
+    <link rel="modulepreload" crossorigin href="/assets/dist-D_cphz-F.js">
     <link rel="modulepreload" crossorigin href="/assets/es2015-2LOekBPA.js">
     <link rel="modulepreload" crossorigin href="/assets/format-ol9VdVG-.js">
     <link rel="modulepreload" crossorigin href="/assets/isSameDay--673e-x8.js">
-    <link rel="stylesheet" crossorigin href="/assets/main-B2gIoOzr.css">
+    <link rel="modulepreload" crossorigin href="/assets/chevron-right-C8K-RGds.js">
+    <link rel="stylesheet" crossorigin href="/assets/main-B-0verbm.css">
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>
