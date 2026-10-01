@@ -77,6 +77,10 @@ self.addEventListener('push', (event) => {
       // minimizado/fechado, ainda notifica (diferente do comportamento antigo,
       // que suprimia sempre que o app estivesse visível, mesmo noutra conversa).
       const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      // Alguma aba do painel em foco: quem avisa é a própria página, com o som
+      // (somCabeAEstaAba em src/lib/notificacoes-app.ts). Mostrar a notificação
+      // também daria dois avisos e dois sons para a mesma mensagem.
+      if (janelas.some((j) => j.visibilityState === 'visible' && j.focused)) return
       const conversaAlvo = dados.usuarioId || null
       let suprimir
       if (conversaAlvo) {
