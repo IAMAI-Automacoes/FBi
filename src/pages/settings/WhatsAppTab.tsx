@@ -6,13 +6,14 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { CampoTelefone } from '@/components/CampoTelefone'
-import { telefoneNacionalValido } from '@/lib/telefone'
 
 interface EstadoWhats {
   hasInstance: boolean
   connected: boolean
   qrcode: string | null
   numero: string | null
+  /** A função desfez a conexão e diz por quê (ex.: era o número do dono). */
+  recusado?: string | null
 }
 
 function qrSrc(qr: string): string {
@@ -21,16 +22,29 @@ function qrSrc(qr: string): string {
   return `data:image/png;base64,${qr}`
 }
 
+/** O número dos avisos urgentes, controlado por quem usa o cartão. Em
+ *  Configurações ele é salvo pela barra "Salvar alterações" da página, junto
+ *  com o resto — o cartão não tem botão próprio. */
+export interface CampoNumeroDoDono {
+  valor: string
+  /** O que está gravado no banco (para o aviso de "sem número"). */
+  salvo: string
+  aoMudar: (valor: string, temDigitos: boolean) => void
+}
+
 export function WhatsAppTab({
   restauranteId,
   embedded = false,
   onConnectedChange,
+  numeroDono,
 }: {
   restauranteId: number | null
   /** No onboarding renderiza só o conteúdo, sem o Card externo (a etapa já tem cabeçalho). */
   embedded?: boolean
   /** Avisa o pai (ex.: onboarding) quando o estado de conexão muda. */
   onConnectedChange?: (connected: boolean) => void
+  /** Sem ele, o cartão dos avisos urgentes não aparece. */
+  numeroDono?: CampoNumeroDoDono
 }) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -40,6 +54,8 @@ export function WhatsAppTab({
   const [reiniciando, setReiniciando] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastConnectRef = useRef(0)
+  // Motivo da última conexão recusada; fica na tela até tentar de novo.
+  const [recusa, setRecusa] = useState<string | null>(null)
 
   const chamar = useCallback(async (action: string): Promise<EstadoWhats | null> => {
     const { data, error } = await supabase.functions.invoke('whatsapp-instancia', { body: { action } })
@@ -76,11 +92,24 @@ export function WhatsAppTab({
   }, [estado?.connected, onConnectedChange])
 
   const iniciarConexao = async () => {
+    setRecusa(null)
     setConectando(true)
     const disparar = async () => {
       const d = await chamar('iniciar')
       lastConnectRef.current = Date.now()
       return d
+    }
+    // Conexão desfeita pela função (o número escaneado é o do dono). Tem que
+    // ser checado ANTES do "instância sumiu → recria": senão o polling criaria
+    // outra instância e mostraria um QR novo como se nada tivesse acontecido.
+    const recusou = (s: EstadoWhats | null): boolean => {
+      if (!s?.recusado) return false
+      pararPolling()
+      setConectando(false)
+      setEstado(s)
+      setRecusa(s.recusado)
+      toast({ title: 'Este número não pode ser conectado', description: s.recusado, variant: 'destructive' })
+      return true
     }
     const concluir = (s: EstadoWhats | null) => {
       pararPolling()
@@ -89,6 +118,7 @@ export function WhatsAppTab({
     }
     try {
       const d = await disparar()
+      if (recusou(d)) return
       setEstado(d)
       if (d?.connected) { concluir(d); return }
       // Polling: detecta conexão e renova o QR (a uazapi expira o QR em ~2 min)
@@ -98,14 +128,17 @@ export function WhatsAppTab({
           // QR perto de expirar → re-dispara o connect para gerar um novo
           if (Date.now() - lastConnectRef.current > 110000) {
             const d2 = await disparar()
+            if (recusou(d2)) return
             setEstado(d2)
             if (d2?.connected) concluir(d2)
             return
           }
           const s = await chamar('status')
+          if (recusou(s)) return
           // Se a instância sumiu no meio do processo, recria e continua
           if (s && !s.hasInstance) {
             const d3 = await disparar()
+            if (recusou(d3)) return
             setEstado(d3)
             if (d3?.connected) concluir(d3)
             return
@@ -209,6 +242,11 @@ export function WhatsAppTab({
                 Conecte um número para começar a receber feedbacks.
               </p>
             </div>
+            {recusa && (
+              <p role="alert" className="max-w-sm rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {recusa}
+              </p>
+            )}
             <Button onClick={iniciarConexao}>
               <MessageCircle className="h-4 w-4 mr-1.5" /> Conectar WhatsApp
             </Button>
@@ -235,101 +273,27 @@ export function WhatsAppTab({
       </CardHeader>
       <CardContent className="space-y-6">
         {conteudo}
-        <NumeroDoDono restauranteId={restauranteId} />
+        {numeroDono && (
+          <CartaoNumeroDoDono
+            numero={numeroDono.valor}
+            aoMudar={numeroDono.aoMudar}
+            semNumero={!numeroDono.salvo}
+          />
+        )}
       </CardContent>
     </Card>
   )
 }
 
 /**
- * Número do dono, para onde vão os avisos urgentes.
+ * O cartão do número do dono, para onde vão os avisos urgentes. Sem botão
+ * próprio: em Configurações salva pela barra "Salvar alterações" da página; no
+ * onboarding ele é a etapa inteira e salva no "Próximo".
  *
- * Separado do número conectado acima, e a distinção é o ponto: aquele é a
- * linha por onde o CLIENTE manda o feedback; este é o celular de quem precisa
- * largar o que está fazendo quando alguém passa mal no salão. Costumam ser
- * telefones diferentes, e misturá-los faria o aviso urgente chegar na caixa de
- * entrada do atendimento, junto com tudo o mais.
- */
-export function NumeroDoDono({ restauranteId }: { restauranteId: number | null }) {
-  const { toast } = useToast()
-  const [numero, setNumero] = useState('')
-  const [salvo, setSalvo] = useState('')
-  // "Tem algo escrito no campo?" — um número pela metade também vira `numero`
-  // vazio (DDD incompleto não é valor guardável), e sem isto "estou digitando"
-  // seria confundido com "quero remover o número".
-  const [temDigitos, setTemDigitos] = useState(false)
-  const [carregando, setCarregando] = useState(true)
-  const [salvando, setSalvando] = useState(false)
-
-  useEffect(() => {
-    if (!restauranteId) return
-    let ativo = true
-    supabase
-      .from('restaurantes')
-      .select('whatsapp_dono')
-      .eq('id', restauranteId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!ativo) return
-        const existente = data?.whatsapp_dono ?? ''
-        setNumero(existente)
-        setSalvo(existente)
-        setTemDigitos(Boolean(existente))
-        setCarregando(false)
-      })
-    return () => { ativo = false }
-  }, [restauranteId])
-
-  const salvar = async () => {
-    if (!restauranteId) return
-    // Mesmo campo/mesma regra do telefone do garçom (`CampoTelefone`, em
-    // `src/lib/telefone.ts`): o "55" é fixo e o valor que chega aqui já vem
-    // canônico do onChange.
-    //
-    // Campo com algo escrito mas sem número válido (DDD ou telefone pela
-    // metade) é ERRO, nunca "remover" — senão uma edição interrompida no meio
-    // apagaria silenciosamente o número que já estava salvo.
-    if (temDigitos && !telefoneNacionalValido(numero)) {
-      toast({
-        title: 'Número inválido',
-        description: 'Confira o DDD e o número — precisa ter DDD + telefone completo.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setSalvando(true)
-    const { error } = await supabase
-      .from('restaurantes')
-      .update({ whatsapp_dono: numero || null })
-      .eq('id', restauranteId)
-    setSalvando(false)
-    if (error) {
-      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
-      return
-    }
-    setSalvo(numero)
-    toast({ title: numero ? 'Número salvo' : 'Número removido' })
-  }
-
-  if (carregando) return null
-
-  return (
-    <CartaoNumeroDoDono
-      numero={numero}
-      aoMudar={(valor, tem) => { setNumero(valor); setTemDigitos(tem) }}
-      semNumero={!salvo}
-    >
-      <Button size="sm" onClick={salvar} disabled={salvando || numero === salvo}>
-        {salvando ? 'Salvando…' : 'Salvar'}
-      </Button>
-    </CartaoNumeroDoDono>
-  )
-}
-
-/**
- * O cartão do número dos avisos urgentes, sem botão próprio. Em Configurações
- * vem com "Salvar"; no onboarding ele é a etapa inteira e salva no "Próximo".
+ * Separado do número conectado, e a distinção é o ponto: aquele é a linha por
+ * onde o CLIENTE manda o feedback; este é o celular de quem precisa largar o
+ * que está fazendo quando alguém passa mal no salão. O aviso sai de um e vai
+ * para o outro, então nunca podem ser o mesmo (o banco também recusa).
  */
 export function CartaoNumeroDoDono({
   numero,
@@ -355,6 +319,7 @@ export function CartaoNumeroDoDono({
           <p className={cn('text-[13px] text-muted-foreground', !semTitulo && 'mt-0.5')}>
             Quando chegar um feedback grave — cliente passou mal, corpo estranho na comida,
             praga no salão — mandamos uma mensagem na hora para este número.
+            Use o seu WhatsApp pessoal, diferente do WhatsApp do restaurante.
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">

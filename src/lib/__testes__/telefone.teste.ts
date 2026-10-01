@@ -9,6 +9,7 @@ import {
   coladoValeDistribuir,
   formatarExibicaoTelefone,
   telefoneNacionalValido,
+  mesmoWhatsapp,
   type PartesTelefone,
 } from '../telefone.ts'
 
@@ -156,6 +157,20 @@ const partes = (p: PartesTelefone) => `${p.ddd}|${p.numero}`
       )
     }
   }
+}
+
+// mesmoWhatsapp: o número do dono não pode ser o WhatsApp do restaurante, e o
+// WhatsApp conhece o mesmo celular com e sem o 9 da frente.
+{
+  ok('igual com o 9 dos dois lados', mesmoWhatsapp('5511952138636', '5511952138636'))
+  ok('com e sem o 9 é o mesmo número', mesmoWhatsapp('5511952138636', '551152138636'))
+  ok('sem e com o 9 é o mesmo número', mesmoWhatsapp('551152138636', '5511952138636'))
+  ok('máscara não atrapalha', mesmoWhatsapp('55 (11) 95213-8636', '5511952138636'))
+  ok('números diferentes', !mesmoWhatsapp('5511952138636', '5511932903005'))
+  ok('mesmo número em DDD diferente', !mesmoWhatsapp('5511952138636', '5521952138636'))
+  ok('fixo de 8 dígitos não perde dígito', !mesmoWhatsapp('551133334444', '55113334444'))
+  ok('vazio nunca é igual', !mesmoWhatsapp('', ''))
+  ok('nulo nunca é igual', !mesmoWhatsapp(null, null))
 }
 
 if (falhas > 0) {

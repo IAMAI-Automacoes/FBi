@@ -43,7 +43,7 @@ import {
 } from 'lucide-react'
 import { getIniciais } from '@/lib/iniciais'
 import { WhatsAppTab, CartaoNumeroDoDono } from '@/pages/settings/WhatsAppTab'
-import { telefoneNacionalValido } from '@/lib/telefone'
+import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
 
 /** Restaurante, coleta, IA, avisos urgentes, WhatsApp e confirmação. */
 const TOTAL_PASSOS = 6
@@ -69,6 +69,8 @@ export default function Onboarding() {
   const [numeroDono, setNumeroDono] = useState('')
   const [numeroDonoSalvo, setNumeroDonoSalvo] = useState('')
   const [numeroDonoTemDigitos, setNumeroDonoTemDigitos] = useState(false)
+  // WhatsApp já conectado do restaurante (quem volta ao passo 4 depois do 5).
+  const [numeroRestaurante, setNumeroRestaurante] = useState<string | null>(null)
   const [loadingSubmit, setLoadingSubmit] = useState(false)
   // Último passo conclui sozinho se a pessoa não clicar nem voltar (o botão "preenche").
   const [autoProgresso, setAutoProgresso] = useState(0)
@@ -100,7 +102,7 @@ export default function Onboarding() {
     if (!usuario?.restaurante_id) return
     supabase
       .from('restaurantes')
-      .select('nome_restaurante, logo_url, whatsapp_dono')
+      .select('nome_restaurante, logo_url, whatsapp_dono, numero_whatsapp')
       .eq('id', usuario.restaurante_id)
       .single()
       .then(({ data: rest }) => {
@@ -108,6 +110,7 @@ export default function Onboarding() {
           setData((prev) => ({ ...prev, restaurante_nome: rest.nome_restaurante }))
         }
         if (rest?.logo_url) setLogoUrl(rest.logo_url)
+        setNumeroRestaurante(rest?.numero_whatsapp ?? null)
         if (rest?.whatsapp_dono) {
           setNumeroDono(rest.whatsapp_dono)
           setNumeroDonoSalvo(rest.whatsapp_dono)
@@ -175,6 +178,9 @@ export default function Onboarding() {
     // apagaria o que já estava salvo. Vale até para admin.
     if (s === 4 && numeroDonoTemDigitos && !telefoneNacionalValido(numeroDono)) {
       return 'Confira o número dos avisos urgentes: precisa ter DDD e telefone completos.'
+    }
+    if (s === 4 && numeroDono && mesmoWhatsapp(numeroDono, numeroRestaurante)) {
+      return 'Este é o WhatsApp do restaurante. Os avisos urgentes precisam ir para o seu número pessoal.'
     }
     // Admin não é cliente: pode deixar tudo em branco e avançar/finalizar. Não há
     // botão de "pular tudo" — são os próprios campos (e o WhatsApp) que ficam
@@ -374,8 +380,8 @@ export default function Onboarding() {
             {step === 1 && 'Conte-nos um pouco sobre o seu estabelecimento.'}
             {step === 2 && 'Como você costuma ouvir seus clientes hoje?'}
             {step === 3 && 'Vamos dar uma personalidade ao seu assistente.'}
-            {step === 4 && 'Quem deve ficar sabendo na hora quando algo grave acontecer no restaurante?'}
-            {step === 5 && 'Conecte o WhatsApp que vai receber e responder os feedbacks dos clientes.'}
+            {step === 4 && 'Seu WhatsApp pessoal, para saber na hora quando algo grave acontecer no restaurante.'}
+            {step === 5 && 'Conecte o WhatsApp do restaurante: o número em que os clientes mandam feedback. Precisa ser diferente do seu número pessoal do passo anterior.'}
             {step === 6 && 'Revise as informações antes de começarmos.'}
           </CardDescription>
         </CardHeader>
@@ -588,7 +594,26 @@ export default function Onboarding() {
           )}
 
           {step === 4 && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Os dois números confundem: quem tem um celular só costuma pôr o
+                  mesmo nos dois. O aviso sai do WhatsApp do restaurante para o
+                  do dono, então sendo o mesmo ele não chega. */}
+              <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4 text-sm text-gray-700">
+                <p className="font-semibold text-gray-900">Você vai usar dois números diferentes</p>
+                <ul className="mt-2 space-y-1.5">
+                  <li>
+                    <span className="font-medium text-gray-900">Seu WhatsApp pessoal</span> (este passo):
+                    recebe os avisos urgentes, como cliente que passou mal.
+                  </li>
+                  <li>
+                    <span className="font-medium text-gray-900">WhatsApp do restaurante</span> (próximo passo):
+                    o número em que os clientes mandam feedback. É nele que o EasyFeed fica conectado.
+                  </li>
+                </ul>
+                <p className="mt-2">
+                  Não use o mesmo número nos dois: o aviso sai do WhatsApp do restaurante e vai para o seu.
+                </p>
+              </div>
               {/* Só o número, antes do WhatsApp. Sem botão no cartão: é gravado
                   no "Próximo". Continua opcional. */}
               <CartaoNumeroDoDono

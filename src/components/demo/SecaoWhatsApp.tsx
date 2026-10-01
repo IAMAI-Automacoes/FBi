@@ -1,13 +1,19 @@
 import { Lock, MessageCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
-import { WhatsAppTab } from '@/pages/settings/WhatsAppTab'
+import { WhatsAppTab, type CampoNumeroDoDono } from '@/pages/settings/WhatsAppTab'
 
 /** Seção WhatsApp de Configurações. Na demonstração vira um aviso: o número
     conectado e o dos avisos urgentes são da conta de verdade do vendedor. */
-export function SecaoWhatsApp({ restauranteId }: { restauranteId: number | null }) {
+export function SecaoWhatsApp({
+  restauranteId,
+  numeroDono,
+}: {
+  restauranteId: number | null
+  numeroDono?: CampoNumeroDoDono
+}) {
   const { sessaoDemo } = useAuth()
-  if (!sessaoDemo) return <WhatsAppTab restauranteId={restauranteId} />
+  if (!sessaoDemo) return <WhatsAppTab restauranteId={restauranteId} numeroDono={numeroDono} />
 
   return (
     <Card data-secao="whatsapp-bloqueado">

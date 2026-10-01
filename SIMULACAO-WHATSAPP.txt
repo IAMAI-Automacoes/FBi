@@ -419,70 +419,83 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Tiques de leitura de mensagens recebidas (o WhatsApp só informa leitura
     das mensagens que o restaurante mandou).
   - Mandar mensagem pela tela: a tela é SÓ de visualização, por decisão do
-    Raver. Para responder, o botão "Enviar mensagem" abre o WhatsApp do
-    próprio dono naquela conversa (item 9).
+    Raver. Para responder, o botão "Enviar mensagem" abre o WhatsApp
+    pessoal do dono naquela conversa (item 9).
 
 
 -------------------------------------------------------------
-9. BOTÃO "ENVIAR MENSAGEM" (abre o WhatsApp do dono)
+9. BOTÃO "ENVIAR MENSAGEM" (abre o WhatsApp PESSOAL do dono)
 -------------------------------------------------------------
 
-Fluxo: o dono clica no contato (cabeçalho da conversa) -> abre o painel do
-contato (nome, telefone formatado) -> botão "Enviar mensagem" -> abre o
-WhatsApp naquela conversa. Nada é enviado pelo EasyFeed; a mensagem que o
-dono mandar pelo WhatsApp volta pelo webhook e aparece na tela sozinha
-(de_mim = true, por_api = false), em tempo real.
+A tela não envia nada. Para falar com o cliente, o dono usa o WhatsApp
+PESSOAL dele: o mesmo número dos avisos urgentes (restaurantes.whatsapp_dono).
+Nunca o número de feedbacks do restaurante, por dois motivos:
+  - os avisos urgentes saem do número do restaurante para o do dono;
+  - com a API oficial, o número de feedbacks deixa de estar em qualquer
+    celular — não dá para conversar por ele.
+O banco garante que os dois números são sempre diferentes (gatilho
+trg_restaurantes_numero_dono_diferente; o onboarding e as configurações
+explicam e recusam; a conexão do WhatsApp recusa o número do dono).
 
-Número usado: a coluna telefone (só dígitos, já com 55). Nunca o chat_id.
+Fluxo: o dono clica no contato (cabeçalho da conversa) -> painel do contato
+(nome, telefone formatado) -> botão "Enviar mensagem" -> abre o WhatsApp
+do dono na conversa com aquele cliente.
 
-Quando NÃO mostrar o botão:
-  - grupo = true (link de WhatsApp não abre grupo; só convite, que não temos);
-  - telefone nulo.
+Consequência: essa conversa NÃO aparece na simulação (acontece fora do
+número de feedbacks). Na simulação fica o feedback e o que veio pelo
+número do restaurante. E o agente de feedback não interfere nela.
 
-O PROBLEMA DAS DUAS CONTAS
-O dono quase sempre tem dois WhatsApps: o do restaurante (normalmente o
-WhatsApp Business, que é o número conectado à uazapi) e o pessoal. Se o link
-abrir no pessoal, o cliente recebe mensagem de um número que ele não conhece.
-O link genérico (wa.me) NÃO deixa escolher a conta. Por isso o botão abre um
-pequeno menu, conforme o aparelho:
+Quando NÃO mostrar o botão (ou mostrar desabilitado):
+  - grupo = true (link de WhatsApp não abre grupo);
+  - telefone nulo;
+  - whatsapp_dono nulo -> botão desabilitado com o texto
+    "Cadastre seu WhatsApp em Configurações para falar com clientes"
+    (link para /configuracoes#whatsapp). Nunca cair no número do restaurante.
 
-  Android (celular)
-    Dá para forçar o app pelo pacote, com um link "intent" (funciona no
-    Chrome do Android):
-      Business:
-        intent://send/?phone=5511932903005#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=https%3A%2F%2Fwa.me%2F5511932903005;end
-      Pessoal:
-        intent://send/?phone=5511932903005#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=https%3A%2F%2Fwa.me%2F5511932903005;end
-    Se o app escolhido não estiver instalado, cai no wa.me.
-    Opções do menu: "WhatsApp Business" e "WhatsApp".
+Número do cliente no link: a coluna telefone (só dígitos, já com 55).
+
+TEXTO PRONTO
+O cliente não conhece o número pessoal do dono. O link já leva uma
+apresentação, que o dono confere e envia:
+  "Oi, <nome_exibicao>! Aqui é do <nome_restaurante>. Vi sua mensagem e
+   queria conversar com você."
+(sem nome do cliente: "Oi! Aqui é do ..."). Vai em &text=, codificado com
+encodeURIComponent.
+
+ABRIR O APP CERTO
+O link só escolhe PARA QUEM a mensagem vai, nunca DE QUAL número ela sai:
+sai da conta aberta no app que o link abrir. Então:
+
+  Mostre sempre o número de onde ela deve sair:
+    "Abrir no seu WhatsApp (11) 91234-5678"
+
+  Android (Chrome)
+    Hoje (uazapi) o número do restaurante costuma estar no MESMO celular do
+    dono, num dos dois apps. Abra o OUTRO app. A função whatsapp-instancia,
+    na ação "status", devolve:
+      business:   true se o número do restaurante é WhatsApp Business
+      plataforma: aparelho do número do restaurante (smba = Business
+                  Android, android = WhatsApp comum Android, ...)
+    business = true  -> abrir o WhatsApp comum (package=com.whatsapp)
+    business = false -> abrir o Business   (package=com.whatsapp.w4b)
+    business = null (desconectado/desconhecido) -> wa.me
+    Link:
+      intent://send/?phone=<telefone>&text=<texto>#Intent;scheme=whatsapp;package=<pacote>;S.browser_fallback_url=<wa.me codificado>;end
+    Se o app não estiver instalado, cai no wa.me sozinho.
 
   iPhone
-    O iPhone não deixa forçar por link universal; ele abre o app que ele
-    escolher. Existem esquemas próprios de cada app:
-      Pessoal:   whatsapp://send?phone=5511932903005
-      Business:  whatsapp-smb://send?phone=5511932903005   (TESTAR: não é
-                 documentado oficialmente; se não abrir, cair no wa.me)
-    Opções do menu: "WhatsApp Business" e "WhatsApp".
+    Não dá para forçar com segurança. Use https://wa.me/<telefone>?text=<texto>.
+    (whatsapp://send?phone=... abre o comum e whatsapp-smb://send?phone=...
+    o Business, mas o segundo não é documentado oficialmente: só usar depois
+    de testar num iPhone com os dois instalados.)
 
   Computador
-    Não existe "Business vs pessoal" no PC: o que existe é ONDE a conta do
-    restaurante está aberta. O WhatsApp do PC (app ou web) mostra uma conta
-    por vez (por janela do navegador / por app). O normal é o dono deixar o
-    número do restaurante em um deles. Opções do menu:
-      "WhatsApp Web":           https://web.whatsapp.com/send?phone=5511932903005
-                                (abre a conta logada naquele navegador)
-      "App do WhatsApp no PC":  whatsapp://send?phone=5511932903005
-                                (abre o app instalado; se não tiver, não faz nada,
-                                então mostre esta opção só como alternativa)
+    https://wa.me/<telefone>?text=<texto>. Abre o app do WhatsApp do PC ou o
+    WhatsApp Web, o que estiver logado. O texto "Abrir no seu WhatsApp
+    (11) 91234-5678" avisa qual conta precisa estar aberta.
 
-  Lembrar a escolha
-    Guarde a última opção no localStorage do aparelho (ex.: chave
-    "easyfeed:abrir-whatsapp") e use direto da próxima vez, com um link
-    pequeno "Abrir de outro jeito" para trocar. Cada aparelho tem sua escolha.
-
-  Texto pronto (opcional)
-    Todos os formatos aceitam &text=<texto codificado com encodeURIComponent>
-    para já deixar uma mensagem escrita. O dono ainda precisa apertar enviar.
+  Com a API oficial: o número de feedbacks sai dos celulares e sobra só o
+  WhatsApp do dono. Aí basta wa.me em todos os aparelhos.
 
 Detectar o aparelho: /Android/i e /iPhone|iPad|iPod/i no navigator.userAgent;
 o resto é computador.
@@ -498,4 +511,4 @@ o resto é computador.
     Raver antes.
   - Não usar midia_url na tela: expira em 2 dias.
   - A tela não envia nada pelo EasyFeed/uazapi. Responder é sempre pelo
-    WhatsApp do dono (item 9).
+    WhatsApp pessoal do dono (item 9), nunca pelo número de feedbacks.

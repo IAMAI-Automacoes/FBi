@@ -45,6 +45,23 @@ function jidToNumero(j: any): string | null {
 function extractNumero(d: any): string | null {
   return jidToNumero(d?.jid) ?? jidToNumero(d?.status?.jid) ?? jidToNumero(d?.instance?.owner) ?? jidToNumero(d?.owner) ?? null
 }
+// Mesma chave de src/lib/telefone.ts (chaveWhatsapp) e de public.telefone_chave:
+// o WhatsApp conhece o mesmo celular com e sem o 9 da frente.
+function chaveWhatsapp(n: string | null | undefined): string {
+  const d = (n ?? '').replace(/\D/g, '')
+  return /^55\d{2}9\d{8}$/.test(d) ? d.slice(0, 4) + d.slice(5) : d
+}
+// O que a tela precisa para abrir o app certo no celular do dono: se o número
+// do restaurante está no WhatsApp Business e em que aparelho (`plataform`, com
+// o erro de digitação da uazapi: smba = Business Android, android = WhatsApp
+// comum Android, etc.).
+function extractAparelho(d: any): { business: boolean | null; plataforma: string | null } {
+  const i = d?.instance ?? d ?? {}
+  return {
+    business: typeof i.isBusiness === 'boolean' ? i.isBusiness : null,
+    plataforma: typeof i.plataform === 'string' && i.plataform ? i.plataform : null,
+  }
+}
 function extractToken(d: any): string | null {
   const raw = d?.token ?? d?.instance?.token ?? d?.hash ?? null
   return typeof raw === 'string' && raw ? raw : null
@@ -99,7 +116,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest, error: restErr } = await admin
       .from('restaurantes')
-      .select('id, nome_restaurante, whatsapp_token, numero_whatsapp')
+      .select('id, nome_restaurante, whatsapp_token, numero_whatsapp, whatsapp_dono')
       .eq('auth_user_id', userId)
       .single()
     if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
@@ -203,6 +220,25 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // O número do dono (avisos urgentes) não pode virar o WhatsApp do
+    // restaurante: o aviso sai de um e vai para o outro. Só dá para saber qual
+    // número foi conectado DEPOIS do QR escaneado, então a recusa é desfazer a
+    // conexão na hora — apaga a instância, como no "desconectar", e a tela
+    // mostra o motivo. O banco também recusa (trg_restaurantes_numero_dono_diferente).
+    const MOTIVO_NUMERO_DO_DONO =
+      'Este é o número que você cadastrou para os avisos urgentes. Conecte aqui o WhatsApp do restaurante, que precisa ser outro número.'
+    const ehNumeroDoDono = (numero: string | null) =>
+      Boolean(numero && rest.whatsapp_dono && chaveWhatsapp(numero) === chaveWhatsapp(rest.whatsapp_dono))
+
+    async function recusarNumeroDoDono() {
+      try {
+        await fetch(`${BASE}/instance`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', token: token as string } })
+      } catch { /* best-effort: as credenciais são limpas de qualquer forma */ }
+      await setToken(null)
+      await setNumero(null)
+      return json({ hasInstance: false, connected: false, qrcode: null, numero: null, recusado: MOTIVO_NUMERO_DO_DONO })
+    }
+
     async function callInstance(path: string, method = 'POST'): Promise<{ status: number; data: any }> {
       const resp = await fetch(`${BASE}/instance/${path}`, {
         method,
@@ -223,12 +259,18 @@ Deno.serve(async (req: Request) => {
       }
       const connected = extractConnected(data)
       const numero = extractNumero(data)
-      if (connected && numero && numero !== rest.numero_whatsapp) await setNumero(numero)
+      // Só na conexão NOVA (número ainda não gravado): um restaurante que já
+      // está funcionando não é derrubado por esta checagem.
+      if (connected && numero && numero !== rest.numero_whatsapp) {
+        if (ehNumeroDoDono(numero)) return await recusarNumeroDoDono()
+        await setNumero(numero)
+      }
       return json({
         hasInstance: true,
         connected,
         qrcode: connected ? null : extractQr(data),
         numero: connected ? (numero ?? rest.numero_whatsapp ?? null) : rest.numero_whatsapp ?? null,
+        ...(connected ? extractAparelho(data) : { business: null, plataforma: null }),
       })
     }
 
@@ -259,6 +301,9 @@ Deno.serve(async (req: Request) => {
 
       const connected = extractConnected(data)
       const numero = extractNumero(data)
+      if (connected && numero && numero !== rest.numero_whatsapp && ehNumeroDoDono(numero)) {
+        return await recusarNumeroDoDono()
+      }
       if (connected && numero) await setNumero(numero)
       return json({ hasInstance: true, connected, qrcode: connected ? null : extractQr(data), numero: connected ? numero : null })
     }

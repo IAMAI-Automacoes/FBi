@@ -2129,6 +2129,7 @@ export type Database = {
           credito_ia_ciclo_inicio: string
           credito_ia_limite_usd: number
           detalhes: string | null
+          email: string | null
           excluida_em: string | null
           feedbacks_visto_em: string
           frequencia_relatorios: string | null
@@ -2179,6 +2180,7 @@ export type Database = {
           credito_ia_ciclo_inicio?: string
           credito_ia_limite_usd?: number
           detalhes?: string | null
+          email?: string | null
           excluida_em?: string | null
           feedbacks_visto_em?: string
           frequencia_relatorios?: string | null
@@ -2229,6 +2231,7 @@ export type Database = {
           credito_ia_ciclo_inicio?: string
           credito_ia_limite_usd?: number
           detalhes?: string | null
+          email?: string | null
           excluida_em?: string | null
           feedbacks_visto_em?: string
           frequencia_relatorios?: string | null

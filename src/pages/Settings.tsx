@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
 
 const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
@@ -46,11 +47,20 @@ export default function Settings() {
   const [mascote, setMascote] = useState<MascoteForm>(MASCOTE_VAZIO)
   const [perfil, setPerfil] = useState<PerfilNegocioForm>(PERFIL_VAZIO)
   const [expiracaoFeedback, setExpiracaoFeedback] = useState(EXPIRACAO_PADRAO)
+  // Número dos avisos urgentes (cartão na seção WhatsApp). Salva pela barra
+  // da página, como o resto.
+  const [numeroDono, setNumeroDono] = useState('')
+  // "Tem algo escrito no campo?" — um número pela metade também vira valor
+  // vazio, e sem isto "estou digitando" seria confundido com "quero remover".
+  const [numeroDonoTemDigitos, setNumeroDonoTemDigitos] = useState(false)
+  // WhatsApp conectado do restaurante: o número do dono não pode ser ele.
+  const [numeroRestaurante, setNumeroRestaurante] = useState<string | null>(null)
   const [salvo, setSalvo] = useState({
     restaurante: RESTAURANTE_VAZIO,
     mascote: MASCOTE_VAZIO,
     perfil: PERFIL_VAZIO,
     expiracaoFeedback: EXPIRACAO_PADRAO,
+    numeroDono: '',
   })
   // Guarda o mascote_config original para não apagar campos que não estão no
   // formulário (ex: "focos", gravado no onboarding e usado no contexto da IA)
@@ -74,7 +84,7 @@ export default function Settings() {
     const carregar = async () => {
       const { data } = await supabase
         .from('restaurantes')
-        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights, telefone_contato')
+        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights, telefone_contato, whatsapp_dono, numero_whatsapp')
         .eq('id', restauranteId)
         .single()
 
@@ -112,7 +122,11 @@ export default function Settings() {
         setRestaurante(r)
         setMascote(m)
         setPerfil(p)
-        setSalvo({ restaurante: r, mascote: m, perfil: p, expiracaoFeedback: expiracao })
+        const dono = data.whatsapp_dono || ''
+        setNumeroDono(dono)
+        setNumeroDonoTemDigitos(Boolean(dono))
+        setNumeroRestaurante(data.numero_whatsapp ?? null)
+        setSalvo({ restaurante: r, mascote: m, perfil: p, expiracaoFeedback: expiracao, numeroDono: dono })
       }
       setCarregandoDados(false)
     }
@@ -120,7 +134,7 @@ export default function Settings() {
   }, [loading, restauranteId])
 
   const alterado =
-    JSON.stringify({ restaurante, mascote, perfil, expiracaoFeedback }) !== JSON.stringify(salvo)
+    JSON.stringify({ restaurante, mascote, perfil, expiracaoFeedback, numeroDono }) !== JSON.stringify(salvo)
 
   const handleSalvar = async () => {
     // Antes isto era um `return` mudo: o botão parecia não fazer nada.
@@ -128,6 +142,26 @@ export default function Settings() {
       toast({
         title: 'Não consegui identificar seu restaurante',
         description: 'Recarregue a página e tente novamente.',
+        variant: 'destructive',
+      })
+      return
+    }
+    // Número pela metade nunca vira "sem número": apagaria em silêncio o que
+    // estava salvo.
+    if (numeroDonoTemDigitos && !telefoneNacionalValido(numeroDono)) {
+      toast({
+        title: 'Número dos avisos urgentes inválido',
+        description: 'Confira o DDD e o número — precisa ter DDD + telefone completo.',
+        variant: 'destructive',
+      })
+      return
+    }
+    // O aviso sai do WhatsApp do restaurante e vai para este número. O banco
+    // também recusa; aqui é para explicar antes.
+    if (numeroDono && mesmoWhatsapp(numeroDono, numeroRestaurante)) {
+      toast({
+        title: 'Use outro número nos avisos urgentes',
+        description: 'Este é o WhatsApp do restaurante, que recebe os feedbacks. Os avisos urgentes precisam ir para o seu número pessoal.',
         variant: 'destructive',
       })
       return
@@ -154,6 +188,9 @@ export default function Settings() {
           ...configInsightsBruto.current,
           expiracao_feedback_dias: expiracaoFeedback,
         },
+        // Só manda quando mudou: assim um salvar que não mexeu no número nem
+        // passa pelas regras do banco sobre ele (demonstração, número igual).
+        ...(numeroDono !== salvo.numeroDono ? { whatsapp_dono: numeroDono || null } : {}),
       } as any)
       .eq('id', restauranteId)
       .select('id')
@@ -172,7 +209,7 @@ export default function Settings() {
       })
       return
     }
-    setSalvo({ restaurante, mascote, perfil, expiracaoFeedback })
+    setSalvo({ restaurante, mascote, perfil, expiracaoFeedback, numeroDono })
     // Atualiza os caches persistentes (sem F5): o contexto (sidebar/banner/chat) e
     // os dados do restaurante no useAuth. As telas que buscam do banco já vêm
     // frescas ao navegar por causa do cache: 'no-store'.
@@ -186,6 +223,8 @@ export default function Settings() {
     setMascote(salvo.mascote)
     setPerfil(salvo.perfil)
     setExpiracaoFeedback(salvo.expiracaoFeedback)
+    setNumeroDono(salvo.numeroDono)
+    setNumeroDonoTemDigitos(Boolean(salvo.numeroDono))
   }
 
   useEffect(() => {
@@ -302,7 +341,14 @@ export default function Settings() {
                 <ConhecimentoTab restauranteId={restauranteId} />
               </section>
               <section id="whatsapp" className="scroll-mt-28">
-                <SecaoWhatsApp restauranteId={restauranteId} />
+                <SecaoWhatsApp
+                  restauranteId={restauranteId}
+                  numeroDono={{
+                    valor: numeroDono,
+                    salvo: salvo.numeroDono,
+                    aoMudar: (valor, tem) => { setNumeroDono(valor); setNumeroDonoTemDigitos(tem) },
+                  }}
+                />
               </section>
               <section id="feedbacks" className="scroll-mt-28">
                 <FeedbacksTab value={expiracaoFeedback} onChange={setExpiracaoFeedback} />

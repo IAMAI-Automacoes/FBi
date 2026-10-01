@@ -136,3 +136,22 @@ export function telefoneNacionalValido(valor: string | null | undefined): boolea
   const total = ddd.length + numero.length
   return total === 10 || total === 11
 }
+
+/**
+ * Os dois números são o MESMO WhatsApp? Compara pela chave do WhatsApp, não
+ * pelo texto: muitos celulares brasileiros têm o JID sem o 9 da frente
+ * (5511 52138636), enquanto o dono digita com o 9 (5511 9 52138636). Para o
+ * WhatsApp é o mesmo número, então aqui também.
+ *
+ * A mesma regra existe no banco (`public.telefone_chave`) e na função
+ * `whatsapp-instancia` — as três precisam concordar.
+ */
+export function chaveWhatsapp(valor: string | null | undefined): string {
+  const d = soDigitos(valor ?? '')
+  return /^55\d{2}9\d{8}$/.test(d) ? d.slice(0, 4) + d.slice(5) : d
+}
+
+export function mesmoWhatsapp(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ca = chaveWhatsapp(a)
+  return ca !== '' && ca === chaveWhatsapp(b)
+}
