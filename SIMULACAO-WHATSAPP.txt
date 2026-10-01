@@ -1,7 +1,7 @@
 SIMULAÇÃO DO WHATSAPP — GUIA PARA QUEM VAI FAZER A INTERFACE
 =============================================================
 
-Atualizado em 30/09/2026.
+Atualizado em 01/10/2026.
 
 O que é: uma tela no painel onde o dono do restaurante vê as conversas do
 WhatsApp do restaurante como se estivesse no próprio WhatsApp: o que o cliente
@@ -89,6 +89,7 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
                                                    bucket e política de leitura
   20260930020000_mensagens_whatsapp_valores_reais.sql  comentários com os
                                                    valores reais
+  20261001000000_mensagens_whatsapp_realtime.sql   liga o Realtime na tabela
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -245,14 +246,26 @@ deixa de servir quando o volume crescer; aí o certo é criar uma função
 (RPC) no banco que devolva uma linha por conversa. Mexer no banco precisa de
 OK do Raver antes.
 
-Tempo real: a tabela AINDA NÃO está no Realtime do Supabase. Opções:
-  a) polling (ex.: refetchInterval de 5 a 10 s no react-query), funciona hoje;
-  b) ligar o Realtime, que é uma linha no banco
-     (alter publication supabase_realtime add table public.mensagens_whatsapp)
-     e respeita a RLS. Precisa do OK do Raver.
-Lembre que uma linha MUDA depois de criada (status, edição, exclusão), então
-escute INSERT e UPDATE, ou recarregue a conversa.
+Tempo real: LIGADO (Realtime do Supabase, com REPLICA IDENTITY FULL). A RLS
+vale também aqui: cada dono só recebe eventos do restaurante dele.
 
+  const canal = supabase
+    .channel(`mensagens-${restauranteId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'mensagens_whatsapp',
+      filter: `restaurante_id=eq.${restauranteId}`,
+    }, ({ eventType, new: linha }) => {
+      // INSERT: mensagem nova (inclusive reação).
+      // UPDATE: mudou status, foi editada ou apagada. Substitua pelo id.
+    })
+    .subscribe()
+  // ao sair da tela: supabase.removeChannel(canal)
+
+Uma linha MUDA depois de criada (status, edição, exclusão), então trate
+INSERT e UPDATE. O evento traz a linha inteira, inclusive o payload; ignore
+essa coluna no estado da tela.
 
 -------------------------------------------------------------
 6. COMO DESENHAR CADA MENSAGEM
@@ -329,11 +342,12 @@ Localização / contato / outro
   Os dados ficam em payload->message->content.
 
 Grupos (grupo = true)
-  O título da conversa é nome_exibicao (nome do grupo). Em cada balão de
-  terceiros, mostre o nome de quem mandou (payload->message->>senderName,
-  ou o telefone). Sugestão: separar grupos numa aba ou filtro, porque o número
-  do restaurante costuma estar em grupos de promoção que enchem a lista
-  (já aconteceu no Camelo).
+  Ficam JUNTO com as outras conversas, na mesma lista, ordenados pela última
+  mensagem (decisão do Raver). Mídia de grupo é baixada e guardada como
+  qualquer outra.
+  O título da conversa é nome_exibicao (nome do grupo; também vem em
+  payload->message->>groupName). Em cada balão de terceiros, mostre o nome de
+  quem mandou (payload->message->>senderName, ou o telefone).
 
 Datas e horários
   Use enviada_em, no fuso America/Sao_Paulo. Separadores "Hoje", "Ontem" e
@@ -404,8 +418,9 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Arquivos acima de 40 MB (linha existe, sem arquivo).
   - Tiques de leitura de mensagens recebidas (o WhatsApp só informa leitura
     das mensagens que o restaurante mandou).
-  - Mandar mensagem pela tela: é só visualização. Enviar exigiria outra
-    integração e não está no escopo.
+  - Mandar mensagem pela tela: por enquanto é só visualização. O envio
+    (texto, editar, apagar, reagir, áudio, arquivos) está sendo planejado;
+    quando existir, este documento ganha uma seção própria.
 
 
 -------------------------------------------------------------
@@ -415,6 +430,6 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Cada restaurante vê só as próprias conversas (RLS já cuida; mesmo assim
     filtre por restaurante_id).
   - O front não escreve em mensagens_whatsapp nem no bucket "mensagens".
-  - Qualquer mudança no banco (view, função, Realtime, coluna nova) precisa
-    de OK do Raver antes.
+  - Qualquer mudança no banco (view, função, coluna nova) precisa de OK do
+    Raver antes.
   - Não usar midia_url na tela: expira em 2 dias.
