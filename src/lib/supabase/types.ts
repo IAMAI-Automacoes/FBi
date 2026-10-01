@@ -1796,6 +1796,33 @@ export type Database = {
         }
         Relationships: []
       }
+      preferencias_conversa: {
+        Row: {
+          atualizado_em: string
+          auth_user_id: string
+          canal: string
+          conversa: string
+          fixada_em: string | null
+          silenciada: boolean
+        }
+        Insert: {
+          atualizado_em?: string
+          auth_user_id?: string
+          canal: string
+          conversa?: string
+          fixada_em?: string | null
+          silenciada?: boolean
+        }
+        Update: {
+          atualizado_em?: string
+          auth_user_id?: string
+          canal?: string
+          conversa?: string
+          fixada_em?: string | null
+          silenciada?: boolean
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -2641,9 +2668,12 @@ export type Database = {
         Args: { p_restaurante_id: number }
         Returns: {
           chat_id: string
+          fixada_em: string
+          foto_url: string
           grupo: boolean
           nao_lidas: number
           nome_exibicao: string
+          silenciada: boolean
           telefone: string
           ultima_de_mim: boolean
           ultima_enviada_em: string

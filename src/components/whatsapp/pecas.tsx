@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Clock, Mic, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { corAvatar, iniciais, trechosFormatados } from '@/lib/whatsapp/formatacao'
@@ -49,12 +49,29 @@ export function MicOuvido({ ouvido }: { ouvido: boolean }) {
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
 
-export function Avatar({ nome, grupo, tamanho = 44, className }: {
+export function Avatar({ nome, grupo, foto, tamanho = 44, className }: {
   nome: string | null
   grupo?: boolean
+  /** Foto do WhatsApp; se não abrir (o link expira), ficam as iniciais. */
+  foto?: string | null
   tamanho?: number
   className?: string
 }) {
+  const [falhou, setFalhou] = useState(false)
+  useEffect(() => { setFalhou(false) }, [foto])
+  if (foto && !falhou) {
+    return (
+      <img
+        src={foto}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFalhou(true)}
+        className={cn('shrink-0 rounded-full bg-gray-200 object-cover', className)}
+        style={{ width: tamanho, height: tamanho }}
+      />
+    )
+  }
   return (
     <div
       className={cn('shrink-0 rounded-full flex items-center justify-center text-white font-semibold select-none', className)}

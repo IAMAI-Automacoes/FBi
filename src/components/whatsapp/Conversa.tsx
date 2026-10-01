@@ -31,12 +31,13 @@ const autorChave = (m: MensagemWa) => (m.de_mim ? `eu:${m.por_api}` : m.grupo ? 
 export interface PedidoSalto { messageId: string; vez: number }
 
 export function Conversa({
-  restauranteId, chatId, nome, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
+  restauranteId, chatId, nome, foto, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
   salto, aoVoltar, aoAbrirContato, aoAbrirPesquisa,
 }: {
   restauranteId: number
   chatId: string
   nome: string
+  foto: string | null
   telefone: string | null
   grupo: boolean
   naoLidasNaAbertura: number
@@ -308,7 +309,7 @@ export function Conversa({
           <ArrowLeft className="h-5 w-5" />
         </button>
         <button type="button" onClick={aoAbrirContato} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:brightness-95" title="Dados do contato">
-          <Avatar nome={nome} grupo={grupo} tamanho={40} />
+          <Avatar nome={nome} grupo={grupo} foto={foto} tamanho={40} />
           <div className="min-w-0">
             <p className="truncate text-[15px] font-semibold leading-tight text-white">{nome}</p>
             <p className="truncate text-[12px] text-white/75">
@@ -356,6 +357,7 @@ export function Conversa({
                       m={m}
                       primeiroDoGrupo={primeiro}
                       nomeContato={nome}
+                      fotoContato={foto}
                       url={m.midia_caminho ? urls[m.midia_caminho] ?? '' : ''}
                       citada={citada}
                       reacoes={reacoes.get(m.message_id) ?? []}

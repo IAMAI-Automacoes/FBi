@@ -10,7 +10,9 @@ import webpush from 'npm:web-push@3.6.7'
 // O gatilho não manda login (só o segredo). Publicada sem a flag, o portão do
 // Supabase devolve 401 antes de chegar aqui e NENHUM push sai — aconteceu em
 // 01/10, por algumas horas.
-// Resolve nome + foto do restaurante e manda { title, body, icon, url, tag }.
+//
+// Antes de mandar, respeita o "silenciar" de cada pessoa
+// (preferencias_conversa): o canal inteiro (sino do topo) ou só a conversa.
 
 function resumo(t: string | null | undefined, fallback: string): string {
   const s = (t ?? '').trim()
@@ -42,6 +44,43 @@ async function enviarPara(
   }
   return { enviados, removidos }
 }
+
+/**
+ * A pessoa silenciou este canal (sino do topo) ou esta conversa?
+ * conversa '' = o canal inteiro.
+ */
+async function silenciado(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  authUserId: string,
+  canal: 'whatsapp' | 'suporte' | 'suporte_admin',
+  conversa: string | null,
+): Promise<boolean> {
+  const chaves = conversa ? ['', conversa] : ['']
+  const { data } = await admin
+    .from('preferencias_conversa')
+    .select('conversa')
+    .eq('auth_user_id', authUserId)
+    .eq('canal', canal)
+    .eq('silenciada', true)
+    .in('conversa', chaves)
+  return (data ?? []).length > 0
+}
+
+async function inscricoesDe(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  authUserId: string,
+): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> {
+  const { data } = await admin
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('auth_user_id', authUserId)
+  return data ?? []
+}
+
+const jsonResp = (corpo: unknown) =>
+  new Response(JSON.stringify(corpo), { headers: { 'Content-Type': 'application/json' } })
 
 /**
  * Total de mensagens de suporte não lidas pelo admin — mesmo cálculo de
@@ -110,7 +149,7 @@ async function payloadWhatsapp(
   // deno-lint-ignore no-explicit-any
   admin: any,
   id: number,
-): Promise<{ authUserId: string; payload: string } | null> {
+): Promise<{ authUserId: string; chatId: string; payload: string } | null> {
   const { data: m } = await admin
     .from('mensagens_whatsapp')
     .select('id, restaurante_id, chat_id, nome_exibicao, telefone, grupo, de_mim, tipo, texto, midia_nome, reacao, responde_message_id, remetente:payload->message->>senderName')
@@ -142,6 +181,7 @@ async function payloadWhatsapp(
   const corpo = resumo(previaWhatsapp(m), 'Nova mensagem')
   return {
     authUserId: rest.auth_user_id,
+    chatId: m.chat_id,
     payload: JSON.stringify({
       title: contato,
       body: m.grupo ? `${m.remetente || 'Alguém'}: ${corpo}` : corpo,
@@ -192,20 +232,37 @@ Deno.serve(async (req: Request) => {
     // Mensagem do WhatsApp do restaurante: vai para o DONO, não para os admins.
     if (tipo === 'whatsapp') {
       const alvo = await payloadWhatsapp(admin, Number(body.id))
-      if (!alvo) {
-        return new Response(JSON.stringify({ ok: true, enviados: 0, motivo: 'sem notificação' }), {
-          headers: { 'Content-Type': 'application/json' },
-        })
+      if (!alvo) return jsonResp({ ok: true, enviados: 0, motivo: 'sem notificação' })
+      if (await silenciado(admin, alvo.authUserId, 'whatsapp', alvo.chatId)) {
+        return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada' })
       }
-      const { data: subsDono } = await admin
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth')
-        .eq('auth_user_id', alvo.authUserId)
-      const r = await enviarPara(admin, subsDono ?? [], alvo.payload)
-      return new Response(JSON.stringify({ ok: true, ...r }), {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const r = await enviarPara(admin, await inscricoesDe(admin, alvo.authUserId), alvo.payload)
+      return jsonResp({ ok: true, ...r })
     }
+
+    // Resposta do SUPORTE: vai para o dono da conversa de suporte.
+    if (tipo === 'suporte_resposta') {
+      const { data: sug } = await admin
+        .from('sugestoes_plataforma')
+        .select('usuario_id')
+        .eq('id', body.sugestao_id)
+        .maybeSingle()
+      const dono = sug?.usuario_id as string | undefined
+      if (!dono) return jsonResp({ ok: true, enviados: 0, motivo: 'sem dono' })
+      if (await silenciado(admin, dono, 'suporte', null)) return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada' })
+      const payloadDono = JSON.stringify({
+        title: 'Suporte EasyFeed',
+        body: resumo(body.texto, 'Respondeu sua mensagem.'),
+        icon: '/icons/icon-192.png',
+        url: '/sugestoes',
+        tag: 'easyfeed-suporte',
+        // A página de Sugestões aberta e visível suprime (avisarConversaAtiva('suporte')).
+        usuarioId: 'suporte',
+      })
+      const r = await enviarPara(admin, await inscricoesDe(admin, dono), payloadDono)
+      return jsonResp({ ok: true, ...r })
+    }
+
     let usuarioId: string | null = body.usuario_id ?? null
     const texto: string = body.texto ?? ''
     const titulo: string | null = body.titulo ?? null
@@ -258,9 +315,15 @@ Deno.serve(async (req: Request) => {
       totalNaoLido,
     })
 
-    // Inscrições só de admins (função security definer).
+    // Inscrições só de admins (função security definer), menos de quem
+    // silenciou o suporte inteiro ou esta conversa.
     const { data: subs } = await admin.rpc('admin_push_subscriptions')
-    const { enviados, removidos } = await enviarPara(admin, subs ?? [], payload)
+    const todas = (subs ?? []) as Array<{ auth_user_id: string; endpoint: string; p256dh: string; auth: string }>
+    const quietos = new Set<string>()
+    for (const id of new Set(todas.map((s) => s.auth_user_id))) {
+      if (await silenciado(admin, id, 'suporte_admin', usuarioId)) quietos.add(id)
+    }
+    const { enviados, removidos } = await enviarPara(admin, todas.filter((s) => !quietos.has(s.auth_user_id)), payload)
 
     return new Response(JSON.stringify({ ok: true, enviados, removidos }), {
       headers: { 'Content-Type': 'application/json' },

@@ -93,6 +93,8 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
   20261001000000_mensagens_whatsapp_realtime.sql   liga o Realtime na tabela
   20261002000000_whatsapp_tela.sql                 leitura por conversa, lista de
                                                    conversas e push
+  20261002010000_silenciar_fixar_fotos_previas.sql silenciar/fixar, fotos, push do
+                                                   suporte ao dono, cache de prévias
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -568,5 +570,32 @@ Notificações:
     gatilho não manda login). Sem isso, nenhum push sai.
   - O dono ativa no aviso do topo da lista. No iPhone, só com o EasyFeed
     adicionado à Tela de Início.
-  - Com a tela aberta, toca um som quando chega mensagem em outra conversa
-    (sino no topo da lista silencia; fica salvo no aparelho).
+  - Com a tela aberta, toca um som quando chega mensagem em outra conversa.
+  - O sino no topo da lista silencia TUDO do WhatsApp (notificação e som).
+
+Fotos: a lista, o cabeçalho, o painel do contato e o player de áudio mostram
+a foto do contato/grupo que vem no próprio evento da uazapi
+(payload->chat->imagePreview, a da mensagem mais recente). É um link do
+WhatsApp que expira; se não abrir, aparecem as iniciais.
+
+Silenciar e fixar (tabela preferencias_conversa, por pessoa, sem limite de
+fixadas):
+  canal 'whatsapp'      conversa = chat_id   (menu da setinha / segurar o
+                                               dedo na conversa; painel do
+                                               contato)
+  canal 'suporte'       conversa = ''        (sino no chat de suporte do dono)
+  canal 'suporte_admin' conversa = usuario_id (menu de cada conversa no
+                                               painel admin) ou '' (sino)
+  conversa '' = o canal inteiro. A função enviar-push consulta antes de
+  mandar. Conversa silenciada: contador cinza e fora do contador do menu.
+  Fixadas ficam no topo (conversas_whatsapp já devolve nessa ordem).
+
+Suporte: a resposta do suporte agora notifica o DONO (gatilho
+trg_push_resposta_suporte_dono → enviar-push tipo 'suporte_resposta'); com a
+tela de Sugestões aberta não notifica.
+
+Prévia de link: o primeiro link de cada mensagem de texto ganha o cartão
+com imagem, título, descrição e site. Vem da função previa-link (lê as tags
+Open Graph da página, como o WhatsApp; cache de 7 dias em previas_link;
+bloqueia endereço interno). Se o site não tiver prévia, usa a miniatura que
+o WhatsApp mandou no evento.

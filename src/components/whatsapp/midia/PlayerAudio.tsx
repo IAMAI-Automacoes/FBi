@@ -55,7 +55,7 @@ async function calcularOnda(url: string): Promise<number[]> {
 const VELOCIDADES = [1, 1.5, 2]
 
 export function PlayerAudio({
-  url, caminho, deMim, ouvido, nomeContato, autoTocar, aoTerminar, aoTocar,
+  url, caminho, deMim, ouvido, nomeContato, fotoContato, autoTocar, aoTerminar, aoTocar,
 }: {
   url: string
   caminho: string
@@ -63,6 +63,8 @@ export function PlayerAudio({
   /** Mensagem enviada já ouvida pelo cliente (status PLAYED). */
   ouvido?: boolean
   nomeContato: string | null
+  /** Foto de quem mandou (como no WhatsApp); sem ela, iniciais. */
+  fotoContato?: string | null
   autoTocar?: boolean
   aoTerminar?: () => void
   aoTocar?: () => void
@@ -165,7 +167,7 @@ export function PlayerAudio({
           </button>
         ) : (
           <>
-            <Avatar nome={deMim ? 'Você' : nomeContato} tamanho={44} />
+            <Avatar nome={deMim ? 'Você' : nomeContato} foto={deMim ? null : fotoContato} tamanho={44} />
             <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white p-0.5">
               <MicOuvido ouvido={deMim ? !!ouvido : jaTocou} />
             </span>
@@ -235,16 +237,17 @@ export function PlayerAudio({
   )
 }
 
-/** Transcrição embaixo do áudio — recolhível. */
+/** Transcrição embaixo do áudio — chega fechada; um toque abre. */
 export function Transcricao({ texto, deMim }: { texto: string; deMim: boolean }) {
-  const [aberta, setAberta] = useState(true)
+  const [aberta, setAberta] = useState(false)
   return (
     <div className={cn('mt-1 rounded-md px-2 py-1.5 text-[13px] leading-snug', deMim ? 'bg-black/[0.05]' : 'bg-black/[0.04]')}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setAberta((v) => !v) }}
-        className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide"
+        className={cn('text-[11px] font-semibold uppercase tracking-wide', aberta && 'mb-0.5')}
         style={{ color: WA.TEAL }}
+        aria-expanded={aberta}
       >
         Transcrição {aberta ? '▾' : '▸'}
       </button>

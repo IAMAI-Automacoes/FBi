@@ -158,3 +158,20 @@ export async function urlParaBaixar(caminho: string, nome: string | null): Promi
   const { data } = await supabase.storage.from('mensagens').createSignedUrl(caminho, 600, { download: nome || true })
   return data?.signedUrl ?? null
 }
+
+// ── Prévia de link (função previa-link, com cache no banco e aqui) ───────────
+
+export interface PreviaLink { ok: boolean; titulo: string | null; descricao: string | null; imagem: string | null; site: string | null }
+const previas = new Map<string, Promise<PreviaLink>>()
+
+export function buscarPreviaLink(url: string): Promise<PreviaLink> {
+  let p = previas.get(url)
+  if (!p) {
+    p = supabase.functions
+      .invoke('previa-link', { body: { url } })
+      .then(({ data, error }) => (error || !data ? { ok: false, titulo: null, descricao: null, imagem: null, site: null } : (data as PreviaLink)))
+      .catch(() => ({ ok: false, titulo: null, descricao: null, imagem: null, site: null }))
+    previas.set(url, p)
+  }
+  return p
+}

@@ -31,6 +31,10 @@ import { LinkifiedText } from '@/components/LinkifiedText'
 import { MessageMenu } from '@/components/MessageMenu'
 import { EmojiInputButton } from '@/components/EmojiPicker'
 import { QuoteBox, type QuoteInfo } from '@/components/QuoteBox'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import { BotaoSino } from '@/components/ControlesConversa'
+import { usePreferencias } from '@/lib/queries/preferencias'
+import { avisarConversaAtiva } from '@/lib/notificacoes-app'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -688,6 +692,16 @@ function ChatInputBar({
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function Sugestoes() {
   const { user, usuario } = useAuth()
+  // Sino do cabeçalho: silencia as notificações de resposta do suporte.
+  const prefsSuporte = usePreferencias('suporte')
+  // Com esta tela aberta e visível, a resposta do suporte não vira notificação
+  // (o service worker compara com o usuarioId 'suporte' do push).
+  useEffect(() => {
+    const avisar = () => avisarConversaAtiva(document.visibilityState === 'visible' ? 'suporte' : null)
+    avisar()
+    document.addEventListener('visibilitychange', avisar)
+    return () => { document.removeEventListener('visibilitychange', avisar); avisarConversaAtiva(null) }
+  }, [])
   const { toast } = useToast()
 
   const [sugestao, setSugestao] = useState<Sugestao | null>(null)
@@ -992,10 +1006,14 @@ export default function Sugestoes() {
         className="shrink-0 flex items-center gap-3 px-4 py-3"
         style={{ background: WA_TEAL }}
       >
+        {/* O cabeçalho do app some nesta página: sem isto, no celular não
+            havia como abrir o menu lateral. */}
+        <SidebarTrigger className="-ml-1 text-white hover:bg-white/10 hover:text-white md:hidden" />
         <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
           <img src={easyFeedIcon} alt="Easy Feed" className="h-8 w-8 object-contain" />
         </div>
-        <p className="text-lg font-semibold text-white leading-tight">Suporte EasyFeed</p>
+        <p className="flex-1 text-lg font-semibold text-white leading-tight">Suporte EasyFeed</p>
+        <BotaoSino claro silenciado={prefsSuporte.tudoSilenciado} aoAlternar={prefsSuporte.alternarTudo} rotulo="notificações do suporte" />
       </div>
 
       {/* Mensagens */}

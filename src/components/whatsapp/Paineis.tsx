@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, Link2, Loader2, Play, Search, Send, X } from 'lucide-react'
+import { Bell, BellOff, FileText, Link2, Loader2, Pin, Play, Search, Send, X } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
   formatarTelefone, horaCurta, linksDoTexto, previaMensagem, rotuloDia, type MensagemWa,
@@ -25,13 +26,19 @@ function Cabecalho({ titulo, aoFechar }: { titulo: string; aoFechar: () => void 
 type Aba = 'midia' | 'docs' | 'links'
 
 export function PainelContato({
-  restauranteId, chatId, nome, telefone, grupo, linkResponder, motivoSemLink, numeroDono, aoFechar,
+  restauranteId, chatId, nome, foto, telefone, grupo, fixada, silenciada, aoFixar, aoSilenciar,
+  linkResponder, motivoSemLink, numeroDono, aoFechar,
 }: {
   restauranteId: number
   chatId: string
   nome: string
+  foto: string | null
   telefone: string | null
   grupo: boolean
+  fixada: boolean
+  silenciada: boolean
+  aoFixar: () => void
+  aoSilenciar: () => void
   linkResponder: string | null
   motivoSemLink: string | null
   /** WhatsApp pessoal do dono, formatado (de onde a mensagem deve sair). */
@@ -81,7 +88,7 @@ export function PainelContato({
       <Cabecalho titulo={grupo ? 'Dados do grupo' : 'Dados do contato'} aoFechar={aoFechar} />
       <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col items-center gap-2 bg-white px-6 pb-6 pt-8 text-center">
-          <Avatar nome={nome} grupo={grupo} tamanho={120} />
+          <Avatar nome={nome} grupo={grupo} foto={foto} tamanho={120} />
           <p className="mt-2 text-[22px] text-[#111b21]">{nome}</p>
           {!grupo && telefone && <p className="text-[15px] text-gray-500">{formatarTelefone(telefone)}</p>}
 
@@ -108,6 +115,19 @@ export function PainelContato({
               </div>
             )
           )}
+        </div>
+
+        <div className="mt-2 bg-white">
+          <label className="flex cursor-pointer items-center gap-4 px-5 py-3.5 hover:bg-gray-50">
+            {silenciada ? <BellOff className="h-5 w-5 text-gray-500" /> : <Bell className="h-5 w-5 text-gray-500" />}
+            <span className="flex-1 text-[15px] text-gray-800">Silenciar notificações</span>
+            <Switch checked={silenciada} onCheckedChange={aoSilenciar} aria-label="Silenciar notificações desta conversa" />
+          </label>
+          <label className="flex cursor-pointer items-center gap-4 border-t border-gray-100 px-5 py-3.5 hover:bg-gray-50">
+            <Pin className="h-5 w-5 -rotate-45 text-gray-500" />
+            <span className="flex-1 text-[15px] text-gray-800">Fixar conversa</span>
+            <Switch checked={fixada} onCheckedChange={aoFixar} aria-label="Fixar esta conversa no topo" />
+          </label>
         </div>
 
         <div className="mt-2 bg-white">

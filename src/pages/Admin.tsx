@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
@@ -41,6 +41,8 @@ import { formatarReais } from '@/components/vendas/ciclos-plano'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
+import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
+import { usePreferencias } from '@/lib/queries/preferencias'
 import { DoubleCheck } from '@/components/DoubleCheck'
 import { LinkifiedText } from '@/components/LinkifiedText'
 import { MessageMenu } from '@/components/MessageMenu'
@@ -216,16 +218,29 @@ function fmtUsos(c: Cupon) {
 }
 
 // ── ConvItem ──────────────────────────────────────────────────────────────────
-function ConvItem({ s, selected, onClick }: { s: SugestaoAdmin; selected: boolean; onClick: () => void }) {
+function ConvItem({ s, selected, onClick, fixada, silenciada, onFixar, onSilenciar }: {
+  s: SugestaoAdmin; selected: boolean; onClick: () => void
+  fixada: boolean; silenciada: boolean; onFixar: () => void; onSilenciar: () => void
+}) {
   const { preview, time, isAdmin, read } = lastActivity(s)
   const count = unreadCount(s)
   const name = s.perfil?.nome_restaurante ?? s.usuario_nome ?? s.usuario_email ?? s.usuario_id.slice(0, 8)
   const logo = s.perfil?.logo_url
+  const [menu, setMenu] = useState(false)
+  const segurar = useSeguraParaMenu(() => setMenu(true))
   return (
-    <button
-      onClick={onClick}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => { if (!segurar.engolirClique()) onClick() }}
+      onKeyDown={(e) => { if (e.key === 'Enter') onClick() }}
+      onPointerDown={segurar.onPointerDown}
+      onPointerUp={segurar.onPointerUp}
+      onPointerLeave={segurar.onPointerLeave}
+      onPointerMove={segurar.onPointerMove}
+      onContextMenu={segurar.onContextMenu}
       className={cn(
-        'w-full text-left flex items-center gap-3 px-4 py-3 transition-colors border-b border-gray-300 last:border-0',
+        'group w-full cursor-pointer select-none text-left flex items-center gap-3 px-4 py-3 transition-colors border-b border-gray-300 last:border-0',
         selected ? 'bg-[#EFF6FF]' : 'hover:bg-gray-50',
       )}
     >
@@ -248,14 +263,26 @@ function ConvItem({ s, selected, onClick }: { s: SugestaoAdmin; selected: boolea
             {isAdmin && <DoubleCheck read={read} size={18} />}
             <p className="text-[12px] text-gray-500 truncate">{preview}</p>
           </div>
+          <MarcasConversa fixada={fixada} silenciada={silenciada} />
           {count > 0 && (
-            <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-[#25D366] text-white text-[10px] font-bold flex items-center justify-center px-1">
+            <span
+              className="shrink-0 min-w-[18px] h-[18px] rounded-full text-white text-[10px] font-bold flex items-center justify-center px-1"
+              style={{ background: silenciada ? '#A5B0B7' : '#25D366' }}
+            >
               {count}
             </span>
           )}
+          <MenuConversa
+            fixada={fixada}
+            silenciada={silenciada}
+            aoFixar={onFixar}
+            aoSilenciar={onSilenciar}
+            aberto={menu}
+            aoMudarAberto={setMenu}
+          />
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -1154,6 +1181,18 @@ export default function Admin() {
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({})
   const [replyFilesMap, setReplyFilesMap] = useState<Record<string, File[]>>({})
   const [sendingId, setSendingId] = useState<string | null>(null)
+  // Silenciar/fixar do suporte (por admin): sino do topo = tudo; menu de cada
+  // conversa = só ela (chave = usuario_id do cliente). Fixadas vão para o topo.
+  const prefsSuporte = usePreferencias('suporte_admin')
+  const sugestoesOrdenadas = useMemo(() => {
+    const fix = (s: SugestaoAdmin) => prefsSuporte.fixadaEm(s.usuario_id)
+    return sugestoes.slice().sort((a, b) => {
+      const fa = fix(a), fb = fix(b)
+      if (!!fa !== !!fb) return fa ? -1 : 1
+      if (fa && fb && fa !== fb) return fa > fb ? -1 : 1
+      return 0 // sem fixar: mantém a ordem que já vinha (por atividade)
+    })
+  }, [sugestoes, prefsSuporte.fixadaEm])
 
   // ── Pagamentos ──
   const [divisoes, setDivisoes] = useState<DivisaoReceita[]>([])
@@ -1569,7 +1608,10 @@ export default function Admin() {
               )}
             >
               <div className="px-4 py-3" style={{ background: WA_TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
-                <p className="text-[15px] font-semibold text-white">Suporte</p>
+                <div className="flex items-center gap-2">
+                  <p className="flex-1 text-[15px] font-semibold text-white">Suporte</p>
+                  <BotaoSino claro silenciado={prefsSuporte.tudoSilenciado} aoAlternar={prefsSuporte.alternarTudo} rotulo="notificações do suporte" />
+                </div>
               </div>
               {loadingSugestoes ? (
                 <p className="text-center py-8 text-sm text-gray-400">Carregando…</p>
@@ -1577,8 +1619,17 @@ export default function Admin() {
                 <p className="text-center py-8 text-sm text-gray-400">Nenhuma mensagem.</p>
               ) : (
                 <div className="overflow-y-auto flex-1">
-                  {sugestoes.map((s) => (
-                    <ConvItem key={s.id} s={s} selected={selectedId === s.id} onClick={() => handleSelect(s.id)} />
+                  {sugestoesOrdenadas.map((s) => (
+                    <ConvItem
+                      key={s.id}
+                      s={s}
+                      selected={selectedId === s.id}
+                      onClick={() => handleSelect(s.id)}
+                      fixada={!!prefsSuporte.fixadaEm(s.usuario_id)}
+                      silenciada={prefsSuporte.silenciada(s.usuario_id)}
+                      onFixar={() => prefsSuporte.alternarFixar(s.usuario_id)}
+                      onSilenciar={() => prefsSuporte.alternarSilencio(s.usuario_id)}
+                    />
                   ))}
                 </div>
               )}

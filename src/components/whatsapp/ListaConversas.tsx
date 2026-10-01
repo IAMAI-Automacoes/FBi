@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react'
-import { Bell, BellOff, Loader2, Search, X } from 'lucide-react'
+import { Loader2, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
 import {
   horarioLista, nomeConversa, previaMensagem, type ConversaWa,
 } from '@/lib/whatsapp/formatacao'
@@ -9,7 +10,15 @@ import { Avatar, Tiques, WA } from './pecas'
 
 type Filtro = 'tudo' | 'nao_lidas' | 'grupos'
 
-const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir }: { c: ConversaWa; ativa: boolean; aoAbrir: (chatId: string) => void }) {
+const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, aoSilenciar }: {
+  c: ConversaWa
+  ativa: boolean
+  aoAbrir: (chatId: string) => void
+  aoFixar: (chatId: string) => void
+  aoSilenciar: (chatId: string) => void
+}) {
+  const [menu, setMenu] = useState(false)
+  const segurar = useSeguraParaMenu(() => setMenu(true))
   const nome = nomeConversa(c)
   const previa = previaMensagem({
     tipo: c.ultima_tipo, texto: c.ultima_texto, midia_nome: c.ultima_midia_nome,
@@ -17,17 +26,25 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir }: { c: Conv
   })
   const remetente = c.grupo && !c.ultima_de_mim && c.ultima_remetente ? `${c.ultima_remetente}: ` : ''
   const naoLida = c.nao_lidas > 0
+  const fixada = !!c.fixada_em
   return (
-    <button
-      type="button"
-      onClick={() => aoAbrir(c.chat_id)}
-      className={cn('flex w-full items-center gap-3 px-3 text-left transition-colors', ativa ? 'bg-[#F0F2F5]' : 'hover:bg-[#F5F6F6]')}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => { if (!segurar.engolirClique()) aoAbrir(c.chat_id) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') aoAbrir(c.chat_id) }}
+      onPointerDown={segurar.onPointerDown}
+      onPointerUp={segurar.onPointerUp}
+      onPointerLeave={segurar.onPointerLeave}
+      onPointerMove={segurar.onPointerMove}
+      onContextMenu={segurar.onContextMenu}
+      className={cn('group flex w-full cursor-pointer select-none items-center gap-3 px-3 text-left transition-colors', ativa ? 'bg-[#F0F2F5]' : 'hover:bg-[#F5F6F6]')}
     >
-      <Avatar nome={nome} grupo={c.grupo} tamanho={48} />
+      <Avatar nome={nome} grupo={c.grupo} foto={c.foto_url} tamanho={48} />
       <div className="min-w-0 flex-1 border-b border-gray-100 py-3">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-[16px] text-[#111b21]">{nome}</span>
-          <span className={cn('shrink-0 text-[12px]', naoLida ? 'font-medium text-[#1FA855]' : 'text-gray-500')}>
+          <span className={cn('shrink-0 text-[12px]', naoLida && !c.silenciada ? 'font-medium text-[#1FA855]' : 'text-gray-500')}>
             {horarioLista(c.ultima_enviada_em)}
           </span>
         </div>
@@ -36,26 +53,43 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir }: { c: Conv
             {c.ultima_de_mim && c.ultima_tipo !== 'reaction' && <Tiques status={c.ultima_status} />}
             <span className={cn('truncate', c.ultima_status === 'DELETED' && 'italic')}>{remetente}{previa}</span>
           </p>
+          <MarcasConversa fixada={fixada} silenciada={c.silenciada} />
           {naoLida && (
-            <span className="shrink-0 min-w-[20px] rounded-full px-1.5 text-center text-[12px] font-semibold leading-5 text-white" style={{ background: WA.VERDE }}>
+            <span
+              className="shrink-0 min-w-[20px] rounded-full px-1.5 text-center text-[12px] font-semibold leading-5 text-white"
+              // Silenciada: contador cinza, como no WhatsApp.
+              style={{ background: c.silenciada ? '#A5B0B7' : WA.VERDE }}
+            >
               {c.nao_lidas > 99 ? '99+' : c.nao_lidas}
             </span>
           )}
+          <MenuConversa
+            fixada={fixada}
+            silenciada={c.silenciada}
+            aoFixar={() => aoFixar(c.chat_id)}
+            aoSilenciar={() => aoSilenciar(c.chat_id)}
+            aberto={menu}
+            aoMudarAberto={setMenu}
+            className="-mr-1"
+          />
         </div>
       </div>
-    </button>
+    </div>
   )
 })
 
 export function ListaConversas({
-  conversas, carregando, ativa, aoAbrir, somAtivo, aoAlternarSom, aviso,
+  conversas, carregando, ativa, aoAbrir, aoFixar, aoSilenciar, tudoSilenciado, aoAlternarTudo, aviso,
 }: {
   conversas: ConversaWa[]
   carregando: boolean
   ativa: string | null
   aoAbrir: (chatId: string) => void
-  somAtivo: boolean
-  aoAlternarSom: () => void
+  aoFixar: (chatId: string) => void
+  aoSilenciar: (chatId: string) => void
+  /** Sino do topo: todas as notificações do WhatsApp (push e som). */
+  tudoSilenciado: boolean
+  aoAlternarTudo: () => void
   /** Avisos no topo (notificações, WhatsApp desconectado). */
   aviso?: React.ReactNode
 }) {
@@ -82,16 +116,7 @@ export function ListaConversas({
       <div className="flex shrink-0 items-center gap-2 px-3 py-3" style={{ background: WA.TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
         <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />
         <p className="flex-1 text-[17px] font-semibold text-white">WhatsApp</p>
-        <button
-          type="button"
-          onClick={aoAlternarSom}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 hover:bg-white/10 hover:text-white"
-          title={somAtivo ? 'Silenciar o som de mensagem nova' : 'Ligar o som de mensagem nova'}
-          aria-label={somAtivo ? 'Silenciar som' : 'Ligar som'}
-          aria-pressed={!somAtivo}
-        >
-          {somAtivo ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
-        </button>
+        <BotaoSino claro silenciado={tudoSilenciado} aoAlternar={aoAlternarTudo} rotulo="notificações do WhatsApp" />
       </div>
 
       {aviso}
@@ -143,7 +168,9 @@ export function ListaConversas({
                 : filtro === 'nao_lidas' ? 'Tudo lido por aqui.' : 'Nenhum grupo.'}
           </div>
         ) : (
-          visiveis.map((c) => <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} />)
+          visiveis.map((c) => (
+            <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} />
+          ))
         )}
         {!carregando && conversas.length > 0 && (
           <p className="px-6 py-6 text-center text-[12px] text-gray-400">

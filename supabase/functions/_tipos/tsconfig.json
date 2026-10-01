@@ -36,6 +36,7 @@
     "../cancelar-assinatura/*.ts",
     "../enviar-push/*.ts",
     "../whatsapp-instancia/*.ts",
-    "../guardar-midia/*.ts"
+    "../guardar-midia/*.ts",
+    "../previa-link/*.ts"
   ]
 }

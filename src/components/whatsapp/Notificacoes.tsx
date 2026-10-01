@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react'
 import { BellRing, X } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { usePermissoes } from '@/hooks/use-permissoes'
 import { iphoneSemApp, inscreverPush, pedirPermissaoEInscrever, pushSuportado } from '@/lib/push'
 
 // ── Som de mensagem nova (com a página aberta) ─────────────────────────────
-
-const CHAVE_SOM = 'easyfeed:wa-som'
-
-export function lerSomAtivo(): boolean {
-  try { return localStorage.getItem(CHAVE_SOM) !== 'desligado' } catch { return true }
-}
-export function gravarSomAtivo(ativo: boolean) {
-  try { localStorage.setItem(CHAVE_SOM, ativo ? 'ligado' : 'desligado') } catch { /* sem armazenamento: vale só nesta visita */ }
-}
+// Toca só se o WhatsApp e a conversa não estiverem silenciados (o mesmo sino
+// que corta o push — preferencias_conversa).
 
 let ctxSom: AudioContext | null = null
 /** "Plim" curto de duas notas, gerado na hora (sem arquivo de som para baixar). */
@@ -43,17 +35,17 @@ export function tocarSomMensagem() {
 
 /**
  * Quem já deu permissão de notificação tem o aparelho inscrito sempre que
- * abre o painel (a inscrição pode mudar quando o navegador a renova). Nunca
- * pede permissão sozinho: quem pede é o aviso da tela WhatsApp, num clique.
+ * abre o painel (a inscrição pode mudar quando o navegador a renova). Vale
+ * para o WhatsApp e para a resposta do suporte. Nunca pede permissão sozinho:
+ * quem pede é o aviso da tela WhatsApp ou o sino, num clique.
  */
-export function NotificacoesWhatsapp() {
+export function NotificacoesDono() {
   const { user, usuario } = useAuth()
-  const { podeVer, carregando } = usePermissoes()
-  const pode = !carregando && !!usuario?.restaurante_id && podeVer('whatsapp')
+  const temRestaurante = !!usuario?.restaurante_id
   useEffect(() => {
-    if (!user || !pode || !pushSuportado() || Notification.permission !== 'granted') return
+    if (!user || !temRestaurante || !pushSuportado() || Notification.permission !== 'granted') return
     inscreverPush(user.id)
-  }, [user, pode])
+  }, [user, temRestaurante])
   return null
 }
 

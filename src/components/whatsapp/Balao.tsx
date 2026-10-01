@@ -5,12 +5,13 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  corRemetente, formatarTelefone, horaCurta, previaMensagem, soEmoji,
+  corRemetente, formatarTelefone, horaCurta, linksDoTexto, previaMensagem, soEmoji,
   type MensagemWa, type ReacaoVisivel,
 } from '@/lib/whatsapp/formatacao'
 import { urlParaBaixar } from '@/lib/queries/whatsapp'
 import { TextoWhatsapp, Tiques, WA } from './pecas'
 import { PlayerAudio, Transcricao } from './midia/PlayerAudio'
+import { PreviaLinkCartao } from './midia/PreviaLink'
 import {
   CartaoConteudo, CartaoDocumento, Figurinha, MidiaGif, MidiaImagem, MidiaIndisponivel, MidiaVideo, NaoSuportada,
 } from './midia/Midias'
@@ -20,6 +21,8 @@ export interface PropsBalao {
   /** Primeira de uma sequência do mesmo autor: leva o "rabinho" e, em grupo, o nome. */
   primeiroDoGrupo: boolean
   nomeContato: string
+  /** Foto do contato (conversa individual): vai no player de áudio. */
+  fotoContato?: string | null
   /** URL assinada da mídia ('' = sem arquivo). */
   url: string
   /** undefined = não é resposta; null = a mensagem citada não está no histórico. */
@@ -135,7 +138,7 @@ function MenuMensagem({ m }: { m: MensagemWa }) {
 }
 
 function BalaoBase({
-  m, primeiroDoGrupo, nomeContato, url, citada, reacoes, destaque, piscando, autoTocar,
+  m, primeiroDoGrupo, nomeContato, fotoContato, url, citada, reacoes, destaque, piscando, autoTocar,
   aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio,
 }: PropsBalao) {
   const deMim = m.de_mim
@@ -176,7 +179,7 @@ function BalaoBase({
           <>
             {url
               ? <PlayerAudio url={url} caminho={m.midia_caminho!} deMim={deMim} ouvido={m.status === 'PLAYED'}
-                  nomeContato={autorDe(m, nomeContato)} autoTocar={autoTocar} aoTerminar={() => aoTerminarAudio(m.id)} />
+                  nomeContato={autorDe(m, nomeContato)} fotoContato={m.grupo ? null : fotoContato} autoTocar={autoTocar} aoTerminar={() => aoTerminarAudio(m.id)} />
               : <MidiaIndisponivel rotulo="Áudio indisponível" />}
             {m.transcricao && <Transcricao texto={m.transcricao} deMim={deMim} />}
           </>
@@ -191,11 +194,19 @@ function BalaoBase({
       case 'contact':
         corpo = <CartaoConteudo id={m.id} tipo={m.tipo} />
         break
-      case 'text':
+      case 'text': {
+        // Prévia do primeiro link em cima do texto, como no WhatsApp.
+        const link = linksDoTexto(m.texto)[0]
         corpo = m.texto
-          ? <TextoWhatsapp texto={m.texto} destaque={destaque} className="text-[14.2px] leading-[19px] text-[#111b21]" />
+          ? (
+            <>
+              {link && <PreviaLinkCartao url={link} idMensagem={m.id} deMim={deMim} />}
+              <TextoWhatsapp texto={m.texto} destaque={destaque} className="text-[14.2px] leading-[19px] text-[#111b21]" />
+            </>
+          )
           : <NaoSuportada />
         break
+      }
       default:
         corpo = m.texto ? <TextoWhatsapp texto={m.texto} destaque={destaque} className="text-[14.2px] text-[#111b21]" /> : <NaoSuportada />
     }

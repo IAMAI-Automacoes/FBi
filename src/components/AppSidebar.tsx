@@ -125,7 +125,7 @@ export function AppSidebar() {
     if (!restauranteId || !podeVerWhatsapp) { setConversasNaoLidas(0); return }
     let espera: ReturnType<typeof setTimeout> | null = null
     const atualizar = () => listarConversas(restauranteId)
-      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0).length))
+      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0 && !c.silenciada).length))
       .catch(() => {})
     const agendar = () => { if (espera) clearTimeout(espera); espera = setTimeout(atualizar, 800) }
     atualizar()
@@ -134,7 +134,8 @@ export function AppSidebar() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp_leitura', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .subscribe()
-    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch) }
+    window.addEventListener('easyfeed:preferencias', agendar)
+    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch); window.removeEventListener('easyfeed:preferencias', agendar) }
   }, [restauranteId, podeVerWhatsapp])
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
 import { AvisoAssinatura } from './AvisoAssinatura'
 import { ErrorBoundary } from './ErrorBoundary'
-import { NotificacoesWhatsapp } from './whatsapp/Notificacoes'
+import { NotificacoesDono } from './whatsapp/Notificacoes'
 
 // Largura fixa do chat de IA (desktop). O conteúdo recua exatamente isso.
 const LARGURA_CHAT = 380
@@ -219,8 +219,8 @@ export default function Layout() {
             </div>
           </main>
           <ChatFab open={chatAberto} onOpenChange={setChatAberto} />
-          {/* Inscreve o aparelho no push de mensagens do WhatsApp (quem já permitiu) */}
-          <NotificacoesWhatsapp />
+          {/* Inscreve o aparelho no push (WhatsApp e resposta do suporte), se já permitiu */}
+          <NotificacoesDono />
         </div>
       </HeaderExtraProvider>
     </SidebarProvider>

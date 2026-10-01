@@ -41,6 +41,8 @@ export interface ConversaWa {
   nome_exibicao: string | null
   telefone: string | null
   grupo: boolean
+  /** Foto do contato/grupo (link do WhatsApp, expira — a tela cai nas iniciais). */
+  foto_url: string | null
   ultima_message_id: string
   ultima_tipo: string
   ultima_texto: string | null
@@ -52,6 +54,8 @@ export interface ConversaWa {
   ultima_remetente: string | null
   ultima_enviada_em: string
   nao_lidas: number
+  silenciada: boolean
+  fixada_em: string | null
 }
 
 export const TIPOS_COM_MIDIA = ['image', 'video', 'gif', 'audio', 'document', 'sticker']

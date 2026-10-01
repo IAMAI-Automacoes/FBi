@@ -14,7 +14,8 @@ import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { ListaConversas } from '@/components/whatsapp/ListaConversas'
 import { Conversa, type PedidoSalto } from '@/components/whatsapp/Conversa'
 import { PainelContato, PainelPesquisa } from '@/components/whatsapp/Paineis'
-import { AvisoNotificacoes, gravarSomAtivo, lerSomAtivo, tocarSomMensagem } from '@/components/whatsapp/Notificacoes'
+import { AvisoNotificacoes, tocarSomMensagem } from '@/components/whatsapp/Notificacoes'
+import { usePreferencias } from '@/lib/queries/preferencias'
 import { WA } from '@/components/whatsapp/pecas'
 
 /**
@@ -37,7 +38,8 @@ export default function WhatsApp() {
 
   const [conversas, setConversas] = useState<ConversaWa[]>([])
   const [carregando, setCarregando] = useState(true)
-  const [somAtivo, setSomAtivo] = useState(lerSomAtivo)
+  // Silenciar/fixar (o sino do topo silencia tudo: push e som).
+  const prefs = usePreferencias('whatsapp')
   const [business, setBusiness] = useState<boolean | null>(null)
   const [salto, setSalto] = useState<PedidoSalto | null>(null)
   // Não lidas de cada conversa no momento em que foi aberta: o divisor
@@ -56,8 +58,8 @@ export default function WhatsApp() {
 
   const chatRef = useRef(chatId)
   chatRef.current = chatId
-  const somRef = useRef(somAtivo)
-  somRef.current = somAtivo
+  const somRef = useRef({ tudo: prefs.tudoSilenciado, conversas: new Set<string>() })
+  somRef.current = { tudo: prefs.tudoSilenciado, conversas: new Set(conversas.filter((c) => c.silenciada).map((c) => c.chat_id)) }
 
   const recarregar = useCallback(async () => {
     if (!restauranteId) return
@@ -90,7 +92,8 @@ export default function WhatsApp() {
           agendar()
           const m = p.new as { de_mim?: boolean; tipo?: string; chat_id?: string }
           const estaVendo = m.chat_id === chatRef.current && document.visibilityState === 'visible'
-          if (p.eventType === 'INSERT' && m.de_mim === false && m.tipo !== 'reaction' && !estaVendo && somRef.current) {
+          const silencio = somRef.current.tudo || (m.chat_id ? somRef.current.conversas.has(m.chat_id) : false)
+          if (p.eventType === 'INSERT' && m.de_mim === false && m.tipo !== 'reaction' && !estaVendo && !silencio) {
             tocarSomMensagem()
           }
         })
@@ -147,9 +150,22 @@ export default function WhatsApp() {
     else { empilhouConversa.current = false; empilhouPainel.current = false; setParams({}, { replace: true }) }
   }
 
-  const alternarSom = () => {
-    setSomAtivo((v) => { gravarSomAtivo(!v); if (!v) tocarSomMensagem(); return !v })
-  }
+  // Fixar e silenciar mudam a lista na hora (e a ordem: fixadas no topo).
+  const { alternarFixar, alternarSilencio } = prefs
+  const ordenar = (lista: ConversaWa[]) => lista.slice().sort((a, b) => {
+    if (!!a.fixada_em !== !!b.fixada_em) return a.fixada_em ? -1 : 1
+    if (a.fixada_em && b.fixada_em && a.fixada_em !== b.fixada_em) return a.fixada_em > b.fixada_em ? -1 : 1
+    return a.ultima_enviada_em > b.ultima_enviada_em ? -1 : 1
+  })
+  const fixar = useCallback((id: string) => {
+    alternarFixar(id)
+    setConversas((lista) => ordenar(lista.map((c) => (c.chat_id === id ? { ...c, fixada_em: c.fixada_em ? null : new Date().toISOString() } : c))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alternarFixar])
+  const silenciar = useCallback((id: string) => {
+    alternarSilencio(id)
+    setConversas((lista) => lista.map((c) => (c.chat_id === id ? { ...c, silenciada: !c.silenciada } : c)))
+  }, [alternarSilencio])
 
   // Dados da conversa aberta (da lista; se ainda não está nela, do próprio id).
   const aberta = conversas.find((c) => c.chat_id === chatId) ?? null
@@ -213,8 +229,10 @@ export default function WhatsApp() {
           carregando={carregando}
           ativa={chatId}
           aoAbrir={abrir}
-          somAtivo={somAtivo}
-          aoAlternarSom={alternarSom}
+          aoFixar={fixar}
+          aoSilenciar={silenciar}
+          tudoSilenciado={prefs.tudoSilenciado}
+          aoAlternarTudo={prefs.alternarTudo}
           aviso={aviso}
         />
       </div>
@@ -227,6 +245,7 @@ export default function WhatsApp() {
             restauranteId={restauranteId}
             chatId={chatId}
             nome={nome}
+            foto={aberta?.foto_url ?? null}
             telefone={telefone}
             grupo={grupo}
             naoLidasNaAbertura={naoLidasAoAbrir.current.get(chatId) ?? aberta?.nao_lidas ?? 0}
@@ -260,8 +279,13 @@ export default function WhatsApp() {
               restauranteId={restauranteId}
               chatId={chatId}
               nome={nome}
+              foto={aberta?.foto_url ?? null}
               telefone={telefone}
               grupo={grupo}
+              fixada={!!aberta?.fixada_em}
+              silenciada={!!aberta?.silenciada}
+              aoFixar={() => fixar(chatId)}
+              aoSilenciar={() => silenciar(chatId)}
               linkResponder={linkResponder}
               motivoSemLink={motivoSemLink}
               numeroDono={donoNum ? formatarTelefone(donoNum) : null}
