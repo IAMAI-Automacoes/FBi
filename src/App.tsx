@@ -38,6 +38,7 @@ import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
 import { AvisosDoPainel } from './components/whatsapp/Notificacoes'
+import { PedirNotificacoes } from './components/PedirNotificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
 import { ControleDemo } from './components/demo/ControleDemo'
 import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
@@ -60,6 +61,8 @@ const App = () => (
         <AdminNotificacoes />
         {/* Dono: inscrição no push e sons de WhatsApp e suporte, em qualquer página logada */}
         <AvisosDoPainel />
+        {/* Pergunta (PC e celular) se pode mandar notificações */}
+        <PedirNotificacoes />
         {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}
         <ManifestPorRota />
         <Suspense

@@ -9,7 +9,7 @@ import { chaveWhatsapp } from '@/lib/telefone'
 import {
   detectarAparelho, formatarTelefone, linkEnviarMensagem, nomeConversa, textoApresentacao, type ConversaWa,
 } from '@/lib/whatsapp/formatacao'
-import { listarConversas, restauranteEhBusiness } from '@/lib/queries/whatsapp'
+import { fotoConhecida, fotosDeParticipantes, listarConversas, restauranteEhBusiness } from '@/lib/queries/whatsapp'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { ListaConversas } from '@/components/whatsapp/ListaConversas'
 import { Conversa, type PedidoSalto } from '@/components/whatsapp/Conversa'
@@ -35,9 +35,30 @@ export default function WhatsApp() {
   const [params, setParams] = useSearchParams()
   const chatId = params.get('chat')
   const painel = params.get('painel') as 'contato' | 'pesquisa' | 'pessoa' | null
+  // Aberto pelo ícone do app (?app=whatsapp) ou vindo de "Instalar app" em
+  // outra página (?instalar=1): limpa a URL; no segundo caso, o botão de
+  // instalar fica em destaque (o navegador só instala com um toque).
+  const [destacarInstalar] = useState(() => params.get('instalar') === '1')
+  useEffect(() => {
+    if (!params.has('app') && !params.has('instalar')) return
+    const limpo = new URLSearchParams(params)
+    limpo.delete('app')
+    limpo.delete('instalar')
+    setParams(limpo, { replace: true })
+  }, [params, setParams])
+
   // Participante de grupo aberto no painel (nome e telefone de quem mandou).
   const pessoaTel = params.get('pessoa')
   const [pessoaNome, setPessoaNome] = useState<string | null>(null)
+  const [pessoaFoto, setPessoaFoto] = useState<string | null>(null)
+  // Perfil aberto (inclusive por link/recarga): a foto, se a pessoa mostra.
+  useEffect(() => {
+    if (!pessoaTel) { setPessoaFoto(null); return }
+    setPessoaFoto(fotoConhecida(pessoaTel))
+    let ativo = true
+    fotosDeParticipantes([pessoaTel]).then((f) => { if (ativo) setPessoaFoto(f[pessoaTel] ?? null) })
+    return () => { ativo = false }
+  }, [pessoaTel])
 
   const [conversas, setConversas] = useState<ConversaWa[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -228,9 +249,13 @@ export default function WhatsApp() {
 
   return (
     <div
-      // Ocupa a tela inteira dentro do Layout (o cabeçalho fixo some nesta
-      // rota, ver ROTAS_SEM_TOPO), como a página de Sugestões.
-      className="-ml-4 -mr-8 -my-4 sm:-ml-6 sm:-my-6 lg:-ml-8 lg:-my-8 flex overflow-hidden bg-white"
+      // Celular: presa à tela visível (fixed + 100dvh). Antes ela ficava dentro
+      // da área que rola do Layout, cuja altura é 100vh — maior que a parte
+      // visível do celular (barra do navegador) — então o cabeçalho da
+      // conversa subia para fora da tela e sobrava uma faixa branca embaixo.
+      // Computador: ocupa a área do Layout (o cabeçalho fixo some nesta rota,
+      // ver ROTAS_SEM_TOPO), como a página de Sugestões.
+      className="fixed inset-0 z-30 flex overflow-hidden bg-white md:relative md:inset-auto md:z-auto md:-ml-6 md:-mr-8 md:-my-6 lg:-ml-8 lg:-my-8"
       style={{ height: '100dvh' }}
     >
       {/* Lista */}
@@ -252,6 +277,7 @@ export default function WhatsApp() {
           aoSilenciar={silenciar}
           tudoSilenciado={prefs.tudoSilenciado}
           aoAlternarTudo={prefs.alternarTudo}
+          destacarInstalar={destacarInstalar}
           aviso={aviso}
         />
       </div>
@@ -315,7 +341,7 @@ export default function WhatsApp() {
               participante={{ nomeGrupo: nome, conversaIndividual: conversaDaPessoa?.chat_id ?? null }}
               aoAbrirConversa={(id) => { empilhouPainel.current = false; abrir(id) }}
               nome={nomePessoa || formatarTelefone(pessoaTel)}
-              foto={conversaDaPessoa?.foto_url ?? null}
+              foto={pessoaFoto ?? conversaDaPessoa?.foto_url ?? null}
               telefone={pessoaTel}
               grupo={false}
               linkResponder={linkPessoa}

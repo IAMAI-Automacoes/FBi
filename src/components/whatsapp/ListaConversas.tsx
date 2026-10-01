@@ -3,6 +3,7 @@ import { Loader2, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
+import { BotaoInstalarApp } from '@/components/InstalarApp'
 import {
   formatarTelefone, horarioLista, nomeConversa, pontuarBusca, previaMensagem, type ConversaWa,
 } from '@/lib/whatsapp/formatacao'
@@ -83,7 +84,10 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
 
 export function ListaConversas({
   restauranteId, conversas, carregando, ativa, aoAbrir, aoAbrirMensagem, aoFixar, aoSilenciar, tudoSilenciado, aoAlternarTudo, aviso,
+  destacarInstalar = false,
 }: {
+  /** Veio de "Instalar app" em outra página: o botão chama atenção. */
+  destacarInstalar?: boolean
   restauranteId: number
   conversas: ConversaWa[]
   carregando: boolean
@@ -155,6 +159,7 @@ export function ListaConversas({
       <div className="flex shrink-0 items-center gap-2 px-3 py-3" style={{ background: WA.TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
         <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />
         <p className="flex-1 text-[17px] font-semibold text-white">WhatsApp</p>
+        <BotaoInstalarApp rota="/whatsapp" nome="Whatsapp EasyFeed" destacar={destacarInstalar} />
         <BotaoSino claro silenciado={tudoSilenciado} aoAlternar={aoAlternarTudo} rotulo="notificações do WhatsApp" />
       </div>
 

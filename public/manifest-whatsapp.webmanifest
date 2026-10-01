@@ -1,0 +1,17 @@
+{
+  "id": "/whatsapp?app=whatsapp",
+  "name": "Whatsapp EasyFeed",
+  "short_name": "Whatsapp EasyFeed",
+  "description": "As conversas do WhatsApp do seu restaurante, com fotos, áudios e documentos.",
+  "lang": "pt-BR",
+  "start_url": "/whatsapp?app=whatsapp",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#128c7e",
+  "theme_color": "#128c7e",
+  "icons": [
+    { "src": "/icons/whatsapp-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/whatsapp-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/whatsapp-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

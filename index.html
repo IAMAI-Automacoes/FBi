@@ -31,6 +31,23 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Easy Feed" />
+    <script>
+      // Mesmo critério do ManifestPorRota (src/components/ManifestPorRota.tsx),
+      // aplicado antes de o navegador ler o manifest.
+      (function () {
+        var p = location.pathname
+        var app = p.indexOf('/whatsapp') === 0 ? 'whatsapp' : p.indexOf('/admin') === 0 ? 'mensagens' : null
+        if (!app) return
+        var tags = {
+          whatsapp: ['/manifest-whatsapp.webmanifest', '/whatsapp-apple-touch.png', 'Whatsapp EasyFeed', '#128c7e'],
+          mensagens: ['/manifest-mensagens.webmanifest', '/mensagens-apple-touch.png', 'Mensagens', '#128c7e'],
+        }[app]
+        document.querySelector('link[rel="manifest"]').setAttribute('href', tags[0])
+        document.querySelector('link[rel="apple-touch-icon"]').setAttribute('href', tags[1])
+        document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', tags[2])
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', tags[3])
+      })()
+    </script>
   </head>
 
   <body>

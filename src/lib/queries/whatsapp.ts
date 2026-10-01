@@ -188,3 +188,35 @@ export function buscarPreviaLink(url: string): Promise<PreviaLink> {
   }
   return p
 }
+
+// ── Foto de perfil dos participantes (grupos) ───────────────────────────────
+
+const fotosEmMemoria = new Map<string, string | null>()
+
+/**
+ * Foto de cada telefone (whatsapp-instancia, ação "fotos": cache de 24 h no
+ * banco + /chat/details da uazapi). null = a pessoa esconde ou não tem foto.
+ * Aqui guarda também em memória, para a mesma tela não pedir de novo.
+ */
+export async function fotosDeParticipantes(telefones: string[]): Promise<Record<string, string | null>> {
+  const unicos = Array.from(new Set(telefones.filter(Boolean)))
+  const faltam = unicos.filter((t) => !fotosEmMemoria.has(t))
+  for (let i = 0; i < faltam.length; i += 40) {
+    const lote = faltam.slice(i, i + 40)
+    try {
+      const { data } = await supabase.functions.invoke('whatsapp-instancia', { body: { action: 'fotos', telefones: lote } })
+      const fotos = ((data as { fotos?: Record<string, string | null> } | null)?.fotos) ?? {}
+      for (const t of lote) fotosEmMemoria.set(t, fotos[t] ?? null)
+    } catch {
+      for (const t of lote) fotosEmMemoria.set(t, null)
+    }
+  }
+  const out: Record<string, string | null> = {}
+  for (const t of unicos) out[t] = fotosEmMemoria.get(t) ?? null
+  return out
+}
+
+/** A foto já conhecida (sem pedir), para o perfil abrir com ela na hora. */
+export function fotoConhecida(telefone: string | null | undefined): string | null {
+  return telefone ? fotosEmMemoria.get(telefone) ?? null : null
+}

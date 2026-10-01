@@ -22,8 +22,8 @@ async function usuarioDaSugestao(sugestaoId: string): Promise<string | null> {
  * mensagem de cliente MESMO com o app fechado. Quem mostra a notificação é o
  * service worker (sw.js), a partir do push enviado pela edge function
  * `enviar-push` (disparada por gatilho no banco). Este componente só:
- *   1. pede permissão (no primeiro gesto — exigência do navegador);
- *   2. cria/recupera a inscrição de push e a salva em `push_subscriptions`.
+ * cria/recupera a inscrição de push e a salva em `push_subscriptions` (quando
+ * a permissão já foi dada — quem pede é o cartão PedirNotificacoes).
  */
 export function AdminNotificacoes() {
   const { ehAdminPlataforma, user } = useAuth()
@@ -44,31 +44,12 @@ export function AdminNotificacoes() {
       await inscreverPush(user.id)
     }
 
-    let removerGesto: (() => void) | null = null
-    if (Notification.permission === 'granted') {
-      inscrever()
-    } else if (Notification.permission === 'default') {
-      // Chrome/Firefox/Safari exigem que o pedido de permissão venha de um gesto.
-      const pedir = async () => {
-        try {
-          const p = await Notification.requestPermission()
-          if (p === 'granted') inscrever()
-        } catch {
-          /* Safari antigo usa callback; ignoramos */
-        }
-        removerGesto?.()
-      }
-      window.addEventListener('pointerdown', pedir, { once: true })
-      window.addEventListener('keydown', pedir, { once: true })
-      removerGesto = () => {
-        window.removeEventListener('pointerdown', pedir)
-        window.removeEventListener('keydown', pedir)
-      }
-    }
+    // Quem pede a permissão é o cartão PedirNotificacoes (num clique, com
+    // explicação). Aqui só inscreve quando ela já foi dada.
+    if (Notification.permission === 'granted') inscrever()
 
     return () => {
       cancelado = true
-      removerGesto?.()
     }
   }, [ehAdminPlataforma, user])
 

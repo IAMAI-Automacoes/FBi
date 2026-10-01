@@ -23,6 +23,8 @@ export interface PropsBalao {
   nomeContato: string
   /** Foto do contato (conversa individual): vai no player de áudio. */
   fotoContato?: string | null
+  /** Grupo: foto de quem mandou (null = escondida/sem foto: não mostra nada). */
+  fotoRemetente?: string | null
   /** URL assinada da mídia ('' = sem arquivo). */
   url: string
   /** undefined = não é resposta; null = a mensagem citada não está no histórico. */
@@ -140,7 +142,7 @@ function MenuMensagem({ m }: { m: MensagemWa }) {
 }
 
 function BalaoBase({
-  m, primeiroDoGrupo, nomeContato, fotoContato, url, citada, reacoes, destaque, piscando, autoTocar,
+  m, primeiroDoGrupo, nomeContato, fotoContato, fotoRemetente, url, citada, reacoes, destaque, piscando, autoTocar,
   aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio, aoAbrirPessoa,
 }: PropsBalao) {
   const deMim = m.de_mim
@@ -154,6 +156,10 @@ function BalaoBase({
   // Texto com link: o balão tem pelo menos a largura da prévia, e a prévia
   // ocupa o balão inteiro (antes ela ficava fixa e o texto passava dela).
   const temPrevia = !apagada && m.tipo === 'text' && linksDoTexto(m.texto).length > 0
+  // Grupo, mensagem recebida: coluna da foto à esquerda (todas alinhadas; a
+  // foto só na primeira da sequência e só se a pessoa mostra a foto).
+  const colunaFoto = m.grupo && !deMim
+  const abrirPessoa = () => aoAbrirPessoa?.({ nome: m.remetente, telefone: m.telefone })
 
   let corpo: React.ReactNode
   if (apagada) {
@@ -227,6 +233,16 @@ function BalaoBase({
       data-message-id={m.message_id}
       className={cn('flex px-[3%] md:px-[6%]', deMim ? 'justify-end' : 'justify-start', primeiroDoGrupo ? 'mt-2' : 'mt-0.5', reacoes.length > 0 && 'mb-3.5')}
     >
+      {colunaFoto && (
+        <div className="mr-1.5 w-7 shrink-0">
+          {primeiroDoGrupo && fotoRemetente && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); abrirPessoa() }} className="block" title="Ver perfil" aria-label={`Ver perfil de ${m.remetente || 'participante'}`}>
+              <img src={fotoRemetente} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-7 w-7 rounded-full bg-gray-200 object-cover"
+                onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
+            </button>
+          )}
+        </div>
+      )}
       <div
         className={cn(
           'group relative max-w-[85%] md:max-w-[65%] transition-shadow duration-500',
@@ -257,7 +273,7 @@ function BalaoBase({
             {/* Clicável como no WhatsApp: abre o perfil de quem mandou. */}
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); aoAbrirPessoa?.({ nome: m.remetente, telefone: m.telefone }) }}
+              onClick={(e) => { e.stopPropagation(); abrirPessoa() }}
               disabled={!m.telefone || !aoAbrirPessoa}
               className="max-w-full truncate text-left hover:underline disabled:cursor-default disabled:no-underline"
               style={{ color: corNome }}

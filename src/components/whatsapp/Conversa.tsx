@@ -6,7 +6,7 @@ import { avisarConversaAtiva } from '@/lib/notificacoes-app'
 import {
   agregarReacoes, formatarTelefone, mesmoDia, rotuloDia, type MensagemWa,
 } from '@/lib/whatsapp/formatacao'
-import { buscarMensagens, buscarPorIds, marcarLidas, urlsAssinadas } from '@/lib/queries/whatsapp'
+import { buscarMensagens, buscarPorIds, fotosDeParticipantes, marcarLidas, urlsAssinadas } from '@/lib/queries/whatsapp'
 import { Avatar, SeparadorDia, WA } from './pecas'
 import { Balao } from './Balao'
 import { Galeria, LeitorPdf, type ItemGaleria } from './midia/Galeria'
@@ -166,6 +166,18 @@ export function Conversa({
   }, [mensagens, porMessageId, restauranteId])
 
   const visiveis = useMemo(() => mensagens.filter((m) => m.tipo !== 'reaction'), [mensagens])
+
+  // Grupo: foto de quem mandou (busca uma vez por pessoa; null = sem foto).
+  const [fotos, setFotos] = useState<Record<string, string | null>>({})
+  const telefonesDoGrupo = useMemo(() => (grupo
+    ? Array.from(new Set(visiveis.filter((m) => !m.de_mim && m.telefone).map((m) => m.telefone!))).sort().join(',')
+    : ''), [grupo, visiveis])
+  useEffect(() => {
+    if (!telefonesDoGrupo) return
+    let ativo = true
+    fotosDeParticipantes(telefonesDoGrupo.split(',')).then((f) => { if (ativo) setFotos(f) })
+    return () => { ativo = false }
+  }, [telefonesDoGrupo])
   const reacoes = useMemo(() => agregarReacoes(mensagens), [mensagens])
 
   // ── Posição da rolagem ──
@@ -377,6 +389,7 @@ export function Conversa({
                       primeiroDoGrupo={primeiro}
                       nomeContato={nome}
                       fotoContato={foto}
+                      fotoRemetente={m.grupo && !m.de_mim && m.telefone ? fotos[m.telefone] ?? null : null}
                       url={m.midia_caminho ? urls[m.midia_caminho] ?? '' : ''}
                       citada={citada}
                       reacoes={reacoes.get(m.message_id) ?? []}
@@ -419,7 +432,9 @@ export function Conversa({
 
       {/* Rodapé: a tela não envia. Responder = WhatsApp pessoal do dono. */}
       <div
-        className="flex shrink-0 items-center gap-3 border-t border-black/5 px-3 py-2.5"
+        // Rente ao fim da tela, com a mesma altura com ou sem o botão; a área
+        // segura de baixo (barra de gestos do celular) entra como respiro.
+        className="flex min-h-[60px] shrink-0 items-center gap-3 border-t border-black/[0.06] px-4 pt-2.5 shadow-[0_-1px_3px_rgba(0,0,0,0.04)]"
         style={{ background: WA.BARRA, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.625rem)' }}
       >
         <p className="min-w-0 flex-1 line-clamp-2 text-[12.5px] leading-snug text-gray-500" title={linkResponder ? 'Para responder, use o seu WhatsApp pessoal.' : motivoSemLink ?? undefined}>

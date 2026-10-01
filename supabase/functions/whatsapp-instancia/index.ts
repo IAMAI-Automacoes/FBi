@@ -388,6 +388,61 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, lidas: novas.length, marcadas_no_whatsapp: marcadas })
     }
 
+    // ── fotos: foto de perfil dos participantes (tela WhatsApp, grupos) ──────────
+    // O evento só traz a foto do grupo; a de quem mandou vem de /chat/details.
+    // Cache de 24 h em whatsapp_fotos (o link do WhatsApp expira). null = a
+    // pessoa esconde a foto ou não tem — a tela não mostra nada.
+    if (action === 'fotos') {
+      const telefones = Array.from(new Set(
+        (Array.isArray(body.telefones) ? body.telefones : [])
+          .map((t: unknown) => String(t ?? '').replace(/\D/g, ''))
+          .filter((t: string) => t.length >= 10 && t.length <= 15),
+      )).slice(0, 40) as string[]
+      if (telefones.length === 0) return json({ fotos: {} })
+
+      const limite = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+      const { data: guardadas } = await admin
+        .from('whatsapp_fotos')
+        .select('telefone, foto_url, atualizada_em')
+        .eq('restaurante_id', rest.id)
+        .in('telefone', telefones)
+      const fotos: Record<string, string | null> = {}
+      for (const g of guardadas ?? []) {
+        if (g.atualizada_em >= limite) fotos[g.telefone] = g.foto_url
+      }
+
+      const faltam = telefones.filter((t) => !(t in fotos))
+      if (faltam.length > 0 && token) {
+        const buscar = async (numero: string): Promise<string | null> => {
+          try {
+            const r = await fetch(`${BASE}/chat/details`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', token: token as string },
+              body: JSON.stringify({ number: numero, preview: true }),
+              signal: AbortSignal.timeout(8000),
+            })
+            if (!r.ok) return null
+            const d = await r.json().catch(() => ({}))
+            const url = String(d?.imagePreview || d?.image || '').trim()
+            return /^https:\/\//.test(url) ? url : null
+          } catch {
+            return null
+          }
+        }
+        // 5 de cada vez: não sobrecarrega a instância do restaurante.
+        for (let i = 0; i < faltam.length; i += 5) {
+          const lote = faltam.slice(i, i + 5)
+          const achadas = await Promise.all(lote.map(buscar))
+          lote.forEach((t, j) => { fotos[t] = achadas[j] })
+        }
+        await admin.from('whatsapp_fotos').upsert(
+          faltam.map((t) => ({ restaurante_id: rest.id, telefone: t, foto_url: fotos[t], atualizada_em: new Date().toISOString() })),
+          { onConflict: 'restaurante_id,telefone' },
+        )
+      }
+      return json({ fotos })
+    }
+
     return json({ error: 'Ação inválida' }, 400)
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

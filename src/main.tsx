@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './main.css'
+// Antes do React: o navegador oferece instalar o app uma vez por carregamento.
+import './lib/instalar-app'
 
 // Mostra no console quando este código foi gerado. Se a data estiver velha,
 // o navegador está com bundle antigo (servidor de dev parado no tempo/cache).

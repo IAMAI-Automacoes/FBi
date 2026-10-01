@@ -5,7 +5,7 @@ import { usePermissoes } from '@/hooks/use-permissoes'
 import { supabase } from '@/lib/supabase/client'
 import { estaOlhando, somCabeAEstaAba } from '@/lib/notificacoes-app'
 import { CANAL_INTEIRO, usePreferencias } from '@/lib/queries/preferencias'
-import { iphoneSemApp, inscreverPush, pedirPermissaoEInscrever, pushSuportado } from '@/lib/push'
+import { iphoneSemApp, inscreverPush, pushSuportado } from '@/lib/push'
 
 // ── Sons (gerados na hora, sem arquivo para baixar) ───────────────────────
 // 'whatsapp': "plim" de duas notas subindo (mensagem de cliente).
@@ -114,8 +114,7 @@ export function AvisosDoPainel() {
 const CHAVE_AVISO = 'easyfeed:wa-aviso-notificacao'
 
 export function AvisoNotificacoes() {
-  const { user } = useAuth()
-  const [estado, setEstado] = useState<NotificationPermission | 'sem-suporte' | 'iphone'>(() => {
+  const [estado] = useState<NotificationPermission | 'sem-suporte' | 'iphone'>(() => {
     if (iphoneSemApp()) return 'iphone'
     if (!pushSuportado()) return 'sem-suporte'
     return Notification.permission
@@ -123,20 +122,14 @@ export function AvisoNotificacoes() {
   const [fechado, setFechado] = useState(() => {
     try { return localStorage.getItem(CHAVE_AVISO) === estado } catch { return false }
   })
-  const [pedindo, setPedindo] = useState(false)
-
-  if (fechado || estado === 'granted' || estado === 'sem-suporte') return null
+  // 'default' (ainda não perguntado) fica com o cartão PedirNotificacoes,
+  // que aparece em todas as páginas; aqui só o que ele não resolve:
+  // permissão bloqueada e iPhone sem o app instalado.
+  if (fechado || estado === 'granted' || estado === 'sem-suporte' || estado === 'default') return null
 
   const fechar = () => {
     setFechado(true)
     try { localStorage.setItem(CHAVE_AVISO, estado) } catch { /* ignora */ }
-  }
-
-  const ativar = async () => {
-    if (!user) return
-    setPedindo(true)
-    setEstado(await pedirPermissaoEInscrever(user.id))
-    setPedindo(false)
   }
 
   return (
@@ -145,14 +138,6 @@ export function AvisoNotificacoes() {
         <BellRing className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1 text-[13.5px] leading-snug text-gray-700">
-        {estado === 'default' && (
-          <>
-            <p className="font-medium text-gray-900">Receba aviso de mensagens novas</p>
-            <button type="button" onClick={ativar} disabled={pedindo} className="mt-0.5 font-medium text-[#027EB5] hover:underline disabled:opacity-60">
-              {pedindo ? 'Ativando…' : 'Ativar notificações'}
-            </button>
-          </>
-        )}
         {estado === 'denied' && (
           <p>As notificações estão bloqueadas neste navegador. Para receber avisos, libere nas permissões do site (ícone do cadeado ao lado do endereço).</p>
         )}

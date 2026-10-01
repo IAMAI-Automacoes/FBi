@@ -15,29 +15,25 @@ export function ManifestPorRota() {
   const { pathname } = useLocation()
 
   useEffect(() => {
-    const ehMensagens = pathname.startsWith('/admin')
+    // Três apps no mesmo site: o painel inteiro ("Easy Feed"), o chat de
+    // suporte do admin ("Mensagens") e a tela WhatsApp ("Whatsapp EasyFeed").
+    // O index.html faz a mesma escolha antes do React, no carregamento.
+    const app = pathname.startsWith('/whatsapp') ? 'whatsapp' : pathname.startsWith('/admin') ? 'mensagens' : 'easyfeed'
+    const tags = {
+      whatsapp: { manifest: '/manifest-whatsapp.webmanifest', icone: '/whatsapp-apple-touch.png', titulo: 'Whatsapp EasyFeed', cor: '#128c7e' },
+      mensagens: { manifest: '/manifest-mensagens.webmanifest', icone: '/mensagens-apple-touch.png', titulo: 'Mensagens', cor: '#128c7e' },
+      easyfeed: { manifest: '/manifest.webmanifest', icone: '/apple-touch-icon.png', titulo: 'Easy Feed', cor: '#ffffff' },
+    }[app]
 
     const set = (seletor: string, attr: string, valor: string) => {
       const el = document.head.querySelector(seletor)
       if (el) el.setAttribute(attr, valor)
     }
 
-    set(
-      'link[rel="manifest"]',
-      'href',
-      ehMensagens ? '/manifest-mensagens.webmanifest' : '/manifest.webmanifest',
-    )
-    set(
-      'link[rel="apple-touch-icon"]',
-      'href',
-      ehMensagens ? '/mensagens-apple-touch.png' : '/apple-touch-icon.png',
-    )
-    set(
-      'meta[name="apple-mobile-web-app-title"]',
-      'content',
-      ehMensagens ? 'Mensagens' : 'Easy Feed',
-    )
-    set('meta[name="theme-color"]', 'content', ehMensagens ? '#128c7e' : '#ffffff')
+    set('link[rel="manifest"]', 'href', tags.manifest)
+    set('link[rel="apple-touch-icon"]', 'href', tags.icone)
+    set('meta[name="apple-mobile-web-app-title"]', 'content', tags.titulo)
+    set('meta[name="theme-color"]', 'content', tags.cor)
   }, [pathname])
 
   return null

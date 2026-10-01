@@ -97,6 +97,7 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
                                                    suporte ao dono, cache de prévias
   20261002020000_preferencias_realtime_busca.sql  preferências em tempo real e
                                                    pesquisa por relevância
+  20261002030000_whatsapp_fotos.sql                cache das fotos dos participantes
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -630,3 +631,24 @@ transcrição — que abre sozinha — ou nome do arquivo); num resultado
 Contador do menu (item WhatsApp): quantas conversas (contatos e grupos)
 têm mensagem não lida. Abrir a página não zera; cada conversa aberta e
 lida tira 1 na hora. Conversa silenciada continua contando.
+
+App "Whatsapp EasyFeed" (tela inicial): manifest próprio
+(public/manifest-whatsapp.webmanifest, ícones public/icons/whatsapp-*.png),
+escolhido pelo index.html e pelo ManifestPorRota quando a rota é /whatsapp.
+Botão "Instalar app" no topo da lista (Chrome/Edge no Android e no PC); no
+iPhone, passo a passo (Compartilhar → Adicionar à Tela de Início). Aberto
+pelo ícone, entra logado (a sessão sempre fica salva no app instalado) e
+direto no WhatsApp.
+
+Permissão de notificação: cartão "Receber notificações?" (PedirNotificacoes,
+no App) em qualquer página logada, no PC e no celular; "Agora não" esconde
+por 7 dias. Autorizado, chega tudo que não foi silenciado no sistema.
+
+Celular: a tela WhatsApp fica presa à área visível (fixed + 100dvh):
+cabeçalho da conversa sempre no topo, rodapé rente ao fim da tela.
+
+Fotos dos participantes dos grupos: whatsapp-instancia, ação "fotos"
+{telefones} → uazapi POST /chat/details {number, preview:true}, com cache de
+24 h na tabela whatsapp_fotos (migration 20261002030000). A foto aparece à
+esquerda da primeira mensagem de cada sequência e no perfil; quem esconde a
+foto (ou não tem) fica sem nada.
