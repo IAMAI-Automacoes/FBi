@@ -29,6 +29,7 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Onboarding = lazy(() => import('./pages/auth/Onboarding'))
 const MyAccount = lazy(() => import('./pages/MyAccount'))
 const Sugestoes = lazy(() => import('./pages/Sugestoes'))
+const WhatsApp = lazy(() => import('./pages/WhatsApp'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 const Assinatura = lazy(() => import('./pages/Assinatura'))
@@ -173,6 +174,14 @@ const App = () => (
                 element={
                   <RotaPermitida modulo="qrcodes">
                     <Garcons />
+                  </RotaPermitida>
+                }
+              />
+              <Route
+                path="/whatsapp"
+                element={
+                  <RotaPermitida modulo="whatsapp">
+                    <WhatsApp />
                   </RotaPermitida>
                 }
               />

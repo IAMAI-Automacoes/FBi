@@ -1,16 +1,17 @@
-SIMULAÇÃO DO WHATSAPP — GUIA PARA QUEM VAI FAZER A INTERFACE
+SIMULAÇÃO DO WHATSAPP — GUIA COMPLETO (CAPTURA, BANCO E TELA)
 =============================================================
 
-Atualizado em 01/10/2026.
+Atualizado em 01/10/2026 (tela /whatsapp pronta).
 
 O que é: uma tela no painel onde o dono do restaurante vê as conversas do
 WhatsApp do restaurante como se estivesse no próprio WhatsApp: o que o cliente
 mandou, o que o EasyFeed respondeu sozinho e o que o dono digitou no celular.
 Cada restaurante vê só as conversas dele.
 
-A parte de captura já está pronta e rodando em produção (webhook, n8n, tabela,
-bucket de arquivos). Falta só a tela. Este documento explica de onde vêm os
-dados, o que significa cada campo e como desenhar cada tipo de mensagem.
+Tudo está pronto e em produção: a captura (webhook, n8n, tabela, bucket de
+arquivos) e a tela /whatsapp do painel (item 11). Este documento explica de
+onde vêm os dados, o que significa cada campo, como cada tipo de mensagem é
+desenhado e onde está cada parte do código.
 
 Tudo aqui foi conferido com eventos reais, mandados pelo número do Camelo
 (restaurante 11) em 30/09: texto, edição, exclusão, reação, resposta, áudio,
@@ -90,6 +91,8 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
   20260930020000_mensagens_whatsapp_valores_reais.sql  comentários com os
                                                    valores reais
   20261001000000_mensagens_whatsapp_realtime.sql   liga o Realtime na tabela
+  20261002000000_whatsapp_tela.sql                 leitura por conversa, lista de
+                                                   conversas e push
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -239,12 +242,21 @@ Abrir uma conversa (as 100 mais recentes):
   Não peça a coluna payload na listagem (é o evento inteiro, pesado). Busque só
   quando precisar, e só da linha que precisa.
 
-Lista de conversas: ainda não existe uma view/função pronta. Para começar dá
-para buscar as últimas ~1000 linhas do restaurante (índice de recentes) e
-agrupar por chat_id no front, pegando a mais recente de cada conversa. Isso
-deixa de servir quando o volume crescer; aí o certo é criar uma função
-(RPC) no banco que devolva uma linha por conversa. Mexer no banco precisa de
-OK do Raver antes.
+Lista de conversas: função public.conversas_whatsapp(p_restaurante_id) —
+uma linha por conversa, com a última mensagem e as não lidas:
+
+  supabase.rpc('conversas_whatsapp', { p_restaurante_id: restauranteId })
+
+  Não lida = mensagem RECEBIDA (sem reação, sem apagada) depois do que for
+  mais recente entre: a leitura no painel (mensagens_whatsapp_leitura.lido_ate)
+  e a última mensagem que o DONO mandou pelo celular (de_mim e não por_api —
+  quem respondeu, leu; a resposta automática do EasyFeed não conta).
+  É security invoker: a RLS vale, outro restaurante volta vazio.
+
+Leitura: tabela mensagens_whatsapp_leitura (restaurante_id, chat_id,
+lido_ate). Quem grava é a função whatsapp-instancia, ação "marcar-lidas"
+{ chat_id }: ela também manda o "lido" para o WhatsApp de verdade
+(POST /message/markread na uazapi) — o cliente vê os tiques azuis.
 
 Tempo real: LIGADO (Realtime do Supabase, com REPLICA IDENTITY FULL). A RLS
 vale também aqui: cada dono só recebe eventos do restaurante dele.
@@ -512,3 +524,49 @@ o resto é computador.
   - Não usar midia_url na tela: expira em 2 dias.
   - A tela não envia nada pelo EasyFeed/uazapi. Responder é sempre pelo
     WhatsApp pessoal do dono (item 9), nunca pelo número de feedbacks.
+
+
+-------------------------------------------------------------
+11. A TELA /whatsapp (o que foi construído)
+-------------------------------------------------------------
+
+Acesso: item "WhatsApp" no menu lateral (logo depois de Feedbacks), módulo
+de permissão "whatsapp", com contador verde de conversas não lidas. Também
+"Ver conversa" em cada card da página Feedbacks (abre /whatsapp?tel=…).
+
+URL: /whatsapp?chat=<chat_id>&painel=contato|pesquisa. O voltar do celular
+fecha o painel e depois volta para a lista. A notificação abre direto na
+conversa.
+
+Arquivos:
+  src/pages/WhatsApp.tsx                   página (lista | conversa | painel)
+  src/components/whatsapp/ListaConversas   busca, filtros Tudo/Não lidas/Grupos
+  src/components/whatsapp/Conversa         mensagens, paginação, divisor de
+                                           não lidas, datas, botão ↓, tempo
+                                           real, marcar como lida, citação
+  src/components/whatsapp/Balao            um balão (todos os tipos)
+  src/components/whatsapp/midia/*          áudio (onda real, velocidade,
+                                           toca o próximo), foto, vídeo, gif,
+                                           figurinha, PDF (capa + leitor),
+                                           galeria em tela cheia
+  src/components/whatsapp/Paineis          dados do contato (Enviar mensagem,
+                                           Mídia/Docs/Links) e pesquisa
+  src/components/whatsapp/Notificacoes     som, aviso de ativar notificações,
+                                           inscrição no push
+  src/lib/whatsapp/formatacao.ts           regras puras (testadas em
+                                           src/lib/__testes__/whatsapp.teste.ts)
+  src/lib/queries/whatsapp.ts              consultas e URLs assinadas
+  src/lib/push.ts                          inscrição Web Push (admin e dono)
+
+Notificações:
+  - Gatilho trg_mensagens_whatsapp_push (mensagem RECEBIDA, grupos inclusive)
+    chama a função enviar-push { tipo: 'whatsapp', id }, que manda para os
+    aparelhos do DONO (push_subscriptions). Reação só notifica se foi numa
+    mensagem do restaurante. O service worker não mostra a notificação da
+    conversa que está aberta na tela (usuarioId = 'wa:' + chat_id).
+  - A função enviar-push tem que ser publicada com --no-verify-jwt (o
+    gatilho não manda login). Sem isso, nenhum push sai.
+  - O dono ativa no aviso do topo da lista. No iPhone, só com o EasyFeed
+    adicionado à Tela de Início.
+  - Com a tela aberta, toca um som quando chega mensagem em outra conversa
+    (sino no topo da lista silencia; fica salvo no aparelho).

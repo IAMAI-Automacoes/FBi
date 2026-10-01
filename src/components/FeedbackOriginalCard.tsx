@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { cn } from '@/lib/utils'
 import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
 import { estiloCategoria } from '@/lib/categorias-feedback'
@@ -39,6 +41,9 @@ interface FeedbackOriginalCardProps {
   quando: string
   /** Corta a citação em 2 linhas (clicável pra ver inteira) — usado no resumo da Visão Geral, não na página cheia de Feedbacks. */
   truncar?: boolean
+  /** Telefone do cliente: mostra "Ver conversa" (abre a tela WhatsApp nele).
+   *  Quem chama só passa se a pessoa pode ver o módulo whatsapp. */
+  telefoneConversa?: string | null
 }
 
 /**
@@ -56,6 +61,7 @@ export function FeedbackOriginalCard({
   categorias,
   quando,
   truncar = false,
+  telefoneConversa,
 }: FeedbackOriginalCardProps) {
   const cor = coresSentimento(sentimento)
   // Só existe pra cortar em 2 linhas — clicar alterna pra mostrar inteiro. Se
@@ -98,8 +104,8 @@ export function FeedbackOriginalCard({
             {quando}
           </span>
         </div>
-        {categorias.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+        {(categorias.length > 0 || telefoneConversa) && (
+          <div className="flex flex-wrap items-center gap-1.5">
             {categorias.map((cat) => {
               const estilo = estiloCategoria(cat)
               const Icon = estilo.icon
@@ -118,6 +124,14 @@ export function FeedbackOriginalCard({
                 </span>
               )
             })}
+            {telefoneConversa && (
+              <Link
+                to={`/whatsapp?tel=${encodeURIComponent(telefoneConversa)}`}
+                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#128C7E] hover:bg-[#128C7E]/10"
+              >
+                <WhatsappIcon className="h-3.5 w-3.5" /> Ver conversa
+              </Link>
+            )}
           </div>
         )}
       </div>

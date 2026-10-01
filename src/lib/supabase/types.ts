@@ -1608,6 +1608,35 @@ export type Database = {
           },
         ]
       }
+      mensagens_whatsapp_leitura: {
+        Row: {
+          atualizado_em: string
+          chat_id: string
+          lido_ate: string
+          restaurante_id: number
+        }
+        Insert: {
+          atualizado_em?: string
+          chat_id: string
+          lido_ate: string
+          restaurante_id: number
+        }
+        Update: {
+          atualizado_em?: string
+          chat_id?: string
+          lido_ate?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_whatsapp_leitura_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modelos_ia: {
         Row: {
           ativo: boolean
@@ -2608,6 +2637,26 @@ export type Database = {
         }[]
       }
       arquivar_concluidas_antigas: { Args: never; Returns: number }
+      conversas_whatsapp: {
+        Args: { p_restaurante_id: number }
+        Returns: {
+          chat_id: string
+          grupo: boolean
+          nao_lidas: number
+          nome_exibicao: string
+          telefone: string
+          ultima_de_mim: boolean
+          ultima_enviada_em: string
+          ultima_message_id: string
+          ultima_midia_nome: string
+          ultima_por_api: boolean
+          ultima_reacao: string
+          ultima_remetente: string
+          ultima_status: string
+          ultima_texto: string
+          ultima_tipo: string
+        }[]
+      }
       assinaturas_expirar_e_listar: {
         Args: never
         Returns: {

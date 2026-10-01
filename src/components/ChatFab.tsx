@@ -188,7 +188,9 @@ export function ChatFab({
   const mascoteNome = mascote.nome
   // O return condicional fica no fim do componente: sair antes dos hooks
   // muda a quantidade de hooks entre renders e quebra o React.
-  const ocultar = pathname === '/sugestoes'
+  // Telas de chat em tela cheia: o botão flutuante cobria o próprio rodapé
+  // delas (na WhatsApp, o "Enviar mensagem").
+  const ocultar = pathname === '/sugestoes' || pathname === '/whatsapp'
   const { toast } = useToast()
   const {
     messages, loading, buscandoWeb, sessaoId, enviar, adicionarMensagemUsuario,

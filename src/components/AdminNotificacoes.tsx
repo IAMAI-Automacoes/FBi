@@ -3,20 +3,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { buscarTotalNaoLidas } from '@/lib/queries/admin'
 import { atualizarBadgeApp } from '@/lib/notificacoes-app'
-
-// Chave pública VAPID (é pública por design — pode ficar no bundle). A privada
-// vive só no servidor (integracao_config), usada pela edge function enviar-push.
-const VAPID_PUBLIC_KEY =
-  'BLfkBUJBdJzyAs5A-8Q-daniHRzoie_v2PkwZPHhMIG4X9Ix8thCjJEX9Zwiw4CmsLpnHHgpfPVA3sdBXQWI_o4'
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = atob(base64)
-  const arr = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i)
-  return arr
-}
+import { inscreverPush } from '@/lib/push'
 
 /**
  * Inscreve o admin da plataforma no Web Push, pra receber notificação de
@@ -36,30 +23,8 @@ export function AdminNotificacoes() {
     let cancelado = false
 
     const inscrever = async () => {
-      if (Notification.permission !== 'granted') return
-      try {
-        const reg = await navigator.serviceWorker.ready
-        const sub =
-          (await reg.pushManager.getSubscription()) ??
-          (await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-          }))
-        if (cancelado) return
-
-        const json = sub.toJSON()
-        const endpoint = json.endpoint
-        const p256dh = json.keys?.p256dh
-        const auth = json.keys?.auth
-        if (!endpoint || !p256dh || !auth) return
-
-        await supabase.from('push_subscriptions').upsert(
-          { auth_user_id: user.id, endpoint, p256dh, auth, user_agent: navigator.userAgent },
-          { onConflict: 'endpoint' },
-        )
-      } catch (err) {
-        console.warn('Falha ao inscrever no push:', err)
-      }
+      if (cancelado) return
+      await inscreverPush(user.id)
     }
 
     let removerGesto: (() => void) | null = null

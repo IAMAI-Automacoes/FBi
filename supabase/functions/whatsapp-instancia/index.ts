@@ -334,6 +334,60 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true })
     }
 
+    // ── marcar-lidas: o dono abriu a conversa na tela WhatsApp ─────────────────
+    // Marca como lida no WhatsApp de verdade (o cliente vê os tiques azuis —
+    // decisão do Raver) e grava até onde foi lido, que é o que zera o contador
+    // da tela. A uazapi falhar não impede o contador de zerar: a leitura no
+    // painel aconteceu de qualquer jeito.
+    if (action === 'marcar-lidas') {
+      const chatId = String(body.chat_id ?? '').trim()
+      if (!chatId) return json({ error: 'chat_id obrigatório' }, 400)
+
+      const { data: leitura } = await admin
+        .from('mensagens_whatsapp_leitura')
+        .select('lido_ate')
+        .eq('restaurante_id', rest.id)
+        .eq('chat_id', chatId)
+        .maybeSingle()
+
+      let consulta = admin
+        .from('mensagens_whatsapp')
+        .select('message_id, enviada_em')
+        .eq('restaurante_id', rest.id)
+        .eq('chat_id', chatId)
+        .eq('de_mim', false)
+        .neq('tipo', 'reaction')
+        .order('enviada_em', { ascending: false })
+        .limit(200)
+      if (leitura?.lido_ate) consulta = consulta.gt('enviada_em', leitura.lido_ate)
+      const { data: novas } = await consulta
+      if (!novas || novas.length === 0) return json({ ok: true, lidas: 0, marcadas_no_whatsapp: 0 })
+
+      let marcadas = 0
+      if (token) {
+        const ids = novas.map((m: { message_id: string }) => m.message_id)
+        for (let i = 0; i < ids.length; i += 50) {
+          const lote = ids.slice(i, i + 50)
+          try {
+            const r = await fetch(`${BASE}/message/markread`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', token },
+              body: JSON.stringify({ id: lote }),
+            })
+            if (r.ok) marcadas += lote.length
+          } catch { /* best-effort */ }
+        }
+      }
+
+      // Até a mais nova que existia AGORA — não `now()`: uma mensagem que chegar
+      // durante esta chamada continua contando como não lida.
+      await admin.from('mensagens_whatsapp_leitura').upsert(
+        { restaurante_id: rest.id, chat_id: chatId, lido_ate: novas[0].enviada_em, atualizado_em: new Date().toISOString() },
+        { onConflict: 'restaurante_id,chat_id' },
+      )
+      return json({ ok: true, lidas: novas.length, marcadas_no_whatsapp: marcadas })
+    }
+
     return json({ error: 'Ação inválida' }, 400)
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

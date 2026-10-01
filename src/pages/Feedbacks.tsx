@@ -23,6 +23,7 @@ import { FiltroPeriodo } from '@/components/FiltroPeriodo'
 import { CampoBusca } from '@/components/CampoBusca'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { useAuth } from '@/hooks/use-auth'
+import { usePermissoes } from '@/hooks/use-permissoes'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { supabase } from '@/lib/supabase/client'
@@ -196,6 +197,7 @@ export default function Feedbacks() {
   }
 
   const dataToDisplay = feedbacks
+  const podeVerWhatsapp = usePermissoes().podeVer('whatsapp')
 
   // Vive dentro do <header> fixo do topo (via `useHeaderExtra`), não na
   // página — um bloco fixo só, sem costura entre cabeçalho e barra de
@@ -329,6 +331,7 @@ export default function Feedbacks() {
                 sentimento={fb.sentimento}
                 categorias={fb.categorias ?? []}
                 quando={formatarDataFeedback(fb.created_at)}
+                telefoneConversa={podeVerWhatsapp ? fb.telefone_cliente : null}
               />
             </div>
           ))

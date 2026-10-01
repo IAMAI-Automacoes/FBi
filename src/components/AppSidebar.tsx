@@ -27,10 +27,13 @@ import { buscarTotalNaoLidasCliente } from '@/lib/queries/sugestoes'
 import { contarGarconsPendentes } from '@/lib/queries/bonificacao-garcons'
 import { contarFeedbacksNaoLidos, marcarFeedbacksVistos } from '@/lib/queries/feedbacks'
 import { supabase } from '@/lib/supabase/client'
+import { listarConversas } from '@/lib/queries/whatsapp'
+import { WhatsappIcon } from './WhatsappIcon'
 
 const navigation = [
   { name: 'Visão Geral', href: '/', icon: LayoutDashboard, modulo: 'visao_geral' },
   { name: 'Feedbacks', href: '/feedbacks', icon: MessageSquare, modulo: 'feedbacks' },
+  { name: 'WhatsApp', href: '/whatsapp', icon: WhatsappIcon, modulo: 'whatsapp' },
   { name: 'Insights', href: '/insights', icon: Lightbulb, modulo: 'insights' },
   { name: 'Ações', href: '/acoes', icon: Zap, modulo: 'acoes' },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart, modulo: 'relatorios' },
@@ -113,6 +116,27 @@ export function AppSidebar() {
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId])
 
+  // Numerozinho do WhatsApp: conversas com mensagem não lida (mesma conta da
+  // tela — recebida depois da última leitura ou da última resposta do dono).
+  // Some sozinho conforme as conversas são abertas, como no WhatsApp.
+  const podeVerWhatsapp = podeVer('whatsapp')
+  const [conversasNaoLidas, setConversasNaoLidas] = useState(0)
+  useEffect(() => {
+    if (!restauranteId || !podeVerWhatsapp) { setConversasNaoLidas(0); return }
+    let espera: ReturnType<typeof setTimeout> | null = null
+    const atualizar = () => listarConversas(restauranteId)
+      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0).length))
+      .catch(() => {})
+    const agendar = () => { if (espera) clearTimeout(espera); espera = setTimeout(atualizar, 800) }
+    atualizar()
+    const ch = supabase
+      .channel('sidebar-whatsapp-nao-lidas')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp_leitura', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
+      .subscribe()
+    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch) }
+  }, [restauranteId, podeVerWhatsapp])
+
   useEffect(() => {
     if (isFeedbacksActive && restauranteId) {
       setFeedbacksNaoLidos(0)
@@ -177,6 +201,11 @@ export function AppSidebar() {
                       {/* "Chegou feedback negativo" — notificação pura: some
                           assim que a rota fica ativa (efeito acima zera e
                           marca como visto no banco). */}
+                      {item.name === 'WhatsApp' && conversasNaoLidas > 0 && (
+                        <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-[#25D366] text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                          {conversasNaoLidas > 99 ? '99+' : conversasNaoLidas}
+                        </span>
+                      )}
                       {item.name === 'Feedbacks' && feedbacksNaoLidos > 0 && (
                         <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
                           {feedbacksNaoLidos > 99 ? '99+' : feedbacksNaoLidos}

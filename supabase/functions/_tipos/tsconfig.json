@@ -13,7 +13,8 @@
       "https://deno.land/std@0.168.0/http/server.ts": ["./stubs/server.ts"],
       "jsr:@supabase/supabase-js@2": ["./stubs/supabase.ts"],
       "npm:stripe@22.6.2": ["./stubs/stripe.ts"],
-      "npm:zod@4.3.6": ["./stubs/zod.ts"]
+      "npm:zod@4.3.6": ["./stubs/zod.ts"],
+      "npm:web-push@3.6.7": ["./stubs/web-push.ts"]
     }
   },
   "include": [
@@ -32,6 +33,9 @@
     "../consultar-compra/*.ts",
     "../vincular-compra/*.ts",
     "../create-portal-session/*.ts",
-    "../cancelar-assinatura/*.ts"
+    "../cancelar-assinatura/*.ts",
+    "../enviar-push/*.ts",
+    "../whatsapp-instancia/*.ts",
+    "../guardar-midia/*.ts"
   ]
 }

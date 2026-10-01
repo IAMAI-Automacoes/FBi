@@ -8,17 +8,19 @@ import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
 import { AvisoAssinatura } from './AvisoAssinatura'
 import { ErrorBoundary } from './ErrorBoundary'
+import { NotificacoesWhatsapp } from './whatsapp/Notificacoes'
 
 // Largura fixa do chat de IA (desktop). O conteúdo recua exatamente isso.
 const LARGURA_CHAT = 380
 
 // A barra some nessa página: "Sugestões e Dúvidas" pediu ficar de fora.
-const ROTAS_SEM_BARRA_SCROLL = ['/sugestoes']
+const ROTAS_SEM_BARRA_SCROLL = ['/sugestoes', '/whatsapp']
 
 // O cabeçalho fixo (logo central + painel do admin) some aqui: a página já
 // tem seu próprio cabeçalho de chat (com o nome/logo do EasyFeed), então o
-// de cima virava um segundo cabeçalho redundante.
-const ROTAS_SEM_TOPO = ['/sugestoes']
+// de cima virava um segundo cabeçalho redundante. Na tela WhatsApp o menu do
+// celular abre pelo botão do cabeçalho da lista de conversas.
+const ROTAS_SEM_TOPO = ['/sugestoes', '/whatsapp']
 
 /**
  * Indicador de rolagem — o app esconde a barra nativa em TODO lugar (ver
@@ -217,6 +219,8 @@ export default function Layout() {
             </div>
           </main>
           <ChatFab open={chatAberto} onOpenChange={setChatAberto} />
+          {/* Inscreve o aparelho no push de mensagens do WhatsApp (quem já permitiu) */}
+          <NotificacoesWhatsapp />
         </div>
       </HeaderExtraProvider>
     </SidebarProvider>
