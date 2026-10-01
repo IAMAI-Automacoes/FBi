@@ -65,7 +65,7 @@ export function PreviaLinkCartao({ url, idMensagem, deMim }: { url: string; idMe
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        'mb-1 block w-[min(330px,72vw)] overflow-hidden rounded-md transition-colors',
+        'mb-1 block w-full overflow-hidden rounded-md transition-colors',
         dados ? (deMim ? 'bg-[#cfe9ba] hover:bg-[#c5e3ae]' : 'bg-[#f5f6f6] hover:bg-[#eceeee]') : 'h-0',
       )}
       aria-label={dados?.titulo ? `Abrir ${dados.titulo}` : 'Abrir link'}
@@ -79,7 +79,7 @@ export function PreviaLinkCartao({ url, idMensagem, deMim }: { url: string; idMe
               loading="lazy"
               referrerPolicy="no-referrer"
               onError={() => setImagemFalhou(true)}
-              className={dados.miniatura ? 'h-[72px] w-[72px] shrink-0 object-cover' : 'max-h-[220px] w-full object-cover'}
+              className={dados.miniatura ? 'h-[72px] w-[72px] shrink-0 object-cover' : 'block max-h-[300px] w-full object-cover'}
             />
           )}
           <div className="min-w-0 px-2.5 py-2">

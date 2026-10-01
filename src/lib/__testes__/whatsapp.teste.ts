@@ -13,6 +13,10 @@ import {
   textoApresentacao,
   linkEnviarMensagem,
   nomeConversa,
+  normalizarBusca,
+  pontuarBusca,
+  regexDestaque,
+  trechoComTermo,
 } from '../whatsapp/formatacao.ts'
 
 let falhas = 0
@@ -135,6 +139,39 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
   ok('android: com volta para wa.me', camelo.includes('S.browser_fallback_url=https%3A%2F%2Fwa.me%2F5511932903005'))
   ok('android: restaurante no comum abre o Business', linkEnviarMensagem({ telefoneCliente: tel, texto: 'oi', aparelho: 'android', restauranteBusiness: false }).includes('package=com.whatsapp.w4b;'))
   ok('android sem saber: wa.me', linkEnviarMensagem({ telefoneCliente: tel, texto: 'oi', aparelho: 'android', restauranteBusiness: null }).startsWith('https://wa.me/'))
+}
+
+// ── Pesquisa: exatos primeiro, depois parecidos ──────────────────────────────
+{
+  const msg = 'a comida estava fria e saborosa'
+  ok('normaliza acento, maiúscula e pontuação', normalizarBusca('Ação, FRIA!  é') === 'acao fria e', normalizarBusca('Ação, FRIA!  é'))
+  ok('exato vale 3', pontuarBusca('fria', msg) === 3)
+  ok('maiúscula e pontuação vale 2', pontuarBusca('FRIA!', msg) === 2)
+  ok('acento vale 2', pontuarBusca('sabórosa', msg) === 2)
+  ok('letras trocadas vale 1', pontuarBusca('fira', msg) === 1)
+  ok('uma letra a mais vale 1', pontuarBusca('saborossa', msg) === 1)
+  ok('pedaço de palavra escrito igual vale 3', pontuarBusca('sabor', msg) === 3)
+  ok('começo de palavra com erro de maiúscula vale 2', pontuarBusca('SABOR', msg) === 2)
+  ok('várias palavras, todas parecidas', pontuarBusca('comdia fira', msg) === 1)
+  ok('palavra de 3 letras não aceita erro', pontuarBusca('foa', msg) === 0)
+  ok('sem relação vale 0', pontuarBusca('pizza', msg) === 0)
+  ok('para não casa com fira', pontuarBusca('fira', 'vou para casa') === 0)
+  const re = regexDestaque('FRIA!')!
+  ok('realce ignora maiúscula e pontuação', 'Estava FRIA demais'.replace(re, '[$1]') === 'Estava [FRIA] demais')
+  ok('realce ignora acento', 'Ação rápida'.replace(regexDestaque('acao')!, '[$1]') === '[Ação] rápida')
+  ok('realce de duas palavras atravessa pontuação', 'comida, fria'.replace(regexDestaque('comida fria')!, '[$1]') === '[comida, fria]')
+  ok('termo curto não realça', regexDestaque('a') === null)
+}
+
+// ── Trecho do resultado de pesquisa ──────────────────────────────────────────
+{
+  const longo = 'CHEGA DE REPETIR CAMISETA\n\nKit 5 Camisetas Básicas Algodão Premium (P ao GG)\n\nDe R$ 199 Por R$ 89\n\nLoja Oficial no ML'
+  const t = trechoComTermo(longo, 'básicas')
+  ok('trecho mostra o termo', t.includes('Básicas'), t)
+  ok('trecho é uma linha só', !t.includes('\n'))
+  ok('termo no começo não corta', trechoComTermo('oi tudo bem', 'oi') === 'oi tudo bem')
+  ok('sem o termo: começo do texto', trechoComTermo('a comida estava fria', 'fira') === 'a comida estava fria')
+  ok('trecho cortado no meio ganha reticências', trechoComTermo('x'.repeat(100) + ' alvo ' + 'y'.repeat(200), 'alvo').startsWith('…'))
 }
 
 if (falhas > 0) {

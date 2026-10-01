@@ -62,13 +62,18 @@ export async function buscarMensagem(id: number): Promise<MensagemWa | null> {
   return (data as unknown as MensagemWa) ?? null
 }
 
-/** Fotos, vídeos, gifs e documentos da conversa + textos com link (painel do contato). */
-export async function buscarMidiasDaConversa(restauranteId: number, chatId: string): Promise<MensagemWa[]> {
-  const { data, error } = await supabase
+/**
+ * Fotos, vídeos, gifs e documentos da conversa + textos com link (painel do
+ * contato). Com `telefone`, só o que essa pessoa mandou (participante de grupo).
+ */
+export async function buscarMidiasDaConversa(restauranteId: number, chatId: string, telefone?: string | null): Promise<MensagemWa[]> {
+  let q = supabase
     .from('mensagens_whatsapp')
     .select(COLUNAS)
     .eq('restaurante_id', restauranteId)
     .eq('chat_id', chatId)
+  if (telefone) q = q.eq('telefone', telefone).eq('de_mim', false)
+  const { data, error } = await q
     .or('tipo.in.(image,video,gif,document),texto.ilike.*http*,texto.ilike.*www.*')
     .order('enviada_em', { ascending: false })
     .limit(300)
@@ -78,20 +83,28 @@ export async function buscarMidiasDaConversa(restauranteId: number, chatId: stri
   return ((data ?? []) as unknown as MensagemWa[]).filter((m) => m.status !== 'DELETED')
 }
 
-/** "Pesquisar na conversa": texto, legenda e transcrição. */
-export async function pesquisarNaConversa(restauranteId: number, chatId: string, termo: string): Promise<MensagemWa[]> {
-  const t = termo.trim().replace(/[%_,()]/g, ' ')
+export type ResultadoBusca = MensagemWa & {
+  /** 1 = exatamente como escrito; 2 = sem acento/maiúscula/pontuação; 3 = parecido. */
+  relevancia: 1 | 2 | 3
+  semelhanca: number
+}
+
+/**
+ * Pesquisa em texto, transcrição e nome de arquivo — exatos primeiro, depois
+ * parecidos (função pesquisar_mensagens_whatsapp). Sem `chatId`, em todas as
+ * conversas (pesquisa da lista).
+ */
+export async function pesquisarMensagens(restauranteId: number, termo: string, chatId?: string | null): Promise<ResultadoBusca[]> {
+  const t = termo.trim()
   if (t.length < 2) return []
-  const { data, error } = await supabase
-    .from('mensagens_whatsapp')
-    .select(COLUNAS)
-    .eq('restaurante_id', restauranteId)
-    .eq('chat_id', chatId)
-    .or(`texto.ilike.*${t}*,transcricao.ilike.*${t}*,midia_nome.ilike.*${t}*`)
-    .order('enviada_em', { ascending: false })
-    .limit(50)
+  const { data, error } = await supabase.rpc('pesquisar_mensagens_whatsapp', {
+    p_restaurante_id: restauranteId,
+    p_termo: t,
+    p_chat_id: chatId ?? undefined,
+    p_limite: chatId ? 80 : 40,
+  })
   if (error) throw error
-  return ((data ?? []) as unknown as MensagemWa[]).filter((m) => m.status !== 'DELETED')
+  return (data ?? []) as unknown as ResultadoBusca[]
 }
 
 /** Localização / contato: os dados só existem no payload, então vêm sob demanda. */

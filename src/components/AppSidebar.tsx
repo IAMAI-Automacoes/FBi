@@ -125,7 +125,7 @@ export function AppSidebar() {
     if (!restauranteId || !podeVerWhatsapp) { setConversasNaoLidas(0); return }
     let espera: ReturnType<typeof setTimeout> | null = null
     const atualizar = () => listarConversas(restauranteId)
-      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0 && !c.silenciada).length))
+      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0).length))
       .catch(() => {})
     const agendar = () => { if (espera) clearTimeout(espera); espera = setTimeout(atualizar, 800) }
     atualizar()

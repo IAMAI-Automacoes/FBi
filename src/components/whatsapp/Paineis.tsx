@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, BellOff, FileText, Link2, Loader2, Pin, Play, Search, Send, X } from 'lucide-react'
-import { Switch } from '@/components/ui/switch'
+import { FileText, Link2, Loader2, MessageCircle, Play, Search, Send, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  formatarTelefone, horaCurta, linksDoTexto, previaMensagem, rotuloDia, type MensagemWa,
+  formatarTelefone, horaCurta, linksDoTexto, previaMensagem, rotuloDia, trechoComTermo, type MensagemWa,
 } from '@/lib/whatsapp/formatacao'
-import { buscarMidiasDaConversa, pesquisarNaConversa, urlParaBaixar, urlsAssinadas } from '@/lib/queries/whatsapp'
+import {
+  buscarMidiasDaConversa, pesquisarMensagens, urlParaBaixar, urlsAssinadas, type ResultadoBusca,
+} from '@/lib/queries/whatsapp'
 import { Avatar, TextoWhatsapp, WA } from './pecas'
 import { Galeria, LeitorPdf, type ItemGaleria } from './midia/Galeria'
 
@@ -26,7 +27,7 @@ function Cabecalho({ titulo, aoFechar }: { titulo: string; aoFechar: () => void 
 type Aba = 'midia' | 'docs' | 'links'
 
 export function PainelContato({
-  restauranteId, chatId, nome, foto, telefone, grupo, fixada, silenciada, aoFixar, aoSilenciar,
+  restauranteId, chatId, nome, foto, telefone, grupo, participante, aoAbrirConversa,
   linkResponder, motivoSemLink, numeroDono, aoFechar,
 }: {
   restauranteId: number
@@ -35,10 +36,10 @@ export function PainelContato({
   foto: string | null
   telefone: string | null
   grupo: boolean
-  fixada: boolean
-  silenciada: boolean
-  aoFixar: () => void
-  aoSilenciar: () => void
+  /** Perfil de quem mandou mensagem num grupo (chatId = o grupo). */
+  participante?: { nomeGrupo: string; conversaIndividual: string | null }
+  /** "Ver conversa": abre a conversa individual com essa pessoa. */
+  aoAbrirConversa?: (chatId: string) => void
   linkResponder: string | null
   motivoSemLink: string | null
   /** WhatsApp pessoal do dono, formatado (de onde a mensagem deve sair). */
@@ -54,7 +55,7 @@ export function PainelContato({
   useEffect(() => {
     let ativo = true
     setMidias(null)
-    buscarMidiasDaConversa(restauranteId, chatId)
+    buscarMidiasDaConversa(restauranteId, chatId, participante ? telefone : null)
       .then(async (lista) => {
         if (!ativo) return
         setMidias(lista)
@@ -63,7 +64,8 @@ export function PainelContato({
       })
       .catch(() => { if (ativo) setMidias([]) })
     return () => { ativo = false }
-  }, [restauranteId, chatId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restauranteId, chatId, telefone, !!participante])
 
   const visuais = useMemo(() => (midias ?? []).filter((m) => ['image', 'video', 'gif'].includes(m.tipo) && m.midia_caminho), [midias])
   const docs = useMemo(() => (midias ?? []).filter((m) => m.tipo === 'document'), [midias])
@@ -85,12 +87,13 @@ export function PainelContato({
 
   return (
     <div className="flex h-full w-full flex-col bg-[#F0F2F5]">
-      <Cabecalho titulo={grupo ? 'Dados do grupo' : 'Dados do contato'} aoFechar={aoFechar} />
+      <Cabecalho titulo={participante ? 'Participante do grupo' : grupo ? 'Dados do grupo' : 'Dados do contato'} aoFechar={aoFechar} />
       <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col items-center gap-2 bg-white px-6 pb-6 pt-8 text-center">
           <Avatar nome={nome} grupo={grupo} foto={foto} tamanho={120} />
           <p className="mt-2 text-[22px] text-[#111b21]">{nome}</p>
           {!grupo && telefone && <p className="text-[15px] text-gray-500">{formatarTelefone(telefone)}</p>}
+          {participante && <p className="text-[13px] text-gray-400">em {participante.nomeGrupo}</p>}
 
           {!grupo && (
             linkResponder ? (
@@ -117,18 +120,18 @@ export function PainelContato({
           )}
         </div>
 
-        <div className="mt-2 bg-white">
-          <label className="flex cursor-pointer items-center gap-4 px-5 py-3.5 hover:bg-gray-50">
-            {silenciada ? <BellOff className="h-5 w-5 text-gray-500" /> : <Bell className="h-5 w-5 text-gray-500" />}
-            <span className="flex-1 text-[15px] text-gray-800">Silenciar notificações</span>
-            <Switch checked={silenciada} onCheckedChange={aoSilenciar} aria-label="Silenciar notificações desta conversa" />
-          </label>
-          <label className="flex cursor-pointer items-center gap-4 border-t border-gray-100 px-5 py-3.5 hover:bg-gray-50">
-            <Pin className="h-5 w-5 -rotate-45 text-gray-500" />
-            <span className="flex-1 text-[15px] text-gray-800">Fixar conversa</span>
-            <Switch checked={fixada} onCheckedChange={aoFixar} aria-label="Fixar esta conversa no topo" />
-          </label>
-        </div>
+        {participante?.conversaIndividual && aoAbrirConversa && (
+          <div className="mt-2 bg-white">
+            <button
+              type="button"
+              onClick={() => aoAbrirConversa(participante.conversaIndividual!)}
+              className="flex w-full items-center gap-4 px-5 py-3.5 text-left hover:bg-gray-50"
+            >
+              <MessageCircle className="h-5 w-5" style={{ color: WA.TEAL }} />
+              <span className="flex-1 text-[15px] text-gray-800">Ver conversa com {nome} no painel</span>
+            </button>
+          </div>
+        )}
 
         <div className="mt-2 bg-white">
           <div className="flex border-b border-gray-100" role="tablist">
@@ -143,7 +146,7 @@ export function PainelContato({
           {midias === null ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : aba === 'midia' ? (
-            visuais.length === 0 ? <Vazio texto="Nenhuma foto, vídeo ou GIF." /> : (
+            visuais.length === 0 ? <Vazio texto={participante ? 'Essa pessoa não mandou foto, vídeo ou GIF neste grupo.' : 'Nenhuma foto, vídeo ou GIF.'} /> : (
               <div className="grid grid-cols-3 gap-1 p-1">
                 {visuais.map((m) => {
                   const u = urls[m.midia_caminho!]
@@ -195,6 +198,36 @@ function Vazio({ texto }: { texto: string }) {
 
 // ── Pesquisar na conversa ──────────────────────────────────────────────────
 
+/** Um resultado de pesquisa (painel da conversa e seção "Mensagens" da lista). */
+export function ItemResultado({ m, termo, autor, aoEscolher }: {
+  m: ResultadoBusca | MensagemWa
+  termo: string
+  /** Quem mandou / em qual conversa (texto de cima). */
+  autor: string
+  aoEscolher: () => void
+}) {
+  return (
+    <button type="button" onClick={aoEscolher} className="block w-full border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50">
+      <p className="truncate text-[12px] text-gray-500">{rotuloDia(m.enviada_em)} · {horaCurta(m.enviada_em)} · {autor}</p>
+      <p className="line-clamp-2 text-[14px] text-gray-800">
+        {/* O trecho em volta da palavra encontrada, não o começo da mensagem. */}
+        {m.texto
+          ? <TextoWhatsapp texto={trechoComTermo(m.texto, termo)} destaque={termo} />
+          : m.transcricao ? <>🎤 <TextoWhatsapp texto={trechoComTermo(m.transcricao, termo)} destaque={termo} /></> : previaMensagem(m)}
+      </p>
+    </button>
+  )
+}
+
+export function SecaoResultados({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <>
+      <p className="sticky top-0 z-10 bg-white px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-wide" style={{ color: WA.TEAL }}>{titulo}</p>
+      {children}
+    </>
+  )
+}
+
 export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolher }: {
   restauranteId: number
   chatId: string
@@ -203,21 +236,26 @@ export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolh
   aoEscolher: (messageId: string) => void
 }) {
   const [termo, setTermo] = useState('')
-  const [resultados, setResultados] = useState<MensagemWa[] | null>(null)
+  const [resultados, setResultados] = useState<ResultadoBusca[] | null>(null)
   const [buscando, setBuscando] = useState(false)
 
   useEffect(() => {
     const t = termo.trim()
     if (t.length < 2) { setResultados(null); return }
     setBuscando(true)
+    let ativo = true
     const espera = setTimeout(() => {
-      pesquisarNaConversa(restauranteId, chatId, t)
-        .then(setResultados)
-        .catch(() => setResultados([]))
-        .finally(() => setBuscando(false))
+      pesquisarMensagens(restauranteId, t, chatId)
+        .then((r) => { if (ativo) setResultados(r) })
+        .catch(() => { if (ativo) setResultados([]) })
+        .finally(() => { if (ativo) setBuscando(false) })
     }, 300)
-    return () => clearTimeout(espera)
+    return () => { ativo = false; clearTimeout(espera) }
   }, [termo, restauranteId, chatId])
+
+  const exatos = (resultados ?? []).filter((r) => r.relevancia === 1)
+  const parecidos = (resultados ?? []).filter((r) => r.relevancia !== 1)
+  const autor = (m: MensagemWa) => (m.de_mim ? 'Você' : m.grupo ? (m.remetente || formatarTelefone(m.telefone)) : nome)
 
   return (
     <div className="flex h-full w-full flex-col bg-white">
@@ -232,19 +270,23 @@ export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolh
       </div>
       <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
         {resultados === null ? (
-          <p className="px-6 py-8 text-center text-[13px] text-gray-500">Pesquise mensagens, legendas, transcrições de áudio e nomes de arquivo com {nome}.</p>
+          <p className="px-6 py-8 text-center text-[13px] text-gray-500">Pesquise mensagens, legendas, transcrições de áudio e nomes de arquivo com {nome}. Primeiro vem o que está escrito exatamente igual; depois, o parecido.</p>
         ) : resultados.length === 0 && !buscando ? (
           <p className="px-6 py-8 text-center text-[13px] text-gray-500">Nenhuma mensagem encontrada.</p>
-        ) : resultados.map((m) => (
-          <button key={m.id} type="button" onClick={() => aoEscolher(m.message_id)} className="block w-full border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50">
-            <p className="text-[12px] text-gray-500">{rotuloDia(m.enviada_em)} · {horaCurta(m.enviada_em)} · {m.de_mim ? 'Você' : (m.grupo ? m.remetente : nome)}</p>
-            <p className="line-clamp-2 text-[14px] text-gray-800">
-              {m.texto
-                ? <TextoWhatsapp texto={m.texto} destaque={termo} />
-                : m.transcricao ? <>🎤 <TextoWhatsapp texto={m.transcricao} destaque={termo} /></> : previaMensagem(m)}
-            </p>
-          </button>
-        ))}
+        ) : (
+          <>
+            {exatos.length > 0 && (
+              <SecaoResultados titulo="Exatamente como escrito">
+                {exatos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id)} />)}
+              </SecaoResultados>
+            )}
+            {parecidos.length > 0 && (
+              <SecaoResultados titulo="Parecidos">
+                {parecidos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id)} />)}
+              </SecaoResultados>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Clock, Mic, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { corAvatar, iniciais, trechosFormatados } from '@/lib/whatsapp/formatacao'
+import { corAvatar, iniciais, regexDestaque, trechosFormatados } from '@/lib/whatsapp/formatacao'
 
 /** Cores do chat — as mesmas do chat de suporte (Sugestoes.tsx / Admin.tsx). */
 export const WA = {
@@ -130,10 +130,10 @@ function cortarEmPalavra(t: string, n: number): string {
   return espaco > n * 0.8 ? corte.slice(0, espaco) : corte
 }
 
-/** Realça o termo pesquisado (sem diferenciar maiúscula e acento simples). */
+/** Realça o termo pesquisado sem diferenciar acento, maiúscula e pontuação. */
 function marcar(texto: string, termo?: string) {
-  if (!termo || termo.trim().length < 2) return texto
-  const re = new RegExp(`(${termo.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const re = regexDestaque(termo)
+  if (!re) return texto
   return texto.split(re).map((p, i) => (i % 2 === 1 ? <mark key={i} className="bg-yellow-200 rounded-sm">{p}</mark> : p))
 }
 

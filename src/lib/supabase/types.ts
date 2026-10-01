@@ -2664,6 +2664,33 @@ export type Database = {
         }[]
       }
       arquivar_concluidas_antigas: { Args: never; Returns: number }
+      pesquisar_mensagens_whatsapp: {
+        Args: { p_chat_id?: string; p_limite?: number; p_restaurante_id: number; p_termo: string }
+        Returns: {
+          chat_id: string
+          de_mim: boolean
+          editada_em: string
+          enviada_em: string
+          grupo: boolean
+          id: number
+          message_id: string
+          midia_caminho: string
+          midia_mime: string
+          midia_nome: string
+          nome_exibicao: string
+          por_api: boolean
+          reacao: string
+          relevancia: number
+          remetente: string
+          responde_message_id: string
+          semelhanca: number
+          status: string
+          telefone: string
+          texto: string
+          tipo: string
+          transcricao: string
+        }[]
+      }
       conversas_whatsapp: {
         Args: { p_restaurante_id: number }
         Returns: {

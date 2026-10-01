@@ -37,6 +37,7 @@ const CheckoutSucesso = lazy(() => import('./pages/CheckoutSucesso'))
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
+import { AvisosDoPainel } from './components/whatsapp/Notificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
 import { ControleDemo } from './components/demo/ControleDemo'
 import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
@@ -57,6 +58,8 @@ const App = () => (
         <AtualizacaoDoApp />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
+        {/* Dono: inscrição no push e sons de WhatsApp e suporte, em qualquer página logada */}
+        <AvisosDoPainel />
         {/* Troca o manifest/ícone conforme a rota → instala "Easy Feed" ou "Mensagens" */}
         <ManifestPorRota />
         <Suspense

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 
@@ -44,15 +44,27 @@ export async function salvarPreferencia(
 export function usePreferencias(canal: Canal) {
   const { user } = useAuth()
   const [mapa, setMapa] = useState<Map<string, Preferencia>>(new Map())
+  const [carregado, setCarregado] = useState(false)
+  const idCanal = useId()
 
+  // Lê do banco e continua ouvindo: silenciar numa aba (ou noutro aparelho)
+  // vale na hora em todas. Antes era lido só ao abrir a tela, e uma aba que já
+  // estava aberta continuava tocando o som depois de silenciado em outra.
   useEffect(() => {
     if (!user) return
     let ativo = true
-    listarPreferencias(canal)
-      .then((lista) => { if (ativo) setMapa(new Map(lista.map((p) => [p.conversa, p]))) })
+    const carregar = () => listarPreferencias(canal)
+      .then((lista) => { if (ativo) { setMapa(new Map(lista.map((p) => [p.conversa, p]))); setCarregado(true) } })
       .catch(() => {})
-    return () => { ativo = false }
-  }, [user, canal])
+    carregar()
+    const ch = supabase
+      .channel(`prefs-${canal}-${idCanal}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'preferencias_conversa', filter: `canal=eq.${canal}` }, carregar)
+      .subscribe()
+    const aoVoltar = () => { if (document.visibilityState === 'visible') carregar() }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => { ativo = false; supabase.removeChannel(ch); document.removeEventListener('visibilitychange', aoVoltar) }
+  }, [user, canal, idCanal])
 
   const mudar = useCallback(async (conversa: string, mudanca: { silenciada?: boolean; fixada?: boolean }) => {
     if (!user) return
@@ -79,11 +91,23 @@ export function usePreferencias(canal: Canal) {
   const silenciada = useCallback((conversa: string) => mapa.get(conversa)?.silenciada ?? false, [mapa])
   const fixadaEm = useCallback((conversa: string) => mapa.get(conversa)?.fixada_em ?? null, [mapa])
 
+  // Para quem lê dentro de um callback de tempo real (sem re-render no meio).
+  const mapaRef = useRef(mapa)
+  mapaRef.current = mapa
+  /** Notificação e som juntos: nem o canal inteiro nem a conversa silenciados. */
+  const deveAvisar = useCallback((conversa: string) => {
+    const m = mapaRef.current
+    return !m.get(CANAL_INTEIRO)?.silenciada && !m.get(conversa)?.silenciada
+  }, [])
+
   return {
+    /** Já leu do banco (antes disso, quem tiver o valor de outra fonte usa). */
+    carregado,
     /** O canal inteiro está silenciado (sino do topo). */
     tudoSilenciado: silenciada(CANAL_INTEIRO),
     silenciada,
     fixadaEm,
+    deveAvisar,
     alternarTudo: () => mudar(CANAL_INTEIRO, { silenciada: !silenciada(CANAL_INTEIRO) }),
     alternarSilencio: (conversa: string) => mudar(conversa, { silenciada: !silenciada(conversa) }),
     alternarFixar: (conversa: string) => mudar(conversa, { fixada: !fixadaEm(conversa) }),

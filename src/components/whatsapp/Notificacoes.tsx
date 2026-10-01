@@ -1,51 +1,111 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BellRing, X } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { usePermissoes } from '@/hooks/use-permissoes'
+import { supabase } from '@/lib/supabase/client'
+import { estaOlhando, somCabeAEstaAba } from '@/lib/notificacoes-app'
+import { CANAL_INTEIRO, usePreferencias } from '@/lib/queries/preferencias'
 import { iphoneSemApp, inscreverPush, pedirPermissaoEInscrever, pushSuportado } from '@/lib/push'
 
-// ── Som de mensagem nova (com a página aberta) ─────────────────────────────
-// Toca só se o WhatsApp e a conversa não estiverem silenciados (o mesmo sino
-// que corta o push — preferencias_conversa).
+// ── Sons (gerados na hora, sem arquivo para baixar) ───────────────────────
+// 'whatsapp': "plim" de duas notas subindo (mensagem de cliente).
+// 'suporte' : três notas descendo, timbre de sino, mais suave — dá para saber
+//             sem olhar que é o suporte, não um cliente (decisão do Raver).
+
+export type Som = 'whatsapp' | 'suporte'
+
+const NOTAS: Record<Som, { tipo: OscillatorType; volume: number; dura: number; notas: Array<[number, number]> }> = {
+  whatsapp: { tipo: 'sine', volume: 0.18, dura: 0.22, notas: [[880, 0], [1318.5, 0.09]] },
+  suporte: { tipo: 'triangle', volume: 0.14, dura: 0.42, notas: [[1046.5, 0], [783.99, 0.13], [659.25, 0.26]] },
+}
 
 let ctxSom: AudioContext | null = null
-/** "Plim" curto de duas notas, gerado na hora (sem arquivo de som para baixar). */
-export function tocarSomMensagem() {
+export function tocarSom(qual: Som) {
+  // Avisa quem estiver ouvindo (os testes de tela contam por aqui).
+  window.dispatchEvent(new CustomEvent('easyfeed:som', { detail: { qual } }))
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     ctxSom ??= new Ctx()
     const ctx = ctxSom
     if (ctx.state === 'suspended') ctx.resume().catch(() => {})
     const agora = ctx.currentTime
-    for (const [freq, ini] of [[880, 0], [1318.5, 0.09]] as const) {
+    const cfg = NOTAS[qual]
+    for (const [freq, ini] of cfg.notas) {
       const osc = ctx.createOscillator()
       const ganho = ctx.createGain()
-      osc.type = 'sine'
+      osc.type = cfg.tipo
       osc.frequency.value = freq
       ganho.gain.setValueAtTime(0.0001, agora + ini)
-      ganho.gain.exponentialRampToValueAtTime(0.18, agora + ini + 0.015)
-      ganho.gain.exponentialRampToValueAtTime(0.0001, agora + ini + 0.22)
+      ganho.gain.exponentialRampToValueAtTime(cfg.volume, agora + ini + 0.015)
+      ganho.gain.exponentialRampToValueAtTime(0.0001, agora + ini + cfg.dura)
       osc.connect(ganho).connect(ctx.destination)
       osc.start(agora + ini)
-      osc.stop(agora + ini + 0.25)
+      osc.stop(agora + ini + cfg.dura + 0.03)
     }
   } catch { /* navegador sem áudio: só não toca */ }
 }
 
-// ── Inscrição em segundo plano (montada no Layout) ─────────────────────────
+// ── Avisos do painel do dono (montado no Layout) ───────────────────────────
 
 /**
- * Quem já deu permissão de notificação tem o aparelho inscrito sempre que
- * abre o painel (a inscrição pode mudar quando o navegador a renova). Vale
- * para o WhatsApp e para a resposta do suporte. Nunca pede permissão sozinho:
- * quem pede é o aviso da tela WhatsApp ou o sino, num clique.
+ * Em qualquer página logada (montado no App, como o AdminNotificacoes):
+ *  - inscreve o aparelho no push (se a pessoa já deu permissão — nunca pede
+ *    sozinho; quem pede é o aviso da tela WhatsApp ou o sino, num clique);
+ *  - toca o som quando chega mensagem no WhatsApp ou resposta do suporte.
+ *
+ * Som e notificação seguem a MESMA regra (preferencias_conversa, sincronizada
+ * entre abas e aparelhos): silenciado não toca nem notifica; reativado, os
+ * dois voltam. E não toca na conversa que a pessoa já está olhando.
  */
-export function NotificacoesDono() {
+export function AvisosDoPainel() {
   const { user, usuario } = useAuth()
-  const temRestaurante = !!usuario?.restaurante_id
+  const { podeVer, carregando } = usePermissoes()
+  const restauranteId = usuario?.restaurante_id ?? null
+  const veWhatsapp = !carregando && !!restauranteId && podeVer('whatsapp')
+  const prefsWa = usePreferencias('whatsapp')
+  const prefsSup = usePreferencias('suporte')
+  const avisaWa = useRef(prefsWa.deveAvisar)
+  avisaWa.current = prefsWa.deveAvisar
+  const avisaSup = useRef(prefsSup.deveAvisar)
+  avisaSup.current = prefsSup.deveAvisar
+
   useEffect(() => {
-    if (!user || !temRestaurante || !pushSuportado() || Notification.permission !== 'granted') return
+    if (!user || !restauranteId || !pushSuportado() || Notification.permission !== 'granted') return
     inscreverPush(user.id)
-  }, [user, temRestaurante])
+  }, [user, restauranteId])
+
+  // WhatsApp: mensagem recebida (não reação) numa conversa não silenciada.
+  useEffect(() => {
+    if (!veWhatsapp || !restauranteId) return
+    const ch = supabase
+      .channel(`avisos-wa-${restauranteId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` },
+        (p) => {
+          const m = p.new as { de_mim?: boolean; tipo?: string; chat_id?: string }
+          if (m.de_mim !== false || m.tipo === 'reaction' || !m.chat_id) return
+          if (estaOlhando(`wa:${m.chat_id}`) || !avisaWa.current(m.chat_id) || !somCabeAEstaAba()) return
+          tocarSom('whatsapp')
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [veWhatsapp, restauranteId])
+
+  // Suporte: resposta do suporte (a RLS só entrega as conversas do dono).
+  useEffect(() => {
+    if (!user || !restauranteId) return
+    const ch = supabase
+      .channel(`avisos-suporte-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'respostas_sugestoes' },
+        (p) => {
+          const r = p.new as { autor?: string }
+          if (!r.autor || r.autor === 'usuario') return
+          if (estaOlhando('suporte') || !avisaSup.current(CANAL_INTEIRO) || !somCabeAEstaAba()) return
+          tocarSom('suporte')
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [user, restauranteId])
+
   return null
 }
 

@@ -14,7 +14,7 @@ import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { ListaConversas } from '@/components/whatsapp/ListaConversas'
 import { Conversa, type PedidoSalto } from '@/components/whatsapp/Conversa'
 import { PainelContato, PainelPesquisa } from '@/components/whatsapp/Paineis'
-import { AvisoNotificacoes, tocarSomMensagem } from '@/components/whatsapp/Notificacoes'
+import { AvisoNotificacoes } from '@/components/whatsapp/Notificacoes'
 import { usePreferencias } from '@/lib/queries/preferencias'
 import { WA } from '@/components/whatsapp/pecas'
 
@@ -34,11 +34,15 @@ export default function WhatsApp() {
   const restauranteId = usuario?.restaurante_id ?? null
   const [params, setParams] = useSearchParams()
   const chatId = params.get('chat')
-  const painel = params.get('painel') as 'contato' | 'pesquisa' | null
+  const painel = params.get('painel') as 'contato' | 'pesquisa' | 'pessoa' | null
+  // Participante de grupo aberto no painel (nome e telefone de quem mandou).
+  const pessoaTel = params.get('pessoa')
+  const [pessoaNome, setPessoaNome] = useState<string | null>(null)
 
   const [conversas, setConversas] = useState<ConversaWa[]>([])
   const [carregando, setCarregando] = useState(true)
-  // Silenciar/fixar (o sino do topo silencia tudo: push e som).
+  // Silenciar/fixar (o sino do topo silencia tudo: push e som). Sincronizado
+  // entre abas e aparelhos; o som em si toca no AvisosDoPainel (Layout).
   const prefs = usePreferencias('whatsapp')
   const [business, setBusiness] = useState<boolean | null>(null)
   const [salto, setSalto] = useState<PedidoSalto | null>(null)
@@ -58,8 +62,6 @@ export default function WhatsApp() {
 
   const chatRef = useRef(chatId)
   chatRef.current = chatId
-  const somRef = useRef({ tudo: prefs.tudoSilenciado, conversas: new Set<string>() })
-  somRef.current = { tudo: prefs.tudoSilenciado, conversas: new Set(conversas.filter((c) => c.silenciada).map((c) => c.chat_id)) }
 
   const recarregar = useCallback(async () => {
     if (!restauranteId) return
@@ -87,16 +89,7 @@ export default function WhatsApp() {
     }
     const canal = supabase
       .channel(`wa-lista-${restauranteId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` },
-        (p) => {
-          agendar()
-          const m = p.new as { de_mim?: boolean; tipo?: string; chat_id?: string }
-          const estaVendo = m.chat_id === chatRef.current && document.visibilityState === 'visible'
-          const silencio = somRef.current.tudo || (m.chat_id ? somRef.current.conversas.has(m.chat_id) : false)
-          if (p.eventType === 'INSERT' && m.de_mim === false && m.tipo !== 'reaction' && !estaVendo && !silencio) {
-            tocarSomMensagem()
-          }
-        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp_leitura', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .subscribe()
     return () => { if (espera) clearTimeout(espera); supabase.removeChannel(canal) }
@@ -145,27 +138,35 @@ export default function WhatsApp() {
     if (!painel) empilhouPainel.current = true
     setParams({ chat: chatId, painel: p }, { replace: !!painel })
   }
+  // Clique no nome/número de quem mandou, num grupo: o perfil dessa pessoa.
+  const abrirPessoa = useCallback((p: { nome: string | null; telefone: string | null }) => {
+    if (!chatRef.current || !p.telefone) return
+    setPessoaNome(p.nome)
+    const jaTinhaPainel = !!params.get('painel')
+    if (!jaTinhaPainel) empilhouPainel.current = true
+    setParams({ chat: chatRef.current, painel: 'pessoa', pessoa: p.telefone }, { replace: jaTinhaPainel })
+  }, [params, setParams])
   const voltarParaLista = () => {
     if (empilhouConversa.current && !painel) { empilhouConversa.current = false; window.history.back() }
     else { empilhouConversa.current = false; empilhouPainel.current = false; setParams({}, { replace: true }) }
   }
 
-  // Fixar e silenciar mudam a lista na hora (e a ordem: fixadas no topo).
-  const { alternarFixar, alternarSilencio } = prefs
-  const ordenar = (lista: ConversaWa[]) => lista.slice().sort((a, b) => {
-    if (!!a.fixada_em !== !!b.fixada_em) return a.fixada_em ? -1 : 1
-    if (a.fixada_em && b.fixada_em && a.fixada_em !== b.fixada_em) return a.fixada_em > b.fixada_em ? -1 : 1
-    return a.ultima_enviada_em > b.ultima_enviada_em ? -1 : 1
-  })
-  const fixar = useCallback((id: string) => {
-    alternarFixar(id)
-    setConversas((lista) => ordenar(lista.map((c) => (c.chat_id === id ? { ...c, fixada_em: c.fixada_em ? null : new Date().toISOString() } : c))))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alternarFixar])
-  const silenciar = useCallback((id: string) => {
-    alternarSilencio(id)
-    setConversas((lista) => lista.map((c) => (c.chat_id === id ? { ...c, silenciada: !c.silenciada } : c)))
-  }, [alternarSilencio])
+  // Fixada/silenciada vêm das preferências sincronizadas (mudou noutra aba,
+  // muda aqui). Antes de elas carregarem, vale o que a lista trouxe do banco.
+  const { alternarFixar: fixar, alternarSilencio: silenciar, silenciada, fixadaEm, carregado } = prefs
+  const conversasVistas = useMemo(() => conversas
+    .map((c) => (carregado ? { ...c, silenciada: silenciada(c.chat_id), fixada_em: fixadaEm(c.chat_id) } : c))
+    .sort((a, b) => {
+      if (!!a.fixada_em !== !!b.fixada_em) return a.fixada_em ? -1 : 1
+      if (a.fixada_em && b.fixada_em && a.fixada_em !== b.fixada_em) return a.fixada_em > b.fixada_em ? -1 : 1
+      return a.ultima_enviada_em > b.ultima_enviada_em ? -1 : 1
+    }), [conversas, carregado, silenciada, fixadaEm])
+
+  // Resultado da pesquisa na lista: abre a conversa já na mensagem.
+  const abrirNaMensagem = useCallback((id: string, messageId: string) => {
+    abrir(id)
+    setSalto({ messageId, vez: Date.now() })
+  }, [abrir])
 
   // Dados da conversa aberta (da lista; se ainda não está nela, do próprio id).
   const aberta = conversas.find((c) => c.chat_id === chatId) ?? null
@@ -190,6 +191,20 @@ export default function WhatsApp() {
       motivoSemLink: null,
     }
   }, [chatId, grupo, donoNum, telefone, aberta?.nome_exibicao, nomeRestaurante, business])
+
+  // Perfil do participante do grupo: mesmo botão, para o telefone dele.
+  const conversaDaPessoa = pessoaTel
+    ? conversas.find((c) => !c.grupo && c.telefone && chaveWhatsapp(c.telefone) === chaveWhatsapp(pessoaTel)) ?? null
+    : null
+  const nomePessoa = pessoaNome ?? conversaDaPessoa?.nome_exibicao ?? null
+  const linkPessoa = pessoaTel && donoNum
+    ? linkEnviarMensagem({
+        telefoneCliente: pessoaTel,
+        texto: textoApresentacao(nomePessoa, nomeRestaurante),
+        aparelho: detectarAparelho(navigator.userAgent),
+        restauranteBusiness: business,
+      })
+    : null
 
   if (!restauranteId || !user) return null
 
@@ -225,10 +240,12 @@ export default function WhatsApp() {
         chatId ? (painel ? 'hidden 2xl:block' : 'hidden md:block') : 'block',
       )}>
         <ListaConversas
-          conversas={conversas}
+          restauranteId={restauranteId}
+          conversas={conversasVistas}
           carregando={carregando}
           ativa={chatId}
           aoAbrir={abrir}
+          aoAbrirMensagem={abrirNaMensagem}
           aoFixar={fixar}
           aoSilenciar={silenciar}
           tudoSilenciado={prefs.tudoSilenciado}
@@ -255,6 +272,7 @@ export default function WhatsApp() {
             aoVoltar={voltarParaLista}
             aoAbrirContato={() => abrirPainel('contato')}
             aoAbrirPesquisa={() => abrirPainel('pesquisa')}
+            aoAbrirPessoa={abrirPessoa}
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-10 text-center" style={{ background: '#F0F2F5', borderBottom: `6px solid ${WA.VERDE}` }}>
@@ -282,12 +300,24 @@ export default function WhatsApp() {
               foto={aberta?.foto_url ?? null}
               telefone={telefone}
               grupo={grupo}
-              fixada={!!aberta?.fixada_em}
-              silenciada={!!aberta?.silenciada}
-              aoFixar={() => fixar(chatId)}
-              aoSilenciar={() => silenciar(chatId)}
               linkResponder={linkResponder}
               motivoSemLink={motivoSemLink}
+              numeroDono={donoNum ? formatarTelefone(donoNum) : null}
+              aoFechar={fecharPainel}
+            />
+          ) : painel === 'pessoa' && pessoaTel ? (
+            <PainelContato
+              key={pessoaTel}
+              restauranteId={restauranteId}
+              chatId={chatId}
+              participante={{ nomeGrupo: nome, conversaIndividual: conversaDaPessoa?.chat_id ?? null }}
+              aoAbrirConversa={(id) => { empilhouPainel.current = false; abrir(id) }}
+              nome={nomePessoa || formatarTelefone(pessoaTel)}
+              foto={conversaDaPessoa?.foto_url ?? null}
+              telefone={pessoaTel}
+              grupo={false}
+              linkResponder={linkPessoa}
+              motivoSemLink={donoNum ? null : 'Cadastre seu WhatsApp pessoal em Configurações para responder por aqui.'}
               numeroDono={donoNum ? formatarTelefone(donoNum) : null}
               aoFechar={fecharPainel}
             />

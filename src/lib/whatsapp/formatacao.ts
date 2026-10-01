@@ -333,3 +333,100 @@ export function linkEnviarMensagem(p: {
   const pacote = p.restauranteBusiness ? 'com.whatsapp' : 'com.whatsapp.w4b'
   return `intent://send/?phone=${tel}&text=${txt}#Intent;scheme=whatsapp;package=${pacote};S.browser_fallback_url=${encodeURIComponent(waMe)};end`
 }
+
+// ── Pesquisa: exatos primeiro, depois parecidos ─────────────────────────────
+// Mesmas regras de public.normalizar_busca / pesquisar_mensagens_whatsapp
+// (migration 20261002020000) — mudou aqui, muda lá.
+
+/** Minúsculas, sem acento, sem pontuação, espaços colapsados. */
+export function normalizarBusca(t: string | null | undefined): string {
+  return (t ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function distancia(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3
+  const ant = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    let diag = ant[0]
+    ant[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const guardado = ant[j]
+      ant[j] = Math.min(ant[j] + 1, ant[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1))
+      diag = guardado
+    }
+  }
+  return ant[b.length]
+}
+
+/** Duas letras vizinhas trocadas ("fira" → "fria"). */
+function difereProTroca(a: string, b: string): boolean {
+  if (a.length !== b.length || a.length < 2 || a === b) return false
+  for (let i = 0; i < a.length - 1; i++) {
+    if (a.slice(0, i) + a[i + 1] + a[i] + a.slice(i + 2) === b) return true
+  }
+  return false
+}
+
+function palavraParecida(tw: string, w: string): boolean {
+  if (tw.length >= 3 && w.startsWith(tw)) return true
+  const limite = tw.length <= 3 ? 0 : tw.length <= 7 ? 1 : 2
+  if (distancia(w, tw) <= limite) return true
+  return tw.length >= 3 && difereProTroca(w, tw)
+}
+
+/**
+ * 3 = aparece exatamente como escrito; 2 = ignorando acento, maiúscula e
+ * pontuação; 1 = parecido (cada palavra pesquisada bate com alguma palavra
+ * do texto: começo de palavra, 1 letra de diferença — 2 em palavras longas —
+ * ou duas letras vizinhas trocadas); 0 = não tem a ver.
+ */
+export function pontuarBusca(termo: string, texto: string | null | undefined): number {
+  const t = termo.trim()
+  const alvo = texto ?? ''
+  if (t.length < 1 || !alvo) return 0
+  if (alvo.includes(t)) return 3
+  const nt = normalizarBusca(t)
+  const na = normalizarBusca(alvo)
+  if (!nt) return 0
+  if (na.includes(nt)) return 2
+  const palavras = na.split(' ')
+  return nt.split(' ').every((tw) => palavras.some((w) => palavraParecida(tw, w))) ? 1 : 0
+}
+
+const VARIANTES: Record<string, string> = {
+  a: 'aáàâãä', e: 'eéèêë', i: 'iíìîï', o: 'oóòôõö', u: 'uúùûü', c: 'cç', n: 'nñ',
+}
+
+/**
+ * Regex para realçar o termo no texto ignorando acento, maiúscula e
+ * pontuação entre as palavras ("FRIA!" realça "fria"). null = nada a realçar.
+ */
+export function regexDestaque(termo: string | null | undefined): RegExp | null {
+  const n = normalizarBusca(termo)
+  if (n.length < 2) return null
+  const padrao = n.split(' ').map((palavra) =>
+    Array.from(palavra, (ch) => (VARIANTES[ch] ? `[${VARIANTES[ch]}]` : ch)).join(''),
+  ).join('[^\p{L}\p{N}]+')
+  return new RegExp(`(${padrao})`, 'giu')
+}
+
+/**
+ * Trecho da mensagem em volta do termo, numa linha só — como o WhatsApp
+ * mostra nos resultados da pesquisa (senão a palavra encontrada fica escondida
+ * no meio de uma mensagem longa). Sem o termo literal (resultado "parecido"),
+ * o começo do texto.
+ */
+export function trechoComTermo(texto: string, termo: string, antes = 30, total = 120): string {
+  const linha = texto.replace(/\s+/g, ' ').trim()
+  const re = regexDestaque(termo)
+  const m = re ? re.exec(linha) : null
+  if (!m || m.index <= antes) return linha.length > total ? `${linha.slice(0, total)}…` : linha
+  const ini = m.index - antes
+  const fim = ini + total
+  return `…${linha.slice(ini, fim)}${fim < linha.length ? '…' : ''}`
+}

@@ -35,6 +35,8 @@ export interface PropsBalao {
   aoAbrirPdf: (m: MensagemWa) => void
   aoIrParaCitada: (messageId: string) => void
   aoTerminarAudio: (id: number) => void
+  /** Grupo: clicar no nome/número de quem mandou abre o perfil dessa pessoa. */
+  aoAbrirPessoa?: (p: { nome: string | null; telefone: string | null }) => void
 }
 
 function autorDe(m: MensagemWa, nomeContato: string): string {
@@ -139,7 +141,7 @@ function MenuMensagem({ m }: { m: MensagemWa }) {
 
 function BalaoBase({
   m, primeiroDoGrupo, nomeContato, fotoContato, url, citada, reacoes, destaque, piscando, autoTocar,
-  aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio,
+  aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio, aoAbrirPessoa,
 }: PropsBalao) {
   const deMim = m.de_mim
   const apagada = m.status === 'DELETED'
@@ -149,6 +151,9 @@ function BalaoBase({
   const legenda = ehMidiaVisual ? m.texto : null
   const mostrarRemetente = !deMim && m.grupo && primeiroDoGrupo
   const corNome = corRemetente(m.remetente ?? m.telefone)
+  // Texto com link: o balão tem pelo menos a largura da prévia, e a prévia
+  // ocupa o balão inteiro (antes ela ficava fixa e o texto passava dela).
+  const temPrevia = !apagada && m.tipo === 'text' && linksDoTexto(m.texto).length > 0
 
   let corpo: React.ReactNode
   if (apagada) {
@@ -225,6 +230,7 @@ function BalaoBase({
       <div
         className={cn(
           'group relative max-w-[85%] md:max-w-[65%] transition-shadow duration-500',
+          temPrevia && 'min-w-[min(330px,72vw)]',
           !semBalao && 'rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]',
           !semBalao && (ehMidiaVisual || m.tipo === 'document' ? 'p-1' : 'px-2 pb-1.5 pt-1.5'),
           !semBalao && primeiroDoGrupo && (deMim ? 'rounded-tr-none' : 'rounded-tl-none'),
@@ -247,9 +253,19 @@ function BalaoBase({
         {!semBalao && !apagada && <MenuMensagem m={m} />}
 
         {mostrarRemetente && (
-          <p className={cn('truncate text-[12.8px] font-semibold', (ehMidiaVisual || m.tipo === 'document') && 'px-1 pt-0.5')} style={{ color: corNome }}>
-            {m.remetente || formatarTelefone(m.telefone)}
-            {m.remetente && m.telefone && <span className="ml-1.5 font-normal text-gray-400">{formatarTelefone(m.telefone)}</span>}
+          <p className={cn('truncate text-[12.8px] font-semibold', (ehMidiaVisual || m.tipo === 'document') && 'px-1 pt-0.5')}>
+            {/* Clicável como no WhatsApp: abre o perfil de quem mandou. */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); aoAbrirPessoa?.({ nome: m.remetente, telefone: m.telefone }) }}
+              disabled={!m.telefone || !aoAbrirPessoa}
+              className="max-w-full truncate text-left hover:underline disabled:cursor-default disabled:no-underline"
+              style={{ color: corNome }}
+              title={m.telefone ? 'Ver perfil' : undefined}
+            >
+              {m.remetente || formatarTelefone(m.telefone)}
+              {m.remetente && m.telefone && <span className="ml-1.5 font-normal text-gray-400">{formatarTelefone(m.telefone)}</span>}
+            </button>
           </p>
         )}
 

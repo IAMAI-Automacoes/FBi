@@ -1,12 +1,14 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { Loader2, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
 import {
-  horarioLista, nomeConversa, previaMensagem, type ConversaWa,
+  formatarTelefone, horarioLista, nomeConversa, pontuarBusca, previaMensagem, type ConversaWa,
 } from '@/lib/whatsapp/formatacao'
+import { pesquisarMensagens, type ResultadoBusca } from '@/lib/queries/whatsapp'
 import { Avatar, Tiques, WA } from './pecas'
+import { ItemResultado, SecaoResultados } from './Paineis'
 
 type Filtro = 'tudo' | 'nao_lidas' | 'grupos'
 
@@ -44,7 +46,7 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
       <div className="min-w-0 flex-1 border-b border-gray-100 py-3">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-[16px] text-[#111b21]">{nome}</span>
-          <span className={cn('shrink-0 text-[12px]', naoLida && !c.silenciada ? 'font-medium text-[#1FA855]' : 'text-gray-500')}>
+          <span className={cn('shrink-0 text-[12px]', naoLida ? 'font-medium text-[#1FA855]' : 'text-gray-500')}>
             {horarioLista(c.ultima_enviada_em)}
           </span>
         </div>
@@ -57,8 +59,9 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
           {naoLida && (
             <span
               className="shrink-0 min-w-[20px] rounded-full px-1.5 text-center text-[12px] font-semibold leading-5 text-white"
-              // Silenciada: contador cinza, como no WhatsApp.
-              style={{ background: c.silenciada ? '#A5B0B7' : WA.VERDE }}
+              // Silenciar só corta notificação e som: o contador fica igual
+              // (pedido do Raver).
+              style={{ background: WA.VERDE }}
             >
               {c.nao_lidas > 99 ? '99+' : c.nao_lidas}
             </span>
@@ -79,12 +82,15 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
 })
 
 export function ListaConversas({
-  conversas, carregando, ativa, aoAbrir, aoFixar, aoSilenciar, tudoSilenciado, aoAlternarTudo, aviso,
+  restauranteId, conversas, carregando, ativa, aoAbrir, aoAbrirMensagem, aoFixar, aoSilenciar, tudoSilenciado, aoAlternarTudo, aviso,
 }: {
+  restauranteId: number
   conversas: ConversaWa[]
   carregando: boolean
   ativa: string | null
   aoAbrir: (chatId: string) => void
+  /** Resultado da pesquisa: abre a conversa já na mensagem. */
+  aoAbrirMensagem: (chatId: string, messageId: string) => void
   aoFixar: (chatId: string) => void
   aoSilenciar: (chatId: string) => void
   /** Sino do topo: todas as notificações do WhatsApp (push e som). */
@@ -96,18 +102,51 @@ export function ListaConversas({
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState<Filtro>('tudo')
 
+  // Conversas: nome e telefone, exatos primeiro, depois parecidos (mesma
+  // régua da pesquisa de mensagens — pontuarBusca).
   const visiveis = useMemo(() => {
-    const termo = busca.trim().toLowerCase()
+    const termo = busca.trim()
     const digitos = termo.replace(/\D/g, '')
-    return conversas.filter((c) => {
+    const filtradas = conversas.filter((c) => {
       if (filtro === 'nao_lidas' && c.nao_lidas === 0) return false
       if (filtro === 'grupos' && !c.grupo) return false
-      if (!termo) return true
-      return nomeConversa(c).toLowerCase().includes(termo)
-        || (digitos.length >= 3 && (c.telefone ?? '').includes(digitos))
-        || (c.ultima_texto ?? '').toLowerCase().includes(termo)
+      return true
     })
+    if (!termo) return filtradas
+    const nota = (c: ConversaWa) => Math.max(
+      pontuarBusca(termo, nomeConversa(c)),
+      digitos.length >= 3 && (c.telefone ?? '').includes(digitos) ? 3 : 0,
+    )
+    return filtradas
+      .map((c) => ({ c, n: nota(c) }))
+      .filter((x) => x.n > 0)
+      .sort((a, b) => b.n - a.n)
+      .map((x) => x.c)
   }, [conversas, busca, filtro])
+
+  // Mensagens de todas as conversas que batem com a pesquisa (no banco).
+  const [mensagens, setMensagens] = useState<ResultadoBusca[] | null>(null)
+  const [buscando, setBuscando] = useState(false)
+  useEffect(() => {
+    const t = busca.trim()
+    if (t.length < 2) { setMensagens(null); setBuscando(false); return }
+    setBuscando(true)
+    let ativo = true
+    const espera = setTimeout(() => {
+      pesquisarMensagens(restauranteId, t)
+        .then((r) => { if (ativo) setMensagens(r) })
+        .catch(() => { if (ativo) setMensagens([]) })
+        .finally(() => { if (ativo) setBuscando(false) })
+    }, 350)
+    return () => { ativo = false; clearTimeout(espera) }
+  }, [busca, restauranteId])
+  const porChat = useMemo(() => new Map(conversas.map((c) => [c.chat_id, c])), [conversas])
+  const rotuloResultado = (m: ResultadoBusca) => {
+    const conv = porChat.get(m.chat_id)
+    const onde = conv ? nomeConversa(conv) : formatarTelefone(m.telefone)
+    const quem = m.de_mim ? 'Você' : m.grupo ? (m.remetente || formatarTelefone(m.telefone)) : null
+    return quem ? `${onde} · ${quem}` : onde
+  }
 
   const totalNaoLidas = conversas.filter((c) => c.nao_lidas > 0).length
 
@@ -127,7 +166,7 @@ export function ListaConversas({
           <input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Pesquisar conversa, nome ou telefone"
+            placeholder="Pesquisar conversa, telefone ou mensagem"
             className="min-w-0 flex-1 bg-transparent text-[14px] text-gray-800 placeholder:text-gray-500 focus:outline-none"
             aria-label="Pesquisar conversa"
           />
@@ -159,20 +198,39 @@ export function ListaConversas({
       <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
         {carregando ? (
           <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" style={{ color: WA.TEAL }} /></div>
+        ) : busca.trim() ? (
+          <>
+            {visiveis.length > 0 && (
+              <SecaoResultados titulo="Conversas">
+                {visiveis.map((c) => (
+                  <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} />
+                ))}
+              </SecaoResultados>
+            )}
+            {mensagens && mensagens.length > 0 && (
+              <SecaoResultados titulo="Mensagens">
+                {mensagens.map((m) => (
+                  <ItemResultado key={m.id} m={m} termo={busca} autor={rotuloResultado(m)} aoEscolher={() => aoAbrirMensagem(m.chat_id, m.message_id)} />
+                ))}
+              </SecaoResultados>
+            )}
+            {buscando && <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>}
+            {!buscando && visiveis.length === 0 && mensagens?.length === 0 && (
+              <div className="px-6 py-10 text-center text-[14px] text-gray-500">Nenhuma conversa ou mensagem com "{busca.trim()}".</div>
+            )}
+          </>
         ) : visiveis.length === 0 ? (
           <div className="px-6 py-10 text-center text-[14px] text-gray-500">
             {conversas.length === 0
               ? 'Nenhuma conversa ainda. As mensagens que chegarem no WhatsApp do restaurante aparecem aqui na hora.'
-              : busca
-                ? `Nenhuma conversa com "${busca}".`
-                : filtro === 'nao_lidas' ? 'Tudo lido por aqui.' : 'Nenhum grupo.'}
+              : filtro === 'nao_lidas' ? 'Tudo lido por aqui.' : 'Nenhum grupo.'}
           </div>
         ) : (
           visiveis.map((c) => (
             <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} />
           ))
         )}
-        {!carregando && conversas.length > 0 && (
+        {!carregando && conversas.length > 0 && !busca.trim() && (
           <p className="px-6 py-6 text-center text-[12px] text-gray-400">
             Mostrando as conversas do número conectado ao EasyFeed.
           </p>

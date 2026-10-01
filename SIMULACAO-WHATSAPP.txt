@@ -95,6 +95,8 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
                                                    conversas e push
   20261002010000_silenciar_fixar_fotos_previas.sql silenciar/fixar, fotos, push do
                                                    suporte ao dono, cache de prévias
+  20261002020000_preferencias_realtime_busca.sql  preferências em tempo real e
+                                                   pesquisa por relevância
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -570,8 +572,18 @@ Notificações:
     gatilho não manda login). Sem isso, nenhum push sai.
   - O dono ativa no aviso do topo da lista. No iPhone, só com o EasyFeed
     adicionado à Tela de Início.
-  - Com a tela aberta, toca um som quando chega mensagem em outra conversa.
-  - O sino no topo da lista silencia TUDO do WhatsApp (notificação e som).
+  - Sons (componente AvisosDoPainel, montado no App: vale em qualquer página
+    logada): 'whatsapp' quando chega mensagem de cliente; 'suporte' (outro
+    toque, mais suave) quando o suporte responde ao dono e, no painel do
+    admin, quando chega mensagem de cliente no suporte.
+  - Um aviso só: com notificações permitidas, a aba EM FOCO toca o som e o
+    service worker não mostra a notificação; sem aba em foco, a notificação
+    do sistema avisa (com o som dela). Sem permissão de notificação, o som
+    da página toca sempre. Nunca toca na conversa que está aberta na tela.
+  - Silenciar (sino do topo = tudo; menu da conversa = só ela) corta
+    notificação E som juntos; reativar volta os dois. As preferências são
+    sincronizadas em tempo real entre abas e aparelhos.
+  - Silenciar NÃO muda o contador (continua verde e contando no menu).
 
 Fotos: a lista, o cabeçalho, o painel do contato e o player de áudio mostram
 a foto do contato/grupo que vem no próprio evento da uazapi
@@ -581,14 +593,13 @@ WhatsApp que expira; se não abrir, aparecem as iniciais.
 Silenciar e fixar (tabela preferencias_conversa, por pessoa, sem limite de
 fixadas):
   canal 'whatsapp'      conversa = chat_id   (menu da setinha / segurar o
-                                               dedo na conversa; painel do
-                                               contato)
+                                               dedo na conversa — só na lista)
   canal 'suporte'       conversa = ''        (sino no chat de suporte do dono)
   canal 'suporte_admin' conversa = usuario_id (menu de cada conversa no
                                                painel admin) ou '' (sino)
   conversa '' = o canal inteiro. A função enviar-push consulta antes de
-  mandar. Conversa silenciada: contador cinza e fora do contador do menu.
-  Fixadas ficam no topo (conversas_whatsapp já devolve nessa ordem).
+  mandar, e o som da página também. Fixadas ficam no topo
+  (conversas_whatsapp já devolve nessa ordem).
 
 Suporte: a resposta do suporte agora notifica o DONO (gatilho
 trg_push_resposta_suporte_dono → enviar-push tipo 'suporte_resposta'); com a
@@ -599,3 +610,15 @@ com imagem, título, descrição e site. Vem da função previa-link (lê as tag
 Open Graph da página, como o WhatsApp; cache de 7 dias em previas_link;
 bloqueia endereço interno). Se o site não tiver prévia, usa a miniatura que
 o WhatsApp mandou no evento.
+
+Grupo: clicar no nome/número de quem mandou abre o perfil dessa pessoa
+(painel=pessoa&pessoa=<telefone>): "Enviar mensagem" pelo WhatsApp pessoal
+do dono, "Ver conversa" se já houver conversa individual com ela, e as abas
+Mídia/Docs/Links só com o que ela mandou naquele grupo.
+
+Pesquisa (lista e dentro da conversa): função pesquisar_mensagens_whatsapp
+(migration 20261002020000). Primeiro o que está escrito exatamente igual;
+depois o parecido: sem diferença de acento, maiúscula ou pontuação, e com
+erros leves (1 letra; 2 em palavras longas; duas letras vizinhas trocadas).
+A lista mostra "Conversas" (nome/telefone) e "Mensagens" de todas as
+conversas; o resultado mostra o trecho em volta da palavra.

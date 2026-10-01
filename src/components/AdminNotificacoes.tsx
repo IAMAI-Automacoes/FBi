@@ -1,9 +1,21 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { buscarTotalNaoLidas } from '@/lib/queries/admin'
-import { atualizarBadgeApp } from '@/lib/notificacoes-app'
+import { atualizarBadgeApp, estaOlhando, somCabeAEstaAba } from '@/lib/notificacoes-app'
 import { inscreverPush } from '@/lib/push'
+import { usePreferencias } from '@/lib/queries/preferencias'
+import { tocarSom } from '@/components/whatsapp/Notificacoes'
+
+// sugestão → dono da conversa (usuario_id), para o "silenciar esta conversa".
+const donoDaSugestao = new Map<string, string | null>()
+async function usuarioDaSugestao(sugestaoId: string): Promise<string | null> {
+  if (donoDaSugestao.has(sugestaoId)) return donoDaSugestao.get(sugestaoId) ?? null
+  const { data } = await supabase.from('sugestoes_plataforma').select('usuario_id').eq('id', sugestaoId).maybeSingle()
+  const id = (data?.usuario_id as string | undefined) ?? null
+  donoDaSugestao.set(sugestaoId, id)
+  return id
+}
 
 /**
  * Inscreve o admin da plataforma no Web Push, pra receber notificação de
@@ -15,6 +27,11 @@ import { inscreverPush } from '@/lib/push'
  */
 export function AdminNotificacoes() {
   const { ehAdminPlataforma, user } = useAuth()
+  // Silenciar do suporte (sino do topo = tudo; conversa = usuario_id),
+  // sincronizado entre abas: vale para o push E para o som.
+  const prefs = usePreferencias('suporte_admin')
+  const deveAvisar = useRef(prefs.deveAvisar)
+  deveAvisar.current = prefs.deveAvisar
 
   useEffect(() => {
     if (!ehAdminPlataforma || !user) return
@@ -79,9 +96,25 @@ export function AdminNotificacoes() {
     }
     window.addEventListener('fib-unread-update', aoAtualizarEvento)
 
+    // Som de mensagem de cliente no suporte (o mesmo toque do suporte do
+    // dono), se não estiver silenciado e a conversa não estiver aberta na tela.
+    const tocarSePrecisar = (usuarioId: string | null) => {
+      if (!usuarioId || estaOlhando(usuarioId) || !deveAvisar.current(usuarioId) || !somCabeAEstaAba()) return
+      tocarSom('suporte')
+    }
+
     const ch = supabase
       .channel('badge-app-nao-lidas')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'respostas_sugestoes' }, atualizar)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'respostas_sugestoes' }, (p) => {
+        atualizar()
+        const r = p.new as { autor?: string; sugestao_id?: string }
+        if (r.autor === 'usuario' && r.sugestao_id) usuarioDaSugestao(r.sugestao_id).then(tocarSePrecisar).catch(() => {})
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sugestoes_plataforma' }, (p) => {
+        const s = p.new as { id?: string; usuario_id?: string }
+        if (s.id && s.usuario_id) donoDaSugestao.set(s.id, s.usuario_id)
+        tocarSePrecisar(s.usuario_id ?? null)
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sugestoes_plataforma' }, atualizar)
       .subscribe()
 

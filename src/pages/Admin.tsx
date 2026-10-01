@@ -267,7 +267,7 @@ function ConvItem({ s, selected, onClick, fixada, silenciada, onFixar, onSilenci
           {count > 0 && (
             <span
               className="shrink-0 min-w-[18px] h-[18px] rounded-full text-white text-[10px] font-bold flex items-center justify-center px-1"
-              style={{ background: silenciada ? '#A5B0B7' : '#25D366' }}
+              style={{ background: '#25D366' }}
             >
               {count}
             </span>

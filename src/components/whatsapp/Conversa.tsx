@@ -32,7 +32,7 @@ export interface PedidoSalto { messageId: string; vez: number }
 
 export function Conversa({
   restauranteId, chatId, nome, foto, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
-  salto, aoVoltar, aoAbrirContato, aoAbrirPesquisa,
+  salto, aoVoltar, aoAbrirContato, aoAbrirPesquisa, aoAbrirPessoa,
 }: {
   restauranteId: number
   chatId: string
@@ -49,6 +49,7 @@ export function Conversa({
   aoVoltar: () => void
   aoAbrirContato: () => void
   aoAbrirPesquisa: () => void
+  aoAbrirPessoa: (p: { nome: string | null; telefone: string | null }) => void
 }) {
   const { toast } = useToast()
   const [mensagens, setMensagens] = useState<MensagemWa[]>([])
@@ -264,7 +265,14 @@ export function Conversa({
     setTimeout(() => setPiscando((p) => (p === messageId ? null : p)), 1800)
   }, [carregarMais, toast])
 
-  useEffect(() => { if (salto) irPara(salto.messageId) }, [salto, irPara])
+  // Pula só depois da carga inicial (vindo da pesquisa da lista, a conversa
+  // abre e o pedido chega antes das mensagens) — e uma vez por pedido.
+  const saltoFeito = useRef<number | null>(null)
+  useEffect(() => {
+    if (!salto || carregando || saltoFeito.current === salto.vez) return
+    saltoFeito.current = salto.vez
+    irPara(salto.messageId)
+  }, [salto, carregando, irPara])
 
   // ── Galeria e áudio seguido ──
   const itensGaleria: ItemGaleria[] = useMemo(() => visiveis
@@ -367,6 +375,7 @@ export function Conversa({
                       aoAbrirPdf={abrirPdf}
                       aoIrParaCitada={irPara}
                       aoTerminarAudio={aoTerminarAudio}
+                      aoAbrirPessoa={aoAbrirPessoa}
                     />
                   </Fragment>
                 )
