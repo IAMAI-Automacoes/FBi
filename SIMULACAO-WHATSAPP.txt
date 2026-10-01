@@ -418,13 +418,77 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Arquivos acima de 40 MB (linha existe, sem arquivo).
   - Tiques de leitura de mensagens recebidas (o WhatsApp só informa leitura
     das mensagens que o restaurante mandou).
-  - Mandar mensagem pela tela: por enquanto é só visualização. O envio
-    (texto, editar, apagar, reagir, áudio, arquivos) está sendo planejado;
-    quando existir, este documento ganha uma seção própria.
+  - Mandar mensagem pela tela: a tela é SÓ de visualização, por decisão do
+    Raver. Para responder, o botão "Enviar mensagem" abre o WhatsApp do
+    próprio dono naquela conversa (item 9).
 
 
 -------------------------------------------------------------
-9. REGRAS DO PROJETO QUE VALEM AQUI
+9. BOTÃO "ENVIAR MENSAGEM" (abre o WhatsApp do dono)
+-------------------------------------------------------------
+
+Fluxo: o dono clica no contato (cabeçalho da conversa) -> abre o painel do
+contato (nome, telefone formatado) -> botão "Enviar mensagem" -> abre o
+WhatsApp naquela conversa. Nada é enviado pelo EasyFeed; a mensagem que o
+dono mandar pelo WhatsApp volta pelo webhook e aparece na tela sozinha
+(de_mim = true, por_api = false), em tempo real.
+
+Número usado: a coluna telefone (só dígitos, já com 55). Nunca o chat_id.
+
+Quando NÃO mostrar o botão:
+  - grupo = true (link de WhatsApp não abre grupo; só convite, que não temos);
+  - telefone nulo.
+
+O PROBLEMA DAS DUAS CONTAS
+O dono quase sempre tem dois WhatsApps: o do restaurante (normalmente o
+WhatsApp Business, que é o número conectado à uazapi) e o pessoal. Se o link
+abrir no pessoal, o cliente recebe mensagem de um número que ele não conhece.
+O link genérico (wa.me) NÃO deixa escolher a conta. Por isso o botão abre um
+pequeno menu, conforme o aparelho:
+
+  Android (celular)
+    Dá para forçar o app pelo pacote, com um link "intent" (funciona no
+    Chrome do Android):
+      Business:
+        intent://send/?phone=5511932903005#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=https%3A%2F%2Fwa.me%2F5511932903005;end
+      Pessoal:
+        intent://send/?phone=5511932903005#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=https%3A%2F%2Fwa.me%2F5511932903005;end
+    Se o app escolhido não estiver instalado, cai no wa.me.
+    Opções do menu: "WhatsApp Business" e "WhatsApp".
+
+  iPhone
+    O iPhone não deixa forçar por link universal; ele abre o app que ele
+    escolher. Existem esquemas próprios de cada app:
+      Pessoal:   whatsapp://send?phone=5511932903005
+      Business:  whatsapp-smb://send?phone=5511932903005   (TESTAR: não é
+                 documentado oficialmente; se não abrir, cair no wa.me)
+    Opções do menu: "WhatsApp Business" e "WhatsApp".
+
+  Computador
+    Não existe "Business vs pessoal" no PC: o que existe é ONDE a conta do
+    restaurante está aberta. O WhatsApp do PC (app ou web) mostra uma conta
+    por vez (por janela do navegador / por app). O normal é o dono deixar o
+    número do restaurante em um deles. Opções do menu:
+      "WhatsApp Web":           https://web.whatsapp.com/send?phone=5511932903005
+                                (abre a conta logada naquele navegador)
+      "App do WhatsApp no PC":  whatsapp://send?phone=5511932903005
+                                (abre o app instalado; se não tiver, não faz nada,
+                                então mostre esta opção só como alternativa)
+
+  Lembrar a escolha
+    Guarde a última opção no localStorage do aparelho (ex.: chave
+    "easyfeed:abrir-whatsapp") e use direto da próxima vez, com um link
+    pequeno "Abrir de outro jeito" para trocar. Cada aparelho tem sua escolha.
+
+  Texto pronto (opcional)
+    Todos os formatos aceitam &text=<texto codificado com encodeURIComponent>
+    para já deixar uma mensagem escrita. O dono ainda precisa apertar enviar.
+
+Detectar o aparelho: /Android/i e /iPhone|iPad|iPod/i no navigator.userAgent;
+o resto é computador.
+
+-------------------------------------------------------------
+10. REGRAS DO PROJETO QUE VALEM AQUI
 -------------------------------------------------------------
 
   - Cada restaurante vê só as próprias conversas (RLS já cuida; mesmo assim
@@ -433,3 +497,5 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Qualquer mudança no banco (view, função, coluna nova) precisa de OK do
     Raver antes.
   - Não usar midia_url na tela: expira em 2 dias.
+  - A tela não envia nada pelo EasyFeed/uazapi. Responder é sempre pelo
+    WhatsApp do dono (item 9).
