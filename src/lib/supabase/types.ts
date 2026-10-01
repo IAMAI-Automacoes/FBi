@@ -1522,10 +1522,12 @@ export type Database = {
           chat_id: string
           criado_em: string
           de_mim: boolean
+          editada_em: string | null
           enviada_em: string
           grupo: boolean
           id: number
           message_id: string
+          midia_caminho: string | null
           midia_id: string | null
           midia_mime: string | null
           midia_nome: string | null
@@ -1547,10 +1549,12 @@ export type Database = {
           chat_id: string
           criado_em?: string
           de_mim?: boolean
+          editada_em?: string | null
           enviada_em: string
           grupo?: boolean
           id?: number
           message_id: string
+          midia_caminho?: string | null
           midia_id?: string | null
           midia_mime?: string | null
           midia_nome?: string | null
@@ -1572,10 +1576,12 @@ export type Database = {
           chat_id?: string
           criado_em?: string
           de_mim?: boolean
+          editada_em?: string | null
           enviada_em?: string
           grupo?: boolean
           id?: number
           message_id?: string
+          midia_caminho?: string | null
           midia_id?: string | null
           midia_mime?: string | null
           midia_nome?: string | null

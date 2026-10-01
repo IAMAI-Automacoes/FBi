@@ -1,0 +1,420 @@
+SIMULAÇÃO DO WHATSAPP — GUIA PARA QUEM VAI FAZER A INTERFACE
+=============================================================
+
+Atualizado em 30/09/2026.
+
+O que é: uma tela no painel onde o dono do restaurante vê as conversas do
+WhatsApp do restaurante como se estivesse no próprio WhatsApp: o que o cliente
+mandou, o que o EasyFeed respondeu sozinho e o que o dono digitou no celular.
+Cada restaurante vê só as conversas dele.
+
+A parte de captura já está pronta e rodando em produção (webhook, n8n, tabela,
+bucket de arquivos). Falta só a tela. Este documento explica de onde vêm os
+dados, o que significa cada campo e como desenhar cada tipo de mensagem.
+
+Tudo aqui foi conferido com eventos reais, mandados pelo número do Camelo
+(restaurante 11) em 30/09: texto, edição, exclusão, reação, resposta, áudio,
+imagem, PDF, figurinha, gif e emoji.
+
+
+-------------------------------------------------------------
+1. CAMINHO DOS DADOS
+-------------------------------------------------------------
+
+  WhatsApp do restaurante
+     -> uazapi (instância do restaurante)
+     -> webhook da instância "registro-mensagens"
+     -> n8n, workflow "Simulação Whatsapp"
+     -> Supabase:
+          tabela public.mensagens_whatsapp   (uma linha por mensagem)
+          bucket privado "mensagens"         (fotos, áudios, PDFs...)
+
+O front SÓ LÊ. Ninguém grava nessa tabela pelo site; quem grava é o n8n com a
+chave de serviço. A política de segurança (RLS) já garante que o dono só
+enxerga linhas do restaurante dele.
+
+Existe um segundo webhook na mesma instância, o "easyfeed", que é o fluxo de
+feedback. Ele é independente deste e não deve ser mexido por causa da tela.
+
+
+-------------------------------------------------------------
+2. CONFIGURAÇÃO (o que já está feito e como refazer)
+-------------------------------------------------------------
+
+2.1 Webhooks da uazapi (por instância; o webhook global está DESLIGADO)
+
+  Cada instância tem dois destinos:
+
+  a) Feedback
+     url:             https://n8n-n8n-main.tikvpg.easypanel.host/webhook/easyfeed
+     events:          ["messages"]
+     excludeMessages: ["wasSentByApi", "isGroupYes"]
+
+  b) Registro (é o desta tela)
+     url:             https://n8n-n8n-main.tikvpg.easypanel.host/webhook/registro-mensagens
+     events:          ["messages", "messages_update"]
+     excludeMessages: []   (não exclui nada: grupos e mensagens do sistema entram)
+
+  Quem configura: a edge function whatsapp-instancia, na ação "iniciar"
+  (função configurarWebhooks). Toda instância nova já nasce com os dois, e uma
+  instância antiga ganha os dois quando reconecta. Ela só adiciona o que está
+  faltando, nunca duplica.
+
+  Para adicionar na mão: POST {BaseUrl}/webhook, header "token: <token da
+  instância>", body:
+    { "action": "add", "enabled": true, "addUrlEvents": false,
+      "addUrlTypesMessages": false, "url": "...", "events": [...],
+      "excludeMessages": [...] }
+
+2.2 Secrets do Supabase (Edge Functions)
+
+  N8N_FEEDBACK_ENTRADA     URL do webhook easyfeed
+  N8N_REGISTRO_MENSAGENS   URL do webhook registro-mensagens
+  MIDIA_SECRET             segredo que o n8n manda no header x-midia-secret
+                           para a função guardar-midia (o valor está com o
+                           Raver; não vai para o repositório)
+
+2.3 Edge functions
+
+  whatsapp-instancia   cria/conecta a instância e configura os webhooks
+  guardar-midia        baixa o arquivo do link temporário da uazapi e salva
+                       no bucket "mensagens". Sempre responde 200: se der
+                       erro, devolve { caminho: null, erro } e a mensagem é
+                       gravada assim mesmo, só sem o arquivo. Limite de 40 MB.
+
+2.4 Migrations (todas já aplicadas em produção)
+
+  20260930000000_mensagens_whatsapp.sql            tabela, índices, RLS
+  20260930010000_midia_permanente.sql              midia_caminho, editada_em,
+                                                   bucket e política de leitura
+  20260930020000_mensagens_whatsapp_valores_reais.sql  comentários com os
+                                                   valores reais
+
+2.5 Workflow do n8n "Simulação Whatsapp"
+
+  Ligações:
+    Recebe evento -> Acha o restaurante -> Classifica o evento -> Qual ação?
+    Qual ação? "inserir" -> Tem mídia?
+    Qual ação? "editar"  -> Aplica edição
+    Qual ação? "status"  -> Atualiza status
+    Tem mídia? verdadeiro -> Baixa a mídia -> É áudio?
+    Tem mídia? falso      -> Grava mensagem
+    É áudio? verdadeiro -> Converte para arquivo -> Transcreve -> Guarda a mídia
+    É áudio? falso      -> Guarda a mídia
+    Guarda a mídia -> Junta a mídia -> Grava mensagem
+
+  O que cada node faz:
+    Recebe evento          webhook POST, path registro-mensagens
+    Acha o restaurante     Supabase, restaurantes onde whatsapp_token = body.token
+                           (Always Output Data ligado)
+    Classifica o evento    código: transforma o evento da uazapi em uma das
+                           três ações (inserir / editar / status) ou descarta
+    Baixa a mídia          POST {BaseUrl}/message/download com id, return_link,
+                           generate_mp3 e return_base64 (só para áudio).
+                           Timeout de 30 s, On Error = continuar
+    Converte para arquivo  base64Data -> audio.mp3 (audio/mpeg), On Error = continuar
+    Transcreve             OpenAI, transcrição de áudio, idioma pt,
+                           On Error = continuar. O nome do node PRECISA ser
+                           "Transcreve": o "Junta a mídia" procura por esse nome
+    Guarda a mídia         POST na função guardar-midia com o header
+                           x-midia-secret e a credencial Supabase do n8n.
+                           On Error = continuar
+    Junta a mídia          coloca midia_url, midia_mime, midia_caminho e
+                           transcricao na linha
+    Grava mensagem         POST /rest/v1/mensagens_whatsapp?on_conflict=restaurante_id,message_id
+                           com Prefer: resolution=ignore-duplicates. Se a uazapi
+                           mandar o mesmo evento duas vezes, não duplica
+    Aplica edição          PATCH texto + editada_em na mensagem original
+    Atualiza status        PATCH status, com filtro que impede o status de voltar
+                           (um "entregue" atrasado não apaga um "lido")
+
+  Princípio: erro de mídia ou de transcrição nunca pode fazer a mensagem
+  sumir. Na pior das hipóteses a linha existe sem arquivo ou sem transcrição.
+
+
+-------------------------------------------------------------
+3. A TABELA public.mensagens_whatsapp
+-------------------------------------------------------------
+
+Uma linha por mensagem (reação também é uma linha, ver abaixo). A chave
+natural é (restaurante_id, message_id), que é única.
+
+  id                   bigint, chave interna
+  restaurante_id       restaurante dono da conversa
+  message_id           id da mensagem no WhatsApp (ex.: 3EB0C8C73637AC7BC4BA23)
+  chat_id              a conversa. Pessoa: 5511932903005@s.whatsapp.net.
+                       Grupo: 120363404511985129@g.us
+  telefone             só dígitos. Em conversa individual é o telefone do
+                       cliente; em grupo é o telefone de quem mandou
+  nome_exibicao        nome DA CONVERSA: nome do contato, ou nome do grupo.
+                       Em grupo, o nome de quem mandou cada mensagem está em
+                       payload->message->>senderName
+  de_mim               false = recebida (cliente mandou)
+                       true  = enviada pelo número do restaurante
+  por_api              só faz sentido com de_mim = true:
+                       true  = o EasyFeed mandou sozinho (resposta automática)
+                       false = o dono digitou no celular
+  grupo                true se a conversa é um grupo
+  tipo                 text, image, video, gif, audio, document, sticker,
+                       reaction, location, contact, outro
+  texto                texto da mensagem, ou legenda da mídia. Nulo em reação.
+                       Se foi editada, já é o texto NOVO
+  transcricao          texto do áudio (OpenAI). Nulo se não for áudio ou se a
+                       transcrição falhou
+  reacao               emoji, quando tipo = reaction. Nulo numa linha de
+                       reação = a pessoa REMOVEU a reação
+  responde_message_id  em resposta (citação): id da mensagem citada.
+                       Em reação: id da mensagem reagida
+  midia_caminho        caminho do arquivo no bucket "mensagens"
+                       (restaurante_<id>/<message_id>.<ext>). É ESTE que a tela usa
+  midia_url            link temporário da uazapi. Morre em ~2 dias. NÃO USAR
+  midia_id             id para baixar de novo na uazapi (uso interno)
+  midia_mime           tipo do arquivo (image/jpeg, audio/mpeg, application/pdf...)
+  midia_nome           nome original do arquivo (vem em documento; em foto e
+                       áudio normalmente é nulo)
+  status               só em mensagem enviada (de_mim = true). Só avança:
+                       SENT -> DELIVERED -> READ -> PLAYED (áudio ouvido).
+                       DELETED = apagada para todos (vale para qualquer lado)
+  editada_em           preenchido quando a mensagem foi editada
+  enviada_em           horário real da mensagem no WhatsApp. ORDENE POR ESTE
+                       (nunca por id ou criado_em: eventos chegam fora de ordem)
+  payload              o evento cru da uazapi, como chegou. Útil para casos
+                       raros (nome do remetente em grupo, localização, texto
+                       antes da edição). Não exibir inteiro na tela
+  criado_em            quando a linha foi gravada
+  atualizado_em        última mudança (status, edição)
+
+Índices prontos para as duas consultas da tela:
+  (restaurante_id, chat_id, enviada_em desc)   abrir uma conversa
+  (restaurante_id, enviada_em desc)            lista de conversas / período
+
+Tipos TypeScript: src/lib/supabase/types.ts, tabela mensagens_whatsapp.
+
+
+-------------------------------------------------------------
+4. ARQUIVOS (fotos, áudios, PDFs...)
+-------------------------------------------------------------
+
+O bucket "mensagens" é PRIVADO (tem foto e documento de cliente). A tela gera
+uma URL assinada na hora de exibir:
+
+  const { data } = await supabase.storage
+    .from('mensagens')
+    .createSignedUrl(m.midia_caminho, 3600)          // 1 hora
+  // data.signedUrl
+
+  Várias de uma vez (melhor para abrir uma conversa):
+  const { data } = await supabase.storage
+    .from('mensagens')
+    .createSignedUrls(caminhos, 3600)
+
+  Para baixar documento com o nome original:
+  .createSignedUrl(m.midia_caminho, 3600, { download: m.midia_nome ?? true })
+
+Quem pode ler: só o dono, só a pasta restaurante_<id do restaurante dele>.
+Atenção: o admin da plataforma enxerga as LINHAS de todos (pela tabela), mas
+NÃO consegue abrir os arquivos (a política do bucket é só do dono).
+
+Se a mídia falhou (link expirado, arquivo acima de 40 MB, uazapi fora do ar),
+a linha existe com midia_caminho nulo. Mostre "Mídia indisponível".
+
+
+-------------------------------------------------------------
+5. CONSULTAS
+-------------------------------------------------------------
+
+Sempre filtre por restaurante_id, mesmo com RLS: o admin da plataforma enxerga
+todos os restaurantes e, sem o filtro, veria tudo misturado.
+
+Abrir uma conversa (as 100 mais recentes):
+
+  supabase.from('mensagens_whatsapp')
+    .select('id, message_id, chat_id, telefone, nome_exibicao, de_mim, por_api, grupo, tipo, texto, transcricao, reacao, responde_message_id, midia_caminho, midia_mime, midia_nome, status, editada_em, enviada_em')
+    .eq('restaurante_id', restauranteId)
+    .eq('chat_id', chatId)
+    .order('enviada_em', { ascending: false })
+    .limit(100)
+
+  Não peça a coluna payload na listagem (é o evento inteiro, pesado). Busque só
+  quando precisar, e só da linha que precisa.
+
+Lista de conversas: ainda não existe uma view/função pronta. Para começar dá
+para buscar as últimas ~1000 linhas do restaurante (índice de recentes) e
+agrupar por chat_id no front, pegando a mais recente de cada conversa. Isso
+deixa de servir quando o volume crescer; aí o certo é criar uma função
+(RPC) no banco que devolva uma linha por conversa. Mexer no banco precisa de
+OK do Raver antes.
+
+Tempo real: a tabela AINDA NÃO está no Realtime do Supabase. Opções:
+  a) polling (ex.: refetchInterval de 5 a 10 s no react-query), funciona hoje;
+  b) ligar o Realtime, que é uma linha no banco
+     (alter publication supabase_realtime add table public.mensagens_whatsapp)
+     e respeita a RLS. Precisa do OK do Raver.
+Lembre que uma linha MUDA depois de criada (status, edição, exclusão), então
+escute INSERT e UPDATE, ou recarregue a conversa.
+
+
+-------------------------------------------------------------
+6. COMO DESENHAR CADA MENSAGEM
+-------------------------------------------------------------
+
+Lado do balão
+  de_mim = false -> esquerda (cliente)
+  de_mim = true  -> direita (restaurante)
+  Na direita, diferencie: por_api = true -> selo pequeno "Automática"/"EasyFeed";
+  por_api = false -> mensagem do dono pelo celular.
+
+Tiques (só em de_mim = true)
+  SENT       um tique cinza
+  DELIVERED  dois tiques cinza
+  READ       dois tiques azuis
+  PLAYED     áudio ouvido (WhatsApp mostra o microfone azul)
+  nulo       sem tique
+
+Editada
+  editada_em preenchido -> "Editada" ao lado do horário. O texto já é o novo.
+  O texto antigo está em payload->message->>text da própria linha (se um dia
+  quiserem mostrar o histórico de edição).
+
+Apagada
+  status = DELETED -> balão "Esta mensagem foi apagada", sem o conteúdo.
+  O texto/arquivo original continua guardado no banco; NÃO mostre por padrão
+  (é o que o WhatsApp faz).
+
+Reação (tipo = reaction)
+  NÃO é um balão. É um emoji pendurado embaixo da mensagem reagida
+  (responde_message_id). Regras:
+    - para cada (mensagem reagida, lado de_mim) vale a reação MAIS RECENTE
+      por enviada_em;
+    - se a mais recente tem reacao nula, a reação foi removida;
+    - se a mensagem reagida não está no banco (é anterior à captura),
+      ignore a reação.
+  Na lista de conversas, pode virar "Reagiu 👍 a uma mensagem".
+
+Resposta (citação)
+  texto normal com responde_message_id preenchido. Mostre o quadro de citação
+  em cima do balão com o trecho da mensagem citada (busque pelo message_id na
+  mesma conversa). Se não achar: "Mensagem não disponível".
+
+Texto (tipo = text)
+  Respeitar quebras de linha. Se o texto for SÓ emoji (1 a 3), o WhatsApp
+  mostra grande e sem balão; ex.: /^(\p{Extended_Pictographic}️?‍?){1,3}$/u
+  O WhatsApp também usa *negrito*, _itálico_, ~riscado~ (opcional).
+
+Áudio (tipo = audio)
+  midia_mime = audio/mpeg (mp3, já convertido do ogg do WhatsApp). Player
+  <audio controls> e, embaixo, a transcrição (pode ser recolhível). Se
+  transcricao for nula, só o player.
+
+Imagem (tipo = image)
+  <img> com a URL assinada; clique abre grande. Legenda em texto.
+
+Vídeo (tipo = video)
+  <video controls>. Legenda em texto. (Não testado com envio real ainda, mas
+  segue o mesmo caminho da imagem.)
+
+Gif (tipo = gif)
+  É um MP4 sem som (o WhatsApp converte todo gif em vídeo). Renderize como
+  <video autoplay loop muted playsinline> SEM controles, como o WhatsApp faz.
+
+Figurinha (tipo = sticker)
+  image/webp (pode ser animada; o navegador toca sozinho). Sem fundo de balão,
+  uns 150 px.
+
+Documento (tipo = document)
+  Cartão com ícone pelo midia_mime, midia_nome e botão de baixar.
+
+Localização / contato / outro
+  Não testados. Mostre "Localização", "Contato" ou "Mensagem não suportada".
+  Os dados ficam em payload->message->content.
+
+Grupos (grupo = true)
+  O título da conversa é nome_exibicao (nome do grupo). Em cada balão de
+  terceiros, mostre o nome de quem mandou (payload->message->>senderName,
+  ou o telefone). Sugestão: separar grupos numa aba ou filtro, porque o número
+  do restaurante costuma estar em grupos de promoção que enchem a lista
+  (já aconteceu no Camelo).
+
+Datas e horários
+  Use enviada_em, no fuso America/Sao_Paulo. Separadores "Hoje", "Ontem" e
+  data, como no WhatsApp.
+
+Telefone
+  Vem só com dígitos (5511932903005). Formate: +55 (11) 93290-3005.
+
+Foto de perfil
+  Não é guardada. O payload->chat tem "image"/"imagePreview", mas são links do
+  WhatsApp que expiram. Use iniciais do nome como padrão.
+
+
+-------------------------------------------------------------
+7. O QUE ACONTECE COM CADA MENSAGEM (teste real de 30/09)
+-------------------------------------------------------------
+
+  Cliente manda o feedback "a comida estava fria..."
+    -> linha text, de_mim false
+  EasyFeed responde "Agradecemos muito pelo seu feedback..."
+    -> linha text, de_mim true, por_api true, status SENT
+    -> depois chegam "entregue" e "lido": status vira DELIVERED, depois READ.
+       Um "entregue" atrasado chegou depois do "lido" e foi ignorado
+  Cliente manda "oi" e edita para "olá"
+    -> linha text "oi"; o evento de edição atualiza para "olá" e preenche
+       editada_em (não cria linha nova)
+  Cliente manda "tudo bem?" e apaga para todos
+    -> linha text "tudo bem?"; a exclusão muda status para DELETED
+  Cliente reage 👍 ao feedback
+    -> linha reaction, reacao 👍, responde_message_id = id do feedback
+  Cliente responde ao feedback com "oi"
+    -> linha text "oi", responde_message_id = id do feedback
+  Áudio
+    -> linha audio; arquivo restaurante_11/<id>.mp3 no bucket; transcrição
+  Foto
+    -> linha image; arquivo .jpg
+  PDF "Rec de It de Quimica.pdf"
+    -> linha document; arquivo .pdf; midia_nome com o nome original
+  Figurinha
+    -> linha sticker; arquivo .webp
+  Gif da biblioteca do WhatsApp
+    -> linha gif; arquivo .mp4
+  Mensagem só com 😎
+    -> linha text "😎"
+
+  Eventos que são descartados de propósito: "FileDownloaded" (é o eco do
+  próprio download que o n8n faz) e status desconhecidos.
+
+Dados para testar a tela: restaurante 11 (Camelo) tem essas 13 mensagens de
+teste, na conversa 5511932903005@s.whatsapp.net, e mensagens reais de um grupo
+de promoções. As 13 de teste foram gravadas antes do workflow existir, por
+isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
+
+
+-------------------------------------------------------------
+8. O QUE A TELA NÃO CONSEGUE MOSTRAR
+-------------------------------------------------------------
+
+  - Conversas e mensagens anteriores a 30/09/2026 (a captura começou aí).
+    Dá para importar o histórico pela uazapi (/message/find), mas ainda não
+    foi feito.
+  - "Apagar só para mim": o WhatsApp não avisa ninguém, então não chega
+    evento.
+  - Mensagem de visualização única, enquete, chamada de voz/vídeo, status
+    (stories), "digitando...", "online": não são registrados (enquete e
+    visualização única entram como tipo "outro", sem conteúdo útil).
+  - Foto de perfil permanente (ver item 6).
+  - Arquivos acima de 40 MB (linha existe, sem arquivo).
+  - Tiques de leitura de mensagens recebidas (o WhatsApp só informa leitura
+    das mensagens que o restaurante mandou).
+  - Mandar mensagem pela tela: é só visualização. Enviar exigiria outra
+    integração e não está no escopo.
+
+
+-------------------------------------------------------------
+9. REGRAS DO PROJETO QUE VALEM AQUI
+-------------------------------------------------------------
+
+  - Cada restaurante vê só as próprias conversas (RLS já cuida; mesmo assim
+    filtre por restaurante_id).
+  - O front não escreve em mensagens_whatsapp nem no bucket "mensagens".
+  - Qualquer mudança no banco (view, função, Realtime, coluna nova) precisa
+    de OK do Raver antes.
+  - Não usar midia_url na tela: expira em 2 dias.
