@@ -90,7 +90,7 @@ export function ListaConversas({
   ativa: string | null
   aoAbrir: (chatId: string) => void
   /** Resultado da pesquisa: abre a conversa já na mensagem. */
-  aoAbrirMensagem: (chatId: string, messageId: string) => void
+  aoAbrirMensagem: (chatId: string, messageId: string, termo: string) => void
   aoFixar: (chatId: string) => void
   aoSilenciar: (chatId: string) => void
   /** Sino do topo: todas as notificações do WhatsApp (push e som). */
@@ -210,7 +210,7 @@ export function ListaConversas({
             {mensagens && mensagens.length > 0 && (
               <SecaoResultados titulo="Mensagens">
                 {mensagens.map((m) => (
-                  <ItemResultado key={m.id} m={m} termo={busca} autor={rotuloResultado(m)} aoEscolher={() => aoAbrirMensagem(m.chat_id, m.message_id)} />
+                  <ItemResultado key={m.id} m={m} termo={busca} autor={rotuloResultado(m)} aoEscolher={() => aoAbrirMensagem(m.chat_id, m.message_id, busca.trim())} />
                 ))}
               </SecaoResultados>
             )}

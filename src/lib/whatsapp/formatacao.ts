@@ -423,10 +423,33 @@ export function regexDestaque(termo: string | null | undefined): RegExp | null {
  */
 export function trechoComTermo(texto: string, termo: string, antes = 30, total = 120): string {
   const linha = texto.replace(/\s+/g, ' ').trim()
-  const re = regexDestaque(termo)
+  const re = destaqueParaTexto(termo, linha)
   const m = re ? re.exec(linha) : null
   if (!m || m.index <= antes) return linha.length > total ? `${linha.slice(0, total)}…` : linha
   const ini = m.index - antes
   const fim = ini + total
   return `…${linha.slice(ini, fim)}${fim < linha.length ? '…' : ''}`
+}
+
+/**
+ * O que realçar NESTE texto para este termo: o termo em si (sem diferenciar
+ * acento, maiúscula e pontuação) ou, se ele não aparece (resultado
+ * "parecido"), as palavras do texto parecidas com as pesquisadas — pesquisar
+ * "fira" realça "fria". null = nada a realçar.
+ */
+export function destaqueParaTexto(termo: string | null | undefined, texto: string | null | undefined): RegExp | null {
+  const exato = regexDestaque(termo)
+  if (!exato || !texto) return exato
+  exato.lastIndex = 0
+  if (exato.test(texto)) { exato.lastIndex = 0; return exato }
+  const palavrasTermo = normalizarBusca(termo).split(' ').filter(Boolean)
+  const achadas = new Set<string>()
+  for (const original of texto.match(/[\p{L}\p{N}]+/gu) ?? []) {
+    const w = normalizarBusca(original)
+    if (w && palavrasTermo.some((tw) => palavraParecida(tw, w))) achadas.add(original)
+  }
+  if (achadas.size === 0) return exato
+  // Só letras e números (vêm do match acima): não precisam de escape.
+  const alternativas = Array.from(achadas).sort((a, b) => b.length - a.length)
+  return new RegExp(`(?<![\\p{L}\\p{N}])(${alternativas.join('|')})(?![\\p{L}\\p{N}])`, 'gu')
 }

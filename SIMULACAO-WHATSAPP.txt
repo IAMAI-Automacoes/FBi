@@ -621,4 +621,12 @@ Pesquisa (lista e dentro da conversa): função pesquisar_mensagens_whatsapp
 depois o parecido: sem diferença de acento, maiúscula ou pontuação, e com
 erros leves (1 letra; 2 em palavras longas; duas letras vizinhas trocadas).
 A lista mostra "Conversas" (nome/telefone) e "Mensagens" de todas as
-conversas; o resultado mostra o trecho em volta da palavra.
+conversas; o resultado mostra o trecho em volta da palavra. Ao escolher um
+resultado, a conversa rola até a mensagem e a palavra fica marcada em
+amarelo por 7 segundos dentro da própria mensagem (texto, legenda,
+transcrição — que abre sozinha — ou nome do arquivo); num resultado
+"parecido", marca a palavra parecida ("fira" marca "fria").
+
+Contador do menu (item WhatsApp): quantas conversas (contatos e grupos)
+têm mensagem não lida. Abrir a página não zera; cada conversa aberta e
+lida tira 1 na hora. Conversa silenciada continua contando.

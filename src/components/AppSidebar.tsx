@@ -116,16 +116,18 @@ export function AppSidebar() {
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId])
 
-  // Numerozinho do WhatsApp: conversas com mensagem não lida (mesma conta da
-  // tela — recebida depois da última leitura ou da última resposta do dono).
-  // Some sozinho conforme as conversas são abertas, como no WhatsApp.
+  // Numerozinho do WhatsApp: quantas CONVERSAS (contatos e grupos) têm
+  // mensagem não lida — mesma conta da tela. Abrir a página não zera nada;
+  // cada conversa aberta e lida tira 1, na hora (evento da tela), e o banco
+  // confirma em seguida.
   const podeVerWhatsapp = podeVer('whatsapp')
-  const [conversasNaoLidas, setConversasNaoLidas] = useState(0)
+  const [chatsNaoLidos, setChatsNaoLidos] = useState<Set<string>>(new Set())
+  const conversasNaoLidas = chatsNaoLidos.size
   useEffect(() => {
-    if (!restauranteId || !podeVerWhatsapp) { setConversasNaoLidas(0); return }
+    if (!restauranteId || !podeVerWhatsapp) { setChatsNaoLidos(new Set()); return }
     let espera: ReturnType<typeof setTimeout> | null = null
     const atualizar = () => listarConversas(restauranteId)
-      .then((lista) => setConversasNaoLidas(lista.filter((c) => c.nao_lidas > 0).length))
+      .then((lista) => setChatsNaoLidos(new Set(lista.filter((c) => c.nao_lidas > 0).map((c) => c.chat_id))))
       .catch(() => {})
     const agendar = () => { if (espera) clearTimeout(espera); espera = setTimeout(atualizar, 800) }
     atualizar()
@@ -134,8 +136,19 @@ export function AppSidebar() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mensagens_whatsapp_leitura', filter: `restaurante_id=eq.${restauranteId}` }, agendar)
       .subscribe()
+    // A tela abriu uma conversa: tira ela da conta na hora.
+    const aoAbrirConversa = (e: Event) => {
+      const chat = (e as CustomEvent<{ chatId: string }>).detail?.chatId
+      if (chat) setChatsNaoLidos((atual) => { if (!atual.has(chat)) return atual; const n = new Set(atual); n.delete(chat); return n })
+    }
     window.addEventListener('easyfeed:preferencias', agendar)
-    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch); window.removeEventListener('easyfeed:preferencias', agendar) }
+    window.addEventListener('easyfeed:whatsapp-conversa-lida', aoAbrirConversa)
+    return () => {
+      if (espera) clearTimeout(espera)
+      supabase.removeChannel(ch)
+      window.removeEventListener('easyfeed:preferencias', agendar)
+      window.removeEventListener('easyfeed:whatsapp-conversa-lida', aoAbrirConversa)
+    }
   }, [restauranteId, podeVerWhatsapp])
 
   useEffect(() => {

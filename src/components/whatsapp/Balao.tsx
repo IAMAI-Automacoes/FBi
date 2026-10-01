@@ -186,13 +186,13 @@ function BalaoBase({
               ? <PlayerAudio url={url} caminho={m.midia_caminho!} deMim={deMim} ouvido={m.status === 'PLAYED'}
                   nomeContato={autorDe(m, nomeContato)} fotoContato={m.grupo ? null : fotoContato} autoTocar={autoTocar} aoTerminar={() => aoTerminarAudio(m.id)} />
               : <MidiaIndisponivel rotulo="Áudio indisponível" />}
-            {m.transcricao && <Transcricao texto={m.transcricao} deMim={deMim} />}
+            {m.transcricao && <Transcricao texto={m.transcricao} deMim={deMim} destaque={destaque} />}
           </>
         )
         break
       case 'document':
         corpo = url
-          ? <CartaoDocumento url={url} caminho={m.midia_caminho!} nome={m.midia_nome} mime={m.midia_mime} deMim={deMim} aoAbrirPdf={() => aoAbrirPdf(m)} />
+          ? <CartaoDocumento url={url} caminho={m.midia_caminho!} nome={m.midia_nome} mime={m.midia_mime} deMim={deMim} aoAbrirPdf={() => aoAbrirPdf(m)} destaque={destaque} />
           : <MidiaIndisponivel rotulo={m.midia_nome ? `${m.midia_nome} indisponível` : 'Documento indisponível'} />
         break
       case 'location':

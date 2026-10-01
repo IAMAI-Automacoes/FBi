@@ -17,6 +17,7 @@ import {
   pontuarBusca,
   regexDestaque,
   trechoComTermo,
+  destaqueParaTexto,
 } from '../whatsapp/formatacao.ts'
 
 let falhas = 0
@@ -172,6 +173,18 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
   ok('termo no começo não corta', trechoComTermo('oi tudo bem', 'oi') === 'oi tudo bem')
   ok('sem o termo: começo do texto', trechoComTermo('a comida estava fria', 'fira') === 'a comida estava fria')
   ok('trecho cortado no meio ganha reticências', trechoComTermo('x'.repeat(100) + ' alvo ' + 'y'.repeat(200), 'alvo').startsWith('…'))
+}
+
+// ── Realce da palavra encontrada (resultado e mensagem) ──────────────────────
+{
+  const marca = (termo: string, texto: string) => { const re = destaqueParaTexto(termo, texto); return re ? texto.replace(re, '[$1]') : texto }
+  ok('realça o termo exato', marca('fria', 'a comida estava fria') === 'a comida estava [fria]')
+  ok('realça sem acento/maiúscula', marca('FRIA!', 'Estava fria.') === 'Estava [fria].')
+  ok('parecido: realça a palavra do texto', marca('fira', 'a comida estava fria e saborosa') === 'a comida estava [fria] e saborosa', marca('fira', 'a comida estava fria e saborosa'))
+  ok('parecido com erro: realça a palavra certa', marca('saborossa', 'fria e saborosa') === 'fria e [saborosa]')
+  ok('não realça pedaço de palavra parecida', marca('fira', 'friagem fria') === 'friagem [fria]', marca('fira', 'friagem fria'))
+  ok('sem relação: nada', marca('pizza', 'a comida estava fria') === 'a comida estava fria')
+  ok('trecho acha a palavra parecida', trechoComTermo('x'.repeat(80) + ' estava fria', 'fira').includes('fria'))
 }
 
 if (falhas > 0) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Pause, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { duracao } from '@/lib/whatsapp/formatacao'
-import { Avatar, MicOuvido, WA } from '../pecas'
+import { Avatar, MicOuvido, Realce, WA } from '../pecas'
 
 /**
  * Player de áudio no estilo do WhatsApp:
@@ -238,8 +238,10 @@ export function PlayerAudio({
 }
 
 /** Transcrição embaixo do áudio — chega fechada; um toque abre. */
-export function Transcricao({ texto, deMim }: { texto: string; deMim: boolean }) {
+export function Transcricao({ texto, deMim, destaque }: { texto: string; deMim: boolean; destaque?: string }) {
   const [aberta, setAberta] = useState(false)
+  // Veio da pesquisa e a palavra está na transcrição: abre para ela aparecer.
+  useEffect(() => { if (destaque) setAberta(true) }, [destaque])
   return (
     <div className={cn('mt-1 rounded-md px-2 py-1.5 text-[13px] leading-snug', deMim ? 'bg-black/[0.05]' : 'bg-black/[0.04]')}>
       <button
@@ -251,7 +253,7 @@ export function Transcricao({ texto, deMim }: { texto: string; deMim: boolean })
       >
         Transcrição {aberta ? '▾' : '▸'}
       </button>
-      {aberta && <p className="whitespace-pre-wrap text-gray-700">{texto}</p>}
+      {aberta && <p className="whitespace-pre-wrap text-gray-700"><Realce texto={texto} termo={destaque} /></p>}
     </div>
   )
 }

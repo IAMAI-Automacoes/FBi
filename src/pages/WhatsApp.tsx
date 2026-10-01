@@ -119,6 +119,8 @@ export default function WhatsApp() {
     const c = conversas.find((x) => x.chat_id === id)
     naoLidasAoAbrir.current.set(id, c?.nao_lidas ?? 0)
     setConversas((lista) => lista.map((x) => (x.chat_id === id ? { ...x, nao_lidas: 0 } : x)))
+    // O número do menu lateral diminui 1 na hora (o banco confirma depois).
+    window.dispatchEvent(new CustomEvent('easyfeed:whatsapp-conversa-lida', { detail: { chatId: id } }))
     // Abrir a conversa a partir da lista empilha no histórico: o voltar do
     // celular volta à lista. Trocar de conversa no computador só substitui.
     const empilhar = !chatRef.current
@@ -163,9 +165,9 @@ export default function WhatsApp() {
     }), [conversas, carregado, silenciada, fixadaEm])
 
   // Resultado da pesquisa na lista: abre a conversa já na mensagem.
-  const abrirNaMensagem = useCallback((id: string, messageId: string) => {
+  const abrirNaMensagem = useCallback((id: string, messageId: string, termo: string) => {
     abrir(id)
-    setSalto({ messageId, vez: Date.now() })
+    setSalto({ messageId, vez: Date.now(), termo })
   }, [abrir])
 
   // Dados da conversa aberta (da lista; se ainda não está nela, do próprio id).
@@ -327,8 +329,8 @@ export default function WhatsApp() {
               chatId={chatId}
               nome={nome}
               aoFechar={fecharPainel}
-              aoEscolher={(messageId) => {
-                setSalto({ messageId, vez: Date.now() })
+              aoEscolher={(messageId, termo) => {
+                setSalto({ messageId, vez: Date.now(), termo })
                 if (window.innerWidth < 768) fecharPainel()
               }}
             />

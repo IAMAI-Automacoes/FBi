@@ -28,7 +28,8 @@ function ordenar(a: MensagemWa, b: MensagemWa) {
 
 const autorChave = (m: MensagemWa) => (m.de_mim ? `eu:${m.por_api}` : m.grupo ? `g:${m.remetente ?? m.telefone}` : 'contato')
 
-export interface PedidoSalto { messageId: string; vez: number }
+/** Rolar até uma mensagem; com `termo` (veio da pesquisa), marca a palavra por 7 s. */
+export interface PedidoSalto { messageId: string; vez: number; termo?: string }
 
 export function Conversa({
   restauranteId, chatId, nome, foto, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
@@ -66,6 +67,8 @@ export function Conversa({
   const [galeria, setGaleria] = useState<number | null>(null)
   const [pdf, setPdf] = useState<{ url: string; nome: string } | null>(null)
   const [piscando, setPiscando] = useState<string | null>(null)
+  // Palavra pesquisada marcada na própria mensagem (7 s, como pedido).
+  const [marcada, setMarcada] = useState<{ messageId: string; termo: string } | null>(null)
   const [autoTocarId, setAutoTocarId] = useState<number | null>(null)
 
   const rolagem = useRef<HTMLDivElement>(null)
@@ -247,7 +250,7 @@ export function Conversa({
   }, [chatId, marcarSePreciso])
 
   // ── Ir até uma mensagem (citação, pesquisa) ──
-  const irPara = useCallback(async (messageId: string) => {
+  const irPara = useCallback(async (messageId: string, termo?: string) => {
     const achar = () => rolagem.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
     let el = achar()
     for (let tentativa = 0; !el && tentativa < 20 && temMaisRef.current; tentativa++) {
@@ -261,8 +264,16 @@ export function Conversa({
       return
     }
     el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    setPiscando(messageId)
-    setTimeout(() => setPiscando((p) => (p === messageId ? null : p)), 1800)
+    if (termo) {
+      // Da pesquisa: só a palavra fica marcada (a mensagem não pisca).
+      const pedido = { messageId, termo }
+      setMarcada(pedido)
+      setTimeout(() => setMarcada((m) => (m === pedido ? null : m)), 7000)
+    } else {
+      // Da citação: a mensagem pisca para mostrar qual é.
+      setPiscando(messageId)
+      setTimeout(() => setPiscando((p) => (p === messageId ? null : p)), 1800)
+    }
   }, [carregarMais, toast])
 
   // Pula só depois da carga inicial (vindo da pesquisa da lista, a conversa
@@ -271,7 +282,7 @@ export function Conversa({
   useEffect(() => {
     if (!salto || carregando || saltoFeito.current === salto.vez) return
     saltoFeito.current = salto.vez
-    irPara(salto.messageId)
+    irPara(salto.messageId, salto.termo)
   }, [salto, carregando, irPara])
 
   // ── Galeria e áudio seguido ──
@@ -370,6 +381,7 @@ export function Conversa({
                       citada={citada}
                       reacoes={reacoes.get(m.message_id) ?? []}
                       piscando={piscando === m.message_id}
+                      destaque={marcada?.messageId === m.message_id ? marcada.termo : undefined}
                       autoTocar={autoTocarId === m.id}
                       aoAbrirMidia={abrirMidia}
                       aoAbrirPdf={abrirPdf}

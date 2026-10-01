@@ -3,6 +3,7 @@ import { Download, FileSpreadsheet, FileText, File as IconeArquivo, ImageOff, Lo
 import { cn } from '@/lib/utils'
 import { duracao, formatarTelefone } from '@/lib/whatsapp/formatacao'
 import { buscarConteudo, urlParaBaixar } from '@/lib/queries/whatsapp'
+import { Realce } from '../pecas'
 
 /**
  * Mídias dentro do balão. A URL vem assinada de fora (bucket privado
@@ -197,7 +198,8 @@ function CapaPdf({ url, aoContarPaginas }: { url: string; aoContarPaginas: (n: n
   )
 }
 
-export function CartaoDocumento({ url, caminho, nome, mime, deMim, aoAbrirPdf }: {
+export function CartaoDocumento({ url, caminho, nome, mime, deMim, aoAbrirPdf, destaque }: {
+  destaque?: string
   url: string
   caminho: string
   nome: string | null
@@ -229,7 +231,7 @@ export function CartaoDocumento({ url, caminho, nome, mime, deMim, aoAbrirPdf }:
       >
         <IconeDoc ext={ext} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] text-gray-800" title={titulo}>{titulo}</p>
+          <p className="truncate text-[14px] text-gray-800" title={titulo}><Realce texto={titulo} termo={destaque} /></p>
           <p className="text-[11px] uppercase text-gray-500">
             {ext}{paginas ? ` · ${paginas} página${paginas > 1 ? 's' : ''}` : ''}
           </p>

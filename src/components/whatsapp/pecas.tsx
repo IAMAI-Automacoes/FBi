@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Clock, Mic, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { corAvatar, iniciais, regexDestaque, trechosFormatados } from '@/lib/whatsapp/formatacao'
+import { corAvatar, destaqueParaTexto, iniciais, trechosFormatados } from '@/lib/whatsapp/formatacao'
 
 /** Cores do chat — as mesmas do chat de suporte (Sugestoes.tsx / Admin.tsx). */
 export const WA = {
@@ -90,15 +90,20 @@ const LIMITE_LER_MAIS = 900
 /** *negrito*, _itálico_, ~riscado~, `mono`, ```bloco``` e links — e "Ler mais" em texto longo. */
 export function TextoWhatsapp({ texto, destaque, className }: { texto: string; destaque?: string; className?: string }) {
   const [inteiro, setInteiro] = useState(false)
-  const longo = texto.length > LIMITE_LER_MAIS
+  // Palavra pesquisada depois do corte do "Ler mais": mostra o texto todo,
+  // senão a marcação ficaria escondida.
+  const re = destaque ? destaqueParaTexto(destaque, texto) : null
+  const posicao = re ? texto.search(re) : -1
+  const longo = texto.length > LIMITE_LER_MAIS && !(posicao >= LIMITE_LER_MAIS * 0.8)
   const mostrado = longo && !inteiro ? cortarEmPalavra(texto, LIMITE_LER_MAIS) : texto
+  const marcar = (t: string) => marcarCom(t, re)
   return (
     <span className={cn('whitespace-pre-wrap break-words', className)}>
       {trechosFormatados(mostrado).map((tr, i) => {
         switch (tr.t) {
-          case 'negrito': return <strong key={i} className="font-semibold">{marcar(tr.v, destaque)}</strong>
-          case 'italico': return <em key={i}>{marcar(tr.v, destaque)}</em>
-          case 'riscado': return <s key={i}>{marcar(tr.v, destaque)}</s>
+          case 'negrito': return <strong key={i} className="font-semibold">{marcar(tr.v)}</strong>
+          case 'italico': return <em key={i}>{marcar(tr.v)}</em>
+          case 'riscado': return <s key={i}>{marcar(tr.v)}</s>
           case 'mono': return <code key={i} className="rounded bg-black/[0.06] px-1 font-mono text-[0.92em]">{tr.v}</code>
           case 'bloco': return <code key={i} className="block my-1 rounded bg-black/[0.06] px-2 py-1 font-mono text-[0.9em] whitespace-pre-wrap">{tr.v}</code>
           case 'link':
@@ -109,7 +114,7 @@ export function TextoWhatsapp({ texto, destaque, className }: { texto: string; d
                 {tr.v}
               </a>
             )
-          default: return <Fragment key={i}>{marcar(tr.v, destaque)}</Fragment>
+          default: return <Fragment key={i}>{marcar(tr.v)}</Fragment>
         }
       })}
       {longo && !inteiro && (
@@ -130,11 +135,20 @@ function cortarEmPalavra(t: string, n: number): string {
   return espaco > n * 0.8 ? corte.slice(0, espaco) : corte
 }
 
-/** Realça o termo pesquisado sem diferenciar acento, maiúscula e pontuação. */
-function marcar(texto: string, termo?: string) {
-  const re = regexDestaque(termo)
+/**
+ * Realça o termo pesquisado (sem diferenciar acento, maiúscula e pontuação)
+ * ou, num resultado "parecido", as palavras parecidas — o mesmo amarelo nos
+ * resultados da pesquisa e na mensagem aberta.
+ */
+function marcarCom(texto: string, re: RegExp | null) {
   if (!re) return texto
+  re.lastIndex = 0
   return texto.split(re).map((p, i) => (i % 2 === 1 ? <mark key={i} className="bg-yellow-200 rounded-sm">{p}</mark> : p))
+}
+
+/** Texto simples (nome de arquivo, transcrição) com o mesmo realce. */
+export function Realce({ texto, termo }: { texto: string; termo?: string }) {
+  return <>{marcarCom(texto, termo ? destaqueParaTexto(termo, texto) : null)}</>
 }
 
 // ── Separador de dia ───────────────────────────────────────────────────────

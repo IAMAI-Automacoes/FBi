@@ -233,7 +233,7 @@ export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolh
   chatId: string
   nome: string
   aoFechar: () => void
-  aoEscolher: (messageId: string) => void
+  aoEscolher: (messageId: string, termo: string) => void
 }) {
   const [termo, setTermo] = useState('')
   const [resultados, setResultados] = useState<ResultadoBusca[] | null>(null)
@@ -277,12 +277,12 @@ export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolh
           <>
             {exatos.length > 0 && (
               <SecaoResultados titulo="Exatamente como escrito">
-                {exatos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id)} />)}
+                {exatos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id, termo)} />)}
               </SecaoResultados>
             )}
             {parecidos.length > 0 && (
               <SecaoResultados titulo="Parecidos">
-                {parecidos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id)} />)}
+                {parecidos.map((m) => <ItemResultado key={m.id} m={m} termo={termo} autor={autor(m)} aoEscolher={() => aoEscolher(m.message_id, termo)} />)}
               </SecaoResultados>
             )}
           </>
