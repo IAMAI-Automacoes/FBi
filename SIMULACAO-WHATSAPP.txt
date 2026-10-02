@@ -680,7 +680,8 @@ O que cada uma mostra:
   Suporte respondeu (para o dono)
     título  "Suporte EasyFeed"
     texto   a resposta; só anexo vira "📷 Foto", "📄 PDF", "📎 2 arquivos"
-    imagem  logo do EasyFeed
+    imagem  no PC, a logo do EasyFeed; no Android, nenhuma à direita (a
+            bolinha da esquerda já é o símbolo do EasyFeed — não repete)
     abre    /sugestoes
   Cliente escreveu no suporte (para os admins)
     título  "Suporte · <restaurante>"
@@ -692,11 +693,13 @@ Imagem e "bolinha" no Android:
   - A bolinha da esquerda (e a barra de status) é o BADGE: o Android só
     aceita uma cor ali, nunca foto. É o símbolo do EasyFeed em branco
     (public/icons/badge-96.png). O badge antigo era o ícone colorido, que o
-    Android pintava por inteiro: aparecia uma bolinha vazia.
+    Android pintava por inteiro: aparecia uma bolinha vazia. A COR da
+    bolinha (azul) é do Chrome/Android: nenhum site consegue mudar.
   - A imagem da direita (à esquerda no PC) é o ICON. A logo do restaurante é
-    deixada quadrada pelo service worker (centralizada num quadrado branco
-    de 192 px, a partir da versão pequena do Storage), porque o Android
-    espremia a logo retangular. O resultado fica em cache (easyfeed-icones-v1).
+    recortada em quadrado pelo centro pelo service worker (como o painel
+    mostra, object-cover; versão de 192 px do Storage, resize=cover), porque
+    o Android espremia a logo retangular. O resultado fica em cache
+    (easyfeed-icones-v2).
 
 Agrupar e separar (celular e PC):
   - Uma notificação por conversa. Mensagem nova na mesma conversa substitui

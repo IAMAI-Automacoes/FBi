@@ -23,8 +23,10 @@ import { fotoValida, linhaSuporte, linhaWhatsapp, resumo } from '../_shared/noti
 //   title   nome da conversa ("Raver Brandi", "Suporte EasyFeed"…)
 //   linha   a mensagem; o SW junta as linhas da mesma conversa (tag)
 //   icon    foto já quadrada (contato/grupo) — entra direto
-//   logo    imagem que o SW deixa quadrada (logo do restaurante); sem as duas,
-//           a logo do EasyFeed
+//   logo    logo do restaurante: o SW recorta em quadrado pelo centro (como
+//           o painel mostra); sem as duas, a logo do EasyFeed
+//   soMarca a imagem é a logo do EasyFeed (suporte → dono): no Android não
+//           repete, porque a bolinha da esquerda já é o símbolo do EasyFeed
 //   chaves  conversas que, abertas na tela deste aparelho, dispensam o aviso
 //   body/usuarioId: o mesmo, no formato do service worker antigo (aparelhos
 //           que ainda não abriram o site depois da atualização)
@@ -38,6 +40,8 @@ interface Aviso {
   linha: string
   icon?: string | null
   logo?: string | null
+  /** A imagem é a marca do EasyFeed (o service worker não repete no Android). */
+  soMarca?: boolean
   url: string
   tag: string
   chaves: string[]
@@ -308,7 +312,9 @@ Deno.serve(async (req: Request) => {
       const payload = montarPayload({
         title: 'Suporte EasyFeed',
         linha: linhaSuporte(body.texto, body.arquivos, 'Respondeu sua mensagem.'),
-        icon: '/icons/icon-192.png',
+        // A imagem seria a logo do EasyFeed: no Android ela já está na bolinha
+        // da esquerda (badge), então não repete à direita; no PC, aparece.
+        soMarca: true,
         url: '/sugestoes',
         tag: 'easyfeed-suporte',
         // 'suporte': a página de Sugestões aberta. O id do dono: a mesma

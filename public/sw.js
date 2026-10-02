@@ -13,7 +13,13 @@ self.addEventListener('install', () => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    (async () => {
+      // Logos quadradas da versão anterior (encaixadas com faixa branca): descarta.
+      await caches.delete('easyfeed-icones-v1')
+      await self.clients.claim()
+    })(),
+  )
 })
 
 // Listener de fetch vazio: alguns navegadores exigem um handler de fetch pra
@@ -85,16 +91,20 @@ function atualizarBadge(total) {
 //    ganha a contagem ("Raver (3 mensagens)"). Conversas diferentes ficam em
 //    notificações separadas (o Android junta todas sob o app).
 //  - Imagem (à direita no Android; à esquerda no PC): `icon` (foto do
-//    contato/grupo, já quadrada) entra direto; `logo` é deixada QUADRADA aqui
-//    (centralizada num quadrado branco) — o Android espreme imagem retangular;
-//    sem as duas, ou se algo falhar, a logo do EasyFeed.
+//    contato/grupo, já quadrada) entra direto; `logo` é RECORTADA em quadrado
+//    pelo centro, igual ao painel mostra (object-cover) — o Android espremia
+//    a logo retangular; sem as duas, ou se algo falhar, a logo do EasyFeed.
+//    `soMarca` (suporte → dono): a imagem seria a logo do EasyFeed — no
+//    Android ela já está na bolinha da esquerda, então não repete à direita.
 //  - `badge` (bolinha da esquerda e barra de status no Android): só aceita uma
-//    cor, com fundo transparente — o símbolo do EasyFeed em branco.
+//    cor, com fundo transparente — o símbolo do EasyFeed em branco. A cor da
+//    bolinha (azul) é do Android/Chrome; o site não consegue mudar.
 
 const ICONE_EASYFEED = '/icons/icon-192.png'
 const BADGE = '/icons/badge-96.png'
 const MAX_LINHAS = 5
-const CACHE_ICONES = 'easyfeed-icones-v1'
+const CACHE_ICONES = 'easyfeed-icones-v2'
+const EH_ANDROID = /Android/i.test(self.navigator.userAgent)
 
 function paraBase64(buffer) {
   const bytes = new Uint8Array(buffer)
@@ -103,14 +113,15 @@ function paraBase64(buffer) {
   return btoa(bin)
 }
 
-// Logo no Storage público do Supabase: pede a versão pequena (192 px), bem
-// mais leve que a original (a do Camelo tem 1600×1200).
+// Logo no Storage público do Supabase: pede a versão pequena já recortada em
+// quadrado pelo centro (192 px), bem mais leve que a original (a do Camelo
+// tem 1600×1200).
 function versaoPequena(url) {
   const marca = '/storage/v1/object/public/'
   const i = url.indexOf(marca)
   if (i < 0) return null
   const caminho = url.slice(i + marca.length).split('?')[0]
-  return url.slice(0, i) + '/storage/v1/render/image/public/' + caminho + '?width=192&height=192&resize=contain'
+  return url.slice(0, i) + '/storage/v1/render/image/public/' + caminho + '?width=192&height=192&resize=cover'
 }
 
 async function baixarImagem(url) {
@@ -119,7 +130,7 @@ async function baixarImagem(url) {
   return createImageBitmap(await r.blob())
 }
 
-/** A logo centralizada num quadrado branco de 192 px, como data URL (guardada em cache por URL). */
+/** A logo recortada em quadrado de 192 px pelo centro (como o painel mostra), como data URL (guardada em cache por URL). */
 async function logoQuadrada(url) {
   const cache = await caches.open(CACHE_ICONES)
   const chave = '/__icone-quadrado?u=' + encodeURIComponent(url)
@@ -135,12 +146,12 @@ async function logoQuadrada(url) {
     imagem = await baixarImagem(url)
   }
   const LADO = 192
-  const MARGEM = 14
   const tela = new OffscreenCanvas(LADO, LADO)
   const g = tela.getContext('2d')
-  g.fillStyle = '#ffffff'
+  g.fillStyle = '#ffffff' // fundo para logo com transparência
   g.fillRect(0, 0, LADO, LADO)
-  const escala = Math.min((LADO - 2 * MARGEM) / imagem.width, (LADO - 2 * MARGEM) / imagem.height)
+  // Recorte pelo centro (object-cover): preenche o quadrado sem espremer.
+  const escala = Math.max(LADO / imagem.width, LADO / imagem.height)
   const w = Math.round(imagem.width * escala)
   const h = Math.round(imagem.height * escala)
   g.imageSmoothingQuality = 'high'
@@ -153,6 +164,7 @@ async function logoQuadrada(url) {
 }
 
 async function escolherIcone(dados) {
+  if (dados.soMarca) return EH_ANDROID ? undefined : ICONE_EASYFEED
   if (dados.icon) return dados.icon
   if (dados.logo) {
     try {
@@ -197,9 +209,10 @@ self.addEventListener('push', (event) => {
       const tituloBase = dados.title || 'EasyFeed'
       const titulo = total > 1 ? `${tituloBase} (${total} mensagens)` : tituloBase
 
+      const icone = await escolherIcone(dados)
       await self.registration.showNotification(titulo, {
         body: linhas.join('\n'),
-        icon: await escolherIcone(dados),
+        ...(icone ? { icon: icone } : {}),
         badge: BADGE,
         tag,
         renotify: true,
