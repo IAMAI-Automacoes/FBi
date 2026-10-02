@@ -81,6 +81,8 @@ export function AdminNotificacoes() {
     // dono), se não estiver silenciado e a conversa não estiver aberta na tela.
     const tocarSePrecisar = (usuarioId: string | null) => {
       if (!usuarioId || estaOlhando(usuarioId) || !deveAvisar.current(usuarioId) || !somCabeAEstaAba()) return
+      // Admin que também é o cliente, escrevendo pelo /sugestoes: é a própria mensagem.
+      if (usuarioId === user?.id && estaOlhando('suporte')) return
       tocarSom('suporte')
     }
 
@@ -103,7 +105,7 @@ export function AdminNotificacoes() {
       window.removeEventListener('fib-unread-update', aoAtualizarEvento)
       supabase.removeChannel(ch)
     }
-  }, [ehAdminPlataforma])
+  }, [ehAdminPlataforma, user?.id])
 
   return null
 }

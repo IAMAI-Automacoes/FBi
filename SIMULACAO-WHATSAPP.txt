@@ -1,7 +1,7 @@
 SIMULAÇÃO DO WHATSAPP — GUIA COMPLETO (CAPTURA, BANCO E TELA)
 =============================================================
 
-Atualizado em 01/10/2026 (tela /whatsapp pronta).
+Atualizado em 03/10/2026 (tela /whatsapp pronta; notificações por aparelho, item 12).
 
 O que é: uma tela no painel onde o dono do restaurante vê as conversas do
 WhatsApp do restaurante como se estivesse no próprio WhatsApp: o que o cliente
@@ -82,6 +82,9 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
                        no bucket "mensagens". Sempre responde 200: se der
                        erro, devolve { caminho: null, erro } e a mensagem é
                        gravada assim mesmo, só sem o arquivo. Limite de 40 MB.
+  enviar-push          manda as notificações (WhatsApp, suporte do dono e
+                       suporte do admin) — item 12. PUBLICAR SEMPRE COM
+                       --no-verify-jwt (o gatilho do banco não manda login).
 
 2.4 Migrations (todas já aplicadas em produção)
 
@@ -98,6 +101,9 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
   20261002020000_preferencias_realtime_busca.sql  preferências em tempo real e
                                                    pesquisa por relevância
   20261002030000_whatsapp_fotos.sql                cache das fotos dos participantes
+  20261003000000_notificacoes_por_aparelho.sql     silenciar por aparelho, troca de
+                                                   conta da inscrição, anexos no
+                                                   push do suporte (item 12)
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -577,13 +583,13 @@ Notificações:
     logada): 'whatsapp' quando chega mensagem de cliente; 'suporte' (outro
     toque, mais suave) quando o suporte responde ao dono e, no painel do
     admin, quando chega mensagem de cliente no suporte.
-  - Um aviso só: com notificações permitidas, a aba EM FOCO toca o som e o
-    service worker não mostra a notificação; sem aba em foco, a notificação
-    do sistema avisa (com o som dela). Sem permissão de notificação, o som
-    da página toca sempre. Nunca toca na conversa que está aberta na tela.
+  - Um som só: com notificações permitidas, a aba EM FOCO toca o som e a
+    notificação do sistema chega sem som; sem aba em foco, a notificação do
+    sistema avisa (com o som dela). Sem permissão de notificação, o som da
+    página toca sempre. Nunca avisa a conversa que está aberta na tela.
   - Silenciar (sino do topo = tudo; menu da conversa = só ela) corta
-    notificação E som juntos; reativar volta os dois. As preferências são
-    sincronizadas em tempo real entre abas e aparelhos.
+    notificação E som juntos, SÓ NESTE APARELHO; reativar volta os dois.
+    Vale na hora em todas as abas do mesmo aparelho (item 12).
   - Silenciar NÃO muda o contador (continua verde e contando no menu).
 
 Fotos: a lista, o cabeçalho, o painel do contato e o player de áudio mostram
@@ -591,16 +597,17 @@ a foto do contato/grupo que vem no próprio evento da uazapi
 (payload->chat->imagePreview, a da mensagem mais recente). É um link do
 WhatsApp que expira; se não abrir, aparecem as iniciais.
 
-Silenciar e fixar (tabela preferencias_conversa, por pessoa, sem limite de
-fixadas):
+Silenciar (tabela silencios_aparelho, POR APARELHO — item 12) e fixar
+(tabela preferencias_conversa, por conta, sem limite de fixadas):
   canal 'whatsapp'      conversa = chat_id   (menu da setinha / segurar o
                                                dedo na conversa — só na lista)
   canal 'suporte'       conversa = ''        (sino no chat de suporte do dono)
   canal 'suporte_admin' conversa = usuario_id (menu de cada conversa no
                                                painel admin) ou '' (sino)
   conversa '' = o canal inteiro. A função enviar-push consulta antes de
-  mandar, e o som da página também. Fixadas ficam no topo
-  (conversas_whatsapp já devolve nessa ordem).
+  mandar (inscrição por inscrição), e o som da página também. Fixadas ficam
+  no topo (conversas_whatsapp já devolve nessa ordem). A coluna
+  preferencias_conversa.silenciada ficou obsoleta.
 
 Suporte: a resposta do suporte agora notifica o DONO (gatilho
 trg_push_resposta_suporte_dono → enviar-push tipo 'suporte_resposta'); com a
@@ -644,11 +651,103 @@ Permissão de notificação: cartão "Receber notificações?" (PedirNotificacoe
 no App) em qualquer página logada, no PC e no celular; "Agora não" esconde
 por 7 dias. Autorizado, chega tudo que não foi silenciado no sistema.
 
-Celular: a tela WhatsApp fica presa à área visível (fixed + 100dvh):
-cabeçalho da conversa sempre no topo, rodapé rente ao fim da tela.
+Celular: a tela WhatsApp fica presa à área visível (fixed inset-0) e a
+página não rola (useTelaFixa): cabeçalho da conversa sempre no topo, rodapé
+rente ao fim da tela, mesmo puxando além do fim das mensagens (item 12).
 
 Fotos dos participantes dos grupos: whatsapp-instancia, ação "fotos"
 {telefones} → uazapi POST /chat/details {number, preview:true}, com cache de
 24 h na tabela whatsapp_fotos (migration 20261002030000). A foto aparece à
 esquerda da primeira mensagem de cada sequência e no perfil; quem esconde a
 foto (ou não tem) fica sem nada.
+
+
+-------------------------------------------------------------
+12. NOTIFICAÇÕES (revisão de 03/10/2026)
+-------------------------------------------------------------
+
+Quem manda: a função enviar-push, chamada pelos gatilhos do banco (com o
+segredo PUSH_TRIGGER_SECRET). Quem mostra: o service worker (public/sw.js).
+
+O que cada uma mostra:
+  WhatsApp (para o dono)
+    título  nome do contato ou do grupo
+    texto   a mensagem; em grupo, "Quem mandou: mensagem"
+    imagem  foto do contato/grupo (payload->chat->imagePreview; sem ela,
+            whatsapp_fotos); sem foto, a logo do restaurante; sem logo, a
+            do EasyFeed
+    abre    /whatsapp?chat=<chat_id>
+  Suporte respondeu (para o dono)
+    título  "Suporte EasyFeed"
+    texto   a resposta; só anexo vira "📷 Foto", "📄 PDF", "📎 2 arquivos"
+    imagem  logo do EasyFeed
+    abre    /sugestoes
+  Cliente escreveu no suporte (para os admins)
+    título  "Suporte · <restaurante>"
+    texto   a mensagem (ou o anexo, como acima)
+    imagem  logo do restaurante; sem logo, a do EasyFeed
+    abre    /admin?conversa=<id> — direto na conversa
+
+Imagem e "bolinha" no Android:
+  - A bolinha da esquerda (e a barra de status) é o BADGE: o Android só
+    aceita uma cor ali, nunca foto. É o símbolo do EasyFeed em branco
+    (public/icons/badge-96.png). O badge antigo era o ícone colorido, que o
+    Android pintava por inteiro: aparecia uma bolinha vazia.
+  - A imagem da direita (à esquerda no PC) é o ICON. A logo do restaurante é
+    deixada quadrada pelo service worker (centralizada num quadrado branco
+    de 192 px, a partir da versão pequena do Storage), porque o Android
+    espremia a logo retangular. O resultado fica em cache (easyfeed-icones-v1).
+
+Agrupar e separar (celular e PC):
+  - Uma notificação por conversa. Mensagem nova na mesma conversa substitui
+    a anterior juntando as últimas 5 linhas, e o título ganha a contagem:
+    "Raver Brandi (3 mensagens)".
+  - Conversas diferentes são notificações separadas (o Android junta todas
+    debaixo do app, como faz com o WhatsApp).
+  - O suporte do dono é uma conversa só; no admin, uma por cliente.
+  - Abrir a conversa fecha as notificações dela neste aparelho.
+
+Quando NÃO aparece:
+  - Com aquela conversa aberta e visível neste aparelho (o push leva
+    "chaves": 'wa:<chat_id>', 'suporte' ou o usuario_id do cliente).
+  - A própria mensagem: o dono que também é admin, respondendo pelo painel
+    do admin, não recebe no aparelho de onde respondeu (e vice-versa). Nos
+    outros aparelhos dele, recebe.
+  - Silenciado neste aparelho.
+  Antes, qualquer aba do site em foco calava tudo: por isso o suporte "não
+  chegava" para quem testava no PC. Agora chega; com uma aba em foco, sem o
+  som do sistema (o som é o da página).
+
+Por aparelho (não por conta):
+  - Cada navegador tem um id (src/lib/aparelho.ts, localStorage
+    'easyfeed:aparelho'). No Android, o app instalado e o Chrome são o mesmo
+    aparelho; no iPhone, o app da Tela de Início tem o seu.
+  - push_subscriptions.aparelho: o id do aparelho de cada inscrição.
+  - silencios_aparelho (auth_user_id, aparelho, canal, conversa): a linha
+    existir = silenciado. RLS: cada um só as suas. Realtime ligado.
+  - A enviar-push filtra cada inscrição pelo aparelho dela. Inscrição antiga
+    (sem aparelho) recebe, e ganha o id na próxima vez que o site abrir lá.
+
+Troca de conta no mesmo navegador:
+  - A inscrição de push é única por navegador. Ela é gravada pela RPC
+    registrar_push, que passa a inscrição para quem está logado agora (antes
+    a RLS impedia, e o aparelho continuava recebendo da conta antiga).
+  - Ao sair da conta, a inscrição deste aparelho é apagada (a permissão do
+    navegador continua; no próximo login, volta para quem entrar).
+
+Testar sem mandar nada (só com o segredo do gatilho):
+  POST /functions/v1/enviar-push  header x-trigger-secret
+  { "simular": true, "tipo": "whatsapp", "id": <id da mensagem> }
+  { "simular": true, "tipo": "suporte_resposta", "sugestao_id": "...", "texto": "..." }
+  { "simular": true, "tipo": "resposta", "sugestao_id": "...", "texto": "..." }
+  Devolve, por inscrição, a conta, o aparelho e o que seria mostrado.
+  O resultado de cada envio de verdade fica em net._http_response.
+
+Telas fixas no celular (WhatsApp, Sugestões e painel do admin):
+  - Presas à área visível (fixed inset-0), e a página não rola
+    (src/hooks/use-tela-fixa.ts + regras html.tela-fixa em main.css): puxar
+    além do fim de uma lista não leva mais a tela junto, o topo verde não
+    some e o campo de mensagem não sai do lugar. No painel do admin, o topo
+    (Painel Admin, abas e a barra verde do Suporte) fica sempre fixo.
+  - index.html: viewport com interactive-widget=resizes-content (no Android,
+    o teclado encolhe a tela em vez de empurrar o topo para fora).

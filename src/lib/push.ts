@@ -1,11 +1,13 @@
 import { supabase } from '@/lib/supabase/client'
+import { idDoAparelho } from '@/lib/aparelho'
 
 /**
  * Inscrição do aparelho no Web Push — usada pelo admin da plataforma
  * (mensagens de suporte) e pelo dono do restaurante (tela WhatsApp). Quem
  * mostra a notificação é o service worker (public/sw.js); quem envia é a edge
- * function enviar-push. A inscrição é por aparelho e por pessoa
- * (push_subscriptions), e a função decide quem recebe o quê.
+ * function enviar-push. A inscrição é por aparelho (push_subscriptions, com o
+ * id de `idDoAparelho`) e pertence a quem está logado nele; a função decide
+ * quem recebe o quê, respeitando o silenciar de cada aparelho.
  */
 
 // Chave pública VAPID (é pública por design — pode ficar no bundle). A privada
@@ -43,7 +45,7 @@ export function iphoneSemApp(): boolean {
  * Só funciona com a permissão já dada — quem pede é `pedirPermissaoEInscrever`.
  */
 export async function inscreverPush(authUserId: string): Promise<boolean> {
-  if (!pushSuportado() || Notification.permission !== 'granted') return false
+  if (!authUserId || !pushSuportado() || Notification.permission !== 'granted') return false
   try {
     const reg = await navigator.serviceWorker.ready
     const sub =
@@ -57,14 +59,41 @@ export async function inscreverPush(authUserId: string): Promise<boolean> {
     const p256dh = json.keys?.p256dh
     const auth = json.keys?.auth
     if (!endpoint || !p256dh || !auth) return false
-    const { error } = await supabase.from('push_subscriptions').upsert(
-      { auth_user_id: authUserId, endpoint, p256dh, auth, user_agent: navigator.userAgent },
-      { onConflict: 'endpoint' },
-    )
+    // Pela RPC (e não upsert direto): se outra conta usou este navegador
+    // antes, a inscrição passa para quem está logado agora — a RLS não deixava.
+    // A RPC usa a conta da sessão (auth.uid()), que é a mesma de `authUserId`.
+    const { error } = await supabase.rpc('registrar_push', {
+      p_endpoint: endpoint,
+      p_p256dh: p256dh,
+      p_auth: auth,
+      p_user_agent: navigator.userAgent,
+      p_aparelho: idDoAparelho(),
+    })
+    if (error) console.warn('Falha ao salvar a inscrição de push:', error.message)
     return !error
   } catch (err) {
     console.warn('Falha ao inscrever no push:', err)
     return false
+  }
+}
+
+/**
+ * Ao sair da conta: este aparelho para de receber as notificações dela.
+ * A inscrição do navegador continua (a permissão também); no próximo login,
+ * `inscreverPush` a registra para a conta que entrar.
+ */
+export async function desinscreverDesteAparelho(): Promise<void> {
+  if (!pushSuportado()) return
+  try {
+    const apagar = async () => {
+      const reg = await navigator.serviceWorker.getRegistration()
+      const sub = await reg?.pushManager.getSubscription()
+      if (sub) await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
+    }
+    // Sair nunca fica esperando por isto mais que 3 s.
+    await Promise.race([apagar(), new Promise((r) => setTimeout(r, 3000))])
+  } catch {
+    /* sem rede ou sem service worker: na pior das hipóteses, o próximo login assume a inscrição */
   }
 }
 

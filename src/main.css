@@ -168,3 +168,17 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
+/* Telas de chat (WhatsApp, Sugestões, painel do admin) — `useTelaFixa`.
+   A página não rola: só as listas e as mensagens lá dentro. No celular, puxar
+   além do fim de uma lista não leva mais a página junto (o topo verde sumia e
+   o campo de mensagem subia), a barra do navegador não some no meio da
+   conversa e o "puxar para atualizar" do Android não recarrega a tela. */
+html.tela-fixa,
+html.tela-fixa body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.tela-fixa * {
+  overscroll-behavior-y: contain;
+}

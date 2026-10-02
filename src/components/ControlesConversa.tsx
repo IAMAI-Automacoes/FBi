@@ -14,7 +14,8 @@ import { iphoneSemApp, pedirPermissaoEInscrever, pushSuportado } from '@/lib/pus
  */
 
 /**
- * Sino do cabeçalho: silencia/reativa TODAS as notificações do canal.
+ * Sino do cabeçalho: silencia/reativa TODAS as notificações do canal, só
+ * NESTE aparelho (silencios_aparelho — os outros aparelhos não mudam).
  * Se o aparelho ainda não deu permissão de notificação, o primeiro clique
  * pede a permissão (sem ela não há o que silenciar).
  */
@@ -35,6 +36,7 @@ export function BotaoSino({ silenciado, aoAlternar, claro = false, rotulo = 'not
         toast({ title: 'Notificações no iPhone', description: 'Adicione o EasyFeed à Tela de Início (Compartilhar → Adicionar à Tela de Início) para receber notificações.' })
       }
       aoAlternar()
+      if (silenciado) toast({ title: `As ${rotulo} foram reativadas neste aparelho` })
       return
     }
     if (Notification.permission === 'default' && user) {
@@ -45,10 +47,10 @@ export function BotaoSino({ silenciado, aoAlternar, claro = false, rotulo = 'not
       if (p === 'denied') return
     }
     aoAlternar()
-    toast({ title: `As ${rotulo} foram silenciadas`, description: 'Toque no sino de novo para voltar a receber.' })
+    toast({ title: `As ${rotulo} foram silenciadas neste aparelho`, description: 'Nos outros aparelhos continua como está. Toque no sino de novo para voltar a receber.' })
   }
 
-  const titulo = silenciado ? `Reativar ${rotulo}` : `Silenciar ${rotulo}`
+  const titulo = silenciado ? `Reativar ${rotulo} neste aparelho` : `Silenciar ${rotulo} neste aparelho`
   return (
     <button
       type="button"
@@ -102,7 +104,7 @@ export function MenuConversa({ fixada, silenciada, aoFixar, aoSilenciar, aberto,
         </DropdownMenuItem>
         <DropdownMenuItem onClick={aoSilenciar}>
           {silenciada ? <Bell className="mr-2 h-4 w-4" /> : <BellOff className="mr-2 h-4 w-4" />}
-          {silenciada ? 'Reativar notificações' : 'Silenciar notificações'}
+          {silenciada ? 'Reativar neste aparelho' : 'Silenciar neste aparelho'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

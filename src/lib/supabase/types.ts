@@ -1825,6 +1825,7 @@ export type Database = {
       }
       push_subscriptions: {
         Row: {
+          aparelho: string | null
           auth: string
           auth_user_id: string
           created_at: string
@@ -1834,6 +1835,7 @@ export type Database = {
           user_agent: string | null
         }
         Insert: {
+          aparelho?: string | null
           auth: string
           auth_user_id: string
           created_at?: string
@@ -1843,6 +1845,7 @@ export type Database = {
           user_agent?: string | null
         }
         Update: {
+          aparelho?: string | null
           auth?: string
           auth_user_id?: string
           created_at?: string
@@ -2043,6 +2046,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      silencios_aparelho: {
+        Row: {
+          aparelho: string
+          auth_user_id: string
+          canal: string
+          conversa: string
+          criado_em: string
+        }
+        Insert: {
+          aparelho: string
+          auth_user_id?: string
+          canal: string
+          conversa?: string
+          criado_em?: string
+        }
+        Update: {
+          aparelho?: string
+          auth_user_id?: string
+          canal?: string
+          conversa?: string
+          criado_em?: string
+        }
+        Relationships: []
       }
       stripe_faturas: {
         Row: {
@@ -2658,7 +2685,9 @@ export type Database = {
       admin_push_subscriptions: {
         Args: never
         Returns: {
+          aparelho: string
           auth: string
+          auth_user_id: string
           endpoint: string
           p256dh: string
         }[]
@@ -2846,6 +2875,16 @@ export type Database = {
           p_texto: string
         }
         Returns: string
+      }
+      registrar_push: {
+        Args: {
+          p_aparelho: string
+          p_auth: string
+          p_endpoint: string
+          p_p256dh: string
+          p_user_agent: string
+        }
+        Returns: undefined
       }
       temas_agrupados: {
         Args: { p_desde?: string; p_restaurante_id: number; p_tipo?: string }

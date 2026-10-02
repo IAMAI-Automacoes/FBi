@@ -53,8 +53,8 @@ export function tocarSom(qual: Som) {
  *    sozinho; quem pede é o aviso da tela WhatsApp ou o sino, num clique);
  *  - toca o som quando chega mensagem no WhatsApp ou resposta do suporte.
  *
- * Som e notificação seguem a MESMA regra (preferencias_conversa, sincronizada
- * entre abas e aparelhos): silenciado não toca nem notifica; reativado, os
+ * Som e notificação seguem a MESMA regra, por aparelho (silencios_aparelho,
+ * sincronizada entre as abas): silenciado não toca nem notifica; reativado, os
  * dois voltam. E não toca na conversa que a pessoa já está olhando.
  */
 export function AvisosDoPainel() {
@@ -99,7 +99,9 @@ export function AvisosDoPainel() {
         (p) => {
           const r = p.new as { autor?: string }
           if (!r.autor || r.autor === 'usuario') return
-          if (estaOlhando('suporte') || !avisaSup.current(CANAL_INTEIRO) || !somCabeAEstaAba()) return
+          // estaOlhando(user.id): é o próprio dono, também admin, respondendo a
+          // conversa dele pelo painel do admin — não toca com a própria resposta.
+          if (estaOlhando('suporte') || estaOlhando(user.id) || !avisaSup.current(CANAL_INTEIRO) || !somCabeAEstaAba()) return
           tocarSom('suporte')
         })
       .subscribe()

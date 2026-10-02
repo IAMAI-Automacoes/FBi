@@ -41,6 +41,7 @@ import { formatarReais } from '@/components/vendas/ciclos-plano'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
+import { useTelaFixa } from '@/hooks/use-tela-fixa'
 import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
 import { usePreferencias } from '@/lib/queries/preferencias'
 import { DoubleCheck } from '@/components/DoubleCheck'
@@ -726,7 +727,7 @@ function AdminBubble({ msg, signedUrls, reacoes, quote, onReact, onReply, onEdit
 // ── ConversaView ──────────────────────────────────────────────────────────────
 function ConversaView({
   s, signedUrls, replyText, replyFiles, sending,
-  onReplyTextChange, onReplyFilesChange, onRemoveFile, onSend, onRefresh, onRead, onReact, onVoltar,
+  onReplyTextChange, onReplyFilesChange, onRemoveFile, onSend, onRefresh, onRead, onReact, onVoltar, noTopoDaTela = false,
 }: {
   s: SugestaoAdmin; signedUrls: Record<string, string>
   replyText: string; replyFiles: File[]; sending: boolean
@@ -735,6 +736,8 @@ function ConversaView({
   onReact: (mensagemId: string, emoji: string) => void
   /** Volta pra lista (só no mobile, onde o chat é single-pane). */
   onVoltar?: () => void
+  /** Sem o cabeçalho do Painel Admin acima (app "Mensagens"): desconta a área segura do topo. */
+  noTopoDaTela?: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -933,7 +936,7 @@ function ConversaView({
   return (
     <div className="flex h-full">
       <div className="flex flex-col h-full flex-1 min-w-0">
-      <div className="shrink-0 flex items-stretch" style={{ background: WA_TEAL, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <div className="shrink-0 flex items-stretch" style={{ background: WA_TEAL, paddingTop: noTopoDaTela ? 'env(safe-area-inset-top, 0px)' : undefined }}>
         {onVoltar && (
           <button
             type="button"
@@ -1167,11 +1170,22 @@ export default function Admin() {
   const location = useLocation()
   // App "Mensagens" instalado (start_url /admin?app=mensagens rodando em standalone):
   // abre direto na lista, sem a barra do Painel Admin — estilo WhatsApp.
+  // Lembrado na sessão: o clique numa notificação abre /admin?conversa=… e o
+  // ?app=mensagens some da URL, mas a janela continua sendo o app.
+  const paramApp = new URLSearchParams(location.search).get('app')
+  if (paramApp === 'mensagens') {
+    try { sessionStorage.setItem('easyfeed:app', 'mensagens') } catch { /* sem armazenamento */ }
+  }
+  let appLembrado: string | null = null
+  try { appLembrado = sessionStorage.getItem('easyfeed:app') } catch { /* sem armazenamento */ }
   const ehAppMensagens =
     (window.matchMedia?.('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true) &&
-    new URLSearchParams(location.search).get('app') === 'mensagens'
+    (paramApp === 'mensagens' || appLembrado === 'mensagens')
   const [activeTab, setActiveTab] = useState<Tab>('suporte')
+  // A página não rola no celular: o topo (Painel Admin, abas e a barra verde
+  // do Suporte) fica fixo, e só a lista e as mensagens rolam.
+  useTelaFixa()
 
   // ── Suporte ──
   const [sugestoes, setSugestoes] = useState<SugestaoAdmin[]>([])
@@ -1412,6 +1426,23 @@ export default function Admin() {
     setSelectedId(id)
   }, [])
 
+  // Clique na notificação de suporte: /admin?conversa=<id> abre direto nela
+  // (e tira o parâmetro da URL, mantendo os outros).
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const conversa = params.get('conversa')
+    if (!conversa) return
+    setActiveTab('suporte')
+    setSelectedId(conversa)
+    params.delete('conversa')
+    const resto = params.toString()
+    navigate({ pathname: location.pathname, search: resto ? `?${resto}` : '' }, { replace: true })
+  }, [location.search, location.pathname, navigate])
+  // Conversa que não existe mais (apagada): volta para a lista.
+  useEffect(() => {
+    if (!loadingSugestoes && selectedId && !sugestoes.some((x) => x.id === selectedId)) setSelectedId(null)
+  }, [loadingSugestoes, selectedId, sugestoes])
+
   const handleSend = async (sugestaoId: string, respondeA: string | null = null) => {
     const texto = (replyTexts[sugestaoId] ?? '').trim()
     const files = replyFilesMap[sugestaoId] ?? []
@@ -1567,11 +1598,13 @@ export default function Admin() {
   if (loadingAdmin || !isAdmin) return null
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    // `fixed inset-0` (e não h-screen): no celular, 100vh é maior que a área
+    // visível, e a página inteira rolava — o topo saía da tela.
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-white">
       {dialogo}
       {/* Header — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
       {!ehAppMensagens && (
-      <div className="shrink-0 bg-white border-b border-gray-200">
+      <div className="shrink-0 bg-white border-b border-gray-200" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="px-4 py-3 flex items-center gap-3">
           <Link to="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-gray-700 transition-colors">
             <ArrowLeft className="h-4 w-4" /> Dashboard
@@ -1607,7 +1640,7 @@ export default function Admin() {
                 selectedId ? 'hidden md:flex' : 'flex w-full',
               )}
             >
-              <div className="px-4 py-3" style={{ background: WA_TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
+              <div className="shrink-0 px-4 py-3" style={{ background: WA_TEAL, paddingTop: ehAppMensagens ? 'max(env(safe-area-inset-top, 0px), 0.75rem)' : undefined }}>
                 <div className="flex items-center gap-2">
                   <p className="flex-1 text-[15px] font-semibold text-white">Suporte</p>
                   <BotaoSino claro silenciado={prefsSuporte.tudoSilenciado} aoAlternar={prefsSuporte.alternarTudo} rotulo="notificações do suporte" />
@@ -1644,6 +1677,7 @@ export default function Admin() {
               {selectedConv ? (
                 <ConversaView
                   key={selectedId}
+                  noTopoDaTela={ehAppMensagens}
                   onVoltar={() => setSelectedId(null)}
                   s={selectedConv} signedUrls={signedUrls}
                   replyText={replyTexts[selectedId!] ?? ''} replyFiles={replyFilesMap[selectedId!] ?? []}

@@ -1,8 +1,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
+import { fotoValida, linhaSuporte, linhaWhatsapp, resumo } from '../_shared/notificacoes.ts'
 
-// Envia Web Push: para os admins quando chega mensagem de suporte, e para o
-// dono do restaurante quando chega mensagem no WhatsApp dele (tipo 'whatsapp').
+// Envia Web Push. Três avisos:
+//   - 'whatsapp'          → mensagem recebida no WhatsApp do restaurante → DONO;
+//   - 'suporte_resposta'  → o suporte respondeu → DONO da conversa;
+//   - 'sugestao'/'resposta' → cliente escreveu no suporte → ADMINS.
 // Chamado pelos gatilhos do banco (net.http_post) com o header x-trigger-secret.
 //
 // PUBLICAR SEMPRE COM --no-verify-jwt:
@@ -11,33 +14,79 @@ import webpush from 'npm:web-push@3.6.7'
 // Supabase devolve 401 antes de chegar aqui e NENHUM push sai — aconteceu em
 // 01/10, por algumas horas.
 //
-// Antes de mandar, respeita o "silenciar" de cada pessoa
-// (preferencias_conversa): o canal inteiro (sino do topo) ou só a conversa.
+// Silenciar é por APARELHO (silencios_aparelho): cada inscrição tem o id do
+// aparelho (push_subscriptions.aparelho) e é filtrada sozinha — silenciar no
+// PC não cala o celular. Inscrição antiga, sem aparelho, recebe (ganha o id na
+// próxima vez que o site abrir naquele aparelho).
+//
+// O que vai no push (o service worker monta a notificação — public/sw.js):
+//   title   nome da conversa ("Raver Brandi", "Suporte EasyFeed"…)
+//   linha   a mensagem; o SW junta as linhas da mesma conversa (tag)
+//   icon    foto já quadrada (contato/grupo) — entra direto
+//   logo    imagem que o SW deixa quadrada (logo do restaurante); sem as duas,
+//           a logo do EasyFeed
+//   chaves  conversas que, abertas na tela deste aparelho, dispensam o aviso
+//   body/usuarioId: o mesmo, no formato do service worker antigo (aparelhos
+//           que ainda não abriram o site depois da atualização)
+//
+// { simular: true } (com o segredo): devolve quem receberia e o quê, sem enviar.
 
-function resumo(t: string | null | undefined, fallback: string): string {
-  const s = (t ?? '').trim()
-  if (!s) return fallback
-  return s.length > 140 ? `${s.slice(0, 137)}…` : s
+interface Inscricao { auth_user_id: string; endpoint: string; p256dh: string; auth: string; aparelho: string | null }
+
+interface Aviso {
+  title: string
+  linha: string
+  icon?: string | null
+  logo?: string | null
+  url: string
+  tag: string
+  chaves: string[]
+  timestamp?: number
+  totalNaoLido?: number
 }
 
-/** Manda o mesmo push para cada inscrição; inscrição morta (404/410 =
- *  app desinstalado / permissão revogada) é apagada. */
+type Canal = 'whatsapp' | 'suporte' | 'suporte_admin'
+
+function montarPayload(a: Aviso): string {
+  return JSON.stringify({
+    ...a,
+    timestamp: a.timestamp ?? Date.now(),
+    // Formato do service worker antigo.
+    body: a.linha,
+    usuarioId: a.chaves[0] ?? null,
+  })
+}
+
+/** Manda o push para cada inscrição; inscrição morta (404/410 = app
+ *  desinstalado / permissão revogada) é apagada. */
 async function enviarPara(
   // deno-lint-ignore no-explicit-any
   admin: any,
-  subs: Array<{ endpoint: string; p256dh: string; auth: string }>,
-  payload: string,
-): Promise<{ enviados: number; removidos: number }> {
+  envios: Array<{ sub: Inscricao; payload: string }>,
+  simular: boolean,
+): Promise<Record<string, unknown>> {
+  if (simular) {
+    return {
+      simulado: true,
+      enviados: 0,
+      envios: envios.map(({ sub, payload }) => ({
+        auth_user_id: sub.auth_user_id,
+        aparelho: sub.aparelho,
+        endpoint: `…${sub.endpoint.slice(-10)}`,
+        payload: JSON.parse(payload),
+      })),
+    }
+  }
   let enviados = 0
   let removidos = 0
-  for (const s of subs) {
+  for (const { sub, payload } of envios) {
     try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload)
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
       enviados++
     } catch (err) {
       const code = (err as { statusCode?: number })?.statusCode
       if (code === 404 || code === 410) {
-        await admin.from('push_subscriptions').delete().eq('endpoint', s.endpoint)
+        await admin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
         removidos++
       }
     }
@@ -45,36 +94,47 @@ async function enviarPara(
   return { enviados, removidos }
 }
 
-/**
- * A pessoa silenciou este canal (sino do topo) ou esta conversa?
- * conversa '' = o canal inteiro.
- */
-async function silenciado(
+/** Aparelhos desta pessoa que silenciaram o canal inteiro ou esta conversa. */
+async function aparelhosSilenciados(
   // deno-lint-ignore no-explicit-any
   admin: any,
   authUserId: string,
-  canal: 'whatsapp' | 'suporte' | 'suporte_admin',
+  canal: Canal,
   conversa: string | null,
-): Promise<boolean> {
+): Promise<Set<string>> {
   const chaves = conversa ? ['', conversa] : ['']
   const { data } = await admin
-    .from('preferencias_conversa')
-    .select('conversa')
+    .from('silencios_aparelho')
+    .select('aparelho')
     .eq('auth_user_id', authUserId)
     .eq('canal', canal)
-    .eq('silenciada', true)
     .in('conversa', chaves)
-  return (data ?? []).length > 0
+  return new Set(((data ?? []) as Array<{ aparelho: string }>).map((r) => r.aparelho))
+}
+
+/** As inscrições que devem receber: as da pessoa, menos as dos aparelhos silenciados. */
+async function filtrarSilenciados(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  subs: Inscricao[],
+  canal: Canal,
+  conversa: string | null,
+): Promise<Inscricao[]> {
+  const porPessoa = new Map<string, Set<string>>()
+  for (const id of new Set(subs.map((s) => s.auth_user_id))) {
+    porPessoa.set(id, await aparelhosSilenciados(admin, id, canal, conversa))
+  }
+  return subs.filter((s) => !s.aparelho || !porPessoa.get(s.auth_user_id)?.has(s.aparelho))
 }
 
 async function inscricoesDe(
   // deno-lint-ignore no-explicit-any
   admin: any,
   authUserId: string,
-): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> {
+): Promise<Inscricao[]> {
   const { data } = await admin
     .from('push_subscriptions')
-    .select('endpoint, p256dh, auth')
+    .select('auth_user_id, endpoint, p256dh, auth, aparelho')
     .eq('auth_user_id', authUserId)
   return data ?? []
 }
@@ -121,38 +181,19 @@ async function contarNaoLidas(
 }
 
 // ── WhatsApp do restaurante ────────────────────────────────────────────────
-// Chamado pelo gatilho de mensagens_whatsapp (mensagem RECEBIDA). Vai para o
-// dono do restaurante, abre /whatsapp na conversa, e o service worker suprime
-// se essa conversa já estiver aberta na tela (usuarioId = 'wa:' + chat_id).
+// Mensagem RECEBIDA → dono do restaurante. Abre /whatsapp na conversa; o
+// service worker não mostra se essa conversa já estiver aberta na tela.
 
-/** Prévia por tipo — mesma regra de `previaMensagem` em src/lib/whatsapp/formatacao.ts. */
-function previaWhatsapp(m: {
-  tipo: string; texto: string | null; midia_nome: string | null; reacao: string | null
-}): string {
-  const t = (m.texto ?? '').trim()
-  switch (m.tipo) {
-    case 'text': return t || 'Mensagem'
-    case 'image': return t ? `📷 ${t}` : '📷 Foto'
-    case 'video': return t ? `🎥 ${t}` : '🎥 Vídeo'
-    case 'gif': return 'GIF'
-    case 'audio': return '🎤 Áudio'
-    case 'document': return `📄 ${m.midia_nome || t || 'Documento'}`
-    case 'sticker': return 'Figurinha'
-    case 'reaction': return `Reagiu ${m.reacao ?? ''} à sua mensagem`.replace('  ', ' ')
-    case 'location': return '📍 Localização'
-    case 'contact': return '👤 Contato'
-    default: return t || 'Mensagem'
-  }
-}
+const FOTO_VALE_MS = 24 * 3600 * 1000 // mesmo cache da whatsapp-instancia (link do WhatsApp expira)
 
-async function payloadWhatsapp(
+async function avisoWhatsapp(
   // deno-lint-ignore no-explicit-any
   admin: any,
   id: number,
-): Promise<{ authUserId: string; chatId: string; payload: string } | null> {
+): Promise<{ authUserId: string; chatId: string; aviso: Aviso } | null> {
   const { data: m } = await admin
     .from('mensagens_whatsapp')
-    .select('id, restaurante_id, chat_id, nome_exibicao, telefone, grupo, de_mim, tipo, texto, midia_nome, reacao, responde_message_id, remetente:payload->message->>senderName')
+    .select('id, restaurante_id, chat_id, nome_exibicao, telefone, grupo, de_mim, tipo, texto, midia_nome, reacao, responde_message_id, enviada_em, remetente:payload->message->>senderName, foto_chat:payload->chat->>imagePreview, foto_chat_grande:payload->chat->>image')
     .eq('id', id)
     .maybeSingle()
   if (!m || m.de_mim) return null
@@ -177,19 +218,32 @@ async function payloadWhatsapp(
     .maybeSingle()
   if (!rest?.auth_user_id) return null
 
-  const contato = m.nome_exibicao || (m.telefone ? `+${m.telefone}` : 'WhatsApp')
-  const corpo = resumo(previaWhatsapp(m), 'Nova mensagem')
+  // Foto: a do chat que veio no próprio evento (contato ou grupo, link novo);
+  // sem ela, numa conversa individual, a do cache de fotos (até 24 h).
+  let foto = fotoValida(m.foto_chat) ?? fotoValida(m.foto_chat_grande)
+  if (!foto && !m.grupo && m.telefone) {
+    const { data: f } = await admin
+      .from('whatsapp_fotos')
+      .select('foto_url, atualizada_em')
+      .eq('restaurante_id', m.restaurante_id)
+      .eq('telefone', m.telefone)
+      .maybeSingle()
+    if (f?.foto_url && Date.now() - new Date(f.atualizada_em).getTime() < FOTO_VALE_MS) foto = fotoValida(f.foto_url)
+  }
+
   return {
     authUserId: rest.auth_user_id,
     chatId: m.chat_id,
-    payload: JSON.stringify({
-      title: contato,
-      body: m.grupo ? `${m.remetente || 'Alguém'}: ${corpo}` : corpo,
-      icon: rest.logo_url || '/icons/icon-192.png',
+    aviso: {
+      title: m.nome_exibicao || (m.telefone ? `+${m.telefone}` : 'WhatsApp'),
+      linha: linhaWhatsapp({ ...m, grupo: !!m.grupo, remetente: m.remetente ?? null }),
+      icon: foto,
+      logo: rest.logo_url || null,
       url: `/whatsapp?chat=${encodeURIComponent(m.chat_id)}`,
       tag: `easyfeed-wa-${m.restaurante_id}-${m.chat_id}`,
-      usuarioId: `wa:${m.chat_id}`,
-    }),
+      chaves: [`wa:${m.chat_id}`],
+      timestamp: m.enviada_em ? new Date(m.enviada_em).getTime() : undefined,
+    },
   }
 }
 
@@ -222,6 +276,7 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}))
     const tipo = String(body.tipo ?? '')
+    const simular = body.simular === true
 
     webpush.setVapidDetails(
       cfg.VAPID_SUBJECT || 'mailto:suporte@easyfeed.app',
@@ -229,18 +284,17 @@ Deno.serve(async (req: Request) => {
       cfg.VAPID_PRIVATE_KEY,
     )
 
-    // Mensagem do WhatsApp do restaurante: vai para o DONO, não para os admins.
+    // ── Mensagem do WhatsApp do restaurante: vai para o DONO.
     if (tipo === 'whatsapp') {
-      const alvo = await payloadWhatsapp(admin, Number(body.id))
+      const alvo = await avisoWhatsapp(admin, Number(body.id))
       if (!alvo) return jsonResp({ ok: true, enviados: 0, motivo: 'sem notificação' })
-      if (await silenciado(admin, alvo.authUserId, 'whatsapp', alvo.chatId)) {
-        return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada' })
-      }
-      const r = await enviarPara(admin, await inscricoesDe(admin, alvo.authUserId), alvo.payload)
-      return jsonResp({ ok: true, ...r })
+      const subs = await filtrarSilenciados(admin, await inscricoesDe(admin, alvo.authUserId), 'whatsapp', alvo.chatId)
+      if (subs.length === 0) return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada ou sem aparelho' })
+      const payload = montarPayload(alvo.aviso)
+      return jsonResp({ ok: true, ...(await enviarPara(admin, subs.map((sub) => ({ sub, payload })), simular)) })
     }
 
-    // Resposta do SUPORTE: vai para o dono da conversa de suporte.
+    // ── Resposta do SUPORTE: vai para o dono da conversa de suporte.
     if (tipo === 'suporte_resposta') {
       const { data: sug } = await admin
         .from('sugestoes_plataforma')
@@ -249,37 +303,39 @@ Deno.serve(async (req: Request) => {
         .maybeSingle()
       const dono = sug?.usuario_id as string | undefined
       if (!dono) return jsonResp({ ok: true, enviados: 0, motivo: 'sem dono' })
-      if (await silenciado(admin, dono, 'suporte', null)) return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada' })
-      const payloadDono = JSON.stringify({
+      const subs = await filtrarSilenciados(admin, await inscricoesDe(admin, dono), 'suporte', null)
+      if (subs.length === 0) return jsonResp({ ok: true, enviados: 0, motivo: 'silenciada ou sem aparelho' })
+      const payload = montarPayload({
         title: 'Suporte EasyFeed',
-        body: resumo(body.texto, 'Respondeu sua mensagem.'),
+        linha: linhaSuporte(body.texto, body.arquivos, 'Respondeu sua mensagem.'),
         icon: '/icons/icon-192.png',
         url: '/sugestoes',
         tag: 'easyfeed-suporte',
-        // A página de Sugestões aberta e visível suprime (avisarConversaAtiva('suporte')).
-        usuarioId: 'suporte',
+        // 'suporte': a página de Sugestões aberta. O id do dono: a mesma
+        // conversa aberta no painel do admin (quando o dono também é admin,
+        // o aparelho de onde ele respondeu não avisa a própria resposta).
+        chaves: ['suporte', dono],
       })
-      const r = await enviarPara(admin, await inscricoesDe(admin, dono), payloadDono)
-      return jsonResp({ ok: true, ...r })
+      return jsonResp({ ok: true, ...(await enviarPara(admin, subs.map((sub) => ({ sub, payload })), simular)) })
     }
 
+    // ── Cliente escreveu no suporte: vai para os ADMINS.
     let usuarioId: string | null = body.usuario_id ?? null
-    const texto: string = body.texto ?? ''
-    const titulo: string | null = body.titulo ?? null
+    const sugestaoId: string | null = body.sugestao_id ?? null
 
     // Resposta do cliente: descobre o dono da conversa pela sugestão.
-    if (tipo === 'resposta' && body.sugestao_id) {
+    if (tipo === 'resposta' && sugestaoId) {
       const { data: sug } = await admin
         .from('sugestoes_plataforma')
         .select('usuario_id')
-        .eq('id', body.sugestao_id)
+        .eq('id', sugestaoId)
         .maybeSingle()
       usuarioId = sug?.usuario_id ?? null
     }
 
-    // Nome (restaurante, com fallback pra pessoa) + foto (logo) do cliente.
+    // Nome (restaurante, com fallback pra pessoa) + logo do cliente.
     let nome = 'Cliente'
-    let foto = '/icons/icon-192.png'
+    let logo: string | null = null
     if (usuarioId) {
       const { data: rest } = await admin
         .from('restaurantes')
@@ -287,7 +343,7 @@ Deno.serve(async (req: Request) => {
         .eq('auth_user_id', usuarioId)
         .maybeSingle()
       if (rest?.nome_restaurante) nome = rest.nome_restaurante
-      if (rest?.logo_url) foto = rest.logo_url
+      if (rest?.logo_url) logo = rest.logo_url
       if (nome === 'Cliente') {
         const { data: pessoa } = await admin
           .from('usuarios')
@@ -303,31 +359,31 @@ Deno.serve(async (req: Request) => {
     // no badge nessa notificação específica.
     const totalNaoLido = await contarNaoLidas(admin).catch(() => undefined)
 
-    const payload = JSON.stringify({
-      title: nome,
-      body: resumo(texto || titulo, tipo === 'sugestao' ? 'Enviou uma nova dúvida.' : 'Enviou uma nova mensagem.'),
-      icon: foto,
-      url: '/admin',
+    const aviso: Aviso = {
+      title: `Suporte · ${nome}`,
+      linha: linhaSuporte(
+        body.texto || body.titulo,
+        body.arquivos,
+        tipo === 'sugestao' ? 'Começou uma conversa.' : 'Enviou uma mensagem.',
+      ),
+      logo,
+      // Abre direto na conversa (Admin.tsx lê ?conversa=).
+      url: sugestaoId ? `/admin?conversa=${encodeURIComponent(sugestaoId)}` : '/admin',
       tag: `easyfeed-cliente-${usuarioId ?? 'x'}`,
-      // Campo explícito (além da tag) — o Service Worker usa para saber se a
-      // conversa desta mensagem é exatamente a que o admin está olhando agora.
-      usuarioId: usuarioId ?? null,
+      chaves: usuarioId ? [usuarioId] : [],
       totalNaoLido,
-    })
-
-    // Inscrições só de admins (função security definer), menos de quem
-    // silenciou o suporte inteiro ou esta conversa.
-    const { data: subs } = await admin.rpc('admin_push_subscriptions')
-    const todas = (subs ?? []) as Array<{ auth_user_id: string; endpoint: string; p256dh: string; auth: string }>
-    const quietos = new Set<string>()
-    for (const id of new Set(todas.map((s) => s.auth_user_id))) {
-      if (await silenciado(admin, id, 'suporte_admin', usuarioId)) quietos.add(id)
     }
-    const { enviados, removidos } = await enviarPara(admin, todas.filter((s) => !quietos.has(s.auth_user_id)), payload)
+    const payload = montarPayload(aviso)
+    // Admin que também é o cliente (escreveu pelo /sugestoes): o aparelho de
+    // onde ele escreveu, com a página de Sugestões aberta, não se avisa.
+    const payloadProprio = montarPayload({ ...aviso, chaves: [...aviso.chaves, 'suporte'] })
 
-    return new Response(JSON.stringify({ ok: true, enviados, removidos }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // Inscrições só de admins (função security definer), menos os aparelhos
+    // que silenciaram o suporte inteiro ou esta conversa.
+    const { data: todas } = await admin.rpc('admin_push_subscriptions')
+    const subs = await filtrarSilenciados(admin, (todas ?? []) as Inscricao[], 'suporte_admin', usuarioId)
+    const envios = subs.map((sub) => ({ sub, payload: sub.auth_user_id === usuarioId ? payloadProprio : payload }))
+    return jsonResp({ ok: true, ...(await enviarPara(admin, envios, simular)) })
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), { status: 500 })
   }

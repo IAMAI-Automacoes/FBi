@@ -74,7 +74,7 @@ export function PedirNotificacoes() {
             <p className="mt-0.5 text-[13px] leading-snug text-gray-600">
               {estado === 'iphone'
                 ? 'No iPhone, as notificações de mensagens do WhatsApp e do suporte só funcionam com o EasyFeed instalado na tela inicial.'
-                : 'Avisamos na hora quando chegar mensagem no WhatsApp ou resposta do suporte. Você pode silenciar o que quiser depois.'}
+                : 'Avisamos neste aparelho, na hora, quando chegar mensagem no WhatsApp ou no suporte. Dá para silenciar o que quiser depois, só aqui ou em cada aparelho.'}
             </p>
             <div className="mt-3 flex gap-2">
               <button

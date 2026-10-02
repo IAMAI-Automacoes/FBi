@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Lock, WifiOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
+import { useTelaFixa } from '@/hooks/use-tela-fixa'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { chaveWhatsapp } from '@/lib/telefone'
@@ -29,6 +30,9 @@ import { WA } from '@/components/whatsapp/pecas'
  * conversa. ?tel=… (vindo do card de feedback) acha a conversa pelo telefone.
  */
 export default function WhatsApp() {
+  // A página não rola, só a lista e as mensagens (o topo e o rodapé da
+  // conversa ficam sempre no lugar no celular).
+  useTelaFixa()
   const { user, usuario } = useAuth()
   const { toast } = useToast()
   const restauranteId = usuario?.restaurante_id ?? null
@@ -249,14 +253,15 @@ export default function WhatsApp() {
 
   return (
     <div
-      // Celular: presa à tela visível (fixed + 100dvh). Antes ela ficava dentro
-      // da área que rola do Layout, cuja altura é 100vh — maior que a parte
-      // visível do celular (barra do navegador) — então o cabeçalho da
-      // conversa subia para fora da tela e sobrava uma faixa branca embaixo.
+      // Celular: presa à tela visível (fixed inset-0, que já é a altura da
+      // parte visível). Antes ela ficava dentro da área que rola do Layout,
+      // cuja altura é 100vh — maior que a parte visível do celular (barra do
+      // navegador) — então o cabeçalho da conversa subia para fora da tela e
+      // sobrava uma faixa branca embaixo. E a página não rola (useTelaFixa):
+      // puxar no fim das mensagens não leva mais a tela junto.
       // Computador: ocupa a área do Layout (o cabeçalho fixo some nesta rota,
       // ver ROTAS_SEM_TOPO), como a página de Sugestões.
-      className="fixed inset-0 z-30 flex overflow-hidden bg-white md:relative md:inset-auto md:z-auto md:-ml-6 md:-mr-8 md:-my-6 lg:-ml-8 lg:-my-8"
-      style={{ height: '100dvh' }}
+      className="fixed inset-0 z-30 flex overflow-hidden bg-white md:relative md:inset-auto md:z-auto md:h-[100dvh] md:-ml-6 md:-mr-8 md:-my-6 lg:-ml-8 lg:-my-8"
     >
       {/* Lista */}
       <div className={cn(

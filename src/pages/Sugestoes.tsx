@@ -35,6 +35,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import { BotaoSino } from '@/components/ControlesConversa'
 import { usePreferencias } from '@/lib/queries/preferencias'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
+import { useTelaFixa } from '@/hooks/use-tela-fixa'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -632,7 +633,7 @@ function ChatInputBar({
   }
 
   return (
-    <div className="shrink-0 px-3 py-2" style={{ background: '#F0F2F5' }}>
+    <div className="shrink-0 px-3 pt-2" style={{ background: '#F0F2F5', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}>
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
           {files.map((file, idx) => (
@@ -691,6 +692,9 @@ function ChatInputBar({
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function Sugestoes() {
+  // A página não rola (só as mensagens): no celular, o topo e o campo de
+  // mensagem ficam sempre no lugar.
+  useTelaFixa()
   const { user, usuario } = useAuth()
   // Sino do cabeçalho: silencia as notificações de resposta do suporte.
   const prefsSuporte = usePreferencias('suporte')
@@ -992,19 +996,21 @@ export default function Sugestoes() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div
-      className="-m-4 sm:-m-6 lg:-m-8 flex flex-col overflow-hidden"
-      // Antes descontava os 64px do cabeçalho fixo (TopHeader) — agora ele
-      // fica escondido nesta página (ver `ROTAS_SEM_TOPO` em Layout.tsx), e
-      // esse desconto sobrava como uma faixa em branco embaixo, no mesmo
-      // tamanho do cabeçalho que sumiu em cima.
-      style={{ height: '100dvh' }}
+      // Celular: presa à tela visível (fixed inset-0), como a tela WhatsApp —
+      // dentro da área que rola do Layout (100vh, maior que a parte visível),
+      // puxar no fim das mensagens levava a página junto: o topo verde sumia
+      // e o campo de mensagem saía do lugar. E a página não rola (useTelaFixa).
+      // Computador: ocupa a área do Layout (o cabeçalho fixo some nesta rota,
+      // ver `ROTAS_SEM_TOPO` em Layout.tsx).
+      className="fixed inset-0 z-30 flex flex-col overflow-hidden bg-white md:static md:inset-auto md:z-auto md:h-[100dvh] md:-m-6 lg:-m-8"
     >
       {/* Header — logo do EasyFeed com o nome do lado, sem slogan (o
           cabeçalho fixo do app com a logo grande já fica escondido nesta
           página, ver `ROTAS_SEM_TOPO` em Layout.tsx). */}
       <div
         className="shrink-0 flex items-center gap-3 px-4 py-3"
-        style={{ background: WA_TEAL }}
+        // Área segura do topo (app instalado no iPhone, com o entalhe).
+        style={{ background: WA_TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
       >
         {/* O cabeçalho do app some nesta página: sem isto, no celular não
             havia como abrir o menu lateral. */}
@@ -1085,7 +1091,7 @@ export default function Sugestoes() {
       </div>
 
       {selectMode ? (
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white border-t border-gray-200">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 pt-3 bg-white border-t border-gray-200" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
           <button
             onClick={exitSelect}
             className="text-sm font-medium text-gray-600 hover:text-gray-800 px-3 py-2"

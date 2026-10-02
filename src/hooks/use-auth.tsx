@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
+import { desinscreverDesteAparelho } from '@/lib/push'
 import { MODO_DEMO } from '@/lib/demo'
 import { buscarMeuAcesso, type AcessoConta, type SessaoDemo } from '@/lib/queries/demo'
 
@@ -299,6 +300,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Marca de "admin pulou pagamento" é por sessão de uso — some ao sair, pra o
     // admin ver a tela de assinatura de novo no próximo login.
     sessionStorage.removeItem('admin_pulou_pagamento')
+    // Antes de sair (ainda com login, por causa da RLS): este aparelho para
+    // de receber as notificações desta conta.
+    await desinscreverDesteAparelho()
     // Na demonstração o login é do vendedor: fecha só nesta aba. O padrão do
     // supabase-js ('global') derrubaria a conta dele em todos os aparelhos.
     const { error } = await supabase.auth.signOut(MODO_DEMO || sessaoDemo ? { scope: 'local' } : undefined)
