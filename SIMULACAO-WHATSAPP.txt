@@ -681,7 +681,9 @@ O que cada uma mostra:
     título  "Suporte EasyFeed"
     texto   a resposta; só anexo vira "📷 Foto", "📄 PDF", "📎 2 arquivos"
     imagem  no PC, a logo do EasyFeed; no Android, nenhuma à direita (a
-            bolinha da esquerda já é o símbolo do EasyFeed — não repete)
+            bolinha da esquerda já é o símbolo do EasyFeed — não repete).
+            Vai uma imagem transparente: sem imagem nenhuma, o Chrome do
+            Android põe uma bolinha cinza com a letra do site ("E")
     abre    /sugestoes
   Cliente escreveu no suporte (para os admins)
     título  "Suporte · <restaurante>"

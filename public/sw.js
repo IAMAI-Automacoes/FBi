@@ -96,6 +96,8 @@ function atualizarBadge(total) {
 //    a logo retangular; sem as duas, ou se algo falhar, a logo do EasyFeed.
 //    `soMarca` (suporte → dono): a imagem seria a logo do EasyFeed — no
 //    Android ela já está na bolinha da esquerda, então não repete à direita.
+//    Vai uma imagem TRANSPARENTE, e não nenhuma: sem imagem, o Chrome do
+//    Android inventa uma bolinha cinza com a primeira letra do site ("E").
 //  - `badge` (bolinha da esquerda e barra de status no Android): só aceita uma
 //    cor, com fundo transparente — o símbolo do EasyFeed em branco. A cor da
 //    bolinha (azul) é do Android/Chrome; o site não consegue mudar.
@@ -105,6 +107,9 @@ const BADGE = '/icons/badge-96.png'
 const MAX_LINHAS = 5
 const CACHE_ICONES = 'easyfeed-icones-v2'
 const EH_ANDROID = /Android/i.test(self.navigator.userAgent)
+// 96×96 todo transparente: ocupa o lugar da imagem sem mostrar nada.
+const ICONE_VAZIO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAO0lEQVR42u3BMQEAAADCoPVPbQhfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgNcAkGAAAXyEu2cAAAAASUVORK5CYII='
 
 function paraBase64(buffer) {
   const bytes = new Uint8Array(buffer)
@@ -164,7 +169,7 @@ async function logoQuadrada(url) {
 }
 
 async function escolherIcone(dados) {
-  if (dados.soMarca) return EH_ANDROID ? undefined : ICONE_EASYFEED
+  if (dados.soMarca) return EH_ANDROID ? ICONE_VAZIO : ICONE_EASYFEED
   if (dados.icon) return dados.icon
   if (dados.logo) {
     try {
