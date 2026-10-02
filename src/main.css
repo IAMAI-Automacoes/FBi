@@ -179,6 +179,11 @@ html.tela-fixa body {
   overflow: hidden;
   overscroll-behavior: none;
 }
-html.tela-fixa * {
+/* Só nas áreas que rolam de verdade (listas e mensagens). Valia para TODO
+   elemento: uma caixa com overflow-hidden (que corta o conteúdo, como o grupo
+   de itens da caixa de escolha de restaurante) também conta como área de
+   rolagem para o navegador, e com isso a rolagem parava nela e não chegava à
+   lista — a lista "travava". */
+html.tela-fixa :is(.overflow-auto, .overflow-y-auto, .overflow-y-scroll) {
   overscroll-behavior-y: contain;
 }
