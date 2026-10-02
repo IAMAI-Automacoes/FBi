@@ -33,9 +33,15 @@ export interface PedidoSalto { messageId: string; vez: number; termo?: string }
 
 export function Conversa({
   restauranteId, chatId, nome, foto, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
-  salto, aoVoltar, aoAbrirContato, aoAbrirPesquisa, aoAbrirPessoa,
+  salto, aoVoltar, aoAbrirContato, aoAbrirPesquisa, aoAbrirPessoa, somenteLeitura = false,
 }: {
   restauranteId: number
+  /**
+   * Visualização do admin: só olha. Não marca como lida (nem no painel do
+   * dono, nem os tiques azuis no WhatsApp do cliente) e não avisa o service
+   * worker de conversa aberta.
+   */
+  somenteLeitura?: boolean
   chatId: string
   nome: string
   foto: string | null
@@ -175,9 +181,9 @@ export function Conversa({
   useEffect(() => {
     if (!telefonesDoGrupo) return
     let ativo = true
-    fotosDeParticipantes(telefonesDoGrupo.split(',')).then((f) => { if (ativo) setFotos(f) })
+    fotosDeParticipantes(telefonesDoGrupo.split(','), somenteLeitura ? restauranteId : undefined).then((f) => { if (ativo) setFotos(f) })
     return () => { ativo = false }
-  }, [telefonesDoGrupo])
+  }, [telefonesDoGrupo, somenteLeitura, restauranteId])
   const reacoes = useMemo(() => agregarReacoes(mensagens), [mensagens])
 
   // ── Posição da rolagem ──
@@ -230,13 +236,13 @@ export function Conversa({
 
   // ── Marcar como lida (no painel e no WhatsApp) quando o fim aparece na tela ──
   const marcarSePreciso = useCallback(() => {
-    if (document.visibilityState !== 'visible') return
+    if (somenteLeitura || document.visibilityState !== 'visible') return
     const recebidas = mensagensRef.current.filter((m) => !m.de_mim && m.tipo !== 'reaction')
     const ultima = recebidas[recebidas.length - 1]
     if (!ultima || marcadaAte.current === ultima.message_id) return
     marcadaAte.current = ultima.message_id
     marcarLidas(chatId)
-  }, [chatId])
+  }, [chatId, somenteLeitura])
 
   useEffect(() => {
     const alvo = fim.current
@@ -252,6 +258,7 @@ export function Conversa({
 
   // Diz ao service worker que esta conversa está aberta (não notifica ela).
   useEffect(() => {
+    if (somenteLeitura) return
     const avisar = () => {
       avisarConversaAtiva(document.visibilityState === 'visible' ? `wa:${chatId}` : null)
       if (document.visibilityState === 'visible') marcarSePreciso()
@@ -259,7 +266,7 @@ export function Conversa({
     avisar()
     document.addEventListener('visibilitychange', avisar)
     return () => { document.removeEventListener('visibilitychange', avisar); avisarConversaAtiva(null) }
-  }, [chatId, marcarSePreciso])
+  }, [chatId, marcarSePreciso, somenteLeitura])
 
   // ── Ir até uma mensagem (citação, pesquisa) ──
   const irPara = useCallback(async (messageId: string, termo?: string) => {

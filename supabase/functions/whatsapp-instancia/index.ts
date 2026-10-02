@@ -113,16 +113,36 @@ Deno.serve(async (req: Request) => {
     // Na demonstração o WhatsApp é o da conta de verdade do vendedor.
     if (await ehSessaoDemo(admin, jwt)) return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
     const userId = userData.user.id
-
-    const { data: rest, error: restErr } = await admin
-      .from('restaurantes')
-      .select('id, nome_restaurante, whatsapp_token, numero_whatsapp, whatsapp_dono')
-      .eq('auth_user_id', userId)
-      .single()
-    if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
-
     const body = await req.json().catch(() => ({}))
     const action = String(body.action ?? '')
+
+    // Painel do admin, aba WhatsApp: o admin da plataforma vê o WhatsApp de
+    // qualquer restaurante. Só a ação "fotos" (leitura) aceita outro
+    // restaurante (restaurante_id), e só para quem está em platform_admins.
+    // Todas as outras ações seguem presas ao restaurante da própria conta.
+    const outroRestaurante = body.restaurante_id != null ? Number(body.restaurante_id) : null
+    if (outroRestaurante != null) {
+      if (action !== 'fotos' || !Number.isInteger(outroRestaurante)) return json({ error: 'Ação não permitida' }, 403)
+      const { data: adm } = await admin
+        .from('platform_admins')
+        .select('email')
+        .eq('email', userData.user.email ?? '')
+        .maybeSingle()
+      if (!adm) return json({ error: 'Só o admin da plataforma' }, 403)
+    }
+
+    const { data: rest, error: restErr } = outroRestaurante != null
+      ? await admin
+          .from('restaurantes')
+          .select('id, nome_restaurante, whatsapp_token, numero_whatsapp, whatsapp_dono')
+          .eq('id', outroRestaurante)
+          .single()
+      : await admin
+          .from('restaurantes')
+          .select('id, nome_restaurante, whatsapp_token, numero_whatsapp, whatsapp_dono')
+          .eq('auth_user_id', userId)
+          .single()
+    if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
     let token: string | null = rest.whatsapp_token ?? null
 
     async function setNumero(numero: string | null) {

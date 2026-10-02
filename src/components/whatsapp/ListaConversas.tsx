@@ -13,15 +13,17 @@ import { ItemResultado, SecaoResultados } from './Paineis'
 
 type Filtro = 'tudo' | 'nao_lidas' | 'grupos'
 
-const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, aoSilenciar }: {
+const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, aoSilenciar, somenteLeitura }: {
   c: ConversaWa
   ativa: boolean
   aoAbrir: (chatId: string) => void
   aoFixar: (chatId: string) => void
   aoSilenciar: (chatId: string) => void
+  /** Visualização do admin: sem o menu fixar/silenciar. */
+  somenteLeitura: boolean
 }) {
   const [menu, setMenu] = useState(false)
-  const segurar = useSeguraParaMenu(() => setMenu(true))
+  const segurar = useSeguraParaMenu(() => { if (!somenteLeitura) setMenu(true) })
   const nome = nomeConversa(c)
   const previa = previaMensagem({
     tipo: c.ultima_tipo, texto: c.ultima_texto, midia_nome: c.ultima_midia_nome,
@@ -67,15 +69,17 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
               {c.nao_lidas > 99 ? '99+' : c.nao_lidas}
             </span>
           )}
-          <MenuConversa
-            fixada={fixada}
-            silenciada={c.silenciada}
-            aoFixar={() => aoFixar(c.chat_id)}
-            aoSilenciar={() => aoSilenciar(c.chat_id)}
-            aberto={menu}
-            aoMudarAberto={setMenu}
-            className="-mr-1"
-          />
+          {!somenteLeitura && (
+            <MenuConversa
+              fixada={fixada}
+              silenciada={c.silenciada}
+              aoFixar={() => aoFixar(c.chat_id)}
+              aoSilenciar={() => aoSilenciar(c.chat_id)}
+              aberto={menu}
+              aoMudarAberto={setMenu}
+              className="-mr-1"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -84,10 +88,16 @@ const ItemConversa = memo(function ItemConversa({ c, ativa, aoAbrir, aoFixar, ao
 
 export function ListaConversas({
   restauranteId, conversas, carregando, ativa, aoAbrir, aoAbrirMensagem, aoFixar, aoSilenciar, tudoSilenciado, aoAlternarTudo, aviso,
-  destacarInstalar = false,
+  destacarInstalar = false, somenteLeitura = false,
 }: {
   /** Veio de "Instalar app" em outra página: o botão chama atenção. */
   destacarInstalar?: boolean
+  /**
+   * Visualização do admin (painel do admin, aba WhatsApp): a mesma lista que
+   * o dono vê, mas sem nada que mexa na conta dele — sem sino, sem instalar,
+   * sem fixar/silenciar e sem o botão do menu lateral.
+   */
+  somenteLeitura?: boolean
   restauranteId: number
   conversas: ConversaWa[]
   carregando: boolean
@@ -156,11 +166,19 @@ export function ListaConversas({
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="flex shrink-0 items-center gap-2 px-3 py-3" style={{ background: WA.TEAL, paddingTop: 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}>
-        <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />
+      <div
+        className="flex shrink-0 items-center gap-2 px-3 py-3"
+        // No admin, o topo da tela é o cabeçalho do painel: não desconta a área segura.
+        style={{ background: WA.TEAL, paddingTop: somenteLeitura ? undefined : 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
+      >
+        {!somenteLeitura && <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />}
         <p className="flex-1 text-[17px] font-semibold text-white">WhatsApp</p>
-        <BotaoInstalarApp rota="/whatsapp" nome="Whatsapp EasyFeed" destacar={destacarInstalar} />
-        <BotaoSino claro silenciado={tudoSilenciado} aoAlternar={aoAlternarTudo} rotulo="notificações do WhatsApp" />
+        {!somenteLeitura && (
+          <>
+            <BotaoInstalarApp rota="/whatsapp" nome="Whatsapp EasyFeed" destacar={destacarInstalar} />
+            <BotaoSino claro silenciado={tudoSilenciado} aoAlternar={aoAlternarTudo} rotulo="notificações do WhatsApp" />
+          </>
+        )}
       </div>
 
       {aviso}
@@ -208,7 +226,7 @@ export function ListaConversas({
             {visiveis.length > 0 && (
               <SecaoResultados titulo="Conversas">
                 {visiveis.map((c) => (
-                  <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} />
+                  <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} somenteLeitura={somenteLeitura} />
                 ))}
               </SecaoResultados>
             )}
@@ -232,7 +250,7 @@ export function ListaConversas({
           </div>
         ) : (
           visiveis.map((c) => (
-            <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} />
+            <ItemConversa key={c.chat_id} c={c} ativa={ativa === c.chat_id} aoAbrir={aoAbrir} aoFixar={aoFixar} aoSilenciar={aoSilenciar} somenteLeitura={somenteLeitura} />
           ))
         )}
         {!carregando && conversas.length > 0 && !busca.trim() && (

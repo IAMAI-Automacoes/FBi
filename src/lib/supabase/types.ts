@@ -2693,6 +2693,13 @@ export type Database = {
         }[]
       }
       arquivar_concluidas_antigas: { Args: never; Returns: number }
+      fixadas_whatsapp_do_restaurante: {
+        Args: { p_restaurante_id: number }
+        Returns: {
+          conversa: string
+          fixada_em: string
+        }[]
+      }
       pesquisar_mensagens_whatsapp: {
         Args: { p_chat_id?: string; p_limite?: number; p_restaurante_id: number; p_termo: string }
         Returns: {

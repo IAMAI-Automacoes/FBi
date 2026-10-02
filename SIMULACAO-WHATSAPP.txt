@@ -104,6 +104,8 @@ feedback. Ele é independente deste e não deve ser mexido por causa da tela.
   20261003000000_notificacoes_por_aparelho.sql     silenciar por aparelho, troca de
                                                    conta da inscrição, anexos no
                                                    push do suporte (item 12)
+  20261004000000_admin_ve_whatsapp.sql             o admin vê o WhatsApp de cada
+                                                   restaurante, só leitura (item 13)
 
 2.5 Workflow do n8n "Simulação Whatsapp"
 
@@ -756,3 +758,53 @@ Telas fixas no celular (WhatsApp, Sugestões e painel do admin):
     (Painel Admin, abas e a barra verde do Suporte) fica sempre fixo.
   - index.html: viewport com interactive-widget=resizes-content (no Android,
     o teclado encolhe a tela em vez de empurrar o topo para fora).
+
+
+-------------------------------------------------------------
+13. VISUALIZAÇÃO DO ADMIN (painel do admin, aba WhatsApp)
+-------------------------------------------------------------
+
+Onde: /admin, aba "WhatsApp" (logo à direita de "Suporte").
+
+Como funciona:
+  - Uma caixa de escolha que é lista e pesquisa ao mesmo tempo: tocar abre
+    todos os restaurantes (logo, nome, e-mail · número; "sem WhatsApp"
+    quando não está conectado); digitar filtra por nome, e-mail ou número,
+    sem diferença de acento, maiúscula ou pontuação ("mamas" acha
+    "Mama's Kitchen"; "2138" acha pelo número).
+  - Escolhido o restaurante, o topo mostra logo, nome, e-mail, número do
+    WhatsApp e Conectado/Desconectado, com o botão "Trocar restaurante".
+  - Abaixo, a MESMA tela que o dono vê em /whatsapp: lista, conversas,
+    mídias, pesquisa, perfil, fixadas do dono e contador de não lidas igual
+    ao dele.
+  - A escolha fica na URL (/admin?restaurante=<id>; recarregar mantém) e no
+    aparelho (localStorage 'easyfeed:admin-wa-restaurante': voltar à aba
+    abre o último).
+
+Só leitura (o admin não mexe em nada do dono):
+  - Abrir uma conversa NÃO marca como lida: nem o contador do dono, nem os
+    tiques azuis no WhatsApp do cliente (a ação marcar-lidas não é chamada).
+  - Sem sino, sem fixar/silenciar, sem "Instalar app" e sem "Enviar
+    mensagem". O rodapé diz "Visualização do admin: só leitura".
+
+Código:
+  - src/components/whatsapp/TelaWhatsapp.tsx: o miolo da tela, com
+    modo 'dono' (página /whatsapp) e modo 'admin' (só leitura).
+  - src/pages/WhatsApp.tsx: só o invólucro do dono.
+  - src/pages/admin/PainelWhatsappAdmin.tsx: a aba do admin (escolha e topo).
+  - buscarRestaurantesWhatsapp em src/lib/queries/admin.ts.
+
+Banco (migration 20261004000000_admin_ve_whatsapp.sql):
+  - mensagens_whatsapp: o admin já lia (política tenant_isolation_select).
+  - mensagens_whatsapp_leitura: política leitura_select_admin (o contador
+    de não lidas do admin bate com o do dono).
+  - storage "mensagens": política "mensagens: admin le tudo" (fotos, áudios
+    e documentos abrem para o admin).
+  - RPC fixadas_whatsapp_do_restaurante(p_restaurante_id): as conversas que
+    o DONO fixou; recusa quem não é admin da plataforma.
+  - Para os donos nada mudou: cada restaurante continua vendo só as suas.
+
+Função whatsapp-instancia: a ação "fotos" aceita restaurante_id — só para
+quem está em platform_admins — e busca as fotos dos participantes pela
+instância daquele restaurante. Todas as outras ações continuam presas ao
+restaurante da própria conta.

@@ -28,8 +28,10 @@ type Aba = 'midia' | 'docs' | 'links'
 
 export function PainelContato({
   restauranteId, chatId, nome, foto, telefone, grupo, participante, aoAbrirConversa,
-  linkResponder, motivoSemLink, numeroDono, aoFechar,
+  linkResponder, motivoSemLink, numeroDono, aoFechar, somenteLeitura = false,
 }: {
+  /** Visualização do admin: sem o atalho para as Configurações do dono. */
+  somenteLeitura?: boolean
   restauranteId: number
   chatId: string
   nome: string
@@ -112,7 +114,7 @@ export function PainelContato({
             ) : (
               <div className="mt-3 w-full max-w-xs rounded-lg bg-[#FFF5C4] px-3 py-2 text-[13px] text-gray-700">
                 {motivoSemLink}
-                {!numeroDono && (
+                {!numeroDono && !somenteLeitura && (
                   <> <Link to="/configuracoes" className="font-medium text-[#027EB5] underline">Ir para Configurações</Link></>
                 )}
               </div>

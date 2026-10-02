@@ -547,6 +547,43 @@ export async function buscarContas(): Promise<ContaAdmin[]> {
   })) as ContaAdmin[]
 }
 
+// ── Aba WhatsApp do painel do admin ─────────────────────────────────────────
+// Leitura pela policy `admins_read_restaurantes`. O token da instância não
+// fica na tela: vira só "tem instância" (é o mesmo critério do aviso
+// "WhatsApp desconectado" que o dono vê).
+
+export interface RestauranteWhatsappAdmin {
+  id: number
+  nome: string | null
+  logo_url: string | null
+  email: string | null
+  /** Número do WhatsApp do restaurante (preenchido = conectado). */
+  numero_whatsapp: string | null
+  /** WhatsApp pessoal do dono. */
+  whatsapp_dono: string | null
+  /** Tem instância criada na uazapi (whatsapp_token). */
+  temInstancia: boolean
+  excluida_em: string | null
+}
+
+export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappAdmin[]> {
+  const { data, error } = await supabase
+    .from('restaurantes')
+    .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, excluida_em')
+    .order('nome_restaurante', { ascending: true })
+  if (error) throw error
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    nome: r.nome_restaurante ?? null,
+    logo_url: r.logo_url || null,
+    email: r.email ?? null,
+    numero_whatsapp: r.numero_whatsapp || null,
+    whatsapp_dono: r.whatsapp_dono || null,
+    temInstancia: !!r.whatsapp_token,
+    excluida_em: r.excluida_em ?? null,
+  }))
+}
+
 export async function definirAssinatura(id: number, status: AssinaturaStatus): Promise<void> {
   const { error } = await supabase
     .from('restaurantes')

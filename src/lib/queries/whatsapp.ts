@@ -193,30 +193,42 @@ export function buscarPreviaLink(url: string): Promise<PreviaLink> {
 
 const fotosEmMemoria = new Map<string, string | null>()
 
+const chaveFoto = (telefone: string, restauranteId?: number) => `${restauranteId ?? ''}|${telefone}`
+
 /**
  * Foto de cada telefone (whatsapp-instancia, ação "fotos": cache de 24 h no
  * banco + /chat/details da uazapi). null = a pessoa esconde ou não tem foto.
  * Aqui guarda também em memória, para a mesma tela não pedir de novo.
+ * `restauranteId`: só no painel do admin (aba WhatsApp) — busca pela
+ * instância daquele restaurante; sem ele, a do restaurante da própria conta.
  */
-export async function fotosDeParticipantes(telefones: string[]): Promise<Record<string, string | null>> {
+export async function fotosDeParticipantes(telefones: string[], restauranteId?: number): Promise<Record<string, string | null>> {
   const unicos = Array.from(new Set(telefones.filter(Boolean)))
-  const faltam = unicos.filter((t) => !fotosEmMemoria.has(t))
+  const faltam = unicos.filter((t) => !fotosEmMemoria.has(chaveFoto(t, restauranteId)))
   for (let i = 0; i < faltam.length; i += 40) {
     const lote = faltam.slice(i, i + 40)
     try {
-      const { data } = await supabase.functions.invoke('whatsapp-instancia', { body: { action: 'fotos', telefones: lote } })
+      const corpo = restauranteId != null ? { action: 'fotos', telefones: lote, restaurante_id: restauranteId } : { action: 'fotos', telefones: lote }
+      const { data } = await supabase.functions.invoke('whatsapp-instancia', { body: corpo })
       const fotos = ((data as { fotos?: Record<string, string | null> } | null)?.fotos) ?? {}
-      for (const t of lote) fotosEmMemoria.set(t, fotos[t] ?? null)
+      for (const t of lote) fotosEmMemoria.set(chaveFoto(t, restauranteId), fotos[t] ?? null)
     } catch {
-      for (const t of lote) fotosEmMemoria.set(t, null)
+      for (const t of lote) fotosEmMemoria.set(chaveFoto(t, restauranteId), null)
     }
   }
   const out: Record<string, string | null> = {}
-  for (const t of unicos) out[t] = fotosEmMemoria.get(t) ?? null
+  for (const t of unicos) out[t] = fotosEmMemoria.get(chaveFoto(t, restauranteId)) ?? null
   return out
 }
 
 /** A foto já conhecida (sem pedir), para o perfil abrir com ela na hora. */
-export function fotoConhecida(telefone: string | null | undefined): string | null {
-  return telefone ? fotosEmMemoria.get(telefone) ?? null : null
+export function fotoConhecida(telefone: string | null | undefined, restauranteId?: number): string | null {
+  return telefone ? fotosEmMemoria.get(chaveFoto(telefone, restauranteId)) ?? null : null
+}
+
+/** Painel do admin: as conversas que o DONO fixou (RPC só para o admin da plataforma). */
+export async function fixadasDoRestaurante(restauranteId: number): Promise<Map<string, string>> {
+  const { data, error } = await supabase.rpc('fixadas_whatsapp_do_restaurante', { p_restaurante_id: restauranteId })
+  if (error) throw error
+  return new Map(((data ?? []) as Array<{ conversa: string; fixada_em: string }>).map((f) => [f.conversa, f.fixada_em]))
 }
