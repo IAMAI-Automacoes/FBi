@@ -170,6 +170,19 @@ async function aoMudarContaConnect(db: Db, conta: Stripe.Account) {
     .eq('id', afiliadoId)
 }
 
+/**
+ * Capacidade da conta Connect mudou. `transfers` ativa = o afiliado pode
+ * receber. Alternativa ao `account.updated` quando o Dashboard não o lista
+ * (contas conectadas): basta assinar `capability.updated` no endpoint.
+ */
+async function aoMudarCapacidadeConnect(db: Db, cap: Stripe.Capability) {
+  if (cap.id !== 'transfers') return
+  const contaId = idDe(cap.account as string | { id: string })
+  if (!contaId) return
+  const status = cap.status === 'active' ? 'ativo' : cap.status === 'pending' ? 'pendente' : 'restrito'
+  await db.from('afiliados').update({ stripe_connect_status: status }).eq('stripe_account_id', contaId)
+}
+
 async function processar(db: Db, evento: Stripe.Event) {
   switch (evento.type) {
     case 'checkout.session.completed':
@@ -211,6 +224,18 @@ async function processar(db: Db, evento: Stripe.Event) {
     case 'account.updated':
       await aoMudarContaConnect(db, evento.data.object as Stripe.Account)
       break
+
+    case 'capability.updated':
+      await aoMudarCapacidadeConnect(db, evento.data.object as Stripe.Capability)
+      break
+
+    // Evento "fino" (API v2): só traz o id da conta em `related_object`;
+    // busca a conta inteira e aplica a mesma regra do `account.updated`.
+    case 'v2.core.account.updated': {
+      const rel = (evento as unknown as { related_object?: { id?: string } }).related_object
+      if (rel?.id) await aoMudarContaConnect(db, await stripe().accounts.retrieve(rel.id))
+      break
+    }
 
     // Preço mudou: nada a gravar — `get-prices` lê o Stripe ao vivo (cache de
     // 5 min). Fica aqui só para o log mostrar que chegou.

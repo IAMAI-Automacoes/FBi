@@ -252,10 +252,14 @@ supabase functions deploy vincular-compra create-portal-session cancelar-assinat
 ### Catálogo e portal (scripts, test mode primeiro)
 
 ```bash
-deno run -A scripts/stripe/bootstrap.ts --mensal=197 --semestral=1002 --anual=1764 --descritor=EASYFEED
-deno run -A scripts/stripe/configurar-portal.ts --criar --site=https://easyfeed.com.br \
+# .env.stripe (ignorado pelo git) com STRIPE_SECRET_KEY=sk_test_...
+deno run -A --env-file=.env.stripe scripts/stripe/bootstrap.ts --mensal=197 --semestral=1002 --anual=1764 --descritor=EASYFEED
+deno run -A --env-file=.env.stripe scripts/stripe/configurar-portal.ts --criar --site=https://easyfeed.com.br \
   --termos=https://easyfeed.com.br/termos --privacidade=https://easyfeed.com.br/privacidade
 ```
+
+`scripts/stripe/deno.json` já desliga o `node_modules` do frontend para o Deno; se o
+erro "npm:stripe não encontrado" aparecer, acrescente `--node-modules-dir=none`.
 
 ### Webhook
 
@@ -269,8 +273,11 @@ Eventos: `checkout.session.completed`, `checkout.session.async_payment_succeeded
 para `STRIPE_WEBHOOK_SECRET` (o do `stripe listen` local é outro).
 
 Segundo endpoint, mesma URL, com **"Listen to events on Connected accounts"** marcado e
-o evento `account.updated` — é por ele que o status Connect do afiliado muda para
-`ativo`. O segredo dele vai em `STRIPE_CONNECT_WEBHOOK_SECRET`.
+os eventos `account.updated`, `capability.updated` e/ou `v2.core.account.updated` (qualquer um basta; o
+segundo dispara quando a capacidade `transfers` do afiliado fica ativa e aparece mesmo
+onde o Dashboard não lista `account.updated`). É por eles que o status Connect do
+afiliado muda para `ativo`. O segredo vai em `STRIPE_CONNECT_WEBHOOK_SECRET`. Sem
+esse endpoint, o botão "Atualizar status" no painel admin faz o mesmo manualmente.
 
 ### Descritor na fatura do cartão ("IAMAI* EASYFEED")
 
