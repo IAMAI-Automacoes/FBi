@@ -99,7 +99,7 @@ export function sentimentoLegivel(s: string | null | undefined): string {
 }
 
 /**
- * O tipo do tema, incluindo NEUTRO.
+ * O tipo do tema, incluindo NEUTRO e SUGESTÃO.
  *
  * Havia um `tipo === 'elogio' ? 'Elogio' : 'Reclamação'`, e os três temas
  * neutros do banco saíam rotulados como reclamação — "Opinião neutra geral"
@@ -110,6 +110,7 @@ export function tipoTemaLegivel(t: string | null | undefined): string {
   if (v === 'elogio') return 'Elogio'
   if (v === 'reclamacao' || v === 'reclamação') return 'Reclamação'
   if (v === 'neutro') return 'Neutro'
+  if (v === 'sugestao' || v === 'sugestão') return 'Sugestão'
   return 'Não classificado'
 }
 
@@ -126,6 +127,10 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     kpis.criticalTheme && kpis.criticalTheme !== 'Nenhum'
       ? `${kpis.criticalTheme} (${kpis.criticalPercent}% negativas)`
       : 'Nenhum'
+
+  // Base do "% das avaliações" por categoria: as categorias contam só
+  // avaliações (sem sugestão), então a base também.
+  const avaliacoes = (kpis.totalFeedbacks ?? 0) - (kpis.sugestoes ?? 0)
 
   const linhas: Linha[] = [
     // ── Identificação ────────────────────────────────────────────────────
@@ -145,7 +150,7 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ['COMO LER ESTA PLANILHA'],
     ['Mensagem', 'Uma vez que um cliente escreveu. É o número do topo da página de relatórios.'],
     ['Assunto', 'Um ponto levantado dentro de uma mensagem. Quem falou de comida e de atendimento gerou dois — por isso as tabelas abaixo somam mais que as mensagens.'],
-    ['Satisfação', 'Escala de 0 a 100. 100 = só avaliações positivas; 50 = tantas positivas quanto negativas; 0 = só negativas.'],
+    ['Satisfação', 'Escala de 0 a 100. 100 = só avaliações positivas; 50 = tantas positivas quanto negativas; 0 = só negativas. Sugestões não entram na conta.'],
     ['Período', 'Todos os números abaixo são apenas do intervalo indicado acima.'],
     ['Em branco', 'Célula vazia significa que não houve avaliação naquele recorte — diferente de zero.'],
     [],
@@ -170,6 +175,7 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ['Avaliações positivas', `${numero(kpis.positivos)} (${numero(kpis.positivePercent)}%)`, ''],
     ['Avaliações neutras', `${numero(kpis.neutros)} (${numero(kpis.neutralPercent)}%)`, ''],
     ['Avaliações negativas', `${numero(kpis.negativos)} (${numero(kpis.negativePercent)}%)`, ''],
+    ['Sugestões', `${numero(kpis.sugestoes ?? 0)} (${numero(kpis.suggestionPercent ?? 0)}%)`, ''],
     // Só aparece se houver: é uma linha de integridade, não uma métrica. O
     // valor esperado é zero, e vê-la significa que alguma avaliação chegou com
     // um sentimento que o sistema não reconhece.
@@ -184,26 +190,27 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
 
     // ── Categorias ───────────────────────────────────────────────────────
     ['SATISFAÇÃO POR CATEGORIA'],
-    ['Onde o restaurante vai melhor e pior. Da satisfação mais baixa para a mais alta.'],
-    ['Categoria', 'Avaliações', '% do total', 'Satisfação (0-100)'],
+    ['Onde o restaurante vai melhor e pior. Da satisfação mais baixa para a mais alta. Sugestões ficam de fora: não são satisfação nem insatisfação.'],
+    ['Categoria', 'Avaliações', '% das avaliações', 'Satisfação (0-100)'],
     ...(stats?.porCategoria ?? []).map((c: { nome: string; total: number; satisfacao: number }) => [
       c.nome,
       numero(c.total),
-      kpis.totalFeedbacks ? numero((c.total / kpis.totalFeedbacks) * 100) : '',
+      avaliacoes ? numero((c.total / avaliacoes) * 100) : '',
       numero(c.satisfacao),
     ]),
     [],
   )
 
   // ── Temas ───────────────────────────────────────────────────────────────
-  // Separados por tipo: o dono quer ver o que incomoda e o que agrada como
-  // duas listas, não uma coluna que ele precisa filtrar.
+  // Separados por tipo: o dono quer ver o que incomoda, o que agrada e o que
+  // sugeriram como listas próprias, não uma coluna que ele precisa filtrar.
   const porTipo = (tipo: string) =>
     d.temas.filter((t) => tipoTemaLegivel(t.tipo) === tipo).map((t) => [t.rotulo, numero(t.quantidade)])
 
   const reclamacoes = porTipo('Reclamação')
   const elogios = porTipo('Elogio')
   const neutros = porTipo('Neutro')
+  const sugestoes = porTipo('Sugestão')
 
   linhas.push(
     ['O QUE OS CLIENTES MAIS RECLAMAM'],
@@ -216,6 +223,15 @@ export function montarLinhasCsv(d: DadosCsv): Linha[] {
     ...(elogios.length ? elogios : [['Nenhum elogio agrupado no período', '']]),
     [],
   )
+  if (sugestoes.length) {
+    linhas.push(
+      ['SUGESTÕES DOS CLIENTES'],
+      ['Ideias e pedidos de melhoria, sem relatar uma falha.'],
+      ['Assunto', 'Vezes'],
+      ...sugestoes,
+      [],
+    )
+  }
   if (neutros.length) {
     linhas.push(
       ['COMENTÁRIOS NEUTROS'],

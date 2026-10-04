@@ -95,8 +95,8 @@ export function AppSidebar() {
     return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
   }, [restauranteId])
 
-  // Numerozinho de "chegou feedback negativo" — conta desde a última vez que
-  // a aba Feedbacks foi aberta (`restaurantes.feedbacks_visto_em`). Ao
+  // Numerozinho de "chegou feedback negativo ou sugestão" — conta desde a
+  // última vez que a aba Feedbacks foi aberta (`restaurantes.feedbacks_visto_em`). Ao
   // contrário do badge de Garçons (que só some quando o bônus é pago), este é
   // notificação pura: visitar a página já resolve, então zera e marca como
   // visto no banco assim que a rota fica ativa.
@@ -105,15 +105,23 @@ export function AppSidebar() {
     if (!restauranteId) { setFeedbacksNaoLidos(0); return }
     const atualizar = () => contarFeedbacksNaoLidos(restauranteId).then(setFeedbacksNaoLidos).catch(() => {})
     atualizar()
+    // Ouve os PONTOS, que chegam logo depois da mensagem e trazem o sentimento
+    // de cada assunto. Uma mensagem vira vários pontos em sequência: espera um
+    // instante e conta uma vez só.
+    let espera: ReturnType<typeof setTimeout> | null = null
+    const agendar = () => {
+      if (espera) clearTimeout(espera)
+      espera = setTimeout(atualizar, 800)
+    }
     const ch = supabase
       .channel('sidebar-feedbacks-nao-lidos')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'feedbacks_originais', filter: `restaurante_id=eq.${restauranteId}` },
-        atualizar,
+        { event: 'INSERT', schema: 'public', table: 'feedbacks_restaurante', filter: `restaurante_id=eq.${restauranteId}` },
+        agendar,
       )
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch) }
   }, [restauranteId])
 
   // Numerozinho do WhatsApp: quantas CONVERSAS (contatos e grupos) têm

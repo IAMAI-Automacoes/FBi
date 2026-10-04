@@ -4,7 +4,7 @@ import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
   FileText, Download, FileSpreadsheet, ChevronDown, Users, ThumbsUp, ThumbsDown,
   AlertTriangle, Loader2, PartyPopper, CalendarDays, Clock,
-  Heart, MessageCircle, ChevronRight, TrendingUp,
+  Heart, MessageCircle, ChevronRight, TrendingUp, Lightbulb, Minus,
 } from 'lucide-react'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
@@ -423,8 +423,16 @@ function LayoutNovo({
   // PDF, para os três nunca mais discordarem sobre a ordem das categorias.
   const categoriasOrdenadas = stats.porCategoria || []
 
-  const elogios = temas.filter((t) => t.tipo === 'elogio').slice(0, 6)
-  const criticas = temas.filter((t) => t.tipo === 'reclamacao').slice(0, 6)
+  // "O que os clientes mais comentam": um grupo por tipo de tema, só os que têm
+  // algum tema no período. Cores iguais às dos cartões de feedback.
+  const gruposDeTemas = [
+    { tipo: 'elogio', titulo: 'Principais elogios', Icone: ThumbsUp, cor: 'text-green-700', pill: 'bg-green-50 text-green-700' },
+    { tipo: 'reclamacao', titulo: 'Principais críticas', Icone: ThumbsDown, cor: 'text-red-600', pill: 'bg-red-100 text-red-600' },
+    { tipo: 'sugestao', titulo: 'Principais sugestões', Icone: Lightbulb, cor: 'text-sky-700', pill: 'bg-sky-50 text-sky-700' },
+    { tipo: 'neutro', titulo: 'Comentários neutros', Icone: Minus, cor: 'text-slate-600', pill: 'bg-slate-100 text-slate-600' },
+  ]
+    .map((g) => ({ ...g, temas: temas.filter((t) => t.tipo === g.tipo).slice(0, 6) }))
+    .filter((g) => g.temas.length > 0)
 
   const temaCriticoCount = kpis.criticalTheme
     ? (stats.porCategoria || []).find((c) => c.nome === kpis.criticalTheme)?.total ?? 0
@@ -595,7 +603,7 @@ function LayoutNovo({
               <div className="flex shrink-0 gap-6">
                 {[
                   { valor: kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
-                  { valor: kpis.neutralPercent, cor: 'text-amber-500', dot: 'bg-amber-500', label: 'Neutras' },
+                  { valor: kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: 'Neutras' },
                   { valor: kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
                   { valor: kpis.suggestionPercent, cor: 'text-sky-600', dot: 'bg-sky-500', label: 'Sugestões' },
                 ].map((s) => (
@@ -612,7 +620,7 @@ function LayoutNovo({
                 <div className="flex h-full w-full">
                   {[
                     { n: kpis.positivos, cor: 'bg-green-500' },
-                    { n: kpis.neutros, cor: 'bg-amber-500' },
+                    { n: kpis.neutros, cor: 'bg-slate-400' },
                     { n: kpis.negativos, cor: 'bg-red-500' },
                     { n: kpis.sugestoes, cor: 'bg-sky-500' },
                   ].map((s, i) =>
@@ -785,44 +793,24 @@ function LayoutNovo({
 
             <CardNovo className="lg:col-span-2">
               <h3 className="text-base font-bold text-gray-900">O que os clientes mais comentam</h3>
-              {elogios.length === 0 && criticas.length === 0 ? (
+              {gruposDeTemas.length === 0 ? (
                 <p className="mt-4 text-sm text-gray-400">Ainda não há comentários suficientes neste período.</p>
               ) : (
                 <div className="mt-4 space-y-4">
-                  {elogios.length > 0 && (
-                    <div>
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-green-700">
-                        <ThumbsUp className="h-4 w-4" /> Principais elogios
+                  {gruposDeTemas.map((g) => (
+                    <div key={g.tipo}>
+                      <p className={cn('flex items-center gap-1.5 text-sm font-semibold', g.cor)}>
+                        <g.Icone className="h-4 w-4" /> {g.titulo}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {elogios.map((t) => (
-                          <span
-                            key={t.id}
-                            className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
-                          >
+                        {g.temas.map((t) => (
+                          <span key={t.id} className={cn('rounded-full px-2.5 py-1 text-xs font-medium', g.pill)}>
                             {t.rotulo}
                           </span>
                         ))}
                       </div>
                     </div>
-                  )}
-                  {criticas.length > 0 && (
-                    <div>
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-red-600">
-                        <ThumbsDown className="h-4 w-4" /> Principais críticas
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {criticas.map((t) => (
-                          <span
-                            key={t.id}
-                            className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-600"
-                          >
-                            {t.rotulo}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
               <Link

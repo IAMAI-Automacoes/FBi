@@ -27,6 +27,8 @@ export const VERDE_CLARO: Cor = [110, 231, 183]
 export const AMBAR: Cor = [245, 158, 11]
 export const VERMELHO: Cor = [244, 63, 94]
 export const CINZA: Cor = [148, 163, 184]
+/** Sugestão: o mesmo azul-céu da tela (sky-600) — não o azul da marca. */
+export const CEU: Cor = [2, 132, 199]
 export const CINZA_CLARO: Cor = [226, 232, 240]
 export const TINTA: Cor = [15, 23, 42]
 export const TEXTO_FRACO: Cor = [100, 116, 139]
@@ -241,7 +243,8 @@ export function linhaEvolucao(
 }
 
 /**
- * Barra única dividida em partes — a divisão positivo / neutro / negativo.
+ * Barra única dividida em partes — a divisão positivo / neutro / negativo /
+ * sugestão.
  *
  * Uma barra e não uma pizza: comparar comprimentos lado a lado é mais preciso
  * que comparar ângulos, e a barra ainda ocupa uma faixa fina em vez de um

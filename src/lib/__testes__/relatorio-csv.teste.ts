@@ -20,6 +20,7 @@ checa('vazio', sentimentoLegivel(null), 'Sem classificação')
 checa('elogio', tipoTemaLegivel('elogio'), 'Elogio')
 checa('reclamacao', tipoTemaLegivel('reclamacao'), 'Reclamação')
 checa('NEUTRO nao vira reclamacao', tipoTemaLegivel('neutro'), 'Neutro')
+checa('SUGESTAO tem tipo proprio', tipoTemaLegivel('sugestao'), 'Sugestão')
 
 const dados = {
   nomeRestaurante: 'Camelo',
@@ -28,7 +29,7 @@ const dados = {
   fim: new Date('2026-09-02T12:00:00'),
   kpis: {
     totalFeedbacks: 113, sentiment: 42, positivos: 43, positivePercent: 38,
-    neutros: 9, neutralPercent: 8, sugestoes: 0, suggestionPercent: 0, negativos: 61, negativePercent: 54,
+    neutros: 9, neutralPercent: 8, sugestoes: 13, suggestionPercent: 12, negativos: 61, negativePercent: 54,
     criticalTheme: 'Reserva', criticalPercent: 100,
     totalTrend: '+1156%', sentimentTrend: '-25 pts',
     hasPrevData: true, prevConfiavel: true,
@@ -44,6 +45,7 @@ const dados = {
     { rotulo: 'Comida fria', tipo: 'reclamacao', quantidade: 12 },
     { rotulo: 'Comida saborosa', tipo: 'elogio', quantidade: 19 },
     { rotulo: 'Opiniao neutra geral', tipo: 'neutro', quantidade: 6 },
+    { rotulo: 'Opcao vegana', tipo: 'sugestao', quantidade: 4 },
   ],
   insights: [{ titulo: 'Falhas no sistema de reservas', prioridade: 'URGENTE' }],
   acoes: [{ titulo_acao: 'Revisar reservas', status: 'EM_ANDAMENTO', prioridade: 'URGENTE', categoria: 'Reserva' }],
@@ -61,7 +63,7 @@ const achar = (t: string) => linhas.findIndex((l) => String(l[0] ?? '').startsWi
 for (const bloco of [
   'RELATÓRIO DE SATISFAÇÃO', 'COMO LER ESTA PLANILHA', 'RESUMO DO PERÍODO',
   'RESUMO EM NÚMEROS', 'SATISFAÇÃO POR CATEGORIA', 'O QUE OS CLIENTES MAIS RECLAMAM',
-  'O QUE OS CLIENTES MAIS ELOGIAM', 'COMENTÁRIOS NEUTROS', 'EVOLUÇÃO DIA A DIA',
+  'O QUE OS CLIENTES MAIS ELOGIAM', 'SUGESTÕES DOS CLIENTES', 'COMENTÁRIOS NEUTROS', 'EVOLUÇÃO DIA A DIA',
   'POR DIA DA SEMANA', 'POR FAIXA DE HORÁRIO', 'INSIGHTS ATIVOS',
   'AÇÕES EM ANDAMENTO', 'TODAS AS AVALIAÇÕES',
 ]) {
@@ -74,6 +76,15 @@ checa('nao usa ponto decimal', txt.includes('"5.8"'), false)
 checa('sentimento normalizado na lista', txt.includes('"Negativo"'), true)
 checa('elogio aparece separado das reclamacoes', achar('O QUE OS CLIENTES MAIS ELOGIAM') > achar('O QUE OS CLIENTES MAIS RECLAMAM'), true)
 checa('quebra de linha vira espaco', txt.includes('Linha 1 Linha 2'), true)
+
+// ── Sugestão: linha própria nos números, lista própria nos temas, fora da nota ──
+const linhaSug = linhas.find((l) => l[0] === 'Sugestões')
+checa('linha de Sugestões nos numeros', linhaSug?.[1], '13 (12%)')
+const iSug = achar('SUGESTÕES DOS CLIENTES')
+checa('tema de sugestao na lista de sugestoes', linhas[iSug + 3]?.[0], 'Opcao vegana')
+checa('tema de sugestao nao vai para reclamacoes', linhas.slice(achar('O QUE OS CLIENTES MAIS RECLAMAM'), achar('O QUE OS CLIENTES MAIS ELOGIAM')).some((l) => l[0] === 'Opcao vegana'), false)
+// Categoria conta só avaliações: a base do % é 113 - 13 = 100, então 44 → 44%.
+checa('% da categoria sobre as avaliacoes (sem sugestao)', linhas.find((l) => l[0] === 'Comida')?.[2], '44')
 
 // O separador e o BOM são o que faz o Excel PT-BR abrir direito.
 checa('separador ponto-e-virgula', txt.includes('";"'), true)

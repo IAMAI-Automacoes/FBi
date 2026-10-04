@@ -3,11 +3,19 @@ import { supabase } from '@/lib/supabase/client'
 export interface TemaFeedback {
   id: string
   rotulo: string
-  tipo: 'elogio' | 'reclamacao' | 'neutro' | string
+  tipo: 'elogio' | 'reclamacao' | 'neutro' | 'sugestao' | string
   quantidade: number
 }
 
-export type SentimentoFiltro = 'todos' | 'positivo' | 'negativo'
+export type SentimentoFiltro = 'todos' | 'positivo' | 'negativo' | 'neutro' | 'sugestao'
+
+/** Tipo do tema (feedback_temas.tipo) de cada filtro. */
+const TIPO_DO_FILTRO: Record<Exclude<SentimentoFiltro, 'todos'>, string> = {
+  positivo: 'elogio',
+  negativo: 'reclamacao',
+  neutro: 'neutro',
+  sugestao: 'sugestao',
+}
 
 /**
  * Temas agrupados do restaurante, contando os feedbacks dentro do período
@@ -20,7 +28,7 @@ export async function buscarTemas(
 ): Promise<TemaFeedback[]> {
   if (!restauranteId) return []
   const desde = dias > 0 ? new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString() : null
-  const tipo = sentimento === 'positivo' ? 'elogio' : sentimento === 'negativo' ? 'reclamacao' : null
+  const tipo = sentimento === 'todos' ? null : TIPO_DO_FILTRO[sentimento]
 
   const { data, error } = await supabase.rpc('temas_agrupados', {
     p_restaurante_id: restauranteId,

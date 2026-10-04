@@ -78,6 +78,8 @@ export interface DashboardData {
     positivos: number
     negativos: number
     neutros: number
+    /** Sugestões do dia/mês: aparecem no tooltip, fora da nota. */
+    sugestoes: number
   }>
   categories: CategoryScore[]
   recentFeedbacks: FeedbackItem[]
@@ -326,11 +328,16 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
   const { now, currentStart, days } = getPeriodDates(periodo)
   const currentFeedbacks = feedbacks.filter((f) => isAfter(parseISO(f.created_at), currentStart))
 
-  type Bucket = { total: number; positive: number; neutral: number }
+  // `total` são as avaliações (base da nota); sugestões contam à parte.
+  type Bucket = { total: number; positive: number; neutral: number; sugestoes: number }
 
   const addToBucket = (b: Bucket, sentimento: string | null | undefined) => {
-    // Sugestão fica fora do índice de satisfação (ver buscarVisaoGeral).
-    if (ehSugestao(sentimento)) return
+    // Sugestão fica fora do índice de satisfação (ver buscarVisaoGeral), mas
+    // aparece no tooltip.
+    if (ehSugestao(sentimento)) {
+      b.sugestoes++
+      return
+    }
     const s = sentimento?.toLowerCase()
     b.total++
     if (s === 'positivo' || s === 'positive') b.positive++
@@ -346,6 +353,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
     positivos: b.positive,
     neutros: b.neutral,
     negativos: b.total - b.positive - b.neutral,
+    sugestoes: b.sugestoes,
   })
 
   if (periodo === '7d') {
@@ -354,7 +362,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
     const grouped: Record<string, Bucket> = {}
     for (let i = days - 1; i >= 0; i--) {
       const key = format(subDays(now, i), 'EE', { locale: ptBR })
-      if (!grouped[key]) grouped[key] = { total: 0, positive: 0, neutral: 0 }
+      if (!grouped[key]) grouped[key] = { total: 0, positive: 0, neutral: 0, sugestoes: 0 }
     }
     for (const f of currentFeedbacks) {
       const key = format(parseISO(f.created_at), 'EE', { locale: ptBR })
@@ -379,6 +387,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
         total: 0,
         positive: 0,
         neutral: 0,
+        sugestoes: 0,
         label: format(d, 'd MMM', { locale: ptBR }),
       }
     }
@@ -409,7 +418,7 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
   }
   const monthMap: Record<string, Bucket> = {}
   for (const monthDate of months) {
-    monthMap[format(monthDate, 'yyyy-MM')] = { total: 0, positive: 0, neutral: 0 }
+    monthMap[format(monthDate, 'yyyy-MM')] = { total: 0, positive: 0, neutral: 0, sugestoes: 0 }
   }
   for (const f of currentFeedbacks) {
     const key = format(parseISO(f.created_at), 'yyyy-MM')

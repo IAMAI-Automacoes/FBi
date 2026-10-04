@@ -9,6 +9,7 @@ import {
   VERDE as G_VERDE,
   VERMELHO as G_VERMELHO,
   CINZA as G_CINZA,
+  CEU,
 } from './graficos'
 
 // Paleta (mesma identidade do app)
@@ -20,6 +21,21 @@ const VERDE: [number, number, number] = [16, 185, 129]
 const CINZA_NEUTRO: [number, number, number] = [148, 163, 184]
 const VERMELHO: [number, number, number] = [244, 63, 94]
 const FUNDO_SUAVE: [number, number, number] = [248, 250, 252]
+
+// Cor e título de cada tipo de tema (feedback_temas.tipo) em "O que os
+// clientes mais comentam" — as mesmas da tela.
+const COR_DO_TIPO: Record<string, [number, number, number]> = {
+  reclamacao: G_VERMELHO,
+  elogio: G_VERDE,
+  sugestao: CEU,
+  neutro: G_CINZA,
+}
+const LISTAS_DE_TEMAS = [
+  { tipo: 'reclamacao', titulo: 'O que mais incomodou' },
+  { tipo: 'elogio', titulo: 'O que mais agradou' },
+  { tipo: 'sugestao', titulo: 'O que sugeriram' },
+  { tipo: 'neutro', titulo: 'Comentários neutros' },
+]
 
 const M = 16 // margem
 const LARGURA = 210
@@ -302,6 +318,7 @@ export async function gerarPdfRelatorio(
     const pos = kpis.positivos || 0
     const neu = kpis.neutros || 0
     const neg = kpis.negativos || 0
+    const sug = kpis.sugestoes || 0
     // Percentuais vêm prontos de `buscarKpis` (mesmos números da tela) em vez
     // de recalculados aqui — evita a legenda do PDF divergir da tela se a
     // fórmula de arredondamento mudar num lugar só.
@@ -309,6 +326,7 @@ export async function gerarPdfRelatorio(
       { n: pos, pct: kpis.positivePercent ?? 0, c: VERDE, r: 'Positivas' },
       { n: neu, pct: kpis.neutralPercent ?? 0, c: CINZA_NEUTRO, r: 'Neutras' },
       { n: neg, pct: kpis.negativePercent ?? 0, c: VERMELHO, r: 'Negativas' },
+      { n: sug, pct: kpis.suggestionPercent ?? 0, c: CEU, r: 'Sugestões' },
     ]
     y = barraEmpilhada(doc, {
       x: M,
@@ -431,15 +449,18 @@ export async function gerarPdfRelatorio(
         .map((t: any) => ({
           rotulo: limpar(t.rotulo),
           valor: Number(t.quantidade ?? 0),
-          cor: tipo === 'elogio' ? G_VERDE : tipo === 'neutro' ? G_CINZA : G_VERMELHO,
+          cor: COR_DO_TIPO[tipo] ?? G_VERMELHO,
         }))
 
-    const totalReclamacoes = doTipo('reclamacao').length
-    const totalElogios = doTipo('elogio').length
-    const reclamacoes = porTipo('reclamacao')
-    const elogios = porTipo('elogio')
+    // Uma lista por tipo, nesta ordem. Sugestões e comentários neutros só
+    // aparecem quando existem — a lista vazia não é desenhada.
+    const listas = LISTAS_DE_TEMAS.map((l) => ({
+      ...l,
+      itens: porTipo(l.tipo),
+      total: doTipo(l.tipo).length,
+    }))
 
-    // Os dois lados sempre, com teto SEPARADO para cada um (8 por lista).
+    // Cada tipo com teto SEPARADO (8 por lista).
     //
     // Antes era uma lista só, cortada em 14, com as reclamações na frente — e
     // como elas são a maioria, os elogios eram empurrados para fora: o
@@ -454,15 +475,14 @@ export async function gerarPdfRelatorio(
     const notaTemas = 'Assuntos que a IA agrupou a partir do que foi escrito, e quantas vezes cada um apareceu.'
     const alturaLista = (n: number, cortado: boolean) =>
       n > 0 ? 4 + n * (5.4 + 2.6) + 1 + (cortado ? 4 : 0) : 0
-    // As DUAS listas entram no mesmo bloco: era aqui que a bagunça aparecia —
+    // As listas entram todas no mesmo bloco: era aqui que a bagunça aparecia —
     // as reclamações cabiam na página atual, os elogios não, e a lista de
     // elogios nascia sozinha na página seguinte sem repetir do que se tratava.
     blocoUnido(
       16 +
         linhasDe(notaTemas, 9) * 4.5 +
         2 +
-        alturaLista(reclamacoes.length, totalReclamacoes > 8) +
-        alturaLista(elogios.length, totalElogios > 8) +
+        listas.reduce((soma, l) => soma + alturaLista(l.itens.length, l.total > 8), 0) +
         2,
     )
     secao('O que os clientes mais comentam')
@@ -496,8 +516,7 @@ export async function gerarPdfRelatorio(
       y += 1
     }
 
-    desenharLista('O que mais incomodou', reclamacoes, totalReclamacoes, G_VERMELHO)
-    desenharLista('O que mais agradou', elogios, totalElogios, G_VERDE)
+    for (const l of listas) desenharLista(l.titulo, l.itens, l.total, COR_DO_TIPO[l.tipo])
     y += 2
   }
 
@@ -671,7 +690,7 @@ export async function gerarPdfRelatorio(
     secao('O que os clientes escreveram')
     for (const f of feedbacks) {
       const sent = String(f.sentimento || '').toLowerCase()
-      const cor = sent === 'positivo' ? VERDE : sent === 'negativo' ? VERMELHO : sent.startsWith('sugest') ? AZUL : CINZA_NEUTRO
+      const cor = sent === 'positivo' ? VERDE : sent === 'negativo' ? VERMELHO : sent.startsWith('sugest') ? CEU : CINZA_NEUTRO
       const texto = limpar(f.texto_original || f.resumo || '-')
       const linhas = doc.splitTextToSize(`"${texto}"`, UTIL - 8)
       espaco(linhas.length * 4.4 + 10)

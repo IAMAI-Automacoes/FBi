@@ -355,7 +355,8 @@ QUANDO OS DOIS SE CONTRADIZEM:
       [
         `Avaliações: ${k.totalFeedbacks}`,
         `Índice de satisfação: ${k.sentiment} de 100`,
-        `Positivas: ${k.positivos} (${k.positivePercent}%) | Neutras: ${k.neutros} (${k.neutralPercent}%) | Negativas: ${k.negativos} (${k.negativePercent}%)`,
+        `Positivas: ${k.positivos} (${k.positivePercent}%) | Neutras: ${k.neutros} (${k.neutralPercent}%) | Negativas: ${k.negativos} (${k.negativePercent}%) | Sugestões: ${k.sugestoes ?? 0} (${k.suggestionPercent ?? 0}%)`,
+        'Sugestão é ideia de melhoria do cliente, sem relatar falha: não conta como satisfação nem insatisfação.',
         k.criticalTheme && k.criticalTheme !== 'Nenhum'
           ? `Tema com mais reclamações: ${k.criticalTheme} (${k.criticalPercent}% negativas)`
           : '',

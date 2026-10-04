@@ -37,6 +37,8 @@ import {
 
 /** Azul da identidade (mesmo do PDF e do app), em hexa ARGB do Excel. */
 const AZUL = 'FF1D4ED8'
+/** Sugestão: o mesmo azul-céu da tela (sky-600) — não o azul da marca. */
+const CEU = 'FF0284C7'
 const TINTA = 'FF0F172A'
 const CINZA = 'FF64748B'
 const FUNDO_TITULO = 'FFF1F5F9'
@@ -154,7 +156,7 @@ function colorirSentimento(ws: ExcelJS.Worksheet, coluna: number, primeiraLinha 
     const v = String(cel.value ?? '')
     if (v === 'Positivo') cel.font = { color: { argb: VERDE }, bold: true, size: 10 }
     else if (v === 'Negativo') cel.font = { color: { argb: VERMELHO }, bold: true, size: 10 }
-    else if (v === 'Sugestão') cel.font = { color: { argb: AZUL }, bold: true, size: 10 }
+    else if (v === 'Sugestão') cel.font = { color: { argb: CEU }, bold: true, size: 10 }
     else cel.font = { color: { argb: CINZA }, size: 10 }
   })
 }
@@ -238,7 +240,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   const glossario: [string, string][] = [
     ['Mensagem', 'Uma vez que um cliente escreveu.'],
     ['Assunto', 'Um ponto levantado dentro de uma mensagem. Quem falou de comida e de atendimento gerou dois — por isso as abas somam mais que as mensagens.'],
-    ['Satisfação', 'Escala de 0 a 100. 100 = só positivas; 50 = tantas positivas quanto negativas; 0 = só negativas.'],
+    ['Satisfação', 'Escala de 0 a 100. 100 = só positivas; 50 = tantas positivas quanto negativas; 0 = só negativas. Sugestões não entram na conta.'],
     ['Célula vazia', 'Não houve avaliação naquele recorte — diferente de zero.'],
   ]
   const tituloGloss = resumo.getCell(inicioGlossario, 1)
@@ -260,39 +262,42 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
     wb,
     'Categorias',
     'Satisfação por categoria',
-    'Onde o restaurante vai melhor e pior, da satisfação mais baixa para a mais alta.',
+    'Onde o restaurante vai melhor e pior, da satisfação mais baixa para a mais alta. Sugestões ficam de fora: não são satisfação nem insatisfação.',
     [
       { titulo: 'Categoria', largura: 30 },
       { titulo: 'Avaliações', largura: 14, formato: '#.##0', alinhamento: 'right' },
-      { titulo: '% do total', largura: 14, formato: '0,0"%"', alinhamento: 'right' },
+      { titulo: '% das avaliações', largura: 18, formato: '0,0"%"', alinhamento: 'right' },
       { titulo: 'Satisfação (0-100)', largura: 20, formato: '#.##0', alinhamento: 'right' },
     ],
   )
+  // As categorias contam só avaliações (sem sugestão), então a base também.
+  const baseAvaliacoes = (kpis.totalFeedbacks ?? 0) - (kpis.sugestoes ?? 0)
   preencher(
     categorias,
     (stats?.porCategoria ?? []).map((c: { nome: string; total: number; satisfacao: number }) => [
       c.nome,
       num(c.total),
-      kpis.totalFeedbacks ? (c.total / kpis.totalFeedbacks) * 100 : null,
+      baseAvaliacoes ? (c.total / baseAvaliacoes) * 100 : null,
       num(c.satisfacao),
     ]),
   )
 
   // ── Aba 3: Temas ────────────────────────────────────────────────────────
-  // Reclamações, elogios e neutros na MESMA aba, separados pela coluna "Tipo":
-  // três abas quase iguais dariam mais trabalho de navegar do que um filtro.
+  // Reclamações, elogios, sugestões e neutros na MESMA aba, separados pela
+  // coluna "Tipo": quatro abas quase iguais dariam mais trabalho de navegar do
+  // que um filtro.
   const temas = criarAba(
     wb,
     'Temas',
     'O que os clientes mais comentam',
-    'Assuntos que a IA agrupou a partir do que foi escrito. Use o filtro da coluna "Tipo" para ver só reclamações ou só elogios.',
+    'Assuntos que a IA agrupou a partir do que foi escrito. Use o filtro da coluna "Tipo" para ver só reclamações, elogios ou sugestões.',
     [
       { titulo: 'Tipo', largura: 16 },
       { titulo: 'Assunto', largura: 46 },
       { titulo: 'Vezes citado', largura: 16, formato: '#.##0', alinhamento: 'right' },
     ],
   )
-  const ordemTipo: Record<string, number> = { Reclamação: 0, Elogio: 1, Neutro: 2 }
+  const ordemTipo: Record<string, number> = { Reclamação: 0, Elogio: 1, Sugestão: 2, Neutro: 3 }
   preencher(
     temas,
     [...d.temas]
@@ -300,14 +305,16 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
       .sort((a, b) => (ordemTipo[a.tipo] ?? 9) - (ordemTipo[b.tipo] ?? 9) || (b.q ?? 0) - (a.q ?? 0))
       .map((t) => [t.tipo, t.rotulo, t.q]),
   )
-  // Reclamação em vermelho, elogio em verde: a coluna "Tipo" é a primeira
-  // coisa que se lê nesta aba, e a cor evita ter que ler a palavra inteira.
+  // Reclamação em vermelho, elogio em verde, sugestão em azul-céu: a coluna
+  // "Tipo" é a primeira coisa que se lê nesta aba, e a cor evita ter que ler a
+  // palavra inteira.
   temas.eachRow((row, n) => {
     if (n < 5) return
     const cel = row.getCell(1)
     const v = String(cel.value ?? '')
     if (v === 'Reclamação') cel.font = { color: { argb: VERMELHO }, bold: true, size: 10 }
     else if (v === 'Elogio') cel.font = { color: { argb: VERDE }, bold: true, size: 10 }
+    else if (v === 'Sugestão') cel.font = { color: { argb: CEU }, bold: true, size: 10 }
     else cel.font = { color: { argb: CINZA }, size: 10 }
   })
 

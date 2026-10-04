@@ -178,14 +178,17 @@ export async function contarFeedbacksPorCategoria(
 }
 
 /**
- * Quantos feedbacks negativos (puro ou misto, ex.: "Positivo e Negativo")
+ * Quantas MENSAGENS com algo a resolver — um ponto negativo ou uma sugestão —
  * chegaram desde a última vez que o dono abriu a aba Feedbacks.
  *
- * O corte por substring — e não por igualdade com "Negativo" — é a mesma
- * leitura usada no resto do produto (ver `assuntos.ts`): "Positivo e
- * Negativo" conta como queixa, porque o cliente relatou um problema mesmo
- * tendo elogiado outra coisa na mesma mensagem. O numerozinho da barra
- * lateral segue essa regra para não subestimar o que precisa de atenção.
+ * Conta pelos pontos (`feedbacks_restaurante`), e não pelo sentimento da
+ * mensagem inteira: uma mensagem "Positivo" pode trazer uma sugestão dentro,
+ * e o sentimento geral dela não diz isso. Cada mensagem conta uma vez só
+ * (`origem_id` liga os pontos à mensagem; ponto antigo sem `origem_id` conta
+ * sozinho). O corte por substring pega "Negativo" e "Sugestão" com ou sem
+ * acento, a mesma leitura do resto do produto.
+ *
+ * O teto de linhas só existe porque o número da barra lateral para em "99+".
  */
 export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<number> {
   const { data: rest } = await supabase
@@ -196,15 +199,16 @@ export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<nu
 
   const desde = rest?.feedbacks_visto_em ?? new Date(0).toISOString()
 
-  const { count, error } = await supabase
-    .from('feedbacks_originais')
-    .select('id', { count: 'exact', head: true })
+  const { data, error } = await supabase
+    .from('feedbacks_restaurante')
+    .select('id, origem_id')
     .eq('restaurante_id', restauranteId)
     .gt('created_at', desde)
-    .ilike('sentimento', '%negativ%')
+    .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
+    .limit(1000)
 
   if (error) return 0
-  return count ?? 0
+  return new Set((data ?? []).map((f: { id: number; origem_id: string | null }) => f.origem_id ?? `linha-${f.id}`)).size
 }
 
 /** Marca a aba Feedbacks como vista agora — zera o numerozinho na barra lateral. */

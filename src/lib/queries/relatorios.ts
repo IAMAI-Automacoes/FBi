@@ -129,9 +129,15 @@ export async function buscarEstatisticasRelatorio(
   const totalMensagens = [...porTelefone.values()].reduce((soma, mensagens) => soma + mensagens.size, 0)
   const mensagensPorCliente = clientesUnicos ? Number((totalMensagens / clientesUnicos).toFixed(1)) : 0
 
+  // Os recortes abaixo (categoria, dia, horário) falam de SATISFAÇÃO, então
+  // contam só avaliações: sugestão não é satisfação nem insatisfação. Com ela
+  // dentro, uma categoria que só recebeu sugestões ficava sem nota (null) — e
+  // aparecia como "null" na tela e quebrava a ordenação.
+  const avaliacoes = fs.filter((f) => !ehSugestao(f.sentimento))
+
   // Melhor / pior categoria (exige amostra mínima para não eleger categoria de 1 avaliação)
   const porCategoria = new Map<string, any[]>()
-  for (const f of fs) {
+  for (const f of avaliacoes) {
     const c = f.categoria || 'Outros'
     if (!porCategoria.has(c)) porCategoria.set(c, [])
     porCategoria.get(c)!.push(f)
@@ -161,7 +167,7 @@ export async function buscarEstatisticasRelatorio(
 
   // Dia da semana
   const diaBuckets = new Map<number, any[]>()
-  for (const f of fs) {
+  for (const f of avaliacoes) {
     const d = getDay(parseISO(f.created_at))
     if (!diaBuckets.has(d)) diaBuckets.set(d, [])
     diaBuckets.get(d)!.push(f)
@@ -181,7 +187,7 @@ export async function buscarEstatisticasRelatorio(
 
   // Faixa de horário
   const faixaBuckets = new Map<string, any[]>()
-  for (const f of fs) {
+  for (const f of avaliacoes) {
     const nome = faixaDoHorario(parseISO(f.created_at).getHours())
     if (!faixaBuckets.has(nome)) faixaBuckets.set(nome, [])
     faixaBuckets.get(nome)!.push(f)
@@ -216,7 +222,7 @@ export async function buscarEstatisticasRelatorio(
     porFaixaHorario,
     faixaMaisMovimentada,
     faixaCritica,
-    amostraSuficiente: fs.length >= MIN_AMOSTRA,
+    amostraSuficiente: avaliacoes.length >= MIN_AMOSTRA,
   }
 }
 
@@ -314,6 +320,7 @@ function numerosPermitidos(dados: any): Set<number> {
   add(k.positivePercent)
   add(k.negativePercent)
   add(k.neutralPercent)
+  add(k.suggestionPercent)
   add(k.criticalPercent)
   add(k.sentiment)
   add(k.prevSentiment)

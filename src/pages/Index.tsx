@@ -153,7 +153,7 @@ export default function Index() {
               <div className="flex shrink-0 gap-6">
                 {[
                   { valor: data.kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
-                  { valor: data.kpis.neutralPercent, cor: 'text-amber-500', dot: 'bg-amber-500', label: 'Neutras' },
+                  { valor: data.kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: 'Neutras' },
                   { valor: data.kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
                   { valor: data.kpis.suggestionPercent, cor: 'text-sky-600', dot: 'bg-sky-500', label: 'Sugestões' },
                 ].map((s) => (
@@ -170,7 +170,7 @@ export default function Index() {
                 <div className="flex h-full w-full">
                   {[
                     { n: data.kpis.positivos, cor: 'bg-green-500' },
-                    { n: data.kpis.neutros, cor: 'bg-amber-500' },
+                    { n: data.kpis.neutros, cor: 'bg-slate-400' },
                     { n: data.kpis.negativos, cor: 'bg-red-500' },
                     { n: data.kpis.sugestoes, cor: 'bg-sky-500' },
                   ].map((s, i) =>

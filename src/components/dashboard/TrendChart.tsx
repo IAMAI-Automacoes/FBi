@@ -28,6 +28,7 @@ interface TooltipPayload {
   positivos: number
   negativos: number
   neutros: number
+  sugestoes: number
   isAtual?: boolean
 }
 
@@ -40,10 +41,13 @@ function SentimentTooltip({
 }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
+  const sugestoes = d.sugestoes > 0 ? `${d.sugestoes} sugest${d.sugestoes !== 1 ? 'ões' : 'ão'}` : ''
   if (d.avaliacoes === 0) {
+    // Dia só com sugestões não tem nota (sugestão não entra na conta), mas
+    // teve feedback — dizer "Sem feedbacks" seria mentira.
     return (
-      <div className="rounded-lg bg-foreground/90 text-white px-3 py-2 shadow-md text-xs">
-        Sem feedbacks
+      <div className="rounded-lg bg-foreground/90 text-white px-3 py-2 shadow-md text-xs whitespace-nowrap">
+        {sugestoes ? `Sem avaliações · ${sugestoes}` : 'Sem feedbacks'}
       </div>
     )
   }
@@ -58,6 +62,7 @@ function SentimentTooltip({
       <span className="text-[11px] text-emerald-50/90 whitespace-nowrap">
         {d.positivos} positivo{d.positivos !== 1 ? 's' : ''} · {d.negativos} negativo{d.negativos !== 1 ? 's' : ''}
         {d.neutros > 0 ? ` · ${d.neutros} neutro${d.neutros !== 1 ? 's' : ''}` : ''}
+        {sugestoes ? ` · ${sugestoes}` : ''}
       </span>
     </div>
   )

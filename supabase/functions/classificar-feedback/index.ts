@@ -81,7 +81,7 @@ const SCHEMA = {
       type: 'string',
       description: 'Rotulo curto, especifico, no singular. Ex.: "Comida fria".',
     },
-    tipo: { type: 'string', enum: ['elogio', 'reclamacao', 'neutro'] },
+    tipo: { type: 'string', enum: ['elogio', 'reclamacao', 'sugestao', 'neutro'] },
   },
   required: ['rotulo', 'tipo'],
 }
@@ -136,10 +136,27 @@ Deno.serve(async (req: Request) => {
     const texto = String(fb.resumo || fb.texto_original || '').trim().slice(0, 1000)
     if (!texto) return json({ ok: false, motivo: 'feedback sem texto' })
 
-    const { data: temas } = await db
+    // O tipo do tema segue o sentimento do ponto, que já veio classificado:
+    // elogio, reclamação, sugestão ou neutro — cada um com a sua aba no painel
+    // ("O que os clientes estão comentando"). Por isso a IA só vê os temas do
+    // MESMO tipo: uma sugestão nunca cai num tema de elogio, nem um comentário
+    // neutro num de reclamação. Só sem sentimento vale o tipo que a IA escolher.
+    const tipoDoPonto = ehNegativo(fb.sentimento)
+      ? 'reclamacao'
+      : ehSugestao(fb.sentimento)
+      ? 'sugestao'
+      : ehPositivo(fb.sentimento)
+      ? 'elogio'
+      : fb.sentimento
+      ? 'neutro'
+      : null
+
+    let consultaTemas = db
       .from('feedback_temas')
       .select('id, rotulo, tipo')
       .eq('restaurante_id', fb.restaurante_id)
+    if (tipoDoPonto) consultaTemas = consultaTemas.eq('tipo', tipoDoPonto)
+    const { data: temas } = await consultaTemas
       .order('quantidade', { ascending: false })
       .limit(120)
     const existentes = temas ?? []
@@ -193,17 +210,8 @@ Deno.serve(async (req: Request) => {
 
     if (!temaId) {
       const rotulo = String(parsed.rotulo || 'Outros').trim().slice(0, 80)
-      // O tipo do tema novo segue o sentimento do ponto, que já veio
-      // classificado: Sugestão é ponto a melhorar e aparece junto das
-      // reclamações; Neutro fica neutro. Só sem sentimento vale o da IA.
-      const tipoDaIA = ['elogio', 'reclamacao', 'neutro'].includes(parsed.tipo) ? parsed.tipo : 'reclamacao'
-      const tipo = ehNegativo(fb.sentimento) || ehSugestao(fb.sentimento)
-        ? 'reclamacao'
-        : ehPositivo(fb.sentimento)
-        ? 'elogio'
-        : fb.sentimento
-        ? 'neutro'
-        : tipoDaIA
+      const tipoDaIA = ['elogio', 'reclamacao', 'sugestao', 'neutro'].includes(parsed.tipo) ? parsed.tipo : 'reclamacao'
+      const tipo = tipoDoPonto ?? tipoDaIA
 
       // Reusa um tema com o mesmo rótulo (case-insensitive) se já existir — evita
       // duplicar quando dois feedbacks iguais chegam quase juntos.

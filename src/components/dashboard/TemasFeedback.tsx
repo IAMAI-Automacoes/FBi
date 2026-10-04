@@ -3,37 +3,59 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase/client'
 import { buscarTemas, type TemaFeedback, type SentimentoFiltro } from '@/lib/queries/temas'
 import { cn } from '@/lib/utils'
-import { Check, AlertTriangle, MessagesSquare } from 'lucide-react'
+import { Check, AlertTriangle, Lightbulb, MessagesSquare, Minus } from 'lucide-react'
 
 const SENTIMENTOS: { key: SentimentoFiltro; label: string }[] = [
   { key: 'todos', label: 'Todos' },
   { key: 'negativo', label: 'Negativos' },
   { key: 'positivo', label: 'Positivos' },
+  { key: 'neutro', label: 'Neutros' },
+  { key: 'sugestao', label: 'Sugestões' },
 ]
 
-function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atencao' }) {
-  const isPositivo = tom === 'positivo'
+type Tom = 'atencao' | 'positivo' | 'sugestao' | 'neutro'
+
+// Mesmas cores dos cartões de feedback (src/lib/sentimento.ts): sugestão
+// azul-céu, neutro cinza — o amarelo fica só para o misto.
+const TONS: Record<Tom, { fundo: string; bolinha: string; numero: string; titulo: string; Icone: typeof Check }> = {
+  atencao: { fundo: 'bg-red-100', bolinha: 'bg-red-500', numero: 'bg-red-600', titulo: 'text-red-600', Icone: AlertTriangle },
+  positivo: { fundo: 'bg-emerald-100', bolinha: 'bg-emerald-500', numero: 'bg-emerald-600', titulo: 'text-emerald-600', Icone: Check },
+  sugestao: { fundo: 'bg-sky-100', bolinha: 'bg-sky-500', numero: 'bg-sky-600', titulo: 'text-sky-600', Icone: Lightbulb },
+  neutro: { fundo: 'bg-slate-100', bolinha: 'bg-slate-400', numero: 'bg-slate-500', titulo: 'text-slate-500', Icone: Minus },
+}
+
+/**
+ * Os quatro grupos, na ordem em que aparecem. Em "Todos", pontos de atenção e
+ * positivos aparecem sempre; sugestões e neutros só quando há algum, para a
+ * tela não encher de listas vazias.
+ */
+const GRUPOS: Array<{
+  filtro: Exclude<SentimentoFiltro, 'todos'>
+  tipo: string
+  tom: Tom
+  titulo: string
+  vazio: string
+  sempre: boolean
+}> = [
+  { filtro: 'negativo', tipo: 'reclamacao', tom: 'atencao', titulo: 'Pontos de Atenção', vazio: 'Nenhum ponto de atenção neste período', sempre: true },
+  { filtro: 'positivo', tipo: 'elogio', tom: 'positivo', titulo: 'Sentimentos Positivos', vazio: 'Nenhum tema positivo neste período', sempre: true },
+  { filtro: 'sugestao', tipo: 'sugestao', tom: 'sugestao', titulo: 'Sugestões', vazio: 'Nenhuma sugestão neste período', sempre: false },
+  { filtro: 'neutro', tipo: 'neutro', tom: 'neutro', titulo: 'Comentários Neutros', vazio: 'Nenhum comentário neutro neste período', sempre: false },
+]
+
+function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: Tom }) {
+  const cor = TONS[tom]
   // Só existe pra rótulo cortado — clicar alterna pra mostrar inteiro. Se o
   // rótulo nem precisava cortar, o clique simplesmente não muda nada visível.
   const [expandido, setExpandido] = useState(false)
   return (
     <div
-      className={cn(
-        'flex items-center gap-2.5 rounded-full pl-2 pr-2 py-1.5 cursor-pointer',
-        isPositivo ? 'bg-emerald-100' : 'bg-red-100',
-      )}
+      className={cn('flex items-center gap-2.5 rounded-full pl-2 pr-2 py-1.5 cursor-pointer', cor.fundo)}
       onClick={() => setExpandido((v) => !v)}
       title={expandido ? 'Clique para recolher' : 'Clique para ver o rótulo inteiro'}
     >
-      <span
-        className={cn(
-          'flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0',
-          isPositivo ? 'bg-emerald-500' : 'bg-red-500',
-        )}
-      >
-        {isPositivo
-          ? <Check className="h-3 w-3" strokeWidth={3} />
-          : <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />}
+      <span className={cn('flex h-5 w-5 items-center justify-center rounded-full text-white shrink-0', cor.bolinha)}>
+        <cor.Icone className="h-3 w-3" strokeWidth={tom === 'positivo' ? 3 : 2.5} />
       </span>
       <span
         className={cn(
@@ -46,7 +68,7 @@ function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atenca
       <span
         className={cn(
           'shrink-0 min-w-[26px] text-center rounded-full text-white text-xs font-bold px-2 py-0.5 tabular-nums',
-          isPositivo ? 'bg-emerald-600' : 'bg-red-600',
+          cor.numero,
         )}
       >
         {tema.quantidade}
@@ -57,13 +79,11 @@ function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: 'positivo' | 'atenca
 
 /**
  * "O que os clientes estão comentando": os feedbacks semelhantes já agrupados em
- * temas (pela IA, no momento que chegam), em duas colunas por sentimento
- * (positivos / pontos de atenção). Temas neutros não entram aqui — continuam
- * contados normalmente no resto do dashboard, só não aparecem nesta lista.
- * As abas Todos/Positivos/Negativos controlam só a exibição (a busca sempre
- * traz tudo, então trocar de aba não recarrega). A JANELA DE TEMPO vem da
- * página, pelo prop `dias`. Atualiza sozinho por Realtime — sem recarregar a
- * página.
+ * temas (pela IA, no momento que chegam), por tipo: pontos de atenção,
+ * positivos, sugestões e neutros. As abas controlam só a exibição (a busca
+ * sempre traz tudo, então trocar de aba não recarrega). A JANELA DE TEMPO vem
+ * da página, pelo prop `dias`. Atualiza sozinho por Realtime — sem recarregar
+ * a página.
  */
 export function TemasFeedback({
   restauranteId,
@@ -98,12 +118,11 @@ export function TemasFeedback({
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId, carregar])
 
-  const positivos = temas.filter((t) => t.tipo === 'elogio')
-  const negativos = temas.filter((t) => t.tipo === 'reclamacao')
-
-  const mostrarPositivos = sentimento === 'todos' || sentimento === 'positivo'
-  const mostrarNegativos = sentimento === 'todos' || sentimento === 'negativo'
-  const nadaAgrupado = positivos.length === 0 && negativos.length === 0
+  // Em "Todos": os grupos fixos e os que têm algum tema; numa aba: só aquele grupo.
+  const grupos = GRUPOS
+    .map((g) => ({ ...g, temas: temas.filter((t) => t.tipo === g.tipo) }))
+    .filter((g) => (sentimento === 'todos' ? g.sempre || g.temas.length > 0 : g.filtro === sentimento))
+  const nadaAgrupado = grupos.every((g) => g.temas.length === 0)
 
   return (
     <Card className="shadow-subtle">
@@ -116,8 +135,9 @@ export function TemasFeedback({
           <CardTitle className="text-base font-semibold">O que os clientes estão comentando</CardTitle>
         </div>
 
-        {/* Filtro de sentimento — segmentado, discreto */}
-        <div className="inline-flex rounded-lg bg-muted/60 p-0.5 text-xs">
+        {/* Filtro de sentimento — segmentado, discreto. Com cinco abas, quebra
+            linha em tela estreita em vez de empurrar a página para o lado. */}
+        <div className="inline-flex flex-wrap rounded-lg bg-muted/60 p-0.5 text-xs">
           {SENTIMENTOS.map((s) => (
             <button
               key={s.key}
@@ -144,41 +164,19 @@ export function TemasFeedback({
             <p className="text-sm font-medium text-gray-500">Nada agrupado neste filtro ainda</p>
           </div>
         ) : (
-          <div
-            className={cn(
-              'grid gap-x-8 gap-y-6 p-5',
-              mostrarPositivos && mostrarNegativos ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1',
-            )}
-          >
-            {mostrarNegativos && (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-red-600 mb-3">
-                  Pontos de Atenção
-                </p>
+          <div className={cn('grid gap-x-8 gap-y-6 p-5', grupos.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
+            {grupos.map((g) => (
+              <div key={g.filtro}>
+                <p className={cn('text-xs font-bold uppercase tracking-wide mb-3', TONS[g.tom].titulo)}>{g.titulo}</p>
                 <div className="flex flex-col gap-2">
-                  {negativos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum ponto de atenção neste período</p>
+                  {g.temas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{g.vazio}</p>
                   ) : (
-                    negativos.map((t) => <TemaPill key={t.id} tema={t} tom="atencao" />)
+                    g.temas.map((t) => <TemaPill key={t.id} tema={t} tom={g.tom} />)
                   )}
                 </div>
               </div>
-            )}
-
-            {mostrarPositivos && (
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-600 mb-3">
-                  Sentimentos Positivos
-                </p>
-                <div className="flex flex-col gap-2">
-                  {positivos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum tema positivo neste período</p>
-                  ) : (
-                    positivos.map((t) => <TemaPill key={t.id} tema={t} tom="positivo" />)
-                  )}
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         )}
       </CardContent>
