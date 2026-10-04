@@ -28,8 +28,12 @@ function ordenar(a: MensagemWa, b: MensagemWa) {
 
 const autorChave = (m: MensagemWa) => (m.de_mim ? `eu:${m.por_api}` : m.grupo ? `g:${m.remetente ?? m.telefone}` : 'contato')
 
-/** Rolar até uma mensagem; com `termo` (veio da pesquisa), marca a palavra por 7 s. */
-export interface PedidoSalto { messageId: string; vez: number; termo?: string }
+/**
+ * Rolar até uma mensagem. Com `termo` (veio da pesquisa), marca a palavra por
+ * 7 s; com `realcar` (veio do card de feedback), destaca essas mensagens por
+ * uns segundos. `chatId` é a conversa do pedido: aberta outra, ele não vale.
+ */
+export interface PedidoSalto { chatId: string; messageId: string; vez: number; termo?: string; realcar?: string[] }
 
 export function Conversa({
   restauranteId, chatId, nome, foto, telefone, grupo, naoLidasNaAbertura, linkResponder, motivoSemLink,
@@ -51,7 +55,7 @@ export function Conversa({
   /** Link do botão "Enviar mensagem" (WhatsApp pessoal do dono); null = não dá. */
   linkResponder: string | null
   motivoSemLink: string | null
-  /** Pedido para rolar até uma mensagem (vem da pesquisa). */
+  /** Pedido para rolar até uma mensagem (vem da pesquisa ou do card de feedback). */
   salto: PedidoSalto | null
   aoVoltar: () => void
   aoAbrirContato: () => void
@@ -73,6 +77,8 @@ export function Conversa({
   const [galeria, setGaleria] = useState<number | null>(null)
   const [pdf, setPdf] = useState<{ url: string; nome: string } | null>(null)
   const [piscando, setPiscando] = useState<string | null>(null)
+  // Mensagens que viraram o feedback aberto pelo card (destaque de 4 s).
+  const [realcadas, setRealcadas] = useState<Set<string> | null>(null)
   // Palavra pesquisada marcada na própria mensagem (7 s, como pedido).
   const [marcada, setMarcada] = useState<{ messageId: string; termo: string } | null>(null)
   const [autoTocarId, setAutoTocarId] = useState<number | null>(null)
@@ -268,8 +274,8 @@ export function Conversa({
     return () => { document.removeEventListener('visibilitychange', avisar); avisarConversaAtiva(null) }
   }, [chatId, marcarSePreciso, somenteLeitura])
 
-  // ── Ir até uma mensagem (citação, pesquisa) ──
-  const irPara = useCallback(async (messageId: string, termo?: string) => {
+  // ── Ir até uma mensagem (citação, pesquisa, card de feedback) ──
+  const irPara = useCallback(async (messageId: string, termo?: string, realcar?: string[]) => {
     const achar = () => rolagem.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
     let el = achar()
     for (let tentativa = 0; !el && tentativa < 20 && temMaisRef.current; tentativa++) {
@@ -288,6 +294,12 @@ export function Conversa({
       const pedido = { messageId, termo }
       setMarcada(pedido)
       setTimeout(() => setMarcada((m) => (m === pedido ? null : m)), 7000)
+    } else if (realcar?.length) {
+      // Do card de feedback: as mensagens que viraram o feedback ficam
+      // destacadas por uns segundos e depois o destaque some devagar.
+      const ids = new Set(realcar)
+      setRealcadas(ids)
+      setTimeout(() => setRealcadas((r) => (r === ids ? null : r)), 4000)
     } else {
       // Da citação: a mensagem pisca para mostrar qual é.
       setPiscando(messageId)
@@ -296,13 +308,16 @@ export function Conversa({
   }, [carregarMais, toast])
 
   // Pula só depois da carga inicial (vindo da pesquisa da lista, a conversa
-  // abre e o pedido chega antes das mensagens) — e uma vez por pedido.
+  // abre e o pedido chega antes das mensagens) — e uma vez por pedido. Pedido
+  // de outra conversa não vale: sem isto, abrir outra conversa depois de uma
+  // pesquisa procurava aquela mensagem na conversa nova, carregava o
+  // histórico inteiro e terminava em "Mensagem não encontrada".
   const saltoFeito = useRef<number | null>(null)
   useEffect(() => {
-    if (!salto || carregando || saltoFeito.current === salto.vez) return
+    if (!salto || salto.chatId !== chatId || carregando || saltoFeito.current === salto.vez) return
     saltoFeito.current = salto.vez
-    irPara(salto.messageId, salto.termo)
-  }, [salto, carregando, irPara])
+    irPara(salto.messageId, salto.termo, salto.realcar)
+  }, [salto, chatId, carregando, irPara])
 
   // ── Galeria e áudio seguido ──
   const itensGaleria: ItemGaleria[] = useMemo(() => visiveis
@@ -401,6 +416,7 @@ export function Conversa({
                       citada={citada}
                       reacoes={reacoes.get(m.message_id) ?? []}
                       piscando={piscando === m.message_id}
+                      realcado={realcadas?.has(m.message_id) ?? false}
                       destaque={marcada?.messageId === m.message_id ? marcada.termo : undefined}
                       autoTocar={autoTocarId === m.id}
                       aoAbrirMidia={abrirMidia}

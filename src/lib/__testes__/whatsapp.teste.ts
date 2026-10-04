@@ -18,6 +18,7 @@ import {
   regexDestaque,
   trechoComTermo,
   destaqueParaTexto,
+  mensagensDoFeedback,
 } from '../whatsapp/formatacao.ts'
 
 let falhas = 0
@@ -185,6 +186,45 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
   ok('não realça pedaço de palavra parecida', marca('fira', 'friagem fria') === 'friagem [fria]', marca('fira', 'friagem fria'))
   ok('sem relação: nada', marca('pizza', 'a comida estava fria') === 'a comida estava fria')
   ok('trecho acha a palavra parecida', trechoComTermo('x'.repeat(80) + ' estava fria', 'fira').includes('fria'))
+}
+
+// ── "Ver conversa" do feedback: quais mensagens viraram aquele feedback ─────
+// Casos reais de 04/10: o buffer junta as mensagens uma por linha, e o
+// feedback é gravado depois da última. A lista vem da mais recente para trás.
+{
+  const msg = (message_id: string, texto: string | null, tipo = 'text', transcricao: string | null = null) =>
+    ({ message_id, tipo, texto, transcricao })
+  ok('feedback de duas mensagens: as duas, em ordem de envio', igual(
+    mensagensDoFeedback('A comida veio fria\nO estacionamento tem difícil acesso', [
+      msg('c', 'O estacionamento tem difícil acesso'), msg('b', 'A comida veio fria'), msg('a', 'Quem ganhou a copa do mundo'),
+    ]),
+    ['b', 'c'],
+  ))
+  ok('mensagem que chegou durante a análise é pulada', igual(
+    mensagensDoFeedback('A pizza veio fria', [msg('d', 'Tem estacionamento?'), msg('c', 'A pizza veio fria'), msg('b', 'Oi')]),
+    ['c'],
+  ))
+  ok('saudação junto com o feedback entra', igual(
+    mensagensDoFeedback('Oi\na pizza veio fria', [msg('c', 'a pizza veio fria'), msg('b', 'Oi')]),
+    ['b', 'c'],
+  ))
+  ok('"oi" não bate dentro de "foi"', igual(
+    mensagensDoFeedback('O atendimento foi ótimo', [msg('c', 'O atendimento foi ótimo'), msg('b', 'oi')]),
+    ['c'],
+  ))
+  ok('figurinha no meio não corta o bloco', igual(
+    mensagensDoFeedback('A comida\nestava fria', [msg('c', 'estava fria'), msg('s', null, 'sticker'), msg('b', 'A comida')]),
+    ['b', 'c'],
+  ))
+  ok('áudio pela transcrição', igual(
+    mensagensDoFeedback('O garçom foi muito atencioso', [msg('a1', null, 'audio', 'O garçom foi muito atencioso.')]),
+    ['a1'],
+  ))
+  ok('nada bate (transcrição diferente): a última de texto ou áudio', igual(
+    mensagensDoFeedback('Garçom atencioso', [msg('s', null, 'sticker'), msg('a1', null, 'audio', 'o garcom foi bem atencioso'), msg('x', 'oi')]),
+    ['a1'],
+  ))
+  ok('feedback sem texto e nada recebido: vazio', igual(mensagensDoFeedback(null, []), []))
 }
 
 if (falhas > 0) {

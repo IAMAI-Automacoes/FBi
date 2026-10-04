@@ -32,6 +32,8 @@ export interface PropsBalao {
   reacoes: ReacaoVisivel[]
   destaque?: string
   piscando?: boolean
+  /** Uma das mensagens do feedback aberto pelo card: a linha fica destacada. */
+  realcado?: boolean
   autoTocar?: boolean
   aoAbrirMidia: (id: number) => void
   aoAbrirPdf: (m: MensagemWa) => void
@@ -142,7 +144,7 @@ function MenuMensagem({ m }: { m: MensagemWa }) {
 }
 
 function BalaoBase({
-  m, primeiroDoGrupo, nomeContato, fotoContato, fotoRemetente, url, citada, reacoes, destaque, piscando, autoTocar,
+  m, primeiroDoGrupo, nomeContato, fotoContato, fotoRemetente, url, citada, reacoes, destaque, piscando, realcado, autoTocar,
   aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio, aoAbrirPessoa,
 }: PropsBalao) {
   const deMim = m.de_mim
@@ -231,7 +233,15 @@ function BalaoBase({
   return (
     <div
       data-message-id={m.message_id}
-      className={cn('flex px-[3%] md:px-[6%]', deMim ? 'justify-end' : 'justify-start', primeiroDoGrupo ? 'mt-2' : 'mt-0.5', reacoes.length > 0 && 'mb-3.5')}
+      className={cn(
+        'flex px-[3%] md:px-[6%] transition-colors duration-1000',
+        deMim ? 'justify-end' : 'justify-start',
+        primeiroDoGrupo ? 'mt-2' : 'mt-0.5',
+        reacoes.length > 0 && 'mb-3.5',
+        // Como o WhatsApp faz ao pular para uma mensagem: a linha inteira
+        // ganha uma faixa clara, que some devagar.
+        realcado && 'bg-[#25D366]/25',
+      )}
     >
       {colunaFoto && (
         <div className="mr-1.5 w-7 shrink-0">

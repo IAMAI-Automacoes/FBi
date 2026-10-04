@@ -8,7 +8,9 @@ import { chaveWhatsapp } from '@/lib/telefone'
 import {
   detectarAparelho, formatarTelefone, linkEnviarMensagem, nomeConversa, textoApresentacao, type ConversaWa,
 } from '@/lib/whatsapp/formatacao'
-import { fixadasDoRestaurante, fotoConhecida, fotosDeParticipantes, listarConversas, restauranteEhBusiness } from '@/lib/queries/whatsapp'
+import {
+  acharMensagensDoFeedback, fixadasDoRestaurante, fotoConhecida, fotosDeParticipantes, listarConversas, restauranteEhBusiness,
+} from '@/lib/queries/whatsapp'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { ListaConversas } from '@/components/whatsapp/ListaConversas'
 import { Conversa, type PedidoSalto } from '@/components/whatsapp/Conversa'
@@ -44,7 +46,8 @@ const AVISO_ADMIN = 'Visualização do admin: só leitura. Nada aqui marca mensa
  *
  * A URL guarda o estado (?chat=… &painel=contato|pesquisa), então o voltar do
  * celular fecha o painel / volta para a lista, e a notificação abre direto na
- * conversa. ?tel=… (vindo do card de feedback) acha a conversa pelo telefone.
+ * conversa. ?tel=… (vindo do card de feedback) acha a conversa pelo telefone;
+ * com &feedback=<id>, rola até as mensagens daquele feedback e as destaca.
  * `paramsBase` são parâmetros que toda navegação preserva (no admin,
  * ?restaurante=<id>, a escolha do restaurante).
  */
@@ -167,18 +170,27 @@ export function TelaWhatsapp({ restaurante, modo, paramsBase, className }: {
   }, [admin, restaurante.conectado])
 
   // ?tel= (card de feedback): acha a conversa pelo telefone, com ou sem o 9.
+  // Com &feedback=, pede para a conversa rolar até as mensagens que viraram
+  // aquele feedback e destacá-las.
   const tel = params.get('tel')
+  const feedbackId = params.get('feedback')
   useEffect(() => {
     if (!tel || carregando) return
     const alvo = conversas.find((c) => !c.grupo && c.telefone && chaveWhatsapp(c.telefone) === chaveWhatsapp(tel))
     if (alvo) {
       naoLidasAoAbrir.current.set(alvo.chat_id, alvo.nao_lidas)
       irPara({ chat: alvo.chat_id }, { replace: true })
+      if (feedbackId) {
+        const chat = alvo.chat_id
+        acharMensagensDoFeedback(restauranteId, chat, feedbackId)
+          .then((ids) => { if (ids.length) setSalto({ chatId: chat, messageId: ids[0], vez: Date.now(), realcar: ids }) })
+          .catch(() => {})
+      }
     } else {
       irPara({}, { replace: true })
       toast({ title: 'Ainda não há conversa com esse número', description: `${formatarTelefone(tel)} não mandou mensagem desde que o WhatsApp foi conectado ao EasyFeed.` })
     }
-  }, [tel, carregando, conversas, irPara, toast])
+  }, [tel, feedbackId, carregando, conversas, irPara, toast, restauranteId])
 
   const abrir = useCallback((id: string) => {
     if (id === chatRef.current) return
@@ -239,7 +251,7 @@ export function TelaWhatsapp({ restaurante, modo, paramsBase, className }: {
   // Resultado da pesquisa na lista: abre a conversa já na mensagem.
   const abrirNaMensagem = useCallback((id: string, messageId: string, termo: string) => {
     abrir(id)
-    setSalto({ messageId, vez: Date.now(), termo })
+    setSalto({ chatId: id, messageId, vez: Date.now(), termo })
   }, [abrir])
 
   // Dados da conversa aberta (da lista; se ainda não está nela, do próprio id).
@@ -417,7 +429,7 @@ export function TelaWhatsapp({ restaurante, modo, paramsBase, className }: {
               nome={nome}
               aoFechar={fecharPainel}
               aoEscolher={(messageId, termo) => {
-                setSalto({ messageId, vez: Date.now(), termo })
+                setSalto({ chatId, messageId, vez: Date.now(), termo })
                 if (window.innerWidth < 768) fecharPainel()
               }}
             />

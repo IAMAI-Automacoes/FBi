@@ -334,6 +334,41 @@ export function linkEnviarMensagem(p: {
   return `intent://send/?phone=${tel}&text=${txt}#Intent;scheme=whatsapp;package=${pacote};S.browser_fallback_url=${encodeURIComponent(waMe)};end`
 }
 
+// ── Feedback → mensagens da conversa ────────────────────────────────────────
+
+/**
+ * Quais mensagens do cliente viraram um feedback (o "Ver conversa" do card
+ * rola até elas e as destaca).
+ *
+ * O workflow junta as mensagens que a pessoa mandou em sequência — uma por
+ * linha no texto do feedback — e grava o feedback uns 20 a 60 s depois da
+ * última. `recebidas` são as mensagens do cliente de antes de o feedback ser
+ * gravado, da MAIS RECENTE para a mais antiga. Volta o bloco seguido de
+ * mensagens cujo texto está no feedback, em ordem de envio. Mensagem que não
+ * bate antes do bloco (chegou durante a análise) é pulada; depois do bloco,
+ * encerra. Sem nenhuma que bata (áudio transcrito de outro jeito, por
+ * exemplo), fica a última mensagem de texto ou áudio.
+ */
+export function mensagensDoFeedback(
+  textoFeedback: string | null | undefined,
+  recebidas: Array<Pick<MensagemWa, 'message_id' | 'tipo' | 'texto' | 'transcricao'>>,
+): string[] {
+  // Espaço nas pontas: a mensagem tem que bater como trecho inteiro ("oi" não
+  // bate dentro de "foi").
+  const alvo = ` ${normalizarBusca(textoFeedback)} `
+  const achadas: string[] = []
+  for (const m of recebidas) {
+    const t = normalizarBusca(m.texto || m.transcricao)
+    // Figurinha, foto sem legenda: não entram no feedback nem cortam o bloco.
+    if (!t) continue
+    if (alvo.includes(` ${t} `)) achadas.push(m.message_id)
+    else if (achadas.length) break
+  }
+  if (achadas.length) return achadas.reverse()
+  const ultima = recebidas.find((m) => m.tipo === 'text' || m.tipo === 'audio')
+  return ultima ? [ultima.message_id] : []
+}
+
 // ── Pesquisa: exatos primeiro, depois parecidos ─────────────────────────────
 // Mesmas regras de public.normalizar_busca / pesquisar_mensagens_whatsapp
 // (migration 20261002020000) — mudou aqui, muda lá.

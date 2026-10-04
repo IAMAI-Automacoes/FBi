@@ -334,6 +334,7 @@ export default function Feedbacks() {
                 categorias={fb.categorias ?? []}
                 quando={formatarDataFeedback(fb.created_at)}
                 telefoneConversa={podeVerWhatsapp ? fb.telefone_cliente : null}
+                feedbackId={fb.id}
               />
             </div>
           ))

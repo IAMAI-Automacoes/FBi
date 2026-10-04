@@ -9,7 +9,8 @@ Recebe o que os clientes mandam para o WhatsApp de feedback do restaurante (webh
 Só entram mensagens de **texto** e **áudio** (o áudio é transcrito). Foto, vídeo, figurinha, reação, documento, grupo e mensagens do próprio número são ignorados.
 
 - **Feedback** (elogio, crítica, comentário morno, sugestão): grava em `feedbacks_originais` + um `feedbacks_restaurante` por ponto, e agradece conforme o sentimento.
-- **Pergunta ou pedido sobre o restaurante** (horário, reserva, pedido…): não grava; encaminha para o número de contato das Configurações (`restaurantes.telefone_contato`). Sem número configurado, só avisa que o canal é de feedback.
+- **Pergunta ou pedido completo sobre o restaurante** (horário, reserva, pedido…): não grava; indica o número de contato das Configurações (`restaurantes.telefone_contato`) — só o número, sem link do WhatsApp. Sem número configurado, só avisa que o canal é de feedback.
+- **Pergunta incompleta** ("tenho uma dúvida", "queria saber uma coisa"), em que não dá para saber o assunto: não responde. Se a pessoa completar em seguida, o buffer junta as duas mensagens.
 - **Feedback + pergunta**: grava, agradece e encaminha, numa mensagem só.
 - **Saudação sozinha, "obrigado", "ok", emoji, assunto fora do restaurante**: não grava e não responde.
 
@@ -31,7 +32,7 @@ Saudação que chega junto com o feedback (o buffer junta as mensagens em sequê
 ## Teste depois de ativar (mande do seu celular para o número de um restaurante)
 
 1. "A comida estava ótima mas o garçom demorou" → agradecimento misto; no painel, mensagem "Positivo e negativo" com 2 pontos.
-2. "Vocês abrem domingo?" → resposta indicando o número de contato (ou só o aviso, se não houver número). Nada gravado.
+2. "Vocês abrem domingo?" → resposta indicando o número de contato, sem link (ou só o aviso, se não houver número). Nada gravado. "Tenho uma dúvida" sozinho → nenhuma resposta.
 3. "Oi" e, em até 20 s, "a pizza veio fria" → uma resposta só; feedback com o texto das duas.
 4. "Bom dia" sozinho → nenhuma resposta.
 5. "Podiam ter opção vegana" → agradecimento de sugestão; ponto "Sugestão" (azul) no painel.

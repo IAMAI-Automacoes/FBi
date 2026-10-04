@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
-import type { ConversaWa, MensagemWa } from '@/lib/whatsapp/formatacao'
+import { mensagensDoFeedback, type ConversaWa, type MensagemWa } from '@/lib/whatsapp/formatacao'
 
 /**
  * Dados da tela WhatsApp. Só leitura: quem grava mensagens_whatsapp é o n8n;
@@ -42,6 +42,35 @@ export async function buscarMensagens(
   const linhas = (data ?? []) as unknown as MensagemWa[]
   const temMais = linhas.length > TAMANHO_PAGINA
   return { mensagens: linhas.slice(0, TAMANHO_PAGINA).reverse(), temMais }
+}
+
+/**
+ * As mensagens do cliente que viraram o feedback `feedbackId`, nesta conversa
+ * (`message_id`s, em ordem de envio; vazio se não achar). Procura na meia hora
+ * antes de o feedback ser gravado — a regra está em `mensagensDoFeedback`.
+ */
+export async function acharMensagensDoFeedback(restauranteId: number, chatId: string, feedbackId: string): Promise<string[]> {
+  const { data: fb } = await supabase
+    .from('feedbacks_originais')
+    .select('created_at, texto_original')
+    .eq('id', feedbackId)
+    .maybeSingle()
+  if (!fb) return []
+  const ate = new Date(fb.created_at)
+  const { data, error } = await supabase
+    .from('mensagens_whatsapp')
+    .select('message_id, tipo, texto, transcricao')
+    .eq('restaurante_id', restauranteId)
+    .eq('chat_id', chatId)
+    .eq('de_mim', false)
+    .neq('tipo', 'reaction')
+    .gte('enviada_em', new Date(ate.getTime() - 30 * 60_000).toISOString())
+    .lte('enviada_em', ate.toISOString())
+    .order('enviada_em', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(40)
+  if (error) return []
+  return mensagensDoFeedback(fb.texto_original, (data ?? []) as Array<Pick<MensagemWa, 'message_id' | 'tipo' | 'texto' | 'transcricao'>>)
 }
 
 /** Mensagens citadas que ficaram fora das páginas carregadas. */

@@ -44,6 +44,8 @@ interface FeedbackOriginalCardProps {
   /** Telefone do cliente: mostra "Ver conversa" (abre a tela WhatsApp nele).
    *  Quem chama só passa se a pessoa pode ver o módulo whatsapp. */
   telefoneConversa?: string | null
+  /** Id do feedback: a conversa abre já rolada até as mensagens dele, destacadas. */
+  feedbackId?: string | null
 }
 
 /**
@@ -62,6 +64,7 @@ export function FeedbackOriginalCard({
   quando,
   truncar = false,
   telefoneConversa,
+  feedbackId,
 }: FeedbackOriginalCardProps) {
   const cor = coresSentimento(sentimento)
   // Só existe pra cortar em 2 linhas — clicar alterna pra mostrar inteiro. Se
@@ -126,7 +129,7 @@ export function FeedbackOriginalCard({
             })}
             {telefoneConversa && (
               <Link
-                to={`/whatsapp?tel=${encodeURIComponent(telefoneConversa)}`}
+                to={`/whatsapp?tel=${encodeURIComponent(telefoneConversa)}${feedbackId ? `&feedback=${encodeURIComponent(feedbackId)}` : ''}`}
                 className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[#128C7E] hover:bg-[#128C7E]/10"
               >
                 <WhatsappIcon className="h-3.5 w-3.5" /> Ver conversa
