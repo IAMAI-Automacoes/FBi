@@ -120,6 +120,8 @@ r = roda('Sou a última mensagem?', [linha(7, 'x', 'c'), linha(5, 'y', 'a'), lin
 ok('não é a última: para', r.length === 0)
 r = roda('Sou a última mensagem?', [linha(6, 'a comida estava fria', 'b'), linha(7, 'a comida estava fria', 'b')], { 'Guarda no buffer': meu, 'Restaurante ativo?': ativo })
 ok('evento repetido da uazapi conta uma vez', r[0]?.json.textoCompleto === 'a comida estava fria')
+r = roda('Sou a última mensagem?', [{ ...linha(6, 'oi', 'b'), message_data: '{"messageid":"b"}' }, { ...linha(7, 'oi', 'b'), message_data: '{"messageid":"b"}' }], { 'Guarda no buffer': meu, 'Restaurante ativo?': ativo })
+ok('message_data como texto também tira a repetida', r[0]?.json.textoCompleto === 'oi')
 ok('buffer vazio ({}): para', roda('Sou a última mensagem?', [{}], { 'Guarda no buffer': meu, 'Restaurante ativo?': ativo }).length === 0)
 const juntada = roda('Sou a última mensagem?', [linha(7, 'A comida estava fria. Vocês abrem domingo?', 'c')], { 'Guarda no buffer': meu, 'Restaurante ativo?': ativo })[0].json
 

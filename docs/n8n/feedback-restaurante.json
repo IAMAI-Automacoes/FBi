@@ -13,7 +13,7 @@
         -60,
         -620
       ],
-      "id": "8dbdfefa-64d0-4495-a279-dec2a67aaa65",
+      "id": "450be5fd-55ea-41e1-8816-aab2e9392938",
       "name": "Nota - Visão geral"
     },
     {
@@ -29,7 +29,7 @@
         -60,
         -220
       ],
-      "id": "dce51b84-7bb1-40fb-b81a-43d10b236602",
+      "id": "33063235-0ad5-4aae-bac5-237bd46c3a74",
       "name": "Nota - Entrada"
     },
     {
@@ -45,7 +45,7 @@
         900,
         -440
       ],
-      "id": "bd3d4ee9-666d-4b82-8146-d1991552737c",
+      "id": "bb920281-99c1-4e9d-b13a-c5cbb49c7704",
       "name": "Nota - Áudio"
     },
     {
@@ -61,7 +61,7 @@
         1940,
         -220
       ],
-      "id": "396ad5c0-30ba-4a09-ac64-7c7d2ea08518",
+      "id": "4fbb10f2-acd7-4654-a78c-d4e0b2542900",
       "name": "Nota - Buffer"
     },
     {
@@ -77,7 +77,7 @@
         3260,
         -220
       ],
-      "id": "3a755049-e1ea-4a1d-a7ba-de5f161af725",
+      "id": "358a2137-d28e-4335-907e-aacdc1efcd05",
       "name": "Nota - IA"
     },
     {
@@ -93,7 +93,7 @@
         3900,
         -440
       ],
-      "id": "f8b0ef6c-fc68-460e-8680-236ffe1b7a0d",
+      "id": "648726a6-b6f2-43a1-be0e-627110c2a2a7",
       "name": "Nota - Grava e responde"
     },
     {
@@ -108,7 +108,7 @@
         0,
         0
       ],
-      "id": "2d271866-c054-4e99-bb1c-b3636572d484",
+      "id": "dda76337-7ded-4729-889b-2b71f7f46ae3",
       "name": "Recebe mensagem",
       "webhookId": "97408caf-b261-4434-9601-0c1a99650276"
     },
@@ -122,7 +122,7 @@
         220,
         0
       ],
-      "id": "98c3e5ea-6059-4c5a-820d-828138e28614",
+      "id": "34c3d491-8505-42b5-a0e0-3a6bdbe39e9e",
       "name": "Lê a mensagem"
     },
     {
@@ -146,7 +146,7 @@
         440,
         0
       ],
-      "id": "57b51e21-3fc2-4285-9f1d-df042d364fc4",
+      "id": "2c542d02-bc43-4f24-a2dd-c52c0465f179",
       "name": "Acha o restaurante",
       "credentials": {
         "supabaseApi": {
@@ -169,7 +169,7 @@
         660,
         0
       ],
-      "id": "cab17f1d-fb55-4ecc-9452-5422c61d76a1",
+      "id": "66fa69cc-decf-4a1d-9d46-d100277ce1fe",
       "name": "Restaurante ativo?"
     },
     {
@@ -183,7 +183,7 @@
           },
           "conditions": [
             {
-              "id": "ccc1e300-b7cd-46f9-b3e3-012b78bdde54",
+              "id": "0e283104-17f8-4bfd-aec6-951cef359972",
               "leftValue": "={{ $json.tipo === 'audio' }}",
               "rightValue": "",
               "operator": {
@@ -203,7 +203,7 @@
         880,
         0
       ],
-      "id": "30027c91-f1d5-4215-bb2c-13e6ee7269d7",
+      "id": "c1696319-38f0-45ec-8d3e-71994a56a1ef",
       "name": "É áudio?"
     },
     {
@@ -232,7 +232,7 @@
         1100,
         -200
       ],
-      "id": "176d5bf6-9c8a-4b5e-a4d7-a8ed7b667529",
+      "id": "563a308f-e40c-43db-a971-6d8d8b9fe3b7",
       "name": "Baixa o áudio",
       "retryOnFail": true,
       "maxTries": 2,
@@ -254,7 +254,7 @@
         1320,
         -200
       ],
-      "id": "ea45923a-7337-48c2-9da3-5fefb1bfabaa",
+      "id": "50642471-4ed4-46bf-8752-93894b63361a",
       "name": "Converte o áudio",
       "onError": "continueRegularOutput"
     },
@@ -272,7 +272,7 @@
         1540,
         -200
       ],
-      "id": "30320908-ed7a-4c7e-983b-cd620262c574",
+      "id": "e2ae66b7-7b66-4214-b206-403837b49eff",
       "name": "Transcreve o áudio",
       "credentials": {
         "openAiApi": {
@@ -295,7 +295,7 @@
         1760,
         -200
       ],
-      "id": "866d8b6e-b22e-48de-8cd7-2cced4c22f84",
+      "id": "4ffeb090-0a91-41f7-8310-3e93f12589f7",
       "name": "Texto do áudio"
     },
     {
@@ -324,7 +324,7 @@
         1980,
         0
       ],
-      "id": "120dde17-6b40-4ebb-997c-6e364f4c88d2",
+      "id": "f4b572a5-77d1-4931-b5ea-69acfb610046",
       "name": "Guarda no buffer",
       "credentials": {
         "supabaseApi": {
@@ -348,9 +348,9 @@
         2200,
         0
       ],
-      "id": "dac6d2dd-514a-419c-8395-0c5331552e24",
+      "id": "7596a1c8-8d07-4a0f-aa82-9c3764382b20",
       "name": "Espera 20 segundos",
-      "webhookId": "9a40aef6-1db0-4b30-8630-06dfadd0dcdd"
+      "webhookId": "e8a92c69-9a30-45b5-99e5-e504485d499b"
     },
     {
       "parameters": {
@@ -373,7 +373,7 @@
         2420,
         0
       ],
-      "id": "a913d8f7-31b7-4c86-a95a-52ca736fd349",
+      "id": "11c74605-a366-40fe-be44-e616faec725f",
       "name": "Lê o buffer",
       "credentials": {
         "supabaseApi": {
@@ -388,7 +388,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Junta as mensagens que a pessoa mandou em sequência.\n// Cada mensagem espera 20 s; só segue quem for a ÚLTIMA da conversa naquele\n// momento — se chegou outra depois, é ela que vai juntar tudo.\nconst meu = $('Guarda no buffer').first().json;\nconst linhas = $input.all()\n  .map((i) => i.json || {})\n  .filter((r) => r.id != null && r.remote_id === meu.remote_id);\nif (!linhas.length) return [];\n\nlinhas.sort((a, b) => Number(a.id) - Number(b.id));\nconst ultima = linhas[linhas.length - 1];\nif (Number(ultima.id) !== Number(meu.id)) return [];\n\n// A uazapi às vezes entrega o mesmo evento duas vezes: tira as repetidas.\nconst vistos = new Set();\nconst textos = [];\nfor (const r of linhas) {\n  const d = r.message_data && typeof r.message_data === 'object' ? r.message_data : {};\n  if (d.messageid) {\n    if (vistos.has(d.messageid)) continue;\n    vistos.add(d.messageid);\n  }\n  const t = String(r.message_content || '').trim();\n  if (t) textos.push(t);\n}\nconst textoCompleto = textos.join('\\n').slice(0, 6000).trim();\nif (!textoCompleto) return [];\n\nconst base = $('Restaurante ativo?').first().json;\nreturn [{ json: { ...base, textoCompleto, ateId: Number(ultima.id), remoteId: meu.remote_id } }];"
+        "jsCode": "// Junta as mensagens que a pessoa mandou em sequência.\n// Cada mensagem espera 20 s; só segue quem for a ÚLTIMA da conversa naquele\n// momento — se chegou outra depois, é ela que vai juntar tudo.\nconst meu = $('Guarda no buffer').first().json;\nconst linhas = $input.all()\n  .map((i) => i.json || {})\n  .filter((r) => r.id != null && r.remote_id === meu.remote_id);\nif (!linhas.length) return [];\n\nlinhas.sort((a, b) => Number(a.id) - Number(b.id));\nconst ultima = linhas[linhas.length - 1];\nif (Number(ultima.id) !== Number(meu.id)) return [];\n\n// A uazapi às vezes entrega o mesmo evento duas vezes: tira as repetidas.\nconst vistos = new Set();\nconst textos = [];\nfor (const r of linhas) {\n  let d = r.message_data;\n  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }\n  if (!d || typeof d !== 'object') d = {};\n  if (d.messageid) {\n    if (vistos.has(d.messageid)) continue;\n    vistos.add(d.messageid);\n  }\n  const t = String(r.message_content || '').trim();\n  if (t) textos.push(t);\n}\nconst textoCompleto = textos.join('\\n').slice(0, 6000).trim();\nif (!textoCompleto) return [];\n\nconst base = $('Restaurante ativo?').first().json;\nreturn [{ json: { ...base, textoCompleto, ateId: Number(ultima.id), remoteId: meu.remote_id } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -396,7 +396,7 @@
         2640,
         0
       ],
-      "id": "4278fa6c-7dd4-4145-b5f7-5987e7c91ea1",
+      "id": "129fc771-5a47-4781-85a3-372ab5496c92",
       "name": "Sou a última mensagem?"
     },
     {
@@ -425,7 +425,7 @@
         2860,
         0
       ],
-      "id": "9e1182b9-b03c-43f6-a415-1ec6af52b297",
+      "id": "4b9692a5-a137-48cb-befa-4cf57dd4fb39",
       "name": "Limpa o buffer",
       "credentials": {
         "supabaseApi": {
@@ -460,7 +460,7 @@
         2860,
         220
       ],
-      "id": "955e694b-8614-4f42-a0fe-85a989ff09ec",
+      "id": "b98e9089-644d-4aa6-8167-36fe0cdcd392",
       "name": "Limpa buffer antigo",
       "credentials": {
         "supabaseApi": {
@@ -481,7 +481,7 @@
         3080,
         0
       ],
-      "id": "18edf5fd-37bf-4901-a765-c77eadf26110",
+      "id": "f51c3215-04db-4d9b-8f89-b9af16c87f99",
       "name": "Segue com a mensagem",
       "executeOnce": true
     },
@@ -504,7 +504,7 @@
         3320,
         0
       ],
-      "id": "76bab1f3-6a8f-4360-8318-638ce52213ac",
+      "id": "d7de1967-4ab8-41ee-b2c3-f309c775a76a",
       "name": "Analisa a mensagem",
       "executeOnce": true,
       "retryOnFail": true,
@@ -533,7 +533,7 @@
         3320,
         220
       ],
-      "id": "e92ed95a-a4af-42eb-8115-7d751336e238",
+      "id": "2fcb4a3f-2fb5-4429-94e3-3c5a00a9f15e",
       "name": "Modelo de análise",
       "credentials": {
         "openAiApi": {
@@ -552,7 +552,7 @@
         3560,
         0
       ],
-      "id": "0a406a81-ccfb-4a78-bace-e78bb3ce9302",
+      "id": "addd7f5e-2ea8-4a14-bec5-4f22f1b85fa2",
       "name": "Monta a resposta"
     },
     {
@@ -566,7 +566,7 @@
           },
           "conditions": [
             {
-              "id": "19cc6fb2-d1b9-407d-890e-543125a1c6b5",
+              "id": "2a5cf753-bacd-4ff1-ad27-e32042281be9",
               "leftValue": "={{ $json.ehFeedback === true }}",
               "rightValue": "",
               "operator": {
@@ -586,7 +586,7 @@
         3780,
         0
       ],
-      "id": "9f09dbee-439f-4604-8079-1805e5fd367c",
+      "id": "ab6da76e-e32e-49cf-9837-68289dcd49ac",
       "name": "É feedback?"
     },
     {
@@ -619,7 +619,7 @@
         4000,
         -180
       ],
-      "id": "8e640cae-ae20-40a2-960c-c9f2b06b8613",
+      "id": "ec586cfe-65f7-4db3-a887-8c6597374510",
       "name": "Salva a mensagem",
       "credentials": {
         "supabaseApi": {
@@ -641,7 +641,7 @@
         4220,
         -180
       ],
-      "id": "6acf66a8-670f-43f8-9f8c-6058078b254a",
+      "id": "2aabd295-1b63-482f-8a98-42601c70f5bb",
       "name": "Separa os pontos"
     },
     {
@@ -686,7 +686,7 @@
         4440,
         -180
       ],
-      "id": "8d97b91d-685a-4dbd-8170-541e25a6a745",
+      "id": "b35befe2-64f5-4a75-9a24-0d5b5751631c",
       "name": "Salva os pontos",
       "credentials": {
         "supabaseApi": {
@@ -708,7 +708,7 @@
         4660,
         -180
       ],
-      "id": "d8ecd09e-e2da-47b9-8f87-c37b6af7ebbd",
+      "id": "fca2893b-d5df-4b72-a995-bd06a2fb173c",
       "name": "Segue para a resposta",
       "executeOnce": true
     },
@@ -723,7 +723,7 @@
           },
           "conditions": [
             {
-              "id": "e3b4adfb-8fd8-4c36-949e-472b016a4f7c",
+              "id": "e4ed65b1-458f-46c0-a6ba-4baa14041ce1",
               "leftValue": "={{ typeof $json.resposta === 'string' && $json.resposta.trim().length > 0 }}",
               "rightValue": "",
               "operator": {
@@ -743,7 +743,7 @@
         4880,
         0
       ],
-      "id": "9fdf19f2-7b18-420c-9bbb-762d3c9820cc",
+      "id": "656712bf-d87b-4de9-b44c-52c81f550e9e",
       "name": "Tem resposta?"
     },
     {
@@ -772,7 +772,7 @@
         5100,
         -20
       ],
-      "id": "6c38b1ce-6314-472e-91f6-b92f3fddb962",
+      "id": "55afb8b5-7b48-4ca8-a796-06e4fcd6abaa",
       "name": "Envia a resposta",
       "retryOnFail": true,
       "maxTries": 2,
