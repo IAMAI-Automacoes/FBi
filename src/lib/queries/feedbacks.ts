@@ -54,6 +54,11 @@ export async function buscarFeedbacks(filtros: FiltrosFeedback, limit: number, o
       query = query.ilike('sentimento', '%positivo%').not('sentimento', 'ilike', '%negativo%')
     } else if (filtros.sentimento === 'negativo') {
       query = query.ilike('sentimento', '%negativo%').not('sentimento', 'ilike', '%positivo%')
+    } else if (filtros.sentimento === 'sugestao') {
+      // Por pedaço sem acento: pega "Sugestão" e "sugestao".
+      query = query.ilike('sentimento', '%sugest%')
+    } else if (filtros.sentimento === 'neutro') {
+      query = query.ilike('sentimento', 'neutro')
     } else {
       query = query.ilike('sentimento', filtros.sentimento)
     }
@@ -149,7 +154,9 @@ export async function contarFeedbacksPorCategoria(
   }
 
   if (filtros.sentimento && filtros.sentimento !== 'all') {
-    query = query.ilike('sentimento', `%${filtros.sentimento}%`)
+    // 'sugestao' (chave do filtro, sem acento) precisa achar "Sugestão".
+    const termo = filtros.sentimento === 'sugestao' ? 'sugest' : filtros.sentimento
+    query = query.ilike('sentimento', `%${termo}%`)
   }
 
   if (filtros.busca) {

@@ -154,6 +154,7 @@ function colorirSentimento(ws: ExcelJS.Worksheet, coluna: number, primeiraLinha 
     const v = String(cel.value ?? '')
     if (v === 'Positivo') cel.font = { color: { argb: VERDE }, bold: true, size: 10 }
     else if (v === 'Negativo') cel.font = { color: { argb: VERMELHO }, bold: true, size: 10 }
+    else if (v === 'Sugestão') cel.font = { color: { argb: AZUL }, bold: true, size: 10 }
     else cel.font = { color: { argb: CINZA }, size: 10 }
   })
 }
@@ -202,6 +203,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
     ['Avaliações positivas', num(kpis.positivos), `${kpis.positivePercent ?? 0}% do total`],
     ['Avaliações neutras', num(kpis.neutros), `${kpis.neutralPercent ?? 0}% do total`],
     ['Avaliações negativas', num(kpis.negativos), `${kpis.negativePercent ?? 0}% do total`],
+    ['Sugestões', num(kpis.sugestoes ?? 0), `${kpis.suggestionPercent ?? 0}% do total`],
     // Linha de integridade, não métrica: o valor esperado é zero.
     ...(kpis.semClassificacao > 0
       ? [['Sem classificação de sentimento', num(kpis.semClassificacao), 'verifique com o suporte']]

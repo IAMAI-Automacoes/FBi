@@ -671,7 +671,7 @@ export async function gerarPdfRelatorio(
     secao('O que os clientes escreveram')
     for (const f of feedbacks) {
       const sent = String(f.sentimento || '').toLowerCase()
-      const cor = sent === 'positivo' ? VERDE : sent === 'negativo' ? VERMELHO : CINZA_NEUTRO
+      const cor = sent === 'positivo' ? VERDE : sent === 'negativo' ? VERMELHO : sent.startsWith('sugest') ? AZUL : CINZA_NEUTRO
       const texto = limpar(f.texto_original || f.resumo || '-')
       const linhas = doc.splitTextToSize(`"${texto}"`, UTIL - 8)
       espaco(linhas.length * 4.4 + 10)

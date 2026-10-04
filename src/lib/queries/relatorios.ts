@@ -1,3 +1,4 @@
+import { ehSugestao } from '@/lib/sentimento'
 import { supabase } from '@/lib/supabase/client'
 import {
   buscarKpis,
@@ -19,7 +20,9 @@ import { ptBR } from 'date-fns/locale'
 const MIN_AMOSTRA = 3
 
 /** Índice de satisfação 0-100: positivo=100, neutro=50, negativo=0. */
-function calcSatisfacao(fs: any[]): number | null {
+function calcSatisfacao(todos: any[]): number | null {
+  // Sugestão não é satisfação nem insatisfação: fica fora do índice.
+  const fs = todos.filter((f) => !ehSugestao(f.sentimento))
   if (!fs.length) return null
   let pos = 0
   let neu = 0

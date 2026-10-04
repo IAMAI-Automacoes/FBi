@@ -38,6 +38,7 @@ import {
 import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
 import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
+import { polaridade } from '../_shared/sentimento.ts'
 
 const AGENTE = 'sugeridor_acoes'
 const AGENTE_VERIFICADOR = 'verificador_acoes'
@@ -215,8 +216,9 @@ async function pontosNovosDoAssunto(
   return (data ?? [])
     .filter((f: any) => !jaLigados.has(f.id))
     .filter((f: any) => {
-      const negativo = (f.sentimento || '').toLowerCase().includes('negativ')
-      return balde === 'neg' ? negativo : !negativo
+      // Sugestão vai com a queixa ('neg'); Neutro não entra em nenhum balde.
+      const p = polaridade(f.sentimento)
+      return p !== 'neutro' && p === balde
     })
     .map((f: any) => ({
       id: f.id,

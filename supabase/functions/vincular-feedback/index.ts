@@ -61,6 +61,7 @@ import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { talvezAlertarDono } from '../_shared/alerta-urgente.ts'
+import { polaridade } from '../_shared/sentimento.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
@@ -261,6 +262,13 @@ Deno.serve(async (req: Request) => {
       return json({ status: 'sem_texto' })
     }
 
+    // Neutro aparece como feedback, mas não é lido para gerar insight
+    // (decisão do Raver, 04/10/2026): não vincula a insight nem a ação.
+    if (polaridade(fb.sentimento) === 'neutro') {
+      await concluirTriagem(db, fb.id)
+      return json({ status: 'neutro_fora_dos_insights' })
+    }
+
     // Triagem de urgencia ANTES de decidir o vinculo.
     //
     // Vem antes porque as duas coisas sao independentes e a urgencia nao pode
@@ -311,7 +319,8 @@ Deno.serve(async (req: Request) => {
     // O insight ativo do mesmo tema, se houver. Não é destino imediato: ver o passo 2.
     let vivoDoTema: { id: string } | null = null
     if (fb.tema_id) {
-      const negativo = (fb.sentimento || '').toLowerCase().includes('negativ')
+      // Sugestão é ponto a melhorar: mesmo balde da queixa.
+      const negativo = polaridade(fb.sentimento) === 'neg'
       const chaveEsperada = `tema:${fb.tema_id}|${negativo ? 'neg' : 'pos'}`
 
       const { data: doTema } = await db
@@ -361,7 +370,7 @@ Deno.serve(async (req: Request) => {
     //
     // Mesma decisão já tomada em `categorizar-acao`: filtro de código, porque a
     // regra é absoluta e prompt não segura.
-    const feedbackNegativo = String(fb.sentimento ?? '').toLowerCase().includes('negativ')
+    const feedbackNegativo = polaridade(fb.sentimento) === 'neg'
     // deno-lint-ignore no-explicit-any
     const polaridadeBate = (i: any) => {
       const chave = String(i.assunto_chave ?? '')

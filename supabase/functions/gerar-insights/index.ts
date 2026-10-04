@@ -46,6 +46,7 @@ import {
   type CamposAvaliacao,
 } from '../_shared/avaliacao.ts'
 import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
+import { polaridade } from '../_shared/sentimento.ts'
 import { ferramentaHistoricoDoAssunto, ferramentaLerOriginal } from '../_shared/ferramentas-feedback.ts'
 
 const corsHeaders = {
@@ -407,7 +408,7 @@ async function avaliarImportancia(
     memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
     conhecimento: ctx.conhecimento ? `## Boas praticas de referencia
 ${ctx.conhecimento}` : '',
-    tipo: assunto.chave.endsWith('|neg') ? 'QUEIXA' : 'ELOGIO ou NEUTRO',
+    tipo: assunto.chave.endsWith('|neg') ? 'QUEIXA ou SUGESTAO DE MELHORIA' : 'ELOGIO',
     categoria: assunto.categoria ?? 'Outros',
     pessoas: String(assunto.pessoas),
     positivos: String(assunto.positivosDoTema ?? 0),
@@ -1114,7 +1115,9 @@ function vinculoPlausivel(ponto: any, insight: InsightCriado): boolean {
     : insight.chave.endsWith('|neg')
     ? 'neg'
     : null
-  const polaridadePonto = String(ponto.sentimento ?? '').toLowerCase().includes('negativ') ? 'neg' : 'pos'
+  // Sugestão é ponto a melhorar ('neg'); Neutro não entra em insight nenhum.
+  const polaridadePonto = polaridade(ponto.sentimento)
+  if (polaridadePonto === 'neutro') return false
   if (polaridadeInsight && polaridadeInsight !== polaridadePonto) return false
 
   const temaInsight = insight.chave.startsWith('tema:')

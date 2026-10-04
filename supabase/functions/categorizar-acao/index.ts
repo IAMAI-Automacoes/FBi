@@ -399,12 +399,13 @@ async function vincularFeedbacks(
   // "resolvemos o seu problema" sobre um elogio. Vira filtro de código porque a
   // regra é absoluta — ação operacional conserta problema.
   //
-  // `%negativ%` cobre "Negativo" e o misto "Positivo e Negativo".
+  // `%negativ%` cobre "Negativo" e o misto "Positivo e Negativo"; `%sugest%`,
+  // a Sugestão — que é ponto a melhorar (decisão do Raver, 04/10/2026).
   const { data: livres } = await db
     .from('feedbacks_livres')
     .select('id, texto_original, resumo, sentimento, origem_id, categoria, tema_id')
     .eq('restaurante_id', ctx.restauranteId)
-    .ilike('sentimento', '%negativ%')
+    .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
     .gte('created_at', limite)
     .not('tema_id', 'is', null)
 

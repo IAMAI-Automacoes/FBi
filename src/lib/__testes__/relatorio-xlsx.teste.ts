@@ -23,7 +23,7 @@ const dados = {
   fim: new Date('2026-09-02T12:00:00'),
   kpis: {
     totalMensagens: 42, totalFeedbacks: 113, sentiment: 42,
-    positivos: 43, positivePercent: 38, neutros: 9, neutralPercent: 8,
+    positivos: 43, positivePercent: 38, neutros: 9, neutralPercent: 8, sugestoes: 0, suggestionPercent: 0,
     negativos: 61, negativePercent: 54, semClassificacao: 0,
     criticalTheme: 'Reserva', criticalPercent: 100,
     totalTrend: '+1156%', sentimentTrend: '-25 pts', mensagensTrend: '+80%',

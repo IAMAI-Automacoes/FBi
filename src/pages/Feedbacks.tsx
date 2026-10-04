@@ -229,6 +229,8 @@ export default function Feedbacks() {
               <SelectItem value="positivo">Positivo</SelectItem>
               <SelectItem value="negativo">Negativo</SelectItem>
               <SelectItem value="positivo e negativo">Positivo e negativo</SelectItem>
+              <SelectItem value="neutro">Neutro</SelectItem>
+              <SelectItem value="sugestao">Sugestão</SelectItem>
             </SelectContent>
           </Select>
 

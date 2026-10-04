@@ -28,6 +28,7 @@
 
 import { avaliarGravidade, type NivelGravidade } from './gravidade.ts'
 import { assuntoElegivel, pessoasNecessarias, pontuarAssunto } from './limiar.ts'
+import { entraEmInsight, polaridade } from './sentimento.ts'
 
 export interface PontoBruto {
   id: number
@@ -77,9 +78,12 @@ function textoDoPonto(p: PontoBruto): string {
   return (p.texto_original || p.resumo || '').trim()
 }
 
-/** Mesma leitura por substring usada no resto do produto: 'Positivo e Negativo' conta como queixa. */
+/**
+ * Ponto a melhorar? Queixa (inclui o misto 'Positivo e Negativo') e Sugestão
+ * caem no mesmo balde — regra única em `sentimento.ts`.
+ */
 function ehNegativo(sentimento: string | null): boolean {
-  return (sentimento || '').toLowerCase().includes('negativ')
+  return polaridade(sentimento) === 'neg'
 }
 
 /**
@@ -120,6 +124,9 @@ export function agruparEmAssuntos(
   const grupos = new Map<string, PontoBruto[]>()
   for (const p of pontos) {
     if (!textoDoPonto(p)) continue // ponto sem texto não sustenta nada
+    // Neutro aparece como feedback, mas não é lido para gerar insight. O banco
+    // já não o entrega (feedbacks_para_geracao); aqui é a segunda trava.
+    if (!entraEmInsight(p.sentimento)) continue
     // Queixa e elogio do mesmo tema são assuntos DIFERENTES.
     //
     // Sem esta separação, o tema "Ambiente" juntava "o ambiente era ruim" com

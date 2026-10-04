@@ -28,6 +28,7 @@ import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
+import { ehNegativo, ehPositivo, ehSugestao } from '../_shared/sentimento.ts'
 
 const AGENTE = 'classificador_feedback'
 
@@ -192,7 +193,17 @@ Deno.serve(async (req: Request) => {
 
     if (!temaId) {
       const rotulo = String(parsed.rotulo || 'Outros').trim().slice(0, 80)
-      const tipo = ['elogio', 'reclamacao', 'neutro'].includes(parsed.tipo) ? parsed.tipo : 'reclamacao'
+      // O tipo do tema novo segue o sentimento do ponto, que já veio
+      // classificado: Sugestão é ponto a melhorar e aparece junto das
+      // reclamações; Neutro fica neutro. Só sem sentimento vale o da IA.
+      const tipoDaIA = ['elogio', 'reclamacao', 'neutro'].includes(parsed.tipo) ? parsed.tipo : 'reclamacao'
+      const tipo = ehNegativo(fb.sentimento) || ehSugestao(fb.sentimento)
+        ? 'reclamacao'
+        : ehPositivo(fb.sentimento)
+        ? 'elogio'
+        : fb.sentimento
+        ? 'neutro'
+        : tipoDaIA
 
       // Reusa um tema com o mesmo rótulo (case-insensitive) se já existir — evita
       // duplicar quando dois feedbacks iguais chegam quase juntos.

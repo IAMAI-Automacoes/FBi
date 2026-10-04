@@ -232,10 +232,14 @@ function avaliarPorLexico(texto: string): ResultadoGravidade {
  * reclamação — só as severas.
  */
 function pisoPorSentimento(sentimento?: string | null): NivelGravidade {
-  const s = (sentimento || '').toLowerCase()
+  const s = (sentimento || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
   // Cobre 'Negativo' e também o misto 'Positivo e Negativo': se há parte
   // negativa, há queixa.
-  return s.includes('negativ') ? 2 : 0
+  if (s.includes('negativ')) return 2
+  // Sugestão é ponto a melhorar: o nível de melhoria do léxico ("sugiro",
+  // "seria bom se"…), nunca queixa nem urgência.
+  if (s.includes('sugest')) return 1
+  return 0
 }
 
 /**
@@ -254,7 +258,7 @@ export function avaliarGravidade(texto: string, sentimento?: string | null): Res
 
   return {
     G: piso,
-    termos: ['sentimento negativo (sem expressao especifica no lexico)'],
+    termos: [piso === 1 ? 'sugestao do cliente (melhoria)' : 'sentimento negativo (sem expressao especifica no lexico)'],
     // Confiança baixa de propósito: sabemos que é queixa, não sabemos o quanto
     // é grave. É exatamente o caso em que vale a IA ler a mensagem original.
     confianca: 'baixa',

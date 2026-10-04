@@ -1,3 +1,4 @@
+import { ehSugestao } from '@/lib/sentimento'
 import { supabase } from '@/lib/supabase/client'
 import { subDays, isAfter, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -44,9 +45,12 @@ export interface DashboardData {
     positivos: number
     negativos: number
     neutros: number
+    /** Pontos de Sugestão. Fatia própria na divisão; não entram no índice de satisfação. */
+    sugestoes: number
     positivePercent: number
     negativePercent: number
     neutralPercent: number
+    suggestionPercent: number
     /**
      * Avaliações cujo sentimento não é positivo, negativo nem neutro.
      *
@@ -184,6 +188,10 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     const s = f.sentimento?.toLowerCase()
     return s === 'neutro' || s === 'neutral'
   }
+  // Sugestão não é satisfação nem insatisfação: aparece como fatia própria na
+  // divisão, mas fica fora do índice e do NPS (senão contaria como nota 0).
+  const isSugestao = (f: any) => ehSugestao(f.sentimento)
+  const avaliativos = (arr: any[]) => arr.filter((f) => !isSugestao(f))
 
   // Contagens absolutas do período atual (métricas diretas que o dono entende)
   const positivos = currentFeedbacks.filter(isPositivo).length
@@ -200,10 +208,12 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   // Hoje não há sentimento fora dos três valores (conferido no banco), então
   // isto é uma trava para o dia em que houver.
   const neutros = currentFeedbacks.filter(isNeutro).length
-  const semClassificacao = totalFeedbacks - positivos - negativos - neutros
+  const sugestoes = currentFeedbacks.filter(isSugestao).length
+  const semClassificacao = totalFeedbacks - positivos - negativos - neutros - sugestoes
   const positivePercent = totalFeedbacks ? Math.round((positivos / totalFeedbacks) * 100) : 0
   const negativePercent = totalFeedbacks ? Math.round((negativos / totalFeedbacks) * 100) : 0
   const neutralPercent = totalFeedbacks ? Math.round((neutros / totalFeedbacks) * 100) : 0
+  const suggestionPercent = totalFeedbacks ? Math.round((sugestoes / totalFeedbacks) * 100) : 0
 
   // % positivo do período anterior — só para a seta de tendência do card
   // "Avaliações positivas" (Relatórios). Mesma regra de pontos percentuais
@@ -220,7 +230,8 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
 
   // Índice 0-100: positivo vale 100, neutro vale 50, negativo vale 0. Usa a
   // MESMA definição de neutro das contagens acima — ver a nota lá.
-  const getSentimentScore = (arr: any[]) => {
+  const getSentimentScore = (todos: any[]) => {
+    const arr = avaliativos(todos)
     if (!arr.length) return 0
     const pos = arr.filter(isPositivo).length
     const neu = arr.filter(isNeutro).length
@@ -239,7 +250,8 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     sentimentTrend = v === 0 ? 'estável' : `${v >= 0 ? '+' : ''}${v} pts`
   }
 
-  const getNpsScore = (arr: any[]) => {
+  const getNpsScore = (todos: any[]) => {
+    const arr = avaliativos(todos)
     if (!arr.length) return 0
     const proms = arr.filter(isPositivo).length
     const dets = arr.filter(isNegativo).length
@@ -259,7 +271,7 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
   // isolada (ratio 100%) venceria uma categoria com 8 negativas em 20 (40%).
   type CatStats = { total: number; negative: number }
   const catStats: Record<string, CatStats> = {}
-  for (const f of currentFeedbacks) {
+  for (const f of avaliativos(currentFeedbacks)) {
     const cat = f.categoria || 'Outros'
     if (!catStats[cat]) catStats[cat] = { total: 0, negative: 0 }
     catStats[cat].total++
@@ -298,9 +310,11 @@ export const buscarKpis = async (restauranteId: number | null, periodo: PeriodIn
     positivos,
     negativos,
     neutros,
+    sugestoes,
     positivePercent,
     negativePercent,
     neutralPercent,
+    suggestionPercent,
     semClassificacao,
     positivePercentTrend,
     prevSentiment,
@@ -315,6 +329,8 @@ export const buscarTendencia = async (restauranteId: number | null, periodo: Per
   type Bucket = { total: number; positive: number; neutral: number }
 
   const addToBucket = (b: Bucket, sentimento: string | null | undefined) => {
+    // Sugestão fica fora do índice de satisfação (ver buscarVisaoGeral).
+    if (ehSugestao(sentimento)) return
     const s = sentimento?.toLowerCase()
     b.total++
     if (s === 'positivo' || s === 'positive') b.positive++
@@ -423,7 +439,8 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
   // então a mesma categoria no mesmo período mostrava números diferentes no
   // painel (aqui) e no relatório — agora os dois batem.
   type CatAcc = { total: number; positive: number; neutral: number; prevTotal: number; prevPositive: number; prevNeutral: number }
-  const categoryMap = currentFeedbacks.reduce(
+  // Sugestão fica fora do índice de satisfação da categoria (ver buscarVisaoGeral).
+  const categoryMap = currentFeedbacks.filter((f) => !ehSugestao(f.sentimento)).reduce(
     (acc, f) => {
       const cat = f.categoria || 'Outros'
       if (!acc[cat]) acc[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }
@@ -436,7 +453,7 @@ export const buscarCategorias = async (restauranteId: number | null, periodo: Pe
     {} as Record<string, CatAcc>,
   )
 
-  previousFeedbacks.forEach((f) => {
+  previousFeedbacks.filter((f) => !ehSugestao(f.sentimento)).forEach((f) => {
     const cat = f.categoria || 'Outros'
     if (!categoryMap[cat])
       categoryMap[cat] = { total: 0, positive: 0, neutral: 0, prevTotal: 0, prevPositive: 0, prevNeutral: 0 }

@@ -1,0 +1,1080 @@
+{
+  "name": "Feedback Restaurante",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Feedback Restaurante (revisado em 04/10/2026)\nRecebe as mensagens que os clientes mandam para o WhatsApp de feedback do restaurante (webhook **easyfeed** da instância na uazapi).\n\n1. **Filtra**: só conversa individual, de cliente (não do próprio número nem da resposta automática), de texto, áudio ou foto/vídeo com legenda.\n2. **Acha o restaurante pelo token da instância** (não pelo número: o cadastro pode estar sem número) e confere onboarding, assinatura ativa e conta não excluída.\n3. **Junta as mensagens em sequência** (buffer de 20 s por restaurante + cliente).\n4. **A IA classifica**: feedback / pergunta sobre o restaurante / outro, e separa o feedback em pontos (Positivo, Negativo, Neutro, Sugestão).\n5. **Feedback** → grava (mensagem + pontos) e agradece. **Pergunta sobre o restaurante** → encaminha para o número de contato das Configurações. **Feedback + pergunta** → as duas coisas numa mensagem. **Qualquer outra coisa** → não responde.\n\nNeutro aparece no painel mas não gera insight; Sugestão gera insight como ponto a melhorar.",
+        "height": 380,
+        "width": 1360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -620
+      ],
+      "id": "8dbdfefa-64d0-4495-a279-dec2a67aaa65",
+      "name": "Nota - Visão geral"
+    },
+    {
+      "parameters": {
+        "content": "## 1. Entrada e restaurante\nFiltra o evento e acha o restaurante pelo token da instância.",
+        "height": 360,
+        "width": 940,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -220
+      ],
+      "id": "dce51b84-7bb1-40fb-b81a-43d10b236602",
+      "name": "Nota - Entrada"
+    },
+    {
+      "parameters": {
+        "content": "## 2. Áudio\nBaixa o áudio (MP3), transcreve em português e segue como texto. Falhou o download ou a transcrição: para em silêncio.",
+        "height": 300,
+        "width": 900,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -440
+      ],
+      "id": "bd3d4ee9-666d-4b82-8146-d1991552737c",
+      "name": "Nota - Áudio"
+    },
+    {
+      "parameters": {
+        "content": "## 3. Buffer de mensagens\nCada mensagem espera 20 s. Só a ÚLTIMA da conversa segue e junta todas; as anteriores param. Apaga só o que juntou (uma mensagem que chegue no meio não se perde). Repetidas da uazapi contam uma vez. Linhas com mais de 1 dia são limpas.",
+        "height": 560,
+        "width": 1100,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1940,
+        -220
+      ],
+      "id": "396ad5c0-30ba-4a09-ac64-7c7d2ea08518",
+      "name": "Nota - Buffer"
+    },
+    {
+      "parameters": {
+        "content": "## 4. Análise (uma chamada de IA)\nTipo da mensagem + pontos com categoria e sentimento. O código depois valida tudo: categoria fora da lista vira Outros; sentimento fora dos 4 valores é descartado.",
+        "height": 560,
+        "width": 480,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3260,
+        -220
+      ],
+      "id": "3a755049-e1ea-4a1d-a7ba-de5f161af725",
+      "name": "Nota - IA"
+    },
+    {
+      "parameters": {
+        "content": "## 5. Grava e responde\n**É feedback?** grava em feedbacks_originais (sentimento geral: Positivo / Negativo / Positivo e Negativo / Neutro / Sugestão) e em feedbacks_restaurante (um por ponto). Os gatilhos do banco classificam o tema e vinculam aos insights.\n**Tem resposta?** envia pela instância do restaurante. Sem resposta (saudação sozinha, agradecimento, assunto fora do restaurante) = silêncio.",
+        "height": 660,
+        "width": 1360,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3900,
+        -440
+      ],
+      "id": "f8b0ef6c-fc68-460e-8680-236ffe1b7a0d",
+      "name": "Nota - Grava e responde"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "easyfeed",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2d271866-c054-4e99-bb1c-b3636572d484",
+      "name": "Recebe mensagem",
+      "webhookId": "97408caf-b261-4434-9601-0c1a99650276"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lê o evento da uazapi e decide se ele entra no fluxo de feedback.\n// Devolve UM item com o que importa, ou nenhum item (o fluxo para aqui).\nconst body = ($input.first().json || {}).body || {};\nconst m = body.message || {};\nconst chat = body.chat || {};\nconst parar = [];\n\nif (body.EventType !== 'messages') return parar;\n// Grupo, mensagem do próprio número (o dono no celular) e a resposta\n// automática (enviada pela API) não entram.\nif (m.isGroup === true || String(m.chatid || '').endsWith('@g.us')) return parar;\nif (m.fromMe === true || m.wasSentByApi === true) return parar;\n// Edição de uma mensagem já enviada não é mensagem nova.\nif (typeof m.edited === 'string' && m.edited.trim() !== '') return parar;\n\nconst token = String(body.token || '').trim();\nconst baseUrl = String(body.BaseUrl || '').trim().replace(/\\/+$/, '');\nconst messageId = String(m.messageid || m.id || '').replace(/\"/g, '').trim();\nif (!token || !/^https:\\/\\//i.test(baseUrl) || !messageId) return parar;\n\n// Telefone do cliente: a conversa individual (...@s.whatsapp.net).\nconst jid = [m.chatid, chat.wa_chatid, m.sender_pn]\n  .map((v) => String(v || ''))\n  .find((v) => v.endsWith('@s.whatsapp.net'));\nif (!jid) return parar;\nconst telefone = jid.split('@')[0].replace(/\\D/g, '');\nif (telefone.length < 10 || telefone.length > 15) return parar;\n\nconst tipoMsg = String(m.messageType || '');\nconst midia = String(m.mediaType || '').toLowerCase();\nconst textoDe = (v) => (typeof v === 'string' ? v : '');\nlet tipo = null;\nlet texto = '';\nif (tipoMsg === 'AudioMessage' || midia === 'ptt' || midia === 'audio') {\n  tipo = 'audio';\n} else if (tipoMsg === 'Conversation' || tipoMsg === 'ExtendedTextMessage' || (!tipoMsg && m.type === 'text')) {\n  tipo = 'texto';\n  texto = textoDe(m.text) || textoDe(m.content);\n} else if (tipoMsg === 'ImageMessage' || tipoMsg === 'VideoMessage') {\n  // Foto ou vídeo: só a legenda conta (ex.: foto do prato + \"veio frio\").\n  tipo = 'texto';\n  texto = textoDe(m.text);\n}\n// Figurinha, reação, documento, localização, contato, enquete: não entram.\ntexto = texto.trim();\nif (!tipo || (tipo === 'texto' && !texto)) return parar;\n\nreturn [{\n  json: {\n    token,\n    baseUrl,\n    messageId,\n    telefone,\n    tipo,\n    texto: texto.slice(0, 4000),\n    nomeContato: String(chat.name || m.senderName || '').trim(),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "98c3e5ea-6059-4c5a-820d-828138e28614",
+      "name": "Lê a mensagem"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "restaurantes",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "whatsapp_token",
+              "condition": "eq",
+              "keyValue": "={{ $json.token }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "id": "57b51e21-3fc2-4285-9f1d-df042d364fc4",
+      "name": "Acha o restaurante",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// A conta pode receber feedback agora? O restaurante foi achado pelo token\n// da instância (o número do WhatsApp no cadastro pode estar vazio). Precisa:\n// onboarding completo, assinatura ativa e conta não excluída.\nconst r = $input.first().json || {};\nif (!r.id) return [];\nif (r.excluida_em) return [];\nif (r.onboarding_completo !== true) return [];\nif (r.assinatura_status !== 'ativa') return [];\nif (!r.whatsapp_token) return [];\n\nconst msg = $('Lê a mensagem').first().json;\nreturn [{\n  json: {\n    ...msg,\n    restauranteId: r.id,\n    // Número de contato/suporte das Configurações (só dígitos) — nulo = não indicar.\n    telefoneContato: String(r.telefone_contato || '').replace(/\\D/g, '') || null,\n    tokenRestaurante: r.whatsapp_token,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "cab17f1d-fb55-4ecc-9452-5422c61d76a1",
+      "name": "Restaurante ativo?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ccc1e300-b7cd-46f9-b3e3-012b78bdde54",
+              "leftValue": "={{ $json.tipo === 'audio' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "30027c91-f1d5-4215-bb2c-13e6ee7269d7",
+      "name": "É áudio?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/message/download",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.tokenRestaurante }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $json.messageId, return_base64: true, generate_mp3: true, return_link: false }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -200
+      ],
+      "id": "176d5bf6-9c8a-4b5e-a4d7-a8ed7b667529",
+      "name": "Baixa o áudio",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "base64Data",
+        "options": {
+          "fileName": "audio.mp3",
+          "mimeType": "audio/mpeg"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -200
+      ],
+      "id": "ea45923a-7337-48c2-9da3-5fefb1bfabaa",
+      "name": "Converte o áudio",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "language": "pt"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1540,
+        -200
+      ],
+      "id": "30320908-ed7a-4c7e-983b-cd620262c574",
+      "name": "Transcreve o áudio",
+      "credentials": {
+        "openAiApi": {
+          "id": "dsjoB8htGVIa9D5e",
+          "name": "OpenAi"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Áudio transcrito vira texto como qualquer outra mensagem. Se o download ou\n// a transcrição falharam, o fluxo para em silêncio (não há o que analisar).\nconst t = String(($input.first().json || {}).text || '').trim();\nif (!t) return [];\nconst base = $('Restaurante ativo?').first().json;\nreturn [{ json: { ...base, texto: t.slice(0, 4000) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -200
+      ],
+      "id": "866d8b6e-b22e-48de-8cd7-2cced4c22f84",
+      "name": "Texto do áudio"
+    },
+    {
+      "parameters": {
+        "tableId": "message_buffer",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "remote_id",
+              "fieldValue": "={{ $json.restauranteId }}:{{ $json.telefone }}"
+            },
+            {
+              "fieldId": "message_data",
+              "fieldValue": "={{ ({ messageid: $json.messageId, tipo: $json.tipo }) }}"
+            },
+            {
+              "fieldId": "message_content",
+              "fieldValue": "={{ $json.texto }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        0
+      ],
+      "id": "120dde17-6b40-4ebb-997c-6e364f4c88d2",
+      "name": "Guarda no buffer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        0
+      ],
+      "id": "dac6d2dd-514a-419c-8395-0c5331552e24",
+      "name": "Espera 20 segundos",
+      "webhookId": "9a40aef6-1db0-4b30-8630-06dfadd0dcdd"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "message_buffer",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "remote_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Guarda no buffer').first().json.remote_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        0
+      ],
+      "id": "a913d8f7-31b7-4c86-a95a-52ca736fd349",
+      "name": "Lê o buffer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta as mensagens que a pessoa mandou em sequência.\n// Cada mensagem espera 20 s; só segue quem for a ÚLTIMA da conversa naquele\n// momento — se chegou outra depois, é ela que vai juntar tudo.\nconst meu = $('Guarda no buffer').first().json;\nconst linhas = $input.all()\n  .map((i) => i.json || {})\n  .filter((r) => r.id != null && r.remote_id === meu.remote_id);\nif (!linhas.length) return [];\n\nlinhas.sort((a, b) => Number(a.id) - Number(b.id));\nconst ultima = linhas[linhas.length - 1];\nif (Number(ultima.id) !== Number(meu.id)) return [];\n\n// A uazapi às vezes entrega o mesmo evento duas vezes: tira as repetidas.\nconst vistos = new Set();\nconst textos = [];\nfor (const r of linhas) {\n  const d = r.message_data && typeof r.message_data === 'object' ? r.message_data : {};\n  if (d.messageid) {\n    if (vistos.has(d.messageid)) continue;\n    vistos.add(d.messageid);\n  }\n  const t = String(r.message_content || '').trim();\n  if (t) textos.push(t);\n}\nconst textoCompleto = textos.join('\\n').slice(0, 6000).trim();\nif (!textoCompleto) return [];\n\nconst base = $('Restaurante ativo?').first().json;\nreturn [{ json: { ...base, textoCompleto, ateId: Number(ultima.id), remoteId: meu.remote_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ],
+      "id": "4278fa6c-7dd4-4145-b5f7-5987e7c91ea1",
+      "name": "Sou a última mensagem?"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "message_buffer",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "remote_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.remoteId }}"
+            },
+            {
+              "keyName": "id",
+              "condition": "lte",
+              "keyValue": "={{ $json.ateId }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        0
+      ],
+      "id": "9e1182b9-b03c-43f6-a415-1ec6af52b297",
+      "name": "Limpa o buffer",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "message_buffer",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "created_at",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus(1, 'day').toUTC().toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        220
+      ],
+      "id": "955e694b-8614-4f42-a0fe-85a989ff09ec",
+      "name": "Limpa buffer antigo",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O \"Limpa o buffer\" devolve uma linha por mensagem apagada; daqui em\n// diante o fluxo segue com UM item só (a conversa juntada).\nreturn [{ json: $('Sou a última mensagem?').first().json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ],
+      "id": "18edf5fd-37bf-4901-a765-c77eadf26110",
+      "name": "Segue com a mensagem",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.textoCompleto }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Você analisa mensagens que clientes mandaram para o WhatsApp de FEEDBACK de um restaurante. Mensagens que a mesma pessoa mandou em sequência chegam juntas, uma por linha. Sua tarefa tem duas partes: (1) dizer o que a mensagem é e (2) se houver feedback, dividi-lo em \"pontos\" classificados. Você NÃO escreve resposta ao cliente — isso é feito por outra etapa.\n\nPARTE 1 — O QUE É A MENSAGEM (campo \"tipo\")\n- \"feedback\": a pessoa conta como foi a experiência ou dá opinião sobre o restaurante — elogio, crítica, comentário morno ou sugestão de melhoria. Basta UM trecho de feedback para o tipo ser \"feedback\", mesmo que o resto seja saudação ou pergunta.\n- \"pergunta_restaurante\": não há feedback, mas a pessoa quer tratar de outro assunto do restaurante: pergunta ou pedido sobre horário, endereço, reserva, cardápio, preços, delivery, um pedido, eventos, vagas de emprego, parcerias, objeto esquecido, nota fiscal, cobrança, falar com o gerente, etc.\n- \"outro\": todo o resto, quando não há feedback nem assunto do restaurante: saudação sozinha (\"oi\", \"bom dia\", \"quero dar uma opinião\", \"posso fazer uma sugestão?\" sem dizer qual), agradecimento ou confirmação (\"obrigado\", \"ok\", \"beleza\", \"👍\"), emojis, mensagem sem sentido, ou assunto sem relação com o restaurante (política, futebol, propaganda, corrente, pergunta geral, conversa pessoal).\n\nCampo \"tem_pergunta_restaurante\": true quando, além do feedback, a pessoa TAMBÉM faz uma pergunta ou pedido sobre o restaurante que não é feedback (ex.: \"A comida estava ótima! Vocês abrem domingo?\"). Se o tipo for \"pergunta_restaurante\", é true. Nos outros casos, false.\nCampo \"assunto_pergunta\": quando tem_pergunta_restaurante for true, o assunto da pergunta em poucas palavras, em minúsculas, para completar a frase \"não consigo te ajudar com ___ por aqui\" (ex.: \"o horário de funcionamento\", \"reservas\", \"o seu pedido\", \"vagas de emprego\", \"o reembolso\"). Nos outros casos, \"\".\n\nAtenção:\n- Crítica com pedido junto (\"A pizza veio fria, vocês vão me reembolsar?\") tem feedback (pizza fria) E pergunta (reembolso).\n- Pergunta retórica ou desabafo dentro de uma crítica (\"como pode demorar tanto?\") NÃO é pergunta sobre o restaurante — é parte do feedback.\n\nPARTE 2 — OS PONTOS (só quando há feedback; senão \"pontos\": [])\nUm ponto é uma unidade de feedback que merece ser registrada separadamente. Existem 3 cenários:\n\nCENÁRIO A — Assunto único: 1 item.\nEntrada: \"Oi, a comida tava muito ruim\"\nPontos: [{\"feedback_original\": \"A comida tava muito ruim\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida ruim\"}]\n\nCENÁRIO B — Assuntos diferentes: 1 item por assunto.\nEntrada: \"A comida estava ótima, mas o atendimento demorou muito\"\nPontos: [{\"feedback_original\": \"A comida estava ótima\", \"categoria\": \"Comida\", \"sentimento\": \"Positivo\", \"resumo\": \"Comida ótima\"}, {\"feedback_original\": \"O atendimento demorou muito\", \"categoria\": \"Tempo de Espera\", \"sentimento\": \"Negativo\", \"resumo\": \"Demora no atendimento\"}]\n\nCENÁRIO C — Mesmo assunto, observações distintas: 1 item por observação, com a MESMA categoria.\nEntrada: \"A comida veio salgada e fria\"\nPontos: [{\"feedback_original\": \"A comida veio salgada\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida salgada\"}, {\"feedback_original\": \"A comida veio fria\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida fria\"}]\n\nREGRA DE AGRUPAMENTO: antes de gerar os itens, releia o texto inteiro e junte tudo que é do mesmo ponto, mesmo que o cliente tenha falado dele em partes separadas. Nunca crie dois itens sobre o mesmo ponto só porque ele apareceu duas vezes.\nEntrada: \"A comida estava ótima. O atendimento foi péssimo, o garçom demorou muito. Mas olha, a comida realmente estava deliciosa, recomendo o prato do dia.\"\nPontos: [{\"feedback_original\": \"A comida estava ótima e deliciosa, recomendo o prato do dia\", \"categoria\": \"Comida\", \"sentimento\": \"Positivo\", \"resumo\": \"Comida ótima e deliciosa\"}, {\"feedback_original\": \"O atendimento foi péssimo, o garçom demorou muito\", \"categoria\": \"Atendimento\", \"sentimento\": \"Negativo\", \"resumo\": \"Atendimento péssimo\"}]\n\nDESAMBIGUAÇÃO DE CATEGORIA:\n- \"A comida demorou para chegar\" → o problema é o TEMPO: \"Tempo de Espera\" (não \"Comida\").\n- \"A comida veio fria/salgada/sem tempero\" → \"Comida\".\n- \"O garçom demorou para anotar o pedido\" ou \"Demorou para trazer a conta\" → \"Tempo de Espera\".\n- \"O garçom foi grosseiro/atencioso/prestativo\" → \"Atendimento\".\n- \"Trouxeram o prato errado\" → \"Outros\" (a menos que o cliente também fale do sabor; aí gera um segundo item em \"Comida\").\n- Regra geral: reclamou de QUANTO TEMPO levou → \"Tempo de Espera\"; de COMO a coisa foi feita ou veio → a categoria específica.\n\nSENTIMENTO DE CADA PONTO — use SOMENTE um destes 4 valores, escritos exatamente assim:\n- \"Positivo\": elogio, algo que deu certo (mesmo dito sem entusiasmo).\n- \"Negativo\": crítica, problema, algo que deu errado. FATO RELATADO COM CALMA TAMBÉM É NEGATIVO: \"vi uma barata perto da cozinha\" (Higiene), \"sentamos numa mesa que balançava\" (Ambiente). Pergunte-se: \"se isso fosse resolvido, o cliente ficaria mais satisfeito?\" Se sim, é Negativo.\n- \"Neutro\": avaliação morna, sem pender para elogio nem crítica (\"o ambiente foi razoável\", \"a comida é ok\", \"achei mediano\").\n- \"Sugestão\": proposta de melhoria ou de algo novo, SEM relatar uma falha (\"podiam ter opção vegana\", \"seria bom ter mais tomadas\", \"sugiro música ao vivo às sextas\"). Se a pessoa relata um problema e sugere a solução óbvia (\"o banheiro estava sujo, deviam limpar mais\"), o ponto é \"Negativo\" — o problema é o que importa.\n\nNÃO VIRA PONTO (descarte):\n- Informação incidental, que não avalia nada (\"sentamos perto da janela\", \"viemos comemorar aniversário\", \"pedimos o combo executivo\").\n- Saudações, agradecimentos e as perguntas/pedidos da Parte 1.\nSe sobrar só isso, \"pontos\" fica [].\n\nCAMPOS DE CADA PONTO:\n- \"feedback_original\": uma frase COMPLETA e compreensível sozinha, reescrevendo só o trecho daquele ponto. Nunca um fragmento cortado (\"mas salgada\" está errado; o certo é \"A comida veio salgada\"). Se o mesmo ponto apareceu em partes separadas, una numa frase só. É PROIBIDO inventar fatos, opiniões ou detalhes; mantenha o vocabulário do cliente. Se não der para separar os pontos com clareza, use o texto original completo.\n- \"categoria\": SOMENTE uma destas, escrita exatamente assim: \"Comida\", \"Bebidas\", \"Atendimento\", \"Ambiente\", \"Limpeza\", \"Preço\", \"Tempo de Espera\", \"Reserva\", \"Estacionamento\", \"Acessibilidade\", \"Música/Som\", \"Cardápio/Variedade\", \"Higiene\", \"Outros\". Nunca invente outra.\n- \"sentimento\": \"Positivo\", \"Negativo\", \"Neutro\" ou \"Sugestão\".\n- \"resumo\": etiqueta curta de 3 a 5 palavras, estilo rótulo (\"Comida fria\", \"Ambiente ótimo\", \"Opção vegana no cardápio\"). Nunca \"Cliente reclamou de...\", \"Cliente elogiou...\".\n\nMAIS EXEMPLOS (mensagem → resultado completo):\n\"Bom dia\" → {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"pontos\": []}\n\"Obrigado!\" → {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"pontos\": []}\n\"Quem ganhou o jogo ontem?\" → {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"pontos\": []}\n\"Vocês abrem domingo?\" → {\"tipo\": \"pergunta_restaurante\", \"tem_pergunta_restaurante\": true, \"assunto_pergunta\": \"o horário de funcionamento\", \"pontos\": []}\n\"Amei o lugar! Vocês fazem reserva para 10 pessoas?\" → {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": true, \"assunto_pergunta\": \"reservas\", \"pontos\": [{\"feedback_original\": \"Amei o lugar\", \"categoria\": \"Ambiente\", \"sentimento\": \"Positivo\", \"resumo\": \"Lugar agradável\"}]}\n\"O ambiente foi razoável\" → {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"pontos\": [{\"feedback_original\": \"O ambiente foi razoável\", \"categoria\": \"Ambiente\", \"sentimento\": \"Neutro\", \"resumo\": \"Ambiente razoável\"}]}\n\"Podiam colocar opção sem glúten no cardápio\" → {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"pontos\": [{\"feedback_original\": \"Podiam colocar opção sem glúten no cardápio\", \"categoria\": \"Cardápio/Variedade\", \"sentimento\": \"Sugestão\", \"resumo\": \"Opção sem glúten\"}]}\n\nFORMATO DE SAÍDA (obrigatório): responda SOMENTE com um objeto JSON válido, sem markdown, sem crases e sem texto antes ou depois, exatamente com estas chaves:\n{\"tipo\": \"feedback | pergunta_restaurante | outro\", \"tem_pergunta_restaurante\": true ou false, \"assunto_pergunta\": \"...\", \"pontos\": [{\"feedback_original\": \"...\", \"categoria\": \"...\", \"sentimento\": \"...\", \"resumo\": \"...\"}]}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        3320,
+        0
+      ],
+      "id": "76bab1f3-6a8f-4360-8318-638ce52213ac",
+      "name": "Analisa a mensagem",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1,
+          "responseFormat": "json_object",
+          "maxRetries": 2,
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3320,
+        220
+      ],
+      "id": "e92ed95a-a4af-42eb-8115-7d751336e238",
+      "name": "Modelo de análise",
+      "credentials": {
+        "openAiApi": {
+          "id": "dsjoB8htGVIa9D5e",
+          "name": "OpenAi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida o que a IA devolveu e decide: o que gravar e o que responder.\n// Regras:\n//   - Feedback (há pelo menos um ponto)  -> grava e agradece.\n//   - Pergunta/pedido sobre o restaurante -> encaminha para o número de\n//     contato das Configurações (sem número: só avisa que o canal é de feedback).\n//   - Feedback + pergunta                 -> agradece e encaminha, numa mensagem só.\n//   - Qualquer outra coisa (saudação sozinha, \"obrigado\", assunto fora do\n//     restaurante)                         -> não responde.\nconst base = $('Sou a última mensagem?').first().json;\n\nconst CATEGORIAS = ['Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço', 'Tempo de Espera',\n  'Reserva', 'Estacionamento', 'Acessibilidade', 'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA vira objeto (aceita texto com ```json em volta).\nconst saida = $input.first().json || {};\nconst bruto = saida.text != null ? saida.text : saida.output != null ? saida.output : '';\nlet r = null;\nif (bruto && typeof bruto === 'object') {\n  r = bruto;\n} else {\n  const s = String(bruto).replace(/```json|```/g, '').trim();\n  try {\n    r = JSON.parse(s);\n  } catch (e) {\n    const achado = s.match(/\\{[\\s\\S]*\\}/);\n    if (achado) {\n      try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n    }\n  }\n}\nif (Array.isArray(r)) r = { tipo: 'feedback', tem_pergunta_restaurante: false, assunto_pergunta: '', pontos: r };\nif (!r || typeof r !== 'object') {\n  // Sem formato não dá para gravar nem responder com segurança: a execução\n  // fica marcada como erro no n8n para alguém ver.\n  throw new Error('A IA devolveu algo fora do formato: ' + String(bruto).slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista fixa e um dos 4 sentimentos.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst pontos = [];\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = String(p.feedback_original || '').trim();\n  const resumo = String(p.resumo || '').trim();\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem da feedbacks_originais_view):\n//    positivo e negativo > negativo > positivo > sugestão > neutro.\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\nconst tipo = semAcento(r.tipo);\nconst temPergunta = tipo === 'pergunta_restaurante' || r.tem_pergunta_restaurante === true;\n\n// 4. O texto da resposta.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst AGRADECIMENTOS = {\n  positivo: [\n    'Muito obrigado pelo seu feedback! Ficamos muito felizes em saber que você teve uma boa experiência conosco. Esperamos vê-lo novamente em breve!',\n    'Agradecemos muito por compartilhar sua opinião! É um prazer saber que você gostou da sua experiência no nosso restaurante. Volte sempre!',\n    'Que alegria receber seu comentário! Ficamos muito satisfeitos em saber que tudo correu bem. Obrigado por escolher a gente!',\n  ],\n  negativo: [\n    'Agradecemos muito pelo seu feedback. Lamentamos que sua experiência não tenha sido como esperávamos, e já estamos avaliando internamente os pontos mencionados para melhorar cada vez mais.',\n    'Obrigado por compartilhar sua opinião conosco. Pedimos desculpas pelos pontos que não atenderam suas expectativas — sua mensagem já está sendo levada em conta pela nossa equipe para que possamos melhorar.',\n    'Sentimos muito que sua experiência não tenha sido ideal. Seu comentário é muito importante e já está sendo considerado pela nossa equipe, que está trabalhando para melhorar cada vez mais.',\n  ],\n  misto: [\n    'Agradecemos muito pelo seu feedback detalhado! Ficamos felizes com os pontos positivos e, ao mesmo tempo, já estamos avaliando internamente o que pode melhorar. Sua opinião é muito importante para nós.',\n    'Muito obrigado por compartilhar sua experiência com tantos detalhes. Ficamos contentes com o que deu certo e já estamos atentos aos pontos que precisam de atenção, buscando sempre melhorar.',\n    'Obrigado pelo seu retorno completo! Levamos tanto os elogios quanto as críticas muito a sério, e já estamos trabalhando para aprimorar o que for necessário.',\n  ],\n  neutro: [\n    'Agradecemos por compartilhar sua opinião conosco! Seu feedback é muito importante para que possamos entender cada vez melhor a experiência dos nossos clientes.',\n    'Obrigado pelo seu comentário! Toda opinião nos ajuda a melhorar continuamente a experiência no nosso restaurante.',\n    'Muito obrigado por dedicar um tempo para nos dar seu retorno. Ele será levado em consideração pela nossa equipe.',\n  ],\n  sugestao: [\n    'Muito obrigado pela sua sugestão! Ela já foi registrada e vai ser avaliada com carinho pela nossa equipe.',\n    'Agradecemos a sugestão! Ideias como a sua nos ajudam a melhorar sempre — já repassamos para a nossa equipe.',\n    'Obrigado por compartilhar sua sugestão conosco! Ela foi anotada e será levada em consideração pela nossa equipe.',\n  ],\n};\nconst CENARIO = {\n  'Positivo e Negativo': 'misto',\n  Negativo: 'negativo',\n  Positivo: 'positivo',\n  'Sugestão': 'sugestao',\n  Neutro: 'neutro',\n};\n\nconst contato = base.telefoneContato ? String(base.telefoneContato).replace(/\\D/g, '') : '';\nconst contatoComPais = contato ? (contato.length <= 11 ? '55' + contato : contato) : '';\nconst formatar = (t) => {\n  let d = t;\n  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);\n  if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);\n  if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);\n  return t;\n};\nconst assunto = String(r.assunto_pergunta || '').trim().replace(/[.!?;:]+$/, '');\nconst sobre = assunto || 'esse assunto';\nconst encaminhar = (comeco) => contatoComPais\n  ? comeco + ' não consigo te ajudar com ' + sobre + ' por aqui. Para isso, fale com a gente pelo WhatsApp '\n    + formatar(contatoComPais) + ': https://wa.me/' + contatoComPais\n  : comeco + ' não consigo te ajudar com ' + sobre + ' por aqui.';\n\nlet resposta = '';\nif (ehFeedback) {\n  const cenario = CENARIO[sentimentoGeral];\n  resposta = sortear(AGRADECIMENTOS[cenario]);\n  if (cenario !== 'sugestao' && tem('Sugestão')) resposta += ' Anotamos também a sua sugestão.';\n  if (temPergunta) resposta += '\\n\\n' + encaminhar('Sobre a sua pergunta: este número é só para receber opiniões, então');\n} else if (temPergunta) {\n  resposta = encaminhar('Este número é só para receber a sua opinião sobre a experiência no restaurante, então');\n}\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    tokenRestaurante: base.tokenRestaurante,\n    textoCompleto: base.textoCompleto,\n    tipoIA: tipo,\n    ehFeedback,\n    temPergunta,\n    sentimentoGeral,\n    pontos,\n    resposta,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3560,
+        0
+      ],
+      "id": "0a406a81-ccfb-4a78-bace-e78bb3ce9302",
+      "name": "Monta a resposta"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "19cc6fb2-d1b9-407d-890e-543125a1c6b5",
+              "leftValue": "={{ $json.ehFeedback === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3780,
+        0
+      ],
+      "id": "9f09dbee-439f-4604-8079-1805e5fd367c",
+      "name": "É feedback?"
+    },
+    {
+      "parameters": {
+        "tableId": "feedbacks_originais",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "restaurante_id",
+              "fieldValue": "={{ $json.restauranteId }}"
+            },
+            {
+              "fieldId": "telefone_cliente",
+              "fieldValue": "={{ $json.telefone }}"
+            },
+            {
+              "fieldId": "texto_original",
+              "fieldValue": "={{ $json.textoCompleto }}"
+            },
+            {
+              "fieldId": "sentimento",
+              "fieldValue": "={{ $json.sentimentoGeral }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        -180
+      ],
+      "id": "8e640cae-ae20-40a2-960c-c9f2b06b8613",
+      "name": "Salva a mensagem",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Um item por ponto, já ligado à mensagem original que acabou de ser salva.\nconst r = $('Monta a resposta').first().json;\nconst origemId = ($input.first().json || {}).id;\nif (!origemId) throw new Error('A mensagem original não foi salva (sem id).');\nreturn r.pontos.map((p) => ({\n  json: {\n    texto_original: p.texto_original,\n    categoria: p.categoria,\n    sentimento: p.sentimento,\n    resumo: p.resumo,\n    telefone_cliente: r.telefone,\n    restaurante_id: r.restauranteId,\n    origem_id: origemId,\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4220,
+        -180
+      ],
+      "id": "6acf66a8-670f-43f8-9f8c-6058078b254a",
+      "name": "Separa os pontos"
+    },
+    {
+      "parameters": {
+        "tableId": "feedbacks_restaurante",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "texto_original",
+              "fieldValue": "={{ $json.texto_original }}"
+            },
+            {
+              "fieldId": "categoria",
+              "fieldValue": "={{ $json.categoria }}"
+            },
+            {
+              "fieldId": "sentimento",
+              "fieldValue": "={{ $json.sentimento }}"
+            },
+            {
+              "fieldId": "resumo",
+              "fieldValue": "={{ $json.resumo }}"
+            },
+            {
+              "fieldId": "telefone_cliente",
+              "fieldValue": "={{ $json.telefone_cliente }}"
+            },
+            {
+              "fieldId": "restaurante_id",
+              "fieldValue": "={{ $json.restaurante_id }}"
+            },
+            {
+              "fieldId": "origem_id",
+              "fieldValue": "={{ $json.origem_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4440,
+        -180
+      ],
+      "id": "8d97b91d-685a-4dbd-8170-541e25a6a745",
+      "name": "Salva os pontos",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Os pontos foram salvos (um item por ponto); a resposta sai uma vez só.\nreturn [{ json: $('Monta a resposta').first().json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4660,
+        -180
+      ],
+      "id": "d8ecd09e-e2da-47b9-8f87-c37b6af7ebbd",
+      "name": "Segue para a resposta",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e3b4adfb-8fd8-4c36-949e-472b016a4f7c",
+              "leftValue": "={{ typeof $json.resposta === 'string' && $json.resposta.trim().length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4880,
+        0
+      ],
+      "id": "9fdf19f2-7b18-420c-9bbb-762d3c9820cc",
+      "name": "Tem resposta?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.tokenRestaurante }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.telefone, text: $json.resposta }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5100,
+        -20
+      ],
+      "id": "6c38b1ce-6314-472e-91f6-b92f3fddb962",
+      "name": "Envia a resposta",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recebe mensagem": {
+      "main": [
+        [
+          {
+            "node": "Lê a mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lê a mensagem": {
+      "main": [
+        [
+          {
+            "node": "Acha o restaurante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acha o restaurante": {
+      "main": [
+        [
+          {
+            "node": "Restaurante ativo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurante ativo?": {
+      "main": [
+        [
+          {
+            "node": "É áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É áudio?": {
+      "main": [
+        [
+          {
+            "node": "Baixa o áudio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guarda no buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixa o áudio": {
+      "main": [
+        [
+          {
+            "node": "Converte o áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converte o áudio": {
+      "main": [
+        [
+          {
+            "node": "Transcreve o áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcreve o áudio": {
+      "main": [
+        [
+          {
+            "node": "Texto do áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto do áudio": {
+      "main": [
+        [
+          {
+            "node": "Guarda no buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guarda no buffer": {
+      "main": [
+        [
+          {
+            "node": "Espera 20 segundos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera 20 segundos": {
+      "main": [
+        [
+          {
+            "node": "Lê o buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lê o buffer": {
+      "main": [
+        [
+          {
+            "node": "Sou a última mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sou a última mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Limpa o buffer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Limpa buffer antigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpa o buffer": {
+      "main": [
+        [
+          {
+            "node": "Segue com a mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segue com a mensagem": {
+      "main": [
+        [
+          {
+            "node": "Analisa a mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo de análise": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analisa a mensagem",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisa a mensagem": {
+      "main": [
+        [
+          {
+            "node": "Monta a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta a resposta": {
+      "main": [
+        [
+          {
+            "node": "É feedback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É feedback?": {
+      "main": [
+        [
+          {
+            "node": "Salva a mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tem resposta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva a mensagem": {
+      "main": [
+        [
+          {
+            "node": "Separa os pontos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa os pontos": {
+      "main": [
+        [
+          {
+            "node": "Salva os pontos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva os pontos": {
+      "main": [
+        [
+          {
+            "node": "Segue para a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segue para a resposta": {
+      "main": [
+        [
+          {
+            "node": "Tem resposta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem resposta?": {
+      "main": [
+        [
+          {
+            "node": "Envia a resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

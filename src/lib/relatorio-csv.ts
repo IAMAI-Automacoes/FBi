@@ -83,7 +83,7 @@ function dataTexto(valorFormatado: string): string {
 }
 
 /**
- * "Positivo", "Negativo", "Neutro" — sempre do mesmo jeito.
+ * "Positivo", "Negativo", "Neutro", "Sugestão" — sempre do mesmo jeito.
  *
  * O banco guarda as duas grafias (`negativo` e `Negativo`), porque vieram de
  * versões diferentes do classificador. Sem normalizar, a planilha sai com as
@@ -94,6 +94,7 @@ export function sentimentoLegivel(s: string | null | undefined): string {
   if (v.startsWith('pos')) return 'Positivo'
   if (v.startsWith('neg')) return 'Negativo'
   if (v.startsWith('neu')) return 'Neutro'
+  if (v.startsWith('sug')) return 'Sugestão'
   return v ? v[0].toUpperCase() + v.slice(1) : 'Sem classificação'
 }
 
