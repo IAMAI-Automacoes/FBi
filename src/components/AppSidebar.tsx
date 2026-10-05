@@ -96,9 +96,9 @@ export function AppSidebar() {
     return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
   }, [restauranteId])
 
-  // Numerozinho de "chegou feedback negativo" (Negativo ou Positivo e
-  // Negativo) — conta desde a última vez que a aba Feedbacks foi aberta
-  // (`restaurantes.feedbacks_visto_em`). Ao
+  // Numerozinho de "chegou feedback negativo ou sugestão" (Negativo,
+  // Positivo e Negativo ou Sugestão) — conta desde a última vez que a aba
+  // Feedbacks foi aberta (`restaurantes.feedbacks_visto_em`). Ao
   // contrário do badge de Garçons (que só some quando o bônus é pago), este é
   // notificação pura: visitar a página já resolve, então zera e marca como
   // visto no banco assim que a rota fica ativa.

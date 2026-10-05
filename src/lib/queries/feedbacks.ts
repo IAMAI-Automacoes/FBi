@@ -178,13 +178,15 @@ export async function contarFeedbacksPorCategoria(
 }
 
 /**
- * Quantas mensagens NEGATIVAS — "Negativo" ou "Positivo e Negativo" —
- * chegaram desde a última vez que o dono abriu a aba Feedbacks.
+ * Quantas mensagens "Negativo", "Positivo e Negativo" ou "Sugestão" chegaram
+ * desde a última vez que o dono abriu a aba Feedbacks — o mesmo rótulo que
+ * aparece no card.
  *
- * O sentimento da mensagem inteira já resume os pontos: ele contém
- * "negativ" sempre que algum ponto é negativo (Negativo, Positivo e
- * Negativo; um ponto negativo junto de neutro ou sugestão também vira
- * "Negativo"). Positivo, Neutro e Sugestão sozinhos não contam.
+ * O sentimento da mensagem inteira já resume os pontos: contém "negativ"
+ * sempre que algum ponto é negativo (um ponto negativo junto de neutro ou
+ * sugestão também vira "Negativo"), e é "Sugestão" quando a mensagem só traz
+ * sugestão (ou sugestão e neutro). Positivo e Neutro não contam. O corte por
+ * pedaço sem acento pega "Sugestão" e "sugestao".
  */
 export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<number> {
   const { data: rest } = await supabase
@@ -200,7 +202,7 @@ export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<nu
     .select('id', { count: 'exact', head: true })
     .eq('restaurante_id', restauranteId)
     .gt('created_at', desde)
-    .ilike('sentimento', '%negativ%')
+    .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
 
   if (error) return 0
   return count ?? 0
