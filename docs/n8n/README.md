@@ -18,14 +18,16 @@ Saudação que chega junto com o feedback (o buffer junta as mensagens em sequê
 
 ## A Helena
 
-Quem responde é a **Helena**, do atendimento do restaurante, e ela diz o nome em toda resposta.
+Quem responde é a **Helena**, do atendimento do restaurante. Ela se apresenta ("Oi! Aqui é a Helena, do Camelo.") só na **primeira resposta do dia** para cada pessoa; nas outras, vai direto ao assunto.
 
 - As respostas são **mensagens prontas**, escritas como gente escreve no WhatsApp, sorteadas no nó "Monta a resposta" conforme o sentimento (positivo, negativo, positivo e negativo, neutro, sugestão). A IA não escreve texto.
 - A IA só devolve pedaços curtos que completam algumas mensagens: `elogio` ("o petit gâteau"), `problema` ("a pizza fria") e `ideia` ("a música ao vivo"). O cliente não é chamado pelo nome: o nome do perfil do WhatsApp muitas vezes não é o real nem está escrito certo. O código confere cada pedaço (minúsculo, começando com artigo, curto); pedaço estranho é ignorado e o sorteio usa só as mensagens que não precisam dele. "por a pizza fria" vira "pela pizza fria".
-- O cumprimento muda se é a **primeira conversa** (o número não respondeu essa pessoa nos últimos 30 dias — nó "Já falou com a pessoa?") ou se já conversaram, mas sempre com o nome dela.
+- A mensagem é separada em blocos com linha em branco (apresentação, agradecimento, encaminhamento) e quebrada em linhas onde uma pessoa quebraria.
+- **Uma vez por dia:** o nó "Já respondeu hoje?" procura resposta do número para essa pessoa desde o início do dia (horário de Brasília), em `mensagens_whatsapp` com `por_api = true`.
+- **Para testar a apresentação de novo no mesmo dia:** no n8n, abra o nó "Já respondeu hoje?", no filtro `enviada_em` troque a data dentro de `DateTime.fromISO('...')` pela hora de agora (ex.: `2026-10-05T15:30:00-03:00`) e salve. A contagem passa a valer só a partir dela. No gerador do JSON é a constante `CONTAR_A_PARTIR_DE`.
 - Pergunta sobre o restaurante: texto pronto indicando o número de contato (só o número, com 55).
 - No envio, a mensagem do cliente fica lida (`readmessages`) e aparece "digitando..." (`delay`) por 2,5 a 8 s, conforme o tamanho da resposta.
-- Para mudar ou acrescentar mensagens: listas `MENSAGENS`, `SAUDACAO_*`, `TAMBEM_SUGESTAO` e `ENCAMINHA_*` no nó "Monta a resposta". O teste confere que toda resposta diz "Helena", não sobra `{variável}` e não tem palavra com cara de IA.
+- Para mudar ou acrescentar mensagens: listas `MENSAGENS`, `SAUDACAO_*`, `TAMBEM_SUGESTAO` e `ENCAMINHA_*` no nó "Monta a resposta". O teste confere a apresentação só na primeira do dia, que não sobra `{variável}`, que nunca aparece "de novo" e que não tem palavra com cara de IA.
 
 ## Sentimentos
 

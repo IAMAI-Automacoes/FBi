@@ -42,16 +42,18 @@ const wh = porNome('Recebe mensagem')
 ok('webhook continua em /easyfeed (POST)', wh.parameters.path === 'easyfeed' && wh.parameters.httpMethod === 'POST')
 ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && porNome('Espera 20 segundos').parameters.unit === 'seconds')
 ok('restaurante é achado pelo token', JSON.stringify(porNome('Acha o restaurante').parameters).includes('whatsapp_token'))
-ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já falou com a pessoa?,Limpa o buffer')
-ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a mensagem,Já falou com a pessoa?,Tem resposta?')
+ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já respondeu hoje?,Limpa o buffer')
+ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a mensagem,Já respondeu hoje?,Tem resposta?')
 ok('modelo: só temperatura e formato JSON', JSON.stringify(porNome('Modelo de análise').parameters.options) === '{"temperature":0.1,"responseFormat":"json_object"}')
-const jaFalou = JSON.stringify(porNome('Já falou com a pessoa?').parameters)
-ok('primeira conversa: procura resposta do número para esse telefone nos últimos 30 dias',
-  jaFalou.includes('mensagens_whatsapp') && jaFalou.includes('"por_api"') && jaFalou.includes('"telefone"') && jaFalou.includes('"restaurante_id"') && jaFalou.includes("minus(30, 'days')"))
+const jaFalou = JSON.stringify(porNome('Já respondeu hoje?').parameters)
+ok('apresentação: procura resposta do número para esse telefone desde o início do dia (horário de Brasília)',
+  jaFalou.includes('mensagens_whatsapp') && jaFalou.includes('"por_api"') && jaFalou.includes('"telefone"') && jaFalou.includes('"restaurante_id"')
+  && jaFalou.includes("setZone('America/Sao_Paulo').startOf('day')") && /DateTime\.fromISO\('\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-03:00'\)/.test(jaFalou))
+ok('nota explica como testar a apresentação de novo', JSON.stringify(wf.nodes).includes('Para testar de novo hoje'))
 const entradaIA = porNome('Analisa a mensagem').parameters.text
 // A expressão roda de verdade (um \n literal dentro das aspas quebraria o JS no n8n).
 const montaEntrada = (ultima, falou) => new Function('$', 'return ' + entradaIA.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, ''))(
-  (n) => ({ first: () => ({ json: n === 'Já falou com a pessoa?' ? falou : ultima }) }))
+  (n) => ({ first: () => ({ json: n === 'Já respondeu hoje?' ? falou : ultima }) }))
 ok('a IA recebe só a mensagem do cliente', montaEntrada({ nomeRestaurante: 'Camelo', textoCompleto: 'oi\na pizza veio fria' }, {}) === 'oi\na pizza veio fria')
 const corpoEnvio = porNome('Envia a resposta').parameters.jsonBody
 ok('envio como gente: "digitando..." e mensagem lida', corpoEnvio.includes('delay: ') && corpoEnvio.includes('digitandoMs') && corpoEnvio.includes('readmessages: true'))
@@ -134,9 +136,9 @@ const juntada = ultima([linha(7, 'A comida estava fria. Vocês abrem domingo?', 
 
 // Monta a resposta
 const P = (s, c = 'Comida', t = 'texto') => ({ feedback_original: t, categoria: c, sentimento: s, resumo: 'resumo' })
-// `falou`: o que o "Já falou com a pessoa?" achou ({} = primeira conversa).
+// `falou`: o que o "Já respondeu hoje?" achou ({} = primeira conversa).
 const JA_FALOU = { id: 99 }
-const monta = (obj, b = juntada, falou = JA_FALOU) => roda('Monta a resposta', { text: typeof obj === 'string' ? obj : JSON.stringify(obj) }, { 'Sou a última mensagem?': b, 'Já falou com a pessoa?': falou })[0].json
+const monta = (obj, b = juntada, falou = JA_FALOU) => roda('Monta a resposta', { text: typeof obj === 'string' ? obj : JSON.stringify(obj) }, { 'Sou a última mensagem?': b, 'Já respondeu hoje?': falou })[0].json
 let o = monta({ tipo: 'feedback', tem_pergunta_restaurante: false, assunto_pergunta: '', pontos: [P('Positivo')] })
 ok('positivo: grava e agradece', o.ehFeedback && o.sentimentoGeral === 'Positivo' && o.resposta.length > 20 && !o.resposta.includes('pergunta'))
 ok('saída só com os campos usados', JSON.stringify(Object.keys(o).sort()) === JSON.stringify(['baseUrl', 'digitandoMs', 'ehFeedback', 'pontos', 'resposta', 'restauranteId', 'sentimentoGeral', 'telefone', 'textoCompleto', 'token']))
@@ -152,11 +154,11 @@ ok('neutro e sugestão juntos: cada um no seu', o.pontos[0].sentimento === 'Neut
 o = monta({ tipo: 'feedback', pontos: [P('Positivo'), P('Sugestão', 'Cardápio/Variedade')] })
 ok('positivo + sugestão: geral Positivo e cita a sugestão', o.sentimentoGeral === 'Positivo' && /sugest|ideia/i.test(o.resposta))
 o = monta({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: 'o horário de funcionamento.', pontos: [P('Negativo')] })
-ok('feedback + pergunta: agradece e encaminha com o contato', o.ehFeedback && /\n\n(Ah, s|S)obre o horário de funcionamento/.test(o.resposta) && o.resposta.endsWith('chamar a gente no número 5511987654321.'))
+ok('feedback + pergunta: agradece e encaminha com o contato (bloco separado, número em outra linha)', o.ehFeedback && /\n\n(Ah, s|S)obre o horário de funcionamento[^\n]*\n(Pra isso|Mas) é só chamar a gente no número 5511987654321\.$/.test(o.resposta), o.resposta)
 ok('encaminhamento só com o número, sem link', !/wa\.me|https?:/.test(o.resposta))
 ok('número com 55, sem parênteses nem hífen', !/[()-]/.test(o.resposta.split('no número')[1]))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] })
-ok('só pergunta: não grava, encaminha só com o número', !o.ehFeedback && o.resposta.includes('Helena') && o.resposta.includes('com reservas') && o.resposta.endsWith('chamar a gente no número 5511987654321.'))
+ok('só pergunta: não grava, encaminha só com o número', !o.ehFeedback && o.resposta.includes('com reservas') && o.resposta.endsWith('chamar a gente no número 5511987654321.'))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, { ...juntada, telefoneContato: null })
 ok('pergunta sem contato configurado: só avisa', o.resposta.includes('com reservas') && !/chamar a gente|número 55/.test(o.resposta))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, { ...juntada, telefoneContato: '11987654321' })
@@ -182,7 +184,19 @@ const todos = [
   ...amostras({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [P('Negativo')] }),
   ...amostras({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, juntada, {}),
 ]
-ok('Helena: diz o nome em todas as respostas', todos.every((t) => t.includes('Helena')), todos.find((t) => !t.includes('Helena')))
+const primeiras = [
+  ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza fria' }, juntada, {}),
+  ...amostras({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, juntada, {}),
+]
+ok('primeira resposta do dia: começa com a apresentação, numa linha só, e uma linha em branco',
+  primeiras.every((t) => /^(Oi|Olá)[^\n]*Helena[^\n]*\n\n\S/.test(t)), primeiras.find((t) => !/^(Oi|Olá)[^\n]*Helena[^\n]*\n\n\S/.test(t)))
+const seguintes = [
+  ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza fria' }),
+  ...amostras({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }),
+]
+ok('já respondeu hoje: sem apresentação e sem cumprimento', seguintes.every((t) => !/Helena|^Oi|^Olá/.test(t)), seguintes.find((t) => /Helena|^Oi|^Olá/.test(t)))
+ok('nunca "de novo"', [...todos, ...primeiras, ...seguintes].every((t) => !/de novo/i.test(t)))
+ok('mensagem quebrada em linhas (reação numa linha, o resto na outra)', seguintes.every((t) => t.includes('\n')))
 ok('Helena: nenhuma {variável} sobra sem preencher', todos.every((t) => !/[{}]|undefined|null/.test(t)), todos.find((t) => /[{}]|undefined|null/.test(t)))
 ok('Helena: nada com cara de IA (feedback, experiência, agradecemos, travessão…)', todos.every((t) => !CARA_DE_IA.test(t)), todos.find((t) => CARA_DE_IA.test(t)))
 ok('Helena: o sorteio varia (várias mensagens diferentes)', new Set(todos).size > 60)
@@ -196,11 +210,10 @@ ok('nunca chama o cliente pelo nome (mesmo se a IA mandar um)', [
   ...amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'Ana' }, juntada, {}),
   ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], primeiro_nome: 'Ana' }),
 ].every((t) => !t.includes('Ana')))
-ok('primeira conversa: cumprimento de apresentação (nunca "de novo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => !/Helena de novo|Oi de novo/.test(t)))
-ok('primeira conversa: diz o restaurante ("do Camelo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => t.includes('Helena') && (t.includes('do Camelo') || t.startsWith('Oi! Helena aqui'))))
+ok('apresentação diz o restaurante ("do Camelo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => t.includes('Helena, do Camelo.')))
 ok('restaurante com nome feminino: "da Pizzaria Bella"', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, { ...juntada, nomeRestaurante: 'Pizzaria Bella' }, {}).some((t) => t.includes('da Pizzaria Bella')))
 o = monta({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, { error: 'falhou a consulta' })
-ok('consulta do "já falou" falhou: trata como primeira conversa', o.resposta.includes('Helena') && !/Helena de novo|Oi de novo/.test(o.resposta))
+ok('consulta do "já respondeu hoje" falhou: se apresenta', o.resposta.includes('Helena'))
 o = monta({ tipo: 'feedback', pontos: [] })
 ok('"feedback" sem ponto: silêncio', !o.ehFeedback && o.resposta === '')
 o = monta({ tipo: 'feedback', pontos: [P('Positivo', 'Decoração'), P('Excelente'), { categoria: 'Comida', sentimento: 'Positivo' }, P('Positivo e Negativo', 'música/som')] })
