@@ -18,13 +18,14 @@ Saudação que chega junto com o feedback (o buffer junta as mensagens em sequê
 
 ## A Helena
 
-Quem responde é a **Helena**, do atendimento do restaurante, escrevendo como gente no WhatsApp: primeira pessoa, no feminino, frases curtas.
+Quem responde é a **Helena**, do atendimento do restaurante, e ela diz o nome em toda resposta.
 
-- O agradecimento do feedback é escrito pela IA na mesma chamada da análise (campo `resposta`), falando do que a pessoa contou. O nó "Monta a resposta" confere o texto: com link, número de telefone, falando de robô/IA/mensagem automática, vazio ou longo demais, troca por um modelo pronto na voz dela.
-- Na **primeira conversa** (o número não respondeu essa pessoa nos últimos 30 dias — nó "Já falou com a pessoa?", em `mensagens_whatsapp` com `por_api = true`) ela se apresenta: "Oi! Aqui é a Helena, do <restaurante>." Depois, não repete.
-- Usa o primeiro nome do perfil do WhatsApp quando ele parece nome de pessoa.
-- Não promete nada (reembolso, desconto, retorno) e não responde perguntas — o encaminhamento para o número de contato é um texto fixo do código.
+- As respostas são **mensagens prontas**, escritas como gente escreve no WhatsApp, sorteadas no nó "Monta a resposta" conforme o sentimento (positivo, negativo, positivo e negativo, neutro, sugestão). A IA não escreve texto.
+- A IA só devolve pedaços curtos que completam algumas mensagens: `primeiro_nome`, `elogio` ("o petit gâteau"), `problema` ("a pizza fria") e `ideia` ("a música ao vivo"). O código confere cada pedaço (minúsculo, começando com artigo, curto); pedaço estranho é ignorado e o sorteio usa só as mensagens que não precisam dele. "por a pizza fria" vira "pela pizza fria".
+- O cumprimento muda se é a **primeira conversa** (o número não respondeu essa pessoa nos últimos 30 dias — nó "Já falou com a pessoa?") ou se já conversaram, mas sempre com o nome dela.
+- Pergunta sobre o restaurante: texto pronto indicando o número de contato (só o número, com 55).
 - No envio, a mensagem do cliente fica lida (`readmessages`) e aparece "digitando..." (`delay`) por 2,5 a 8 s, conforme o tamanho da resposta.
+- Para mudar ou acrescentar mensagens: listas `MENSAGENS`, `SAUDACAO_*`, `TAMBEM_SUGESTAO` e `ENCAMINHA_*` no nó "Monta a resposta". O teste confere que toda resposta diz "Helena", não sobra `{variável}` e não tem palavra com cara de IA.
 
 ## Sentimentos
 
@@ -41,7 +42,7 @@ Quem responde é a **Helena**, do atendimento do restaurante, escrevendo como ge
 
 ## Teste depois de ativar (mande do seu celular para o número de um restaurante)
 
-1. "A comida estava ótima mas o garçom demorou" → "digitando..." e a Helena responde falando da comida e da demora (na primeira conversa, se apresentando); no painel, mensagem "Positivo e negativo" com 2 pontos.
+1. "A comida estava ótima mas o garçom demorou" → "digitando..." e a Helena responde (dizendo o nome), por exemplo "Fico feliz com a comida e sinto muito pela demora"; no painel, mensagem "Positivo e negativo" com 2 pontos.
 2. "Vocês abrem domingo?" → resposta indicando o número de contato, sem link (ou só o aviso, se não houver número). Nada gravado. "Tenho uma dúvida" sozinho → nenhuma resposta.
 3. "Oi" e, em até 20 s, "a pizza veio fria" → uma resposta só; feedback com o texto das duas.
 4. "Bom dia" sozinho → nenhuma resposta.

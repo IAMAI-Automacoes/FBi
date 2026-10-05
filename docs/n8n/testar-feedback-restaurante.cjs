@@ -44,7 +44,7 @@ ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && p
 ok('restaurante é achado pelo token', JSON.stringify(porNome('Acha o restaurante').parameters).includes('whatsapp_token'))
 ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já falou com a pessoa?,Limpa o buffer')
 ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a mensagem,Já falou com a pessoa?,Tem resposta?')
-ok('modelo: só temperatura e formato JSON', JSON.stringify(porNome('Modelo de análise').parameters.options) === '{"temperature":0.3,"responseFormat":"json_object"}')
+ok('modelo: só temperatura e formato JSON', JSON.stringify(porNome('Modelo de análise').parameters.options) === '{"temperature":0.1,"responseFormat":"json_object"}')
 const jaFalou = JSON.stringify(porNome('Já falou com a pessoa?').parameters)
 ok('primeira conversa: procura resposta do número para esse telefone nos últimos 30 dias',
   jaFalou.includes('mensagens_whatsapp') && jaFalou.includes('"por_api"') && jaFalou.includes('"telefone"') && jaFalou.includes('"restaurante_id"') && jaFalou.includes("minus(30, 'days')"))
@@ -52,11 +52,10 @@ const entradaIA = porNome('Analisa a mensagem').parameters.text
 // A expressão roda de verdade (um \n literal dentro das aspas quebraria o JS no n8n).
 const montaEntrada = (ultima, falou) => new Function('$', 'return ' + entradaIA.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, ''))(
   (n) => ({ first: () => ({ json: n === 'Já falou com a pessoa?' ? falou : ultima }) }))
-ok('a IA recebe restaurante, nome, primeira conversa e a mensagem',
+ok('a IA recebe o nome do perfil e a mensagem',
   montaEntrada({ nomeRestaurante: 'Camelo', nome: 'Ana', textoCompleto: 'oi\na pizza veio fria' }, {})
-    === 'Restaurante: Camelo\nNome do cliente no WhatsApp: Ana\nPrimeira conversa: sim\nMensagem do cliente:\noi\na pizza veio fria')
-ok('já conversaram e sem nome: "não" e "(sem nome)"',
-  montaEntrada({ nomeRestaurante: 'Camelo', nome: '', textoCompleto: 'x' }, { id: 5 }).includes('(sem nome)\nPrimeira conversa: não\n'))
+    === 'Nome do cliente no WhatsApp: Ana\nMensagem do cliente:\noi\na pizza veio fria')
+ok('sem nome no perfil: "(sem nome)"', montaEntrada({ nome: '', textoCompleto: 'x' }, {}).startsWith('Nome do cliente no WhatsApp: (sem nome)\n'))
 const corpoEnvio = porNome('Envia a resposta').parameters.jsonBody
 ok('envio como gente: "digitando..." e mensagem lida', corpoEnvio.includes('delay: ') && corpoEnvio.includes('digitandoMs') && corpoEnvio.includes('readmessages: true'))
 ok('nenhum nó desativado', !nos.some((n) => n.disabled))
@@ -152,54 +151,60 @@ ok('positivo e negativo', monta({ tipo: 'feedback', pontos: [P('Positivo'), P('N
 o = monta({ tipo: 'feedback', pontos: [P('Neutro', 'Ambiente')] })
 ok('neutro: grava como Neutro e agradece', o.ehFeedback && o.sentimentoGeral === 'Neutro' && o.pontos[0].sentimento === 'Neutro' && !/sugest/i.test(o.resposta))
 o = monta({ tipo: 'feedback', pontos: [P('Sugestão', 'Cardápio/Variedade')] })
-ok('sugestão: grava como Sugestão e agradece a sugestão', o.sentimentoGeral === 'Sugestão' && o.pontos[0].sentimento === 'Sugestão' && /sugest/i.test(o.resposta))
+ok('sugestão: grava como Sugestão e agradece a sugestão', o.sentimentoGeral === 'Sugestão' && o.pontos[0].sentimento === 'Sugestão' && /sugest|ideia/i.test(o.resposta))
 o = monta({ tipo: 'feedback', pontos: [P('neutra', 'Ambiente'), P('sugestao', 'Música/Som')] })
 ok('neutro e sugestão juntos: cada um no seu', o.pontos[0].sentimento === 'Neutro' && o.pontos[1].sentimento === 'Sugestão' && o.sentimentoGeral === 'Sugestão')
 o = monta({ tipo: 'feedback', pontos: [P('Positivo'), P('Sugestão', 'Cardápio/Variedade')] })
-ok('positivo + sugestão: geral Positivo e cita a sugestão', o.sentimentoGeral === 'Positivo' && o.resposta.endsWith('Anotei também a sua sugestão!'))
+ok('positivo + sugestão: geral Positivo e cita a sugestão', o.sentimentoGeral === 'Positivo' && /sugest|ideia/i.test(o.resposta))
 o = monta({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: 'o horário de funcionamento.', pontos: [P('Negativo')] })
-ok('feedback + pergunta: agradece e encaminha com o contato', o.ehFeedback && o.resposta.includes('\n\nSobre o horário de funcionamento, por aqui eu não consigo te ajudar') && o.resposta.endsWith('é só chamar a gente no número 5511987654321.'))
+ok('feedback + pergunta: agradece e encaminha com o contato', o.ehFeedback && /\n\n(Ah, s|S)obre o horário de funcionamento/.test(o.resposta) && o.resposta.endsWith('chamar a gente no número 5511987654321.'))
 ok('encaminhamento só com o número, sem link', !/wa\.me|https?:/.test(o.resposta))
 ok('número com 55, sem parênteses nem hífen', !/[()-]/.test(o.resposta.split('no número')[1]))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] })
-ok('só pergunta: não grava, encaminha só com o número', !o.ehFeedback && o.resposta === 'Oi! Este número é só pra receber a opinião dos clientes sobre a experiência no restaurante, então não consigo te ajudar com reservas por aqui. Pra isso, é só chamar a gente no número 5511987654321.')
+ok('só pergunta: não grava, encaminha só com o número', !o.ehFeedback && o.resposta.includes('Helena') && o.resposta.includes('com reservas') && o.resposta.endsWith('chamar a gente no número 5511987654321.'))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, { ...juntada, telefoneContato: null })
-ok('pergunta sem contato configurado: só avisa', o.resposta === 'Oi! Este número é só pra receber a opinião dos clientes sobre a experiência no restaurante, então não consigo te ajudar com reservas por aqui.')
+ok('pergunta sem contato configurado: só avisa', o.resposta.includes('com reservas') && !/chamar a gente|número 55/.test(o.resposta))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, { ...juntada, telefoneContato: '11987654321' })
 ok('contato sem o 55 ganha o 55', o.resposta.endsWith('no número 5511987654321.'))
 o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: '', pontos: [] })
 ok('pergunta incompleta (sem assunto): não responde', !o.ehFeedback && o.resposta === '')
 o = monta({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: ' ', pontos: [P('Positivo')] })
-ok('feedback + pergunta incompleta: só agradece', o.ehFeedback && o.resposta.length > 20 && !o.resposta.includes('Sobre '))
+ok('feedback + pergunta incompleta: só agradece', o.ehFeedback && o.resposta.length > 20 && !o.resposta.includes('\n\n'))
 o = monta({ tipo: 'outro', tem_pergunta_restaurante: false, assunto_pergunta: '', pontos: [] })
 ok('saudação/assunto fora: não responde nem grava', !o.ehFeedback && o.resposta === '' && o.digitandoMs === 0)
 
-// A Helena: o texto da IA, conferido; apresentação só na primeira conversa
-const daIA = 'Poxa, sinto muito pela pizza fria! Obrigada por avisar, já vou passar pro pessoal da cozinha.'
-o = monta({ tipo: 'feedback', pontos: [P('Negativo')], resposta: daIA })
-ok('Helena: usa o texto da IA', o.resposta === daIA)
-for (const [nome, ruim] of [
-  ['com link', 'Obrigada! Veja nosso cardápio em https://x.com'],
-  ['com telefone', 'Obrigada! Me chama no 11 98765-4321'],
-  ['falando de robô', 'Sou um robô e agradeço o seu feedback!'],
-  ['falando de IA', 'Como IA, agradeço o seu feedback!'],
-  ['vazio', ''],
-  ['longo demais', 'Obrigada! '.repeat(80)],
-]) {
-  const t = monta({ tipo: 'feedback', pontos: [P('Negativo')], resposta: ruim }).resposta
-  ok(`Helena: texto da IA ${nome} vira o modelo pronto`, t !== ruim && t.length > 20)
-}
-ok('Helena: "ia" minúsculo (verbo ir) não é barrado', monta({ tipo: 'feedback', pontos: [P('Positivo')], resposta: 'Que bom! Eu ia mesmo perguntar se tinha gostado, obrigada!' }).resposta.startsWith('Que bom! Eu ia'))
-o = monta({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {})
-ok('primeira conversa: a Helena se apresenta com o nome do restaurante', o.resposta.startsWith('Oi! Aqui é a Helena, do Camelo. '))
-o = monta({ tipo: 'feedback', pontos: [P('Positivo')], resposta: 'Oi, Ana! Aqui é a Helena, do Camelo. Que bom que você gostou!' }, juntada, {})
-ok('primeira conversa: não se apresenta duas vezes', o.resposta.match(/Helena/g).length === 1)
-o = monta({ tipo: 'feedback', pontos: [P('Positivo')] })
-ok('já conversaram: não se apresenta de novo', !/Helena/.test(o.resposta))
-o = monta({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, juntada, {})
-ok('só pergunta, primeira conversa: apresenta e encaminha', o.resposta.startsWith('Oi! Aqui é a Helena, do Camelo. Este número é só pra receber'))
+// A Helena: mensagens prontas sorteadas. Sorteia muitas vezes cada caso e
+// confere o que vale para TODAS as respostas.
+const amostras = (obj, b = juntada, falou = JA_FALOU, n = 150) => Array.from({ length: n }, () => monta(obj, b, falou).resposta)
+const CARA_DE_IA = /feedback|experiência|agradecemos|lamentamos|valios|importante para nós|nossa equipe está|—/i
+const todos = [
+  ...amostras({ tipo: 'feedback', pontos: [P('Positivo')], elogio: 'a comida', primeiro_nome: 'Ana' }, juntada, {}),
+  ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza fria' }),
+  ...amostras({ tipo: 'feedback', pontos: [P('Positivo'), P('Negativo', 'Atendimento')], elogio: 'o garçom', problema: 'a demora no atendimento' }, juntada, {}),
+  ...amostras({ tipo: 'feedback', pontos: [P('Neutro', 'Ambiente')] }),
+  ...amostras({ tipo: 'feedback', pontos: [P('Sugestão', 'Música/Som')], ideia: 'a música ao vivo' }, juntada, {}),
+  ...amostras({ tipo: 'feedback', pontos: [P('Positivo'), P('Sugestão', 'Música/Som')], ideia: 'a música ao vivo' }),
+  ...amostras({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [P('Negativo')] }),
+  ...amostras({ tipo: 'pergunta_restaurante', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', pontos: [] }, juntada, {}),
+]
+ok('Helena: diz o nome em todas as respostas', todos.every((t) => t.includes('Helena')), todos.find((t) => !t.includes('Helena')))
+ok('Helena: nenhuma {variável} sobra sem preencher', todos.every((t) => !/[{}]|undefined|null/.test(t)), todos.find((t) => /[{}]|undefined|null/.test(t)))
+ok('Helena: nada com cara de IA (feedback, experiência, agradecemos, travessão…)', todos.every((t) => !CARA_DE_IA.test(t)), todos.find((t) => CARA_DE_IA.test(t)))
+ok('Helena: o sorteio varia (várias mensagens diferentes)', new Set(todos).size > 60)
+const negativos = amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza fria' })
+ok('problema completa a mensagem com contração ("pela pizza fria", "da pizza fria")', negativos.some((t) => /pela pizza fria|da pizza fria/.test(t)) && negativos.every((t) => !/por a |de a /.test(t)))
+ok('problema no plural: "pelas mesas bambas"', amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'as mesas bambas' }).some((t) => t.includes('pelas mesas bambas') || t.includes('das mesas bambas')))
+ok('pedaço estranho da IA é ignorado', amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'Pizza fria.' }).every((t) => !/pizza/i.test(t)))
+ok('pedaço longo demais é ignorado', amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza que veio fria e sem queijo nenhum hoje' }).every((t) => !/pizza/i.test(t)))
+ok('sem pedaço: ainda responde com mensagem pronta', amostras({ tipo: 'feedback', pontos: [P('Negativo')] }).every((t) => t.length > 30))
+const comNome = amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'Ana' }, juntada, {})
+ok('primeiro nome no cumprimento', comNome.some((t) => t.includes('Oi, Ana!') || t.includes('Olá, Ana!') || t.includes('Oi, Ana,')))
+ok('nome que não parece de pessoa é ignorado', amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'LOJA 123' }, juntada, {}).every((t) => !t.includes('LOJA')))
+ok('primeira conversa: cumprimento de apresentação (nunca "de novo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => !/Helena de novo|Oi de novo/.test(t)))
+ok('primeira conversa: diz o restaurante ("do Camelo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => t.includes('Helena') && (t.includes('do Camelo') || t.startsWith('Oi! Helena aqui'))))
+ok('restaurante com nome feminino: "da Pizzaria Bella"', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, { ...juntada, nomeRestaurante: 'Pizzaria Bella' }, {}).some((t) => t.includes('da Pizzaria Bella')))
 o = monta({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, { error: 'falhou a consulta' })
-ok('consulta do "já falou" falhou: trata como primeira conversa', o.resposta.startsWith('Oi! Aqui é a Helena'))
+ok('consulta do "já falou" falhou: trata como primeira conversa', o.resposta.includes('Helena') && !/Helena de novo|Oi de novo/.test(o.resposta))
 o = monta({ tipo: 'feedback', pontos: [] })
 ok('"feedback" sem ponto: silêncio', !o.ehFeedback && o.resposta === '')
 o = monta({ tipo: 'feedback', pontos: [P('Positivo', 'Decoração'), P('Excelente'), { categoria: 'Comida', sentimento: 'Positivo' }, P('Positivo e Negativo', 'música/som')] })
