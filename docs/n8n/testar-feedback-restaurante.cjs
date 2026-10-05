@@ -52,10 +52,7 @@ const entradaIA = porNome('Analisa a mensagem').parameters.text
 // A expressão roda de verdade (um \n literal dentro das aspas quebraria o JS no n8n).
 const montaEntrada = (ultima, falou) => new Function('$', 'return ' + entradaIA.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, ''))(
   (n) => ({ first: () => ({ json: n === 'Já falou com a pessoa?' ? falou : ultima }) }))
-ok('a IA recebe o nome do perfil e a mensagem',
-  montaEntrada({ nomeRestaurante: 'Camelo', nome: 'Ana', textoCompleto: 'oi\na pizza veio fria' }, {})
-    === 'Nome do cliente no WhatsApp: Ana\nMensagem do cliente:\noi\na pizza veio fria')
-ok('sem nome no perfil: "(sem nome)"', montaEntrada({ nome: '', textoCompleto: 'x' }, {}).startsWith('Nome do cliente no WhatsApp: (sem nome)\n'))
+ok('a IA recebe só a mensagem do cliente', montaEntrada({ nomeRestaurante: 'Camelo', textoCompleto: 'oi\na pizza veio fria' }, {}) === 'oi\na pizza veio fria')
 const corpoEnvio = porNome('Envia a resposta').parameters.jsonBody
 ok('envio como gente: "digitando..." e mensagem lida', corpoEnvio.includes('delay: ') && corpoEnvio.includes('digitandoMs') && corpoEnvio.includes('readmessages: true'))
 ok('nenhum nó desativado', !nos.some((n) => n.disabled))
@@ -90,9 +87,7 @@ const base = (msg, extra = {}) => ({
 const lê = (msg) => roda('Lê a mensagem', base(msg))
 let r = lê({ type: 'text', messageType: 'Conversation', text: 'A comida estava fria' })
 ok('texto: entra', r.length === 1 && r[0].json.tipo === 'texto' && r[0].json.texto === 'A comida estava fria')
-ok('texto: só os campos usados', JSON.stringify(Object.keys(r[0].json).sort()) === JSON.stringify(['baseUrl', 'messageId', 'nome', 'telefone', 'texto', 'tipo', 'token']))
-ok('nome do perfil sem emoji nem símbolo', lê({ type: 'text', messageType: 'Conversation', text: 'oi', senderName: '~ 🐼 Aninha 💕' })[0].json.nome === 'Aninha')
-ok('sem nome no perfil: vazio', r[0].json.nome === '')
+ok('texto: só os campos usados', JSON.stringify(Object.keys(r[0].json).sort()) === JSON.stringify(['baseUrl', 'messageId', 'telefone', 'texto', 'tipo', 'token']))
 const lido = r[0].json
 ok('texto com link (ExtendedTextMessage) entra', lê({ type: 'text', messageType: 'ExtendedTextMessage', text: 'olha https://x.com' }).length === 1)
 ok('áudio entra', lê({ type: 'media', messageType: 'AudioMessage', mediaType: 'ptt', text: '' })[0]?.json.tipo === 'audio')
@@ -178,7 +173,7 @@ ok('saudação/assunto fora: não responde nem grava', !o.ehFeedback && o.respos
 const amostras = (obj, b = juntada, falou = JA_FALOU, n = 150) => Array.from({ length: n }, () => monta(obj, b, falou).resposta)
 const CARA_DE_IA = /feedback|experiência|agradecemos|lamentamos|valios|importante para nós|nossa equipe está|—/i
 const todos = [
-  ...amostras({ tipo: 'feedback', pontos: [P('Positivo')], elogio: 'a comida', primeiro_nome: 'Ana' }, juntada, {}),
+  ...amostras({ tipo: 'feedback', pontos: [P('Positivo')], elogio: 'a comida' }, juntada, {}),
   ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza fria' }),
   ...amostras({ tipo: 'feedback', pontos: [P('Positivo'), P('Negativo', 'Atendimento')], elogio: 'o garçom', problema: 'a demora no atendimento' }, juntada, {}),
   ...amostras({ tipo: 'feedback', pontos: [P('Neutro', 'Ambiente')] }),
@@ -197,9 +192,10 @@ ok('problema no plural: "pelas mesas bambas"', amostras({ tipo: 'feedback', pont
 ok('pedaço estranho da IA é ignorado', amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'Pizza fria.' }).every((t) => !/pizza/i.test(t)))
 ok('pedaço longo demais é ignorado', amostras({ tipo: 'feedback', pontos: [P('Negativo')], problema: 'a pizza que veio fria e sem queijo nenhum hoje' }).every((t) => !/pizza/i.test(t)))
 ok('sem pedaço: ainda responde com mensagem pronta', amostras({ tipo: 'feedback', pontos: [P('Negativo')] }).every((t) => t.length > 30))
-const comNome = amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'Ana' }, juntada, {})
-ok('primeiro nome no cumprimento', comNome.some((t) => t.includes('Oi, Ana!') || t.includes('Olá, Ana!') || t.includes('Oi, Ana,')))
-ok('nome que não parece de pessoa é ignorado', amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'LOJA 123' }, juntada, {}).every((t) => !t.includes('LOJA')))
+ok('nunca chama o cliente pelo nome (mesmo se a IA mandar um)', [
+  ...amostras({ tipo: 'feedback', pontos: [P('Positivo')], primeiro_nome: 'Ana' }, juntada, {}),
+  ...amostras({ tipo: 'feedback', pontos: [P('Negativo')], primeiro_nome: 'Ana' }),
+].every((t) => !t.includes('Ana')))
 ok('primeira conversa: cumprimento de apresentação (nunca "de novo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => !/Helena de novo|Oi de novo/.test(t)))
 ok('primeira conversa: diz o restaurante ("do Camelo")', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, juntada, {}).every((t) => t.includes('Helena') && (t.includes('do Camelo') || t.startsWith('Oi! Helena aqui'))))
 ok('restaurante com nome feminino: "da Pizzaria Bella"', amostras({ tipo: 'feedback', pontos: [P('Positivo')] }, { ...juntada, nomeRestaurante: 'Pizzaria Bella' }, {}).some((t) => t.includes('da Pizzaria Bella')))

@@ -21,7 +21,7 @@ Saudação que chega junto com o feedback (o buffer junta as mensagens em sequê
 Quem responde é a **Helena**, do atendimento do restaurante, e ela diz o nome em toda resposta.
 
 - As respostas são **mensagens prontas**, escritas como gente escreve no WhatsApp, sorteadas no nó "Monta a resposta" conforme o sentimento (positivo, negativo, positivo e negativo, neutro, sugestão). A IA não escreve texto.
-- A IA só devolve pedaços curtos que completam algumas mensagens: `primeiro_nome`, `elogio` ("o petit gâteau"), `problema` ("a pizza fria") e `ideia` ("a música ao vivo"). O código confere cada pedaço (minúsculo, começando com artigo, curto); pedaço estranho é ignorado e o sorteio usa só as mensagens que não precisam dele. "por a pizza fria" vira "pela pizza fria".
+- A IA só devolve pedaços curtos que completam algumas mensagens: `elogio` ("o petit gâteau"), `problema` ("a pizza fria") e `ideia` ("a música ao vivo"). O cliente não é chamado pelo nome: o nome do perfil do WhatsApp muitas vezes não é o real nem está escrito certo. O código confere cada pedaço (minúsculo, começando com artigo, curto); pedaço estranho é ignorado e o sorteio usa só as mensagens que não precisam dele. "por a pizza fria" vira "pela pizza fria".
 - O cumprimento muda se é a **primeira conversa** (o número não respondeu essa pessoa nos últimos 30 dias — nó "Já falou com a pessoa?") ou se já conversaram, mas sempre com o nome dela.
 - Pergunta sobre o restaurante: texto pronto indicando o número de contato (só o número, com 55).
 - No envio, a mensagem do cliente fica lida (`readmessages`) e aparece "digitando..." (`delay`) por 2,5 a 8 s, conforme o tamanho da resposta.
