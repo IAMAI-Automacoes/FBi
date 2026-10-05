@@ -13,7 +13,7 @@
         -60,
         -620
       ],
-      "id": "0ca9fdd2-bb4c-41eb-9adc-71739f88d52b",
+      "id": "0e62cf38-4803-46c1-92ae-24e1e1ebe7c8",
       "name": "Nota - Visão geral"
     },
     {
@@ -29,7 +29,7 @@
         -60,
         -220
       ],
-      "id": "f429db1a-4a2d-4ed9-8e6e-a03033376782",
+      "id": "697351a2-cb9d-4e42-b079-a2d3a0c5269d",
       "name": "Nota - Entrada"
     },
     {
@@ -45,7 +45,7 @@
         900,
         -440
       ],
-      "id": "f29dd7b9-b66e-4cc3-9402-648fdae4b743",
+      "id": "f892199a-9746-4f12-86bb-571d3f5fbcfb",
       "name": "Nota - Áudio"
     },
     {
@@ -61,7 +61,7 @@
         1940,
         -220
       ],
-      "id": "999c49ff-8fc7-4a43-9e2d-28ebf695b463",
+      "id": "76df82f4-6f3d-41de-8548-bcd32bb5e7f5",
       "name": "Nota - Buffer"
     },
     {
@@ -77,7 +77,7 @@
         3060,
         -220
       ],
-      "id": "59bdc18a-b88d-4e9e-8243-fbb4f85d662f",
+      "id": "ac8aa428-c871-4ea1-bf26-2b0ea25b73c9",
       "name": "Nota - IA"
     },
     {
@@ -93,7 +93,7 @@
         3780,
         -440
       ],
-      "id": "0021238d-5d38-4eb2-bf2d-ea6ac6ac5b32",
+      "id": "b84612bf-29be-4455-b25a-bb337ffd9668",
       "name": "Nota - Grava e responde"
     },
     {
@@ -108,7 +108,7 @@
         0,
         0
       ],
-      "id": "0216c6a3-9c50-4f63-8246-b37d800b847a",
+      "id": "e33351b1-e268-4085-b30c-0932713e0034",
       "name": "Recebe mensagem",
       "webhookId": "97408caf-b261-4434-9601-0c1a99650276"
     },
@@ -122,7 +122,7 @@
         220,
         0
       ],
-      "id": "18987cb9-0b2c-49e5-93f8-f6b7ac136a82",
+      "id": "46559d08-11a2-4c02-8b68-efbb07db9560",
       "name": "Lê a mensagem"
     },
     {
@@ -146,7 +146,7 @@
         440,
         0
       ],
-      "id": "4820752b-b4b2-499b-94b9-7a2ff45a9f18",
+      "id": "31215603-1584-4425-9ad5-f9e54a75294a",
       "name": "Acha o restaurante",
       "credentials": {
         "supabaseApi": {
@@ -168,7 +168,7 @@
         660,
         0
       ],
-      "id": "f799e991-00bc-46e7-a008-538fd2b5a3d0",
+      "id": "3ace30ba-c534-4e03-8248-719bedeee6f1",
       "name": "Restaurante ativo?"
     },
     {
@@ -182,7 +182,7 @@
           },
           "conditions": [
             {
-              "id": "62b5f44b-c158-449c-b72d-5a696dc1e30c",
+              "id": "3b5d8e16-1f6f-4681-bad1-00252c447879",
               "leftValue": "={{ $json.tipo === 'audio' }}",
               "rightValue": "",
               "operator": {
@@ -202,7 +202,7 @@
         880,
         0
       ],
-      "id": "1f55e3f3-8941-41bc-a696-8f4a47f0a1cc",
+      "id": "2c2b451b-2e85-4317-983f-62dc3676fead",
       "name": "É áudio?"
     },
     {
@@ -231,7 +231,7 @@
         1100,
         -200
       ],
-      "id": "3273bbee-b724-4745-a2f3-24b5c805e664",
+      "id": "2b0580a8-890f-4719-9874-b36ea38be227",
       "name": "Baixa o áudio",
       "retryOnFail": true,
       "maxTries": 2,
@@ -253,7 +253,7 @@
         1320,
         -200
       ],
-      "id": "388fa151-621b-4574-80b0-ef31f2396d18",
+      "id": "4ed3c409-901b-48a0-9576-2d02ba1e632a",
       "name": "Converte o áudio",
       "onError": "continueRegularOutput"
     },
@@ -271,7 +271,7 @@
         1540,
         -200
       ],
-      "id": "5e01a5f2-aa5c-4269-bc6a-e8924d0116a9",
+      "id": "34b8fb53-7edb-4897-9b45-ff6be9d3f3bf",
       "name": "Transcreve o áudio",
       "credentials": {
         "openAiApi": {
@@ -294,7 +294,7 @@
         1760,
         -200
       ],
-      "id": "242bd364-dbe8-4445-9b97-712c0a77fd48",
+      "id": "b233306e-bdda-47cb-9c8a-50f5bc8250d9",
       "name": "Texto do áudio"
     },
     {
@@ -323,7 +323,7 @@
         1980,
         0
       ],
-      "id": "0d77139b-9f60-4d34-ac33-649d915ddb6c",
+      "id": "279fbf0f-f39b-428d-8af5-2dbf9f0ebc6b",
       "name": "Guarda no buffer",
       "credentials": {
         "supabaseApi": {
@@ -346,9 +346,9 @@
         2200,
         0
       ],
-      "id": "69efa893-38e1-4f29-9d32-3f2e9364998e",
+      "id": "781a9b8b-dd6d-4278-a037-f02808820142",
       "name": "Espera 20 segundos",
-      "webhookId": "e7785791-a63c-4edf-9941-bc3c549184cb"
+      "webhookId": "45edf221-3af4-43cc-933c-64528e0e0a22"
     },
     {
       "parameters": {
@@ -371,7 +371,7 @@
         2420,
         0
       ],
-      "id": "0e72b020-0305-4473-b65b-ec166901ab2c",
+      "id": "3804e01d-0887-4b4b-9fa6-4b9cb2be0c7f",
       "name": "Lê o buffer",
       "credentials": {
         "supabaseApi": {
@@ -393,7 +393,7 @@
         2640,
         0
       ],
-      "id": "d367df97-bc70-4bd4-bb9d-2336f44247b8",
+      "id": "ed79866c-8cb5-4380-8dc5-0fa2d791af9c",
       "name": "Sou a última mensagem?"
     },
     {
@@ -422,7 +422,7 @@
         2860,
         0
       ],
-      "id": "733382f8-8728-45f7-ba8a-9866021a1f25",
+      "id": "82900551-bf31-4823-b3e3-a544ca931fa9",
       "name": "Limpa o buffer",
       "credentials": {
         "supabaseApi": {
@@ -457,7 +457,7 @@
         2860,
         220
       ],
-      "id": "01e644f2-bc7d-4e38-9d16-db0bff4c8c85",
+      "id": "251a133c-b6b5-4bf9-9642-81b276d26529",
       "name": "Limpa buffer antigo",
       "credentials": {
         "supabaseApi": {
@@ -485,7 +485,7 @@
         3120,
         0
       ],
-      "id": "0367c566-8485-4692-9859-4b94e29932bd",
+      "id": "f916446f-378a-4643-b586-96e1efa7e017",
       "name": "Analisa a mensagem",
       "executeOnce": true,
       "retryOnFail": true,
@@ -511,7 +511,7 @@
         3120,
         220
       ],
-      "id": "6d5a8b7a-f605-4fd6-bcb8-2af0867be9d4",
+      "id": "354a4e2d-f162-468f-b712-f8c282f39dd9",
       "name": "Modelo de análise",
       "credentials": {
         "openAiApi": {
@@ -522,7 +522,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Valida o que a IA devolveu e decide: o que gravar e o que responder.\n// Regras:\n//   - Feedback (há pelo menos um ponto)  -> grava e agradece.\n//   - Pergunta/pedido COMPLETO sobre o restaurante -> indica o número de\n//     contato das Configurações, só o número, sem link (sem número: só avisa\n//     que o canal é de feedback). Pergunta incompleta (\"tenho uma dúvida\"),\n//     em que não dá para saber o assunto, não é respondida.\n//   - Feedback + pergunta                 -> agradece e encaminha, numa mensagem só.\n//   - Qualquer outra coisa (saudação sozinha, \"obrigado\", assunto fora do\n//     restaurante)                         -> não responde.\nconst base = $('Sou a última mensagem?').first().json;\n\nconst CATEGORIAS = ['Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço', 'Tempo de Espera',\n  'Reserva', 'Estacionamento', 'Acessibilidade', 'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA (modo JSON) vira objeto.\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry {\n  r = JSON.parse(bruto);\n} catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) {\n    try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n  }\n}\nif (!r || typeof r !== 'object' || Array.isArray(r)) {\n  // Sem formato não dá para gravar nem responder com segurança: a execução\n  // fica marcada como erro no n8n para alguém ver.\n  throw new Error('A IA devolveu algo fora do formato: ' + bruto.slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista fixa e um dos 4 sentimentos.\n//    Neutro e Sugestão são valores distintos e nunca viram um no outro.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst pontos = [];\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = String(p.feedback_original || '').trim();\n  const resumo = String(p.resumo || '').trim();\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem da feedbacks_originais_view):\n//    positivo e negativo > negativo > positivo > sugestão > neutro.\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\n// Só encaminha pergunta completa: sem o assunto, não dá para dizer com o que\n// o número de contato ajuda — e \"tenho uma dúvida\" sozinho fica sem resposta.\nconst sobre = String(r.assunto_pergunta || '').trim().replace(/[.!?;:]+$/, '');\nconst temPergunta = (semAcento(r.tipo) === 'pergunta_restaurante' || r.tem_pergunta_restaurante === true) && sobre !== '';\n\n// 4. O texto da resposta.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst AGRADECIMENTOS = {\n  positivo: [\n    'Muito obrigado pelo seu feedback! Ficamos muito felizes em saber que você teve uma boa experiência conosco. Esperamos vê-lo novamente em breve!',\n    'Agradecemos muito por compartilhar sua opinião! É um prazer saber que você gostou da sua experiência no nosso restaurante. Volte sempre!',\n    'Que alegria receber seu comentário! Ficamos muito satisfeitos em saber que tudo correu bem. Obrigado por escolher a gente!',\n  ],\n  negativo: [\n    'Agradecemos muito pelo seu feedback. Lamentamos que sua experiência não tenha sido como esperávamos, e já estamos avaliando internamente os pontos mencionados para melhorar cada vez mais.',\n    'Obrigado por compartilhar sua opinião conosco. Pedimos desculpas pelos pontos que não atenderam suas expectativas — sua mensagem já está sendo levada em conta pela nossa equipe para que possamos melhorar.',\n    'Sentimos muito que sua experiência não tenha sido ideal. Seu comentário é muito importante e já está sendo considerado pela nossa equipe, que está trabalhando para melhorar cada vez mais.',\n  ],\n  misto: [\n    'Agradecemos muito pelo seu feedback detalhado! Ficamos felizes com os pontos positivos e, ao mesmo tempo, já estamos avaliando internamente o que pode melhorar. Sua opinião é muito importante para nós.',\n    'Muito obrigado por compartilhar sua experiência com tantos detalhes. Ficamos contentes com o que deu certo e já estamos atentos aos pontos que precisam de atenção, buscando sempre melhorar.',\n    'Obrigado pelo seu retorno completo! Levamos tanto os elogios quanto as críticas muito a sério, e já estamos trabalhando para aprimorar o que for necessário.',\n  ],\n  neutro: [\n    'Agradecemos por compartilhar sua opinião conosco! Seu feedback é muito importante para que possamos entender cada vez melhor a experiência dos nossos clientes.',\n    'Obrigado pelo seu comentário! Toda opinião nos ajuda a melhorar continuamente a experiência no nosso restaurante.',\n    'Muito obrigado por dedicar um tempo para nos dar seu retorno. Ele será levado em consideração pela nossa equipe.',\n  ],\n  sugestao: [\n    'Muito obrigado pela sua sugestão! Ela já foi registrada e vai ser avaliada com carinho pela nossa equipe.',\n    'Agradecemos a sugestão! Ideias como a sua nos ajudam a melhorar sempre — já repassamos para a nossa equipe.',\n    'Obrigado por compartilhar sua sugestão conosco! Ela foi anotada e será levada em consideração pela nossa equipe.',\n  ],\n};\nconst CENARIO = {\n  'Positivo e Negativo': 'misto',\n  Negativo: 'negativo',\n  Positivo: 'positivo',\n  'Sugestão': 'sugestao',\n  Neutro: 'neutro',\n};\n\nconst contato = base.telefoneContato ? (base.telefoneContato.length <= 11 ? '55' + base.telefoneContato : base.telefoneContato) : '';\nconst formatar = (t) => {\n  const d = t.startsWith('55') ? t.slice(2) : t;\n  if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);\n  if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);\n  return t;\n};\n// Só o número, sem link do WhatsApp.\nconst encaminhar = (comeco) => contato\n  ? comeco + ' não consigo te ajudar com ' + sobre + ' por aqui. Para isso, fale com a gente pelo número '\n    + formatar(contato) + '.'\n  : comeco + ' não consigo te ajudar com ' + sobre + ' por aqui.';\n\nlet resposta = '';\nif (ehFeedback) {\n  const cenario = CENARIO[sentimentoGeral];\n  resposta = sortear(AGRADECIMENTOS[cenario]);\n  if (cenario !== 'sugestao' && tem('Sugestão')) resposta += ' Anotamos também a sua sugestão.';\n  if (temPergunta) resposta += '\\n\\n' + encaminhar('Sobre a sua pergunta: este número é só para receber opiniões, então');\n} else if (temPergunta) {\n  resposta = encaminhar('Este número é só para receber a sua opinião sobre a experiência no restaurante, então');\n}\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    textoCompleto: base.textoCompleto,\n    ehFeedback,\n    sentimentoGeral,\n    pontos,\n    resposta,\n  },\n}];"
+        "jsCode": "// Valida o que a IA devolveu e decide: o que gravar e o que responder.\n// Regras:\n//   - Feedback (há pelo menos um ponto)  -> grava e agradece.\n//   - Pergunta/pedido COMPLETO sobre o restaurante -> indica o número de\n//     contato das Configurações, só o número, sem link (sem número: só avisa\n//     que o canal é de feedback). Pergunta incompleta (\"tenho uma dúvida\"),\n//     em que não dá para saber o assunto, não é respondida.\n//   - Feedback + pergunta                 -> agradece e encaminha, numa mensagem só.\n//   - Qualquer outra coisa (saudação sozinha, \"obrigado\", assunto fora do\n//     restaurante)                         -> não responde.\nconst base = $('Sou a última mensagem?').first().json;\n\nconst CATEGORIAS = ['Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço', 'Tempo de Espera',\n  'Reserva', 'Estacionamento', 'Acessibilidade', 'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA (modo JSON) vira objeto.\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry {\n  r = JSON.parse(bruto);\n} catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) {\n    try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n  }\n}\nif (!r || typeof r !== 'object' || Array.isArray(r)) {\n  // Sem formato não dá para gravar nem responder com segurança: a execução\n  // fica marcada como erro no n8n para alguém ver.\n  throw new Error('A IA devolveu algo fora do formato: ' + bruto.slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista fixa e um dos 4 sentimentos.\n//    Neutro e Sugestão são valores distintos e nunca viram um no outro.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst pontos = [];\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = String(p.feedback_original || '').trim();\n  const resumo = String(p.resumo || '').trim();\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem da feedbacks_originais_view):\n//    positivo e negativo > negativo > positivo > sugestão > neutro.\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\n// Só encaminha pergunta completa: sem o assunto, não dá para dizer com o que\n// o número de contato ajuda — e \"tenho uma dúvida\" sozinho fica sem resposta.\nconst sobre = String(r.assunto_pergunta || '').trim().replace(/[.!?;:]+$/, '');\nconst temPergunta = (semAcento(r.tipo) === 'pergunta_restaurante' || r.tem_pergunta_restaurante === true) && sobre !== '';\n\n// 4. O texto da resposta.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst AGRADECIMENTOS = {\n  positivo: [\n    'Muito obrigado pelo seu feedback! Ficamos muito felizes em saber que você teve uma boa experiência conosco. Esperamos vê-lo novamente em breve!',\n    'Agradecemos muito por compartilhar sua opinião! É um prazer saber que você gostou da sua experiência no nosso restaurante. Volte sempre!',\n    'Que alegria receber seu comentário! Ficamos muito satisfeitos em saber que tudo correu bem. Obrigado por escolher a gente!',\n  ],\n  negativo: [\n    'Agradecemos muito pelo seu feedback. Lamentamos que sua experiência não tenha sido como esperávamos, e já estamos avaliando internamente os pontos mencionados para melhorar cada vez mais.',\n    'Obrigado por compartilhar sua opinião conosco. Pedimos desculpas pelos pontos que não atenderam suas expectativas — sua mensagem já está sendo levada em conta pela nossa equipe para que possamos melhorar.',\n    'Sentimos muito que sua experiência não tenha sido ideal. Seu comentário é muito importante e já está sendo considerado pela nossa equipe, que está trabalhando para melhorar cada vez mais.',\n  ],\n  misto: [\n    'Agradecemos muito pelo seu feedback detalhado! Ficamos felizes com os pontos positivos e, ao mesmo tempo, já estamos avaliando internamente o que pode melhorar. Sua opinião é muito importante para nós.',\n    'Muito obrigado por compartilhar sua experiência com tantos detalhes. Ficamos contentes com o que deu certo e já estamos atentos aos pontos que precisam de atenção, buscando sempre melhorar.',\n    'Obrigado pelo seu retorno completo! Levamos tanto os elogios quanto as críticas muito a sério, e já estamos trabalhando para aprimorar o que for necessário.',\n  ],\n  neutro: [\n    'Agradecemos por compartilhar sua opinião conosco! Seu feedback é muito importante para que possamos entender cada vez melhor a experiência dos nossos clientes.',\n    'Obrigado pelo seu comentário! Toda opinião nos ajuda a melhorar continuamente a experiência no nosso restaurante.',\n    'Muito obrigado por dedicar um tempo para nos dar seu retorno. Ele será levado em consideração pela nossa equipe.',\n  ],\n  sugestao: [\n    'Muito obrigado pela sua sugestão! Ela já foi registrada e vai ser avaliada com carinho pela nossa equipe.',\n    'Agradecemos a sugestão! Ideias como a sua nos ajudam a melhorar sempre — já repassamos para a nossa equipe.',\n    'Obrigado por compartilhar sua sugestão conosco! Ela foi anotada e será levada em consideração pela nossa equipe.',\n  ],\n};\nconst CENARIO = {\n  'Positivo e Negativo': 'misto',\n  Negativo: 'negativo',\n  Positivo: 'positivo',\n  'Sugestão': 'sugestao',\n  Neutro: 'neutro',\n};\n\n// O número vai só com dígitos e o 55 na frente (5511987654321): sem\n// parênteses nem hífen.\nconst contato = base.telefoneContato ? (base.telefoneContato.length <= 11 ? '55' + base.telefoneContato : base.telefoneContato) : '';\n// Só o número, sem link do WhatsApp.\nconst encaminhar = (comeco) => contato\n  ? comeco + ' não consigo te ajudar com ' + sobre + ' por aqui. Para isso, fale com a gente pelo número '\n    + contato + '.'\n  : comeco + ' não consigo te ajudar com ' + sobre + ' por aqui.';\n\nlet resposta = '';\nif (ehFeedback) {\n  const cenario = CENARIO[sentimentoGeral];\n  resposta = sortear(AGRADECIMENTOS[cenario]);\n  if (cenario !== 'sugestao' && tem('Sugestão')) resposta += ' Anotamos também a sua sugestão.';\n  if (temPergunta) resposta += '\\n\\n' + encaminhar('Sobre a sua pergunta: este número é só para receber opiniões, então');\n} else if (temPergunta) {\n  resposta = encaminhar('Este número é só para receber a sua opinião sobre a experiência no restaurante, então');\n}\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    textoCompleto: base.textoCompleto,\n    ehFeedback,\n    sentimentoGeral,\n    pontos,\n    resposta,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -530,7 +530,7 @@
         3360,
         0
       ],
-      "id": "91935479-80d5-4a39-a4bd-146414ce0325",
+      "id": "e751ae3b-b105-4cba-8987-6fa3dee25bfb",
       "name": "Monta a resposta"
     },
     {
@@ -544,7 +544,7 @@
           },
           "conditions": [
             {
-              "id": "76211975-afc3-4c86-9a21-2f9ae966f9a0",
+              "id": "d84f0636-28cb-43e1-9ac3-0117699f7eb6",
               "leftValue": "={{ $json.ehFeedback === true }}",
               "rightValue": "",
               "operator": {
@@ -564,7 +564,7 @@
         3580,
         0
       ],
-      "id": "d6e9449e-7e2d-4bdf-931b-ab396b6ce18b",
+      "id": "8bc283cc-7811-4b6d-bdf2-0051731fe06a",
       "name": "É feedback?"
     },
     {
@@ -597,7 +597,7 @@
         3840,
         -180
       ],
-      "id": "670352bc-719f-4bc0-b8bd-71c021eae15d",
+      "id": "f9e68875-9a64-446a-a90c-918f398cc4d2",
       "name": "Salva a mensagem",
       "credentials": {
         "supabaseApi": {
@@ -619,7 +619,7 @@
         4060,
         -180
       ],
-      "id": "5759d414-1ff0-4cfc-826d-f007fab818eb",
+      "id": "576c3ce4-e4a8-44a0-b6d2-961437be411c",
       "name": "Separa os pontos"
     },
     {
@@ -664,7 +664,7 @@
         4280,
         -180
       ],
-      "id": "61679152-6022-41e9-86e9-9844b825ee45",
+      "id": "f10a5c52-1168-46ca-9ce6-fe8f2107d0c0",
       "name": "Salva os pontos",
       "credentials": {
         "supabaseApi": {
@@ -687,7 +687,7 @@
           },
           "conditions": [
             {
-              "id": "51edce1c-a488-4f16-8837-cf830f3559fe",
+              "id": "c460c753-2d03-44fe-82eb-7d08d14dd39a",
               "leftValue": "={{ $('Monta a resposta').first().json.resposta !== '' }}",
               "rightValue": "",
               "operator": {
@@ -707,7 +707,7 @@
         4520,
         0
       ],
-      "id": "85def4a7-f73b-4ffe-b714-56388844c26f",
+      "id": "a5428c00-2542-4df8-8c3b-d24e5c029113",
       "name": "Tem resposta?",
       "executeOnce": true
     },
@@ -737,7 +737,7 @@
         4760,
         -20
       ],
-      "id": "69054e64-2aa2-4339-826b-37a83743d7f7",
+      "id": "775b3ba7-45ef-4767-a167-9117915777e8",
       "name": "Envia a resposta",
       "retryOnFail": true,
       "maxTries": 2,

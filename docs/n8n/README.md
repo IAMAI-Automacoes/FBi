@@ -9,7 +9,7 @@ Recebe o que os clientes mandam para o WhatsApp de feedback do restaurante (webh
 Só entram mensagens de **texto** e **áudio** (o áudio é transcrito). Foto, vídeo, figurinha, reação, documento, grupo e mensagens do próprio número são ignorados.
 
 - **Feedback** (elogio, crítica, comentário morno, sugestão): grava em `feedbacks_originais` + um `feedbacks_restaurante` por ponto, e agradece conforme o sentimento.
-- **Pergunta ou pedido completo sobre o restaurante** (horário, reserva, pedido…): não grava; indica o número de contato das Configurações (`restaurantes.telefone_contato`) — só o número, sem link do WhatsApp. Sem número configurado, só avisa que o canal é de feedback.
+- **Pergunta ou pedido completo sobre o restaurante** (horário, reserva, pedido…): não grava; indica o número de contato das Configurações (`restaurantes.telefone_contato`) — só o número, com 55 e sem parênteses nem hífen (ex.: 5511987654321), sem link do WhatsApp. Sem número configurado, só avisa que o canal é de feedback.
 - **Pergunta incompleta** ("tenho uma dúvida", "queria saber uma coisa"), em que não dá para saber o assunto: não responde. Se a pessoa completar em seguida, o buffer junta as duas mensagens.
 - **Feedback + pergunta**: grava, agradece e encaminha, numa mensagem só.
 - **Saudação sozinha, "obrigado", "ok", emoji, assunto fora do restaurante**: não grava e não responde.
