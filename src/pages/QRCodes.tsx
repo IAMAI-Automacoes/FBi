@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { subDays } from 'date-fns'
 import { supabase } from '@/lib/supabase/client'
 import type { Json } from '@/lib/supabase/types'
@@ -557,6 +558,13 @@ export default function QRCodes() {
     return () => { cancelado = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrId, periodo, intervalo])
+
+  // Tempo real: cada abertura nova do QR entra no gráfico na hora, sem a
+  // tela de carregamento (o cartaz, que pode estar em edição, não é tocado).
+  useRealtimeReload(['qr_scans'], restauranteId, () => {
+    if (!qrId) return
+    buscarAberturas(qrId, periodo, intervalo).then(setAberturas).catch(() => {})
+  })
 
   const serie = useMemo(
     () => montarSerie(aberturas, periodo, new Date(), intervalo),

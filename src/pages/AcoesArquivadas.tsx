@@ -17,6 +17,7 @@ import { TaskCard } from '@/components/actions/TaskCard'
 import { DetalhesAcaoPanel } from '@/components/actions/DetalhesAcaoPanel'
 import { buscarAcoesArquivadas, desarquivarAcao, excluirAcao } from '@/lib/queries/acoes'
 import { useAuth } from '@/hooks/use-auth'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useToast } from '@/hooks/use-toast'
 
 /**
@@ -94,10 +95,10 @@ export default function AcoesArquivadas() {
 
   const temFiltro = !!busca.trim() || categorias.length > 0 || !!datas || periodo !== 'all'
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async ({ silencioso = false } = {}) => {
     if (!usuario?.restaurante_id) return
     try {
-      setLoading(true)
+      if (!silencioso) setLoading(true)
       const data = await buscarAcoesArquivadas(usuario.restaurante_id)
       setAcoes(
         (data || []).map((d) => ({
@@ -107,17 +108,21 @@ export default function AcoesArquivadas() {
         })),
       )
     } catch {
-      toast({ title: 'Não foi possível carregar as ações arquivadas.',
+      if (!silencioso) toast({ title: 'Não foi possível carregar as ações arquivadas.',
         variant: 'destructive',
       })
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [usuario?.restaurante_id, toast])
 
   useEffect(() => {
     carregar()
   }, [carregar])
+
+  // Tempo real: o arquivamento automático (de hora em hora) e o que se faz
+  // noutro aparelho aparecem sem F5.
+  useRealtimeReload(['acoes_operacionais'], usuario?.restaurante_id ?? null, () => carregar({ silencioso: true }))
 
   const handleDesarquivar = async (id: string) => {
     try {

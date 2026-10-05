@@ -24,6 +24,7 @@ import { criarAcaoDoInsight } from '@/lib/queries/acoes'
 import { PRIORIDADES, pesoPrioridade } from '@/lib/prioridade'
 import type { Insight } from '@/lib/tipos/insight'
 import { useAuth } from '@/hooks/use-auth'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { useToast } from '@/hooks/use-toast'
@@ -101,9 +102,10 @@ export default function Insights() {
   const { setExtra } = useHeaderExtra()
   const { toast } = useToast()
 
-  const fetchInsights = async () => {
+  // `silencioso`: recarga do tempo real, sem o esqueleto de carregamento.
+  const fetchInsights = async ({ silencioso = false } = {}) => {
     if (!usuario?.restaurante_id) return
-    setLoading(true)
+    if (!silencioso) setLoading(true)
     try {
       // `insight_feedback(count)` é a MESMA fonte que a telinha lista, então o
       // número do card não tem como divergir do que aparece dentro dela.
@@ -123,11 +125,19 @@ export default function Insights() {
         setInsights(data as Insight[])
       }
     } catch (e: any) {
-      toast({ title: 'Erro ao buscar insights', description: e.message, variant: 'destructive' })
+      if (!silencioso) toast({ title: 'Erro ao buscar insights', description: e.message, variant: 'destructive' })
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }
+
+  // Tempo real: insight novo (a geração roda sozinha de hora em hora),
+  // feedback ligado a um insight e ação criada a partir dele aparecem sem F5.
+  useRealtimeReload(
+    ['insights', 'insight_feedback', 'acoes_operacionais'],
+    usuario?.restaurante_id ?? null,
+    () => fetchInsights({ silencioso: true }),
+  )
 
   // Sincroniza o valor da engrenagem com a fonte única de config (contexto)
   useEffect(() => {

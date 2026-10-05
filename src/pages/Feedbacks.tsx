@@ -169,11 +169,26 @@ export default function Feedbacks() {
     return () => clearTimeout(timeoutId)
   }, [filtros, carregarDoZero])
 
-  // Tempo real: novo feedback recarrega a lista sozinho.
+  // Tempo real: feedback novo entra na lista sozinho — sem a tela de
+  // carregamento e sem descartar as páginas já abertas com "Carregar mais"
+  // (antes, cada feedback que chegava voltava a lista para a primeira página).
+  const qtdCarregada = useRef(0)
+  qtdCarregada.current = feedbacks.length
+  const atualizarEmSilencio = useCallback(async () => {
+    try {
+      const { feedbacks: lista, total } = await buscarFeedbacks(filtros, Math.max(LIMIT, qtdCarregada.current), 0)
+      setFeedbacks(lista)
+      setTotalFeedbacks(total)
+      // O próximo "Carregar mais" continua de onde a lista termina.
+      setOffset(Math.max(0, lista.length - LIMIT))
+    } catch {
+      /* a próxima mudança tenta de novo */
+    }
+  }, [filtros])
   useRealtimeReload(
     ['feedbacks_originais', 'feedbacks_restaurante'],
     usuario?.restaurante_id ?? null,
-    () => carregarDoZero(),
+    atualizarEmSilencio,
   )
 
   // "Carregar mais" — função separada de propósito (ver comentário acima).

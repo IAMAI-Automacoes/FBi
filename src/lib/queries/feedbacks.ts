@@ -178,17 +178,13 @@ export async function contarFeedbacksPorCategoria(
 }
 
 /**
- * Quantas MENSAGENS com algo a resolver — um ponto negativo ou uma sugestão —
+ * Quantas mensagens NEGATIVAS — "Negativo" ou "Positivo e Negativo" —
  * chegaram desde a última vez que o dono abriu a aba Feedbacks.
  *
- * Conta pelos pontos (`feedbacks_restaurante`), e não pelo sentimento da
- * mensagem inteira: uma mensagem "Positivo" pode trazer uma sugestão dentro,
- * e o sentimento geral dela não diz isso. Cada mensagem conta uma vez só
- * (`origem_id` liga os pontos à mensagem; ponto antigo sem `origem_id` conta
- * sozinho). O corte por substring pega "Negativo" e "Sugestão" com ou sem
- * acento, a mesma leitura do resto do produto.
- *
- * O teto de linhas só existe porque o número da barra lateral para em "99+".
+ * O sentimento da mensagem inteira já resume os pontos: ele contém
+ * "negativ" sempre que algum ponto é negativo (Negativo, Positivo e
+ * Negativo; um ponto negativo junto de neutro ou sugestão também vira
+ * "Negativo"). Positivo, Neutro e Sugestão sozinhos não contam.
  */
 export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<number> {
   const { data: rest } = await supabase
@@ -199,16 +195,15 @@ export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<nu
 
   const desde = rest?.feedbacks_visto_em ?? new Date(0).toISOString()
 
-  const { data, error } = await supabase
-    .from('feedbacks_restaurante')
-    .select('id, origem_id')
+  const { count, error } = await supabase
+    .from('feedbacks_originais')
+    .select('id', { count: 'exact', head: true })
     .eq('restaurante_id', restauranteId)
     .gt('created_at', desde)
-    .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
-    .limit(1000)
+    .ilike('sentimento', '%negativ%')
 
   if (error) return 0
-  return new Set((data ?? []).map((f: { id: number; origem_id: string | null }) => f.origem_id ?? `linha-${f.id}`)).size
+  return count ?? 0
 }
 
 /** Marca a aba Feedbacks como vista agora — zera o numerozinho na barra lateral. */

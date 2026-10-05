@@ -82,6 +82,7 @@ import {
 } from '@/lib/queries/acoes'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { estiloStatus } from '@/lib/status-acao'
 import { cn } from '@/lib/utils'
 
@@ -370,6 +371,24 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       Object.values(organizarTimers.current).forEach((timer) => clearTimeout(timer))
     }
   }, [refreshTrigger, usuario])
+
+  // Tempo real: ações que mudam sozinhas (a cada 10 min o banco promove as
+  // transições agendadas e arquiva as concluídas antigas), criadas pela IA ou
+  // mexidas noutro aparelho aparecem sem F5. Durante o arraste, espera soltar:
+  // trocar a lista no meio do gesto faria o card pular.
+  const arrastandoRef = useRef(false)
+  arrastandoRef.current = !!activeTask
+  const recargaPendente = useRef(false)
+  useRealtimeReload(['acoes_operacionais'], usuario?.restaurante_id ?? null, () => {
+    if (arrastandoRef.current) { recargaPendente.current = true; return }
+    load({ silencioso: true })
+  })
+  useEffect(() => {
+    if (activeTask || !recargaPendente.current) return
+    recargaPendente.current = false
+    load({ silencioso: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask])
 
   const isValidMove = (from: ActionStatus, to: ActionStatus) => {
     if (from === 'PENDENTE' && to === 'EM_ANDAMENTO') return true

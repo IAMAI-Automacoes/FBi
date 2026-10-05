@@ -72,11 +72,11 @@ export function AppSidebar() {
   // Numerozinho de "tem garçom pra pagar" — mesmo desenho do badge de
   // Sugestões, só que aqui não some sozinho ao entrar na página: some só
   // quando o bônus for de fato marcado como pago (é dinheiro, não
-  // notificação — visitar a tela não resolve a pendência). Sem tabela com
-  // realtime dedicado pra "meta batida" (depende de escaneamento, que não
-  // tem restaurante_id pra filtrar por canal), então recalcula ao entrar em
-  // qualquer página e de novo a cada minuto, além de reagir na hora quando
-  // `garcons` muda (cobre o "acabei de marcar como pago" imediatamente).
+  // notificação — visitar a tela não resolve a pendência). Reage na hora a
+  // escaneamento novo (meta batida; `qr_scans` não tem restaurante_id, então
+  // a RLS é quem limita aos QR deste restaurante) e a qualquer mudança em
+  // `garcons` ("acabei de marcar como pago", garçom novo ou removido). O
+  // minuto a minuto fica para a virada de período das regras.
   const restauranteId = usuario?.restaurante_id ?? null
   const [pendentes, setPendentes] = useState(0)
   useEffect(() => {
@@ -88,15 +88,17 @@ export function AppSidebar() {
       .channel('sidebar-garcons-pendentes')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'garcons', filter: `restaurante_id=eq.${restauranteId}` },
+        { event: '*', schema: 'public', table: 'garcons', filter: `restaurante_id=eq.${restauranteId}` },
         atualizar,
       )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'qr_scans' }, atualizar)
       .subscribe()
     return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
   }, [restauranteId])
 
-  // Numerozinho de "chegou feedback negativo ou sugestão" — conta desde a
-  // última vez que a aba Feedbacks foi aberta (`restaurantes.feedbacks_visto_em`). Ao
+  // Numerozinho de "chegou feedback negativo" (Negativo ou Positivo e
+  // Negativo) — conta desde a última vez que a aba Feedbacks foi aberta
+  // (`restaurantes.feedbacks_visto_em`). Ao
   // contrário do badge de Garçons (que só some quando o bônus é pago), este é
   // notificação pura: visitar a página já resolve, então zera e marca como
   // visto no banco assim que a rota fica ativa.
@@ -105,23 +107,16 @@ export function AppSidebar() {
     if (!restauranteId) { setFeedbacksNaoLidos(0); return }
     const atualizar = () => contarFeedbacksNaoLidos(restauranteId).then(setFeedbacksNaoLidos).catch(() => {})
     atualizar()
-    // Ouve os PONTOS, que chegam logo depois da mensagem e trazem o sentimento
-    // de cada assunto. Uma mensagem vira vários pontos em sequência: espera um
-    // instante e conta uma vez só.
-    let espera: ReturnType<typeof setTimeout> | null = null
-    const agendar = () => {
-      if (espera) clearTimeout(espera)
-      espera = setTimeout(atualizar, 800)
-    }
+    // A mensagem já chega gravada com o sentimento geral: basta ouvir ela.
     const ch = supabase
       .channel('sidebar-feedbacks-nao-lidos')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'feedbacks_restaurante', filter: `restaurante_id=eq.${restauranteId}` },
-        agendar,
+        { event: 'INSERT', schema: 'public', table: 'feedbacks_originais', filter: `restaurante_id=eq.${restauranteId}` },
+        atualizar,
       )
       .subscribe()
-    return () => { if (espera) clearTimeout(espera); supabase.removeChannel(ch) }
+    return () => { supabase.removeChannel(ch) }
   }, [restauranteId])
 
   // Numerozinho do WhatsApp: quantas CONVERSAS (contatos e grupos) têm

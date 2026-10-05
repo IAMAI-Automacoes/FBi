@@ -93,9 +93,14 @@ export default function Reports() {
 
   const restauranteId = profile?.restaurante_id ?? null
 
-  const carregar = useCallback(async () => {
-    setLoading(true)
-    setAnalise(null) // a leitura da IA é por período
+  // `silencioso`: recarga do tempo real — sem a tela de carregamento e sem
+  // apagar a leitura da IA. Antes, cada feedback que chegava fazia a página
+  // piscar e sumia com a análise que o dono tinha acabado de gerar.
+  const carregar = useCallback(async ({ silencioso = false }: { silencioso?: boolean } = {}) => {
+    if (!silencioso) {
+      setLoading(true)
+      setAnalise(null) // a leitura da IA é por período
+    }
     try {
       const [k, e, t, tm] = await Promise.all([
         buscarKpis(restauranteId, period),
@@ -111,9 +116,9 @@ export default function Reports() {
       }
     } catch (err) {
       console.error(err)
-      toast.error('Não foi possível carregar os dados do relatório.')
+      if (!silencioso) toast.error('Não foi possível carregar os dados do relatório.')
     }
-    setLoading(false)
+    if (!silencioso) setLoading(false)
   }, [restauranteId, period])
 
   useEffect(() => {
@@ -121,8 +126,13 @@ export default function Reports() {
     carregar()
   }, [profileLoading, carregar])
 
-  // Tempo real: novos feedbacks separados recarregam KPIs e gráficos sozinhos.
-  useRealtimeReload(['feedbacks_restaurante'], restauranteId, carregar)
+  // Tempo real: feedback novo (mensagem e pontos) e tema novo recarregam
+  // KPIs, gráficos e listas sozinhos.
+  useRealtimeReload(
+    ['feedbacks_restaurante', 'feedbacks_originais', 'feedback_temas'],
+    restauranteId,
+    () => carregar({ silencioso: true }),
+  )
 
   const semDados = !!kpis && kpis.totalFeedbacks === 0
 

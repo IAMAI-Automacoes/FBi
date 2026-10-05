@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import {
   differenceInCalendarDays, format,
   startOfMonth, startOfWeek, startOfQuarter,
@@ -377,7 +378,9 @@ export default function Garcons() {
   const [scansEsteTrimestre, setScansEsteTrimestre] = useState<Record<number, number>>({})
   const [pagando, setPagando] = useState('')
 
-  const carregar = useCallback(async () => {
+  // `soDados`: recarga do tempo real — atualiza garçons, regras e
+  // escaneamentos, mas não toca no cartaz (que pode estar sendo editado).
+  const carregar = useCallback(async ({ soDados = false }: { soDados?: boolean } = {}) => {
     const { data: u } = await supabase.auth.getUser()
     if (!u?.user) { setLoading(false); return }
     const { data: r } = await supabase
@@ -388,14 +391,16 @@ export default function Garcons() {
     if (!r) { setLoading(false); return }
     setRestauranteId(r.id)
     //  manda no cartaz; o nome do cadastro e so o padrao dele.
-    const titulo = (r as any).qr_titulo?.trim() || r.nome_restaurante
-    if (titulo) setRestaurantName(titulo)
-    setPosterRotulo((r as any).qr_rotulo ?? null)
-    setPosterTema(r.qr_estilo ?? 'classico')
-    setPosterMsg(r.qr_mensagem ?? null)
-    setPosterEstilos(lerEstiloDosTextos((r as any).qr_textos_estilo))
-    setPosterElementos(lerElementos((r as any).qr_elementos))
-    setPosterArte((r as any).qr_bg_imagem ?? null)
+    if (!soDados) {
+      const titulo = (r as any).qr_titulo?.trim() || r.nome_restaurante
+      if (titulo) setRestaurantName(titulo)
+      setPosterRotulo((r as any).qr_rotulo ?? null)
+      setPosterTema(r.qr_estilo ?? 'classico')
+      setPosterMsg(r.qr_mensagem ?? null)
+      setPosterEstilos(lerEstiloDosTextos((r as any).qr_textos_estilo))
+      setPosterElementos(lerElementos((r as any).qr_elementos))
+      setPosterArte((r as any).qr_bg_imagem ?? null)
+    }
 
     let listaRegras = (Array.isArray(r.config_bonificacao) ? r.config_bonificacao : []) as unknown as RegraBonificacao[]
 
@@ -505,6 +510,10 @@ export default function Garcons() {
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // Tempo real: escaneamento novo (progresso das metas e ranking), garçom
+  // novo, pago ou removido e QR novo aparecem sem F5.
+  useRealtimeReload(['garcons', 'qr_codes', 'qr_scans'], restauranteId, () => carregar({ soDados: true }))
 
   // Escaneamentos do Ranking dentro do filtro escolhido. Regra selecionada
   // dispensa a busca (reaproveita `scansPorRegra`, já calculado); "todo o

@@ -8,13 +8,23 @@ Recebe o que os clientes mandam para o WhatsApp de feedback do restaurante (webh
 
 Só entram mensagens de **texto** e **áudio** (o áudio é transcrito). Foto, vídeo, figurinha, reação, documento, grupo e mensagens do próprio número são ignorados.
 
-- **Feedback** (elogio, crítica, comentário morno, sugestão): grava em `feedbacks_originais` + um `feedbacks_restaurante` por ponto, e agradece conforme o sentimento.
+- **Feedback** (elogio, crítica, comentário morno, sugestão): grava em `feedbacks_originais` + um `feedbacks_restaurante` por ponto, e a Helena agradece (ver abaixo).
 - **Pergunta ou pedido completo sobre o restaurante** (horário, reserva, pedido…): não grava; indica o número de contato das Configurações (`restaurantes.telefone_contato`) — só o número, com 55 e sem parênteses nem hífen (ex.: 5511987654321), sem link do WhatsApp. Sem número configurado, só avisa que o canal é de feedback.
 - **Pergunta incompleta** ("tenho uma dúvida", "queria saber uma coisa"), em que não dá para saber o assunto: não responde. Se a pessoa completar em seguida, o buffer junta as duas mensagens.
 - **Feedback + pergunta**: grava, agradece e encaminha, numa mensagem só.
 - **Saudação sozinha, "obrigado", "ok", emoji, assunto fora do restaurante**: não grava e não responde.
 
 Saudação que chega junto com o feedback (o buffer junta as mensagens em sequência) é tratada como parte do feedback.
+
+## A Helena
+
+Quem responde é a **Helena**, do atendimento do restaurante, escrevendo como gente no WhatsApp: primeira pessoa, no feminino, frases curtas.
+
+- O agradecimento do feedback é escrito pela IA na mesma chamada da análise (campo `resposta`), falando do que a pessoa contou. O nó "Monta a resposta" confere o texto: com link, número de telefone, falando de robô/IA/mensagem automática, vazio ou longo demais, troca por um modelo pronto na voz dela.
+- Na **primeira conversa** (o número não respondeu essa pessoa nos últimos 30 dias — nó "Já falou com a pessoa?", em `mensagens_whatsapp` com `por_api = true`) ela se apresenta: "Oi! Aqui é a Helena, do <restaurante>." Depois, não repete.
+- Usa o primeiro nome do perfil do WhatsApp quando ele parece nome de pessoa.
+- Não promete nada (reembolso, desconto, retorno) e não responde perguntas — o encaminhamento para o número de contato é um texto fixo do código.
+- No envio, a mensagem do cliente fica lida (`readmessages`) e aparece "digitando..." (`delay`) por 2,5 a 8 s, conforme o tamanho da resposta.
 
 ## Sentimentos
 
@@ -31,7 +41,7 @@ Saudação que chega junto com o feedback (o buffer junta as mensagens em sequê
 
 ## Teste depois de ativar (mande do seu celular para o número de um restaurante)
 
-1. "A comida estava ótima mas o garçom demorou" → agradecimento misto; no painel, mensagem "Positivo e negativo" com 2 pontos.
+1. "A comida estava ótima mas o garçom demorou" → "digitando..." e a Helena responde falando da comida e da demora (na primeira conversa, se apresentando); no painel, mensagem "Positivo e negativo" com 2 pontos.
 2. "Vocês abrem domingo?" → resposta indicando o número de contato, sem link (ou só o aviso, se não houver número). Nada gravado. "Tenho uma dúvida" sozinho → nenhuma resposta.
 3. "Oi" e, em até 20 s, "a pizza veio fria" → uma resposta só; feedback com o texto das duas.
 4. "Bom dia" sozinho → nenhuma resposta.
