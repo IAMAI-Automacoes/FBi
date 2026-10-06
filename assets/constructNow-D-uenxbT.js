@@ -1,0 +1,1 @@
+import{y as e}from"./format-ol9VdVG-.js";function t(t){return e(t,Date.now())}export{t};
