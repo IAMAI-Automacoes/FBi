@@ -117,10 +117,29 @@ function googleFalso(rotas: Record<string, Resp | Resp[]>) {
   ok('avaliações: caminho v4 accounts/{conta}/locations/{local}/reviews', new URL(g.chamadas[0].url).pathname === '/v4/accounts/1/locations/10/reviews')
 }
 {
+  // Leitura rápida: vem da mais recente para a mais antiga (updateTime desc) e
+  // para na primeira que já tinha sido lida.
+  const r = (id: string, quando: string) => ({ ...REVIEW, reviewId: id, createTime: quando, updateTime: quando })
+  const g = googleFalso({
+    '/reviews': [
+      { corpo: { reviews: [r('novo1', '2026-10-06T11:50:00Z'), r('novo2', '2026-10-06T11:40:00Z'), r('velho', '2026-10-06T09:00:00Z'), r('maisvelho', '2026-10-05T09:00:00Z')], averageRating: 4.4, totalReviewCount: 900, nextPageToken: 'p2' } },
+      { corpo: { reviews: [r('nunca', '2026-01-01T00:00:00Z')] } },
+    ],
+  })
+  const res = await g.cliente.avaliacoes('acc', 'accounts/1', 'locations/10', '2026-10-06T10:00:00Z')
+  ok('leitura rápida: só as criadas/editadas depois da última leitura', JSON.stringify(res.avaliacoes.map((a) => a.id)) === '["novo1","novo2"]', res.avaliacoes.map((a) => a.id))
+  ok('leitura rápida: uma chamada só (não vai para a página seguinte)', g.chamadas.length === 1)
+  ok('leitura rápida: não conta como completa (não apaga nada)', res.completo === false && res.notaMedia === 4.4 && res.total === 900)
+}
+{
+  const g = googleFalso({ '/reviews': { corpo: { reviews: [REVIEW], averageRating: 4, totalReviewCount: 1 } } })
+  ok('leitura sem "desde" e até o fim: completa', (await g.cliente.avaliacoes('acc', 'accounts/1', 'locations/10')).completo === true)
+}
+{
   const infinita = Array.from({ length: 10 }, (_, i) => ({ corpo: { reviews: [{ ...REVIEW, reviewId: `x${i}` }], nextPageToken: `t${i}` } }))
   const g = googleFalso({ '/reviews': infinita })
   const r = await g.cliente.avaliacoes('acc', 'accounts/1', 'locations/10')
-  ok('avaliações: para no teto de páginas e avisa que cortou', r.cortado && r.avaliacoes.length === 5)
+  ok('avaliações: para no teto de páginas e avisa que cortou (não é completa)', r.cortado && !r.completo && r.avaliacoes.length === 5)
 }
 {
   const g = googleFalso({ '/reviews': { status: 429, corpo: { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded ... limit 0' } } } })

@@ -4,10 +4,11 @@
 //   conectar        → cria o `state` e devolve a URL da tela do Google
 //   escolher_local  → { local }: liga o restaurante escolhido (quando o dono tem vários)
 //   descobrir       → busca de novo os restaurantes da conta (depois que o Google libera a API)
-//   sincronizar     → busca as avaliações agora (no máximo 1 vez a cada 10 min)
+//   sincronizar     → busca as avaliações agora (no máximo 1 vez por minuto)
 //   desconectar     → revoga no Google e apaga token, avaliações e conexão
-// Pelo cron (cabeçalho x-cron-secret = integracao_config.PUSH_TRIGGER_SECRET):
-//   sincronizar_todos → todos os restaurantes conectados, em segundo plano
+// Pelo cron, a cada 2 min (cabeçalho x-cron-secret = integracao_config.PUSH_TRIGGER_SECRET):
+//   sincronizar_todos → todos os restaurantes conectados, em segundo plano: leitura
+//                       rápida (só o novo) e, 1x por dia, a completa
 
 import { json, preflight } from '../_shared/cors.ts'
 import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
@@ -16,7 +17,11 @@ import {
   aplicarLocais, clienteGoogle, configGoogle, escolherLocal, lerToken, marcarAguardandoGoogle, sincronizarRestaurante,
 } from '../_shared/google-operacoes.ts'
 
-const INTERVALO_MINIMO_MS = 10 * 60_000
+const INTERVALO_MINIMO_MS = 60_000
+/** Leitura começada há menos que isto ainda pode estar rodando: o cron pula. */
+const EM_ANDAMENTO_MS = 90_000
+/** Quantos restaurantes o cron lê ao mesmo tempo. */
+const EM_PARALELO = 5
 
 function novoEstado(): string {
   const bytes = new Uint8Array(24)
@@ -40,14 +45,19 @@ Deno.serve(async (req: Request) => {
     if (!segredo?.valor || req.headers.get('x-cron-secret') !== segredo.valor) return json({ error: 'unauthorized' }, 401)
     if (!cfg) return json({ ok: false, motivo: 'nao_configurado' })
     const google = clienteGoogle(cfg)
-    const { data: conectados } = await db.from('google_conexoes').select('restaurante_id').eq('status', 'conectado')
+    const { data: conectadosTodos } = await db.from('google_conexoes').select('restaurante_id, ultima_tentativa').eq('status', 'conectado')
+    // Pula quem ainda está sendo lido pela rodada anterior.
+    const conectados = (conectadosTodos ?? []).filter((c: any) => !c.ultima_tentativa || Date.now() - new Date(c.ultima_tentativa).getTime() > EM_ANDAMENTO_MS)
     const trabalho = (async () => {
-      for (const c of conectados ?? []) await sincronizarRestaurante(db, google, Number(c.restaurante_id))
+      const fila = conectados.map((c: any) => Number(c.restaurante_id))
+      await Promise.all(Array.from({ length: Math.min(EM_PARALELO, fila.length) }, async () => {
+        for (let id = fila.shift(); id !== undefined; id = fila.shift()) await sincronizarRestaurante(db, google, id)
+      }))
     })()
     // Responde já e termina em segundo plano (o pg_net corta a conexão em segundos).
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(trabalho)
     else await trabalho
-    return json({ ok: true, restaurantes: (conectados ?? []).length }, 202)
+    return json({ ok: true, restaurantes: conectados.length }, 202)
   }
 
   // ── Dono do restaurante ──
@@ -70,7 +80,7 @@ Deno.serve(async (req: Request) => {
     if (acao === 'escolher_local') {
       const ok = await escolherLocal(db, restauranteId, String(corpo?.local ?? ''))
       if (!ok) return json({ ok: false, motivo: 'local_invalido' }, 400)
-      const r = await sincronizarRestaurante(db, google, restauranteId)
+      const r = await sincronizarRestaurante(db, google, restauranteId, { completa: true })
       return json({ ok: true, sincronizacao: r })
     }
 
@@ -80,7 +90,7 @@ Deno.serve(async (req: Request) => {
       try {
         const access = await google.renovar(refresh)
         const status = await aplicarLocais(db, restauranteId, await locaisDeTodasAsContas(google, access))
-        if (status === 'conectado') await sincronizarRestaurante(db, google, restauranteId)
+        if (status === 'conectado') await sincronizarRestaurante(db, google, restauranteId, { completa: true })
         return json({ ok: true, status })
       } catch (e) {
         if (e instanceof ErroGoogle && e.motivo === 'acesso_nao_liberado') {

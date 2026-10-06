@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
     guardarToken: (id, token) => guardarToken(db, id, token),
     aplicarLocais: (id, locais) => aplicarLocais(db, id, locais),
     marcarAguardandoGoogle: (id) => marcarAguardandoGoogle(db, id),
-    sincronizar: async (id) => { await sincronizarRestaurante(db, google, id) },
+    sincronizar: async (id) => { await sincronizarRestaurante(db, google, id, { completa: true }) },
   })
   return handler(req)
 })

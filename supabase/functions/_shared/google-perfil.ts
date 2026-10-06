@@ -132,6 +132,8 @@ export interface ResultadoAvaliacoes {
   total: number | null
   /** true se parou no limite de páginas (não leu tudo). */
   cortado: boolean
+  /** true se leu o histórico inteiro (sem `desde` e sem cortar). */
+  completo: boolean
 }
 
 /** Uma avaliação da API (Review) no formato da tabela. Sem id, data ou nota válida: null. */
@@ -270,14 +272,22 @@ export function criarClienteGoogle(op: {
       return locais
     },
 
-    /** Todas as avaliações do local (50 por página), mais a nota média e o total do Google. */
-    async avaliacoes(accessToken: string, conta: string, local: string): Promise<ResultadoAvaliacoes> {
+    /**
+     * Avaliações do local (50 por página), mais a nota média e o total do Google.
+     * Sem `desde`: o histórico inteiro. Com `desde` (ISO): só as criadas ou
+     * editadas depois — vêm da mais recente para a mais antiga (updateTime),
+     * então a leitura para na primeira mais velha que isso. Na maioria das
+     * vezes é uma chamada só.
+     */
+    async avaliacoes(accessToken: string, conta: string, local: string, desde?: string): Promise<ResultadoAvaliacoes> {
+      const limite = desde ? new Date(desde).getTime() : null
       const idLocal = local.replace(/^locations\//, '')
       const avaliacoes: AvaliacaoGoogle[] = []
       let notaMedia: number | null = null
       let total: number | null = null
       let pagina = ''
       let cortado = false
+      let chegouNoLimite = false
       for (let i = 0; ; i++) {
         if (i >= maxPaginas) { cortado = true; break }
         const u = new URL(`${API_AVALIACOES}/${conta}/locations/${idLocal}/reviews`)
@@ -288,13 +298,15 @@ export function criarClienteGoogle(op: {
         if (notaMedia === null && typeof j?.averageRating === 'number') notaMedia = j.averageRating
         if (total === null && j?.totalReviewCount != null) total = Number(j.totalReviewCount)
         for (const r of j?.reviews ?? []) {
+          const quando = new Date(r?.updateTime ?? r?.createTime ?? 0).getTime()
+          if (limite !== null && quando <= limite) { chegouNoLimite = true; break }
           const a = lerAvaliacao(r)
           if (a) avaliacoes.push(a)
         }
         pagina = j?.nextPageToken ?? ''
-        if (!pagina) break
+        if (!pagina || chegouNoLimite) break
       }
-      return { avaliacoes, notaMedia, total, cortado }
+      return { avaliacoes, notaMedia, total, cortado, completo: !desde && !cortado }
     },
   }
 }

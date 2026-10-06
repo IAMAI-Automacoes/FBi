@@ -405,7 +405,7 @@ export default function Google() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        Dados do Google, atualizados a cada 6 horas. O EasyFeed só lê as avaliações; nada é publicado no seu perfil.
+        Dados do Google, atualizados a cada 2 minutos. O EasyFeed só lê as avaliações; nada é publicado no seu perfil.
       </p>
     </div>
   )

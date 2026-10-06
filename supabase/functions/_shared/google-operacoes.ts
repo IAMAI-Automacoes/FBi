@@ -2,9 +2,13 @@
 // aplicar o local escolhido e sincronizar as avaliações de um restaurante.
 //
 // As avaliações vão para `google_avaliacoes`, uma CÓPIA TEMPORÁRIA (política
-// da API: até 30 dias, sem agregar). Cada sincronização renova a cópia; o que
-// some do Google sai daqui na hora, e o que ficar 30 dias sem renovar o cron
-// apaga. As médias do gráfico são calculadas na consulta (google_medias_mensais).
+// da API: até 30 dias, sem agregar). Duas leituras:
+//   - rápida (a cada 2 min, pelo cron): só o que foi criado ou editado desde a
+//     última leitura — quase sempre uma chamada só ao Google;
+//   - completa (1x por dia, e logo ao conectar): o histórico inteiro, que
+//     renova a cópia toda e tira daqui o que foi apagado no Google.
+// O que ficar 30 dias sem renovar o cron apaga. As médias do gráfico são
+// calculadas na consulta (google_medias_mensais).
 
 import { criarClienteGoogle, ErroGoogle, type ClienteGoogle, type LocalGoogle } from './google-perfil.ts'
 
@@ -91,25 +95,43 @@ export async function marcarAguardandoGoogle(db: Db, restauranteId: number): Pro
 }
 
 export type ResultadoSincronizacao =
-  | { ok: true; quantidade: number }
+  | { ok: true; quantidade: number; completa: boolean }
   | { ok: false; motivo: string }
 
-/** Busca todas as avaliações do local no Google e renova a cópia temporária. */
-export async function sincronizarRestaurante(db: Db, google: ClienteGoogle, restauranteId: number): Promise<ResultadoSincronizacao> {
+/** De quanto em quanto tempo a leitura completa (o histórico inteiro) é refeita. */
+export const INTERVALO_COMPLETA_MS = 24 * 60 * 60_000
+/** Folga na leitura rápida: relê os últimos minutos antes da última leitura (relógios diferentes). */
+const FOLGA_MS = 15 * 60_000
+
+/**
+ * Busca as avaliações do local no Google e renova a cópia temporária. Leitura
+ * completa se nunca houve uma, se a última tem mais de 24 h ou se pedida.
+ */
+export async function sincronizarRestaurante(
+  db: Db,
+  google: ClienteGoogle,
+  restauranteId: number,
+  op: { completa?: boolean } = {},
+): Promise<ResultadoSincronizacao> {
   const { data: c } = await db
     .from('google_conexoes')
-    .select('status, conta, local')
+    .select('status, conta, local, ultima_sincronizacao, ultima_completa')
     .eq('restaurante_id', restauranteId)
     .maybeSingle()
   if (!c || c.status !== 'conectado' || !c.conta || !c.local) return { ok: false, motivo: 'nao_conectado' }
 
-  const inicio = new Date().toISOString()
+  const agora = Date.now()
+  const ultimaCompleta = c.ultima_completa ? new Date(c.ultima_completa).getTime() : 0
+  const completa = op.completa || !c.ultima_sincronizacao || agora - ultimaCompleta > INTERVALO_COMPLETA_MS
+  const desde = completa ? undefined : new Date(new Date(c.ultima_sincronizacao).getTime() - FOLGA_MS).toISOString()
+
+  const inicio = new Date(agora).toISOString()
   await atualizarConexao(db, restauranteId, { ultima_tentativa: inicio })
   try {
     const refresh = await lerToken(db, restauranteId)
     if (!refresh) throw new ErroGoogle(401, 'precisa_reconectar', 'Sem token guardado.')
     const accessToken = await google.renovar(refresh)
-    const r = await google.avaliacoes(accessToken, c.conta, c.local)
+    const r = await google.avaliacoes(accessToken, c.conta, c.local, desde)
 
     // Grava em lotes; `buscada_em` = agora renova a cópia.
     const linhas = r.avaliacoes.map((a) => ({ ...a, restaurante_id: restauranteId, buscada_em: inicio }))
@@ -118,17 +140,19 @@ export async function sincronizarRestaurante(db: Db, google: ClienteGoogle, rest
       if (error) throw error
     }
     // Leu tudo: o que não veio desta vez foi apagado no Google — sai daqui também.
-    if (!r.cortado) {
+    if (r.completo) {
       const { error } = await db.from('google_avaliacoes').delete().eq('restaurante_id', restauranteId).lt('buscada_em', inicio)
       if (error) throw error
     }
     await atualizarConexao(db, restauranteId, {
       nota_media: r.notaMedia,
       total_avaliacoes: r.total,
-      ultima_sincronizacao: new Date().toISOString(),
+      // O início da leitura: a próxima rápida busca o que mudou desde aqui.
+      ultima_sincronizacao: inicio,
+      ...(r.completo ? { ultima_completa: inicio } : {}),
       erro: null,
     })
-    return { ok: true, quantidade: linhas.length }
+    return { ok: true, quantidade: linhas.length, completa: r.completo }
   } catch (e) {
     const motivo = e instanceof ErroGoogle ? e.motivo : 'outro'
     await atualizarConexao(db, restauranteId, {

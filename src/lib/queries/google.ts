@@ -139,7 +139,7 @@ export const MENSAGENS_GOOGLE: Record<string, string> = {
   estado: 'O link de conexão expirou. Clique em "Conectar com o Google" de novo.',
   sem_token: 'O Google não liberou o acesso contínuo. Conecte de novo.',
   sem_local: 'Essa conta Google não administra nenhum perfil de empresa.',
-  aguarde: 'As avaliações foram atualizadas há pouco. Tente de novo em alguns minutos.',
+  aguarde: 'As avaliações acabaram de ser atualizadas. Tente de novo daqui a 1 minuto.',
   local_invalido: 'Esse restaurante não está na lista da sua conta Google.',
   google: 'O Google respondeu com um erro. Tente de novo.',
   rede: 'Não foi possível falar com o servidor. Confira a internet.',
