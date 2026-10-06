@@ -23,6 +23,7 @@ const Insights = lazy(() => import('./pages/Insights'))
 const Actions = lazy(() => import('./pages/Actions'))
 const AcoesArquivadas = lazy(() => import('./pages/AcoesArquivadas'))
 const Reports = lazy(() => import('./pages/Reports'))
+const Google = lazy(() => import('./pages/Google'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
 const Garcons = lazy(() => import('./pages/Garcons'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -164,6 +165,14 @@ const App = () => (
                 element={
                   <RotaPermitida modulo="relatorios">
                     <Reports />
+                  </RotaPermitida>
+                }
+              />
+              <Route
+                path="/google"
+                element={
+                  <RotaPermitida modulo="relatorios">
+                    <Google />
                   </RotaPermitida>
                 }
               />

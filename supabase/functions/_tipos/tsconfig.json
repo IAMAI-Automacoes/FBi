@@ -37,6 +37,8 @@
     "../enviar-push/*.ts",
     "../whatsapp-instancia/*.ts",
     "../guardar-midia/*.ts",
-    "../previa-link/*.ts"
+    "../previa-link/*.ts",
+    "../google-perfil/*.ts",
+    "../google-oauth-callback/*.ts"
   ]
 }

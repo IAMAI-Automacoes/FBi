@@ -9,6 +9,7 @@ import {
   QrCode,
   Users,
   HelpCircle,
+  Star,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -37,6 +38,9 @@ const navigation = [
   { name: 'Insights', href: '/insights', icon: Lightbulb, modulo: 'insights' },
   { name: 'Ações', href: '/acoes', icon: Zap, modulo: 'acoes' },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart, modulo: 'relatorios' },
+  // Avaliações do Google: só o admin da plataforma vê enquanto o Google não
+  // libera a API para o EasyFeed. Para liberar aos clientes: apague `soAdmin`.
+  { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },
 ]
@@ -45,7 +49,7 @@ export function AppSidebar() {
   const location = useLocation()
   const { nomeRestaurante, logoUrl } = useRestauranteConfig()
   const { podeVer } = usePermissoes()
-  const { usuario } = useAuth()
+  const { usuario, ehAdminPlataforma } = useAuth()
 
   const isSugestoesActive = location.pathname === '/sugestoes'
   const isFeedbacksActive = location.pathname === '/feedbacks'
@@ -188,7 +192,7 @@ export function AppSidebar() {
             mais altura pra rodapé/resto da barra lateral. */}
         <SidebarMenu className="gap-0.5">
           {navigation
-            .filter((item) => podeVer(item.modulo))
+            .filter((item) => podeVer(item.modulo) && (!('soAdmin' in item) || ehAdminPlataforma))
             .map((item) => {
               const isActive = location.pathname === item.href
               return (
