@@ -22,7 +22,7 @@ import { PassoAPassoIphone } from '@/components/InstalarApp'
 const CHAVE = 'easyfeed:pedir-notificacoes-ate'
 const SETE_DIAS = 7 * 24 * 3600 * 1000
 // Páginas públicas, de entrada ou de compra: ali não faz sentido perguntar.
-const FORA = ['/login', '/cadastro', '/recuperar-senha', '/vendas', '/checkout', '/assinatura', '/onboarding', '/f/']
+const FORA = ['/login', '/cadastro', '/recuperar-senha', '/vendas', '/checkout', '/assinatura', '/onboarding', '/f/', '/influencers']
 
 function adiado(): boolean {
   try { return Number(localStorage.getItem(CHAVE) || 0) > Date.now() } catch { return false }

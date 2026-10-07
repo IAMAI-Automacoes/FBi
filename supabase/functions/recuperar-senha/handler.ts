@@ -39,7 +39,10 @@ const esperaPedida = (r: { esperarSegundos?: number } | void) => (r ? r.esperarS
  * que só deixa mandar outro depois de ~1 minuto: nesse caso, tenta de novo
  * quando liberar, depois de responder à tela.
  */
-async function mandarPelaReserva(email: string, deps: DepsRecuperar): Promise<void> {
+export async function mandarPelaReserva(
+  email: string,
+  deps: Pick<DepsRecuperar, 'enviarPeloSupabase' | 'emSegundoPlano' | 'esperar'>,
+): Promise<void> {
   const segundos = esperaPedida(await deps.enviarPeloSupabase(email))
   if (!segundos) return
   const esperar = deps.esperar ?? ((ms: number) => new Promise<void>((ok) => setTimeout(ok, ms)))

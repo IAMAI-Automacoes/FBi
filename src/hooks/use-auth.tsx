@@ -61,6 +61,10 @@ interface AuthContextType {
   /** Preenchido quando ESTA sessão é o admin da plataforma dentro da conta de um
       cliente (painel Admin → Contas → "Entrar"). Quem confirma é o banco. */
   acessoAdmin: AcessoAdmin | null
+  /** Conta só do EasyFeed Influencers (está na lista e não tem restaurante) que
+      entrou pelo login dos restaurantes. Não ganha restaurante: o RotaProtegida
+      mostra que ela é de lá. */
+  contaDeInfluencer: boolean
   /** Relê vendedor e demonstração no banco sem mexer no resto. Falha de rede não
       muda nada — uma demonstração em andamento não cai por instabilidade. */
   recarregarAcesso: () => Promise<void>
@@ -113,6 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [ehVendedor, setEhVendedor] = useState(false)
   const [sessaoDemo, setSessaoDemo] = useState<SessaoDemo | null>(null)
   const [acessoAdmin, setAcessoAdmin] = useState<AcessoAdmin | null>(null)
+  const [contaDeInfluencer, setContaDeInfluencer] = useState(false)
 
   const aplicarAcesso = useCallback((acesso: AcessoConta) => {
     setEhVendedor(acesso.ehVendedor)
@@ -199,8 +204,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (data) {
           const pessoa = await buscarPessoa(userAuth.id)
+          setContaDeInfluencer(false)
           setUsuario(mesclarUsuario(data, pessoa, userAuth))
           return
+        }
+
+        // Influenciador sem restaurante: a conta é do EasyFeed Influencers. Não
+        // cria o restaurante vazio (a limpeza de contas abandonadas o apagaria).
+        if (error?.code === 'PGRST116') {
+          const { data: ehInfluencer } = await supabase.rpc('eh_influencer')
+          if (ehInfluencer === true) {
+            setContaDeInfluencer(true)
+            setUsuario(null)
+            return
+          }
         }
 
         // Sem restaurante — cria placeholder. Os campos de pessoa NÃO vão para
@@ -247,6 +264,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setEhVendedor(false)
         setSessaoDemo(null)
         setAcessoAdmin(null)
+        setContaDeInfluencer(false)
         setLoading(false)
       }
     })
@@ -378,7 +396,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, acessoAdmin, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, acessoAdmin, contaDeInfluencer, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

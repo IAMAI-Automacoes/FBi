@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Loader2, LogOut, UserCog } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { voltarParaMinhaConta } from '@/lib/acesso-admin'
+import { ehEnderecoInfluencers } from '@/lib/influencers'
 
 /* Aparece em todas as páginas enquanto o admin da plataforma está dentro da
    conta de um cliente (painel Admin → Contas → "Entrar"): deixa claro de quem
@@ -10,7 +11,8 @@ export function BarraAcessoAdmin() {
   const { acessoAdmin, usuario } = useAuth()
   const [voltando, setVoltando] = useState(false)
 
-  if (!acessoAdmin) return null
+  // Na área de influencers o login é outro: a barra do painel dos restaurantes não vale lá.
+  if (!acessoAdmin || ehEnderecoInfluencers(window.location.pathname)) return null
 
   const voltar = async () => {
     setVoltando(true)

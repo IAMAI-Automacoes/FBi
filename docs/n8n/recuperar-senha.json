@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## EasyFeed - Recuperação de senha\nA função **recuperar-senha** do Supabase chama este webhook com `{ email, nome, link, validadeMinutos }` e o cabeçalho **x-easyfeed-segredo**.\n\n1. **Recebe pedido**: só aceita quem manda o segredo certo (credencial Header Auth).\n2. **Monta o e-mail**: confere o e-mail e se o link é mesmo de recuperação do Supabase do EasyFeed.\n3. **Envia o e-mail**: pela caixa nao-responda@easyfeed.com.br (SMTP da Hostinger).\n4. **Responde** 200 (enviado) ou 502 (falhou). No 502 a função manda pelo Supabase, como reserva.",
+        "content": "## EasyFeed - Recuperação de senha\nAs funções **recuperar-senha** e **acesso-influencer** do Supabase chamam este webhook com `{ email, nome, link, validadeMinutos, tipo }` e o cabeçalho **x-easyfeed-segredo**. Com `tipo: acesso_influencer`, o texto é o de criar a senha do EasyFeed Influencers.\n\n1. **Recebe pedido**: só aceita quem manda o segredo certo (credencial Header Auth).\n2. **Monta o e-mail**: confere o e-mail e se o link é mesmo de recuperação do Supabase do EasyFeed.\n3. **Envia o e-mail**: pela caixa nao-responda@easyfeed.com.br (SMTP da Hostinger).\n4. **Responde** 200 (enviado) ou 502 (falhou). No 502 a função manda pelo Supabase, como reserva.",
         "height": 300,
         "width": 760,
         "color": 6
@@ -14,7 +14,7 @@
         -40,
         -360
       ],
-      "id": "2f596fc6-1d20-4da1-b6c6-d482f645edf3",
+      "id": "2902dcbe-5e4f-4b88-8965-85ee360e65d2",
       "name": "Nota - Como funciona"
     },
     {
@@ -31,7 +31,7 @@
         0,
         0
       ],
-      "id": "133e9bd2-674a-4306-89ac-28194753b0b2",
+      "id": "c1579af1-ac4c-470b-bf76-8df2e6b1ae3d",
       "name": "Recebe pedido",
       "webhookId": "5d6f8a2e-4f1b-4c3e-9b7a-6e2d1c0a9f31",
       "credentials": {
@@ -43,7 +43,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta o e-mail de recuperação de senha a partir do que a função\n// recuperar-senha do Supabase mandou: { email, nome, link, validadeMinutos }.\nconst b = $input.first().json.body || {};\n\nconst email = String(b.email || '').trim().toLowerCase();\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('E-mail inválido: ' + email);\n\n// Só aceita o link oficial de recuperação do Supabase do EasyFeed: ninguém\n// consegue usar este workflow para mandar outro link pelo nosso domínio.\nconst link = String(b.link || '').trim();\nif (!link.startsWith('https://lixrcruilisncfhfhndo.supabase.co/auth/v1/verify?')) throw new Error('Link de recuperação inesperado.');\n\nconst esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst primeiroNome = String(b.nome || '').trim().split(/\\s+/)[0].slice(0, 40);\nconst oi = primeiroNome ? 'Oi, ' + primeiroNome + '!' : 'Oi!';\nconst minutos = Number(b.validadeMinutos) || 60;\nconst validade = minutos % 60 === 0 ? (minutos / 60 === 1 ? '1 hora' : (minutos / 60) + ' horas') : minutos + ' minutos';\n\nconst assunto = 'Crie sua nova senha do EasyFeed';\n\nconst html = `<!doctype html>\n<html lang=\"pt-BR\">\n<body style=\"margin:0;padding:0;background:#F1F5F9;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#F1F5F9;padding:32px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:520px;background:#FFFFFF;border-radius:14px;border:1px solid #E2E8F0;\">\n        <tr><td style=\"padding:28px 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;\">\n          <div style=\"font-size:22px;font-weight:700;color:#2563EB;\">EasyFeed</div>\n        </td></tr>\n        <tr><td style=\"padding:12px 28px 4px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#334155;\">\n          <p style=\"margin:0 0 14px 0;font-size:17px;color:#0F172A;font-weight:700;\">${esc(oi)}</p>\n          <p style=\"margin:0 0 14px 0;\">Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, é só clicar no botão:</p>\n        </td></tr>\n        <tr><td align=\"center\" style=\"padding:10px 28px 18px 28px;\">\n          <a href=\"${esc(link)}\" style=\"display:inline-block;background:#2563EB;color:#FFFFFF;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;padding:13px 26px;border-radius:10px;\">Criar nova senha</a>\n        </td></tr>\n        <tr><td style=\"padding:0 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#475569;\">\n          <p style=\"margin:0 0 12px 0;\">O link vale por ${validade} e só funciona uma vez.</p>\n          <p style=\"margin:0 0 12px 0;\">Se não foi você que pediu, pode ignorar este e-mail. Sua senha continua a mesma.</p>\n          <p style=\"margin:0 0 4px 0;\">Equipe EasyFeed</p>\n        </td></tr>\n        <tr><td style=\"padding:16px 28px 26px 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#94A3B8;\">\n          Se o botão não abrir, copie e cole este endereço no navegador:<br>\n          <a href=\"${esc(link)}\" style=\"color:#2563EB;word-break:break-all;\">${esc(link)}</a>\n        </td></tr>\n      </table>\n      <p style=\"font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#94A3B8;margin:16px 0 0 0;\">EasyFeed, um produto da IAMAI · easyfeed.com.br<br>Este e-mail é automático, não precisa responder.</p>\n    </td></tr>\n  </table>\n</body>\n</html>`;\n\nconst texto = [\n  oi,\n  '',\n  'Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, abra este link:',\n  link,\n  '',\n  'O link vale por ' + validade + ' e só funciona uma vez.',\n  'Se não foi você que pediu, pode ignorar este e-mail. Sua senha continua a mesma.',\n  '',\n  'Equipe EasyFeed',\n  'EasyFeed, um produto da IAMAI · easyfeed.com.br',\n].join('\\n');\n\nreturn [{ json: { para: email, assunto, html, texto } }];"
+        "jsCode": "// Monta o e-mail a partir do que a função do Supabase mandou:\n// { email, nome, link, validadeMinutos, tipo }.\n//   tipo ausente          → \"Esqueci a senha\" do EasyFeed (função recuperar-senha)\n//   'acesso_influencer'   → criar a senha do EasyFeed Influencers (função acesso-influencer)\nconst b = $input.first().json.body || {};\n\nconst email = String(b.email || '').trim().toLowerCase();\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('E-mail inválido: ' + email);\n\n// Só aceita o link oficial de recuperação do Supabase do EasyFeed: ninguém\n// consegue usar este workflow para mandar outro link pelo nosso domínio.\nconst link = String(b.link || '').trim();\nif (!link.startsWith('https://lixrcruilisncfhfhndo.supabase.co/auth/v1/verify?')) throw new Error('Link de recuperação inesperado.');\n\nconst esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst primeiroNome = String(b.nome || '').trim().split(/\\s+/)[0].slice(0, 40);\nconst oi = primeiroNome ? 'Oi, ' + primeiroNome + '!' : 'Oi!';\nconst minutos = Number(b.validadeMinutos) || 60;\nconst validade = minutos % 60 === 0 ? (minutos / 60 === 1 ? '1 hora' : (minutos / 60) + ' horas') : minutos + ' minutos';\n\nconst influencer = b.tipo === 'acesso_influencer';\nconst T = influencer\n  ? {\n      assunto: 'Crie sua senha do EasyFeed Influencers',\n      marca: 'EasyFeed Influencers',\n      pedido: 'Para criar sua senha do EasyFeed Influencers e entrar, é só clicar no botão:',\n      pedidoTexto: 'Para criar sua senha do EasyFeed Influencers e entrar, abra este link:',\n      botao: 'Criar minha senha',\n      ignorar: 'Se não foi você que pediu, pode ignorar este e-mail.',\n    }\n  : {\n      assunto: 'Crie sua nova senha do EasyFeed',\n      marca: 'EasyFeed',\n      pedido: 'Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, é só clicar no botão:',\n      pedidoTexto: 'Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, abra este link:',\n      botao: 'Criar nova senha',\n      ignorar: 'Se não foi você que pediu, pode ignorar este e-mail. Sua senha continua a mesma.',\n    };\nconst assunto = T.assunto;\n\nconst html = `<!doctype html>\n<html lang=\"pt-BR\">\n<body style=\"margin:0;padding:0;background:#F1F5F9;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#F1F5F9;padding:32px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:520px;background:#FFFFFF;border-radius:14px;border:1px solid #E2E8F0;\">\n        <tr><td style=\"padding:28px 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;\">\n          <div style=\"font-size:22px;font-weight:700;color:#2563EB;\">${T.marca}</div>\n        </td></tr>\n        <tr><td style=\"padding:12px 28px 4px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#334155;\">\n          <p style=\"margin:0 0 14px 0;font-size:17px;color:#0F172A;font-weight:700;\">${esc(oi)}</p>\n          <p style=\"margin:0 0 14px 0;\">${T.pedido}</p>\n        </td></tr>\n        <tr><td align=\"center\" style=\"padding:10px 28px 18px 28px;\">\n          <a href=\"${esc(link)}\" style=\"display:inline-block;background:#2563EB;color:#FFFFFF;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;padding:13px 26px;border-radius:10px;\">${T.botao}</a>\n        </td></tr>\n        <tr><td style=\"padding:0 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#475569;\">\n          <p style=\"margin:0 0 12px 0;\">O link vale por ${validade} e só funciona uma vez.</p>\n          <p style=\"margin:0 0 12px 0;\">${T.ignorar}</p>\n          <p style=\"margin:0 0 4px 0;\">Equipe EasyFeed</p>\n        </td></tr>\n        <tr><td style=\"padding:16px 28px 26px 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#94A3B8;\">\n          Se o botão não abrir, copie e cole este endereço no navegador:<br>\n          <a href=\"${esc(link)}\" style=\"color:#2563EB;word-break:break-all;\">${esc(link)}</a>\n        </td></tr>\n      </table>\n      <p style=\"font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#94A3B8;margin:16px 0 0 0;\">EasyFeed, um produto da IAMAI · easyfeed.com.br<br>Este e-mail é automático, não precisa responder.</p>\n    </td></tr>\n  </table>\n</body>\n</html>`;\n\nconst texto = [\n  oi,\n  '',\n  T.pedidoTexto,\n  link,\n  '',\n  'O link vale por ' + validade + ' e só funciona uma vez.',\n  T.ignorar,\n  '',\n  'Equipe EasyFeed',\n  'EasyFeed, um produto da IAMAI · easyfeed.com.br',\n].join('\\n');\n\nreturn [{ json: { para: email, assunto, html, texto } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -51,7 +51,7 @@
         240,
         0
       ],
-      "id": "6ce2ffac-aadd-4d0e-bcec-ac84ea6b4e22",
+      "id": "44d950cc-e1ba-41dd-b740-ff2d052b2f4f",
       "name": "Monta o e-mail"
     },
     {
@@ -72,7 +72,7 @@
         480,
         0
       ],
-      "id": "a6389529-d5a2-4a66-8ed7-56ad15bfd73b",
+      "id": "5403b1f9-d508-4707-9d26-5b6754eb06b1",
       "name": "Envia o e-mail",
       "credentials": {
         "smtp": {
@@ -99,7 +99,7 @@
         720,
         -100
       ],
-      "id": "e1847e3f-fc5f-47bd-8f8d-4642acc59b91",
+      "id": "2fa5bb43-5b7a-47dc-a63a-2ef122917b9a",
       "name": "Responde enviado"
     },
     {
@@ -116,7 +116,7 @@
         720,
         100
       ],
-      "id": "250a3082-c7b3-44c5-befe-5d6f4a3f2bd2",
+      "id": "57615b5b-0000-4eff-b8ea-46f3c5e6e027",
       "name": "Responde falha"
     }
   ],

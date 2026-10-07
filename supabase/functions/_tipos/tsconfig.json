@@ -42,6 +42,7 @@
     "../google-oauth-callback/*.ts",
     "../recuperar-senha/*.ts",
     "../salvy-webhook/*.ts",
-    "../entrar-na-conta/*.ts"
+    "../entrar-na-conta/*.ts",
+    "../acesso-influencer/*.ts"
   ]
 }

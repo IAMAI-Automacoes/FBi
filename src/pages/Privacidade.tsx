@@ -12,7 +12,7 @@ import { cores } from '@/components/vendas/tokens'
  * Mudou o que o sistema guarda ou com quem compartilha? Atualize aqui e a data.
  */
 
-const ATUALIZADA_EM = '6 de outubro de 2026'
+const ATUALIZADA_EM = '8 de outubro de 2026'
 const EMAIL = 'oficial@iamai.ia.br'
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -106,7 +106,8 @@ export default function Privacidade() {
             'prestar o serviço: receber e organizar os feedbacks, responder automaticamente em nome do restaurante, gerar insights, relatórios e planos de ação;',
             'analisar os feedbacks com inteligência artificial (classificar o assunto e o sentimento, resumir e sugerir melhorias);',
             'cobrar a assinatura, dar suporte e enviar avisos sobre a conta;',
-            'manter a segurança da plataforma, evitar fraudes e cumprir obrigações legais.',
+            'manter a segurança da plataforma, evitar fraudes e cumprir obrigações legais;',
+            'produzir estatísticas agrupadas e anônimas sobre os feedbacks, para estudos sobre o setor e para conteúdo educativo para donos de restaurante (veja a seção 5).',
           ]} />
           <p>
             As bases legais são a execução do contrato com o restaurante, o legítimo interesse em operar e melhorar
@@ -149,6 +150,13 @@ export default function Privacidade() {
           <p>
             Alguns desses fornecedores ficam fora do Brasil, e a transferência segue o que a LGPD permite. Também
             podemos compartilhar dados quando a lei ou uma autoridade exigir.
+          </p>
+          <p>
+            <b>Dados agrupados e anônimos com parceiros.</b> Parceiros que produzem conteúdo educativo para donos de
+            restaurante podem ver estatísticas agrupadas dos feedbacks: assuntos, temas, quantidades e resumos
+            curtos (como "comida fria"). Eles não veem o nome do restaurante, o nome ou o telefone de quem mandou o
+            feedback, nem a mensagem original, e nunca veem dados do Google. Esses dados não permitem identificar
+            o restaurante nem o cliente.
           </p>
         </Secao>
 

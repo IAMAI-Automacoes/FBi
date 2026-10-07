@@ -1371,6 +1371,66 @@ export type Database = {
           },
         ]
       }
+      influencer_consultas: {
+        Row: {
+          criado_em: string
+          id: number
+          ip_hash: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: number
+          ip_hash: string
+        }
+        Update: {
+          criado_em?: string
+          id?: number
+          ip_hash?: string
+        }
+        Relationships: []
+      }
+      influenciadores: {
+        Row: {
+          arroba: string | null
+          auth_user_id: string | null
+          cidade: string | null
+          criado_em: string
+          criado_por: string | null
+          email: string
+          id: string
+          nome: string | null
+          onboarding_em: string | null
+          ultimo_acesso_em: string | null
+          valor_mensal: number | null
+        }
+        Insert: {
+          arroba?: string | null
+          auth_user_id?: string | null
+          cidade?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          email: string
+          id?: string
+          nome?: string | null
+          onboarding_em?: string | null
+          ultimo_acesso_em?: string | null
+          valor_mensal?: number | null
+        }
+        Update: {
+          arroba?: string | null
+          auth_user_id?: string | null
+          cidade?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          email?: string
+          id?: string
+          nome?: string | null
+          onboarding_em?: string | null
+          ultimo_acesso_em?: string | null
+          valor_mensal?: number | null
+        }
+        Relationships: []
+      }
       insight_feedback: {
         Row: {
           created_at: string
@@ -3496,6 +3556,7 @@ export type Database = {
       }
       difere_por_troca: { Args: { a: string; b: string }; Returns: boolean }
       eh_admin_plataforma_ou_console: { Args: never; Returns: boolean }
+      eh_influencer: { Args: never; Returns: boolean }
       encerrar_acesso_admin: { Args: never; Returns: boolean }
       encerrar_sessoes_demo: { Args: never; Returns: number }
       expirar_assinaturas: { Args: never; Returns: number }
@@ -3583,6 +3644,35 @@ export type Database = {
           quantidade_30d: number
         }[]
       }
+      influencer_conta: {
+        Args: { p_email: string }
+        Returns: {
+          tem_senha: boolean
+          user_id: string
+        }[]
+      }
+      influencer_marcar_acesso: { Args: never; Returns: undefined }
+      influencer_salvar_perfil: {
+        Args: { p_arroba: string; p_cidade: string; p_nome: string }
+        Returns: boolean
+      }
+      influencers_definir_incluir_testes: {
+        Args: { p_incluir: boolean }
+        Returns: boolean
+      }
+      influencers_incluem_testes: { Args: never; Returns: boolean }
+      influencers_painel: {
+        Args: { p_culinaria?: string; p_dias?: number }
+        Returns: Json
+      }
+      influencers_restaurantes_base: {
+        Args: { p_testes: boolean }
+        Returns: {
+          id: number
+          tipo_culinaria: string
+        }[]
+      }
+      influencers_tipo: { Args: { p_sentimento: string }; Returns: string }
       janela_demo_atual: { Args: never; Returns: number }
       limpar_contas_abandonadas: { Args: never; Returns: number }
       limpar_payload_eventos_stripe: { Args: never; Returns: number }

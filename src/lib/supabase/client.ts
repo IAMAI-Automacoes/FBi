@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
 import { rememberMeStorage } from './auth-storage'
 import { MODO_DEMO } from '@/lib/demo'
+import { NA_AREA_INFLUENCERS } from '@/lib/influencers'
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://lixrcruilisncfhfhndo.supabase.co'
-const SUPABASE_PUBLISHABLE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpeHJjcnVpbGlzbmNmaGZobmRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MzkyNTcsImV4cCI6MjA3ODUxNTI1N30.dm3PN80PogMaEHK5ZxHhEyacMbb3PMUoHCUwaDbePmM'
+export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://lixrcruilisncfhfhndo.supabase.co'
+export const SUPABASE_PUBLISHABLE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpeHJjcnVpbGlzbmNmaGZobmRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MzkyNTcsImV4cCI6MjA3ODUxNTI1N30.dm3PN80PogMaEHK5ZxHhEyacMbb3PMUoHCUwaDbePmM'
 
 // Import the supabase client like this:
 // import { supabase } from "@/lib/supabase/client";
@@ -19,6 +20,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     ...(MODO_DEMO ? { storageKey: 'sb-lixrcruilisncfhfhndo-demo-auth-token' } : {}),
     persistSession: true,
     autoRefreshToken: true,
+    // Na área de influencers, o link do e-mail (criar senha) é da sessão de lá
+    // (`cliente-influencers.ts`): este cliente não pode pegá-lo para si.
+    detectSessionInUrl: !NA_AREA_INFLUENCERS,
   },
   global: {
     // O Supabase não envia Cache-Control nas respostas; sem isto o navegador

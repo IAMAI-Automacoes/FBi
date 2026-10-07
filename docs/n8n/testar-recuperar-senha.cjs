@@ -53,6 +53,15 @@ ok('sem nome: só "Oi!"', r.html.includes('>Oi!<') && r.texto.startsWith('Oi!'))
 r = roda({ email: 'a@b.com', link: LINK, validadeMinutos: 30 })[0].json
 ok('validade em minutos', r.texto.includes('vale por 30 minutos'))
 
+// EasyFeed Influencers: mesmo webhook, outro texto.
+r = roda({ email: 'ana@influencer.com', nome: 'Ana Souza', link: LINK, validadeMinutos: 60, tipo: 'acesso_influencer' })[0].json
+ok('influencer: assunto próprio', r.assunto === 'Crie sua senha do EasyFeed Influencers')
+ok('influencer: texto e botão de criar a senha', r.html.includes('Para criar sua senha do EasyFeed Influencers') && r.html.includes('>Criar minha senha<') && r.texto.includes('EasyFeed Influencers'))
+ok('influencer: chama pelo primeiro nome e manda o link', r.texto.startsWith('Oi, Ana!') && r.texto.includes(LINK))
+ok('influencer: nada do texto de "trocar a senha"', !/trocar a senha|continua a mesma/.test(r.html + r.texto))
+ok('sem tipo: continua o e-mail da recuperação de senha', roda({ email: 'a@b.com', link: LINK })[0].json.assunto === 'Crie sua nova senha do EasyFeed')
+ok('tipo desconhecido: cai no da recuperação de senha', roda({ email: 'a@b.com', link: LINK, tipo: 'outro' })[0].json.assunto === 'Crie sua nova senha do EasyFeed')
+
 let erro = null
 try { roda({ email: 'a@b.com', link: 'https://site-falso.com/roubar?x=1' }) } catch (e) { erro = e.message }
 ok('link que não é do Supabase do EasyFeed é recusado', !!erro && erro.includes('Link'))

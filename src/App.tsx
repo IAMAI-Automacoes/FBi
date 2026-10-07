@@ -18,6 +18,8 @@ import Vendas from './pages/Vendas'
 // sob demanda (code-splitting) para o bundle inicial ficar pequeno e o primeiro
 // paint ser rápido, inclusive na página de vendas.
 const Index = lazy(() => import('./pages/Index'))
+// EasyFeed Influencers: área escondida, com login separado (só carrega em /influencers).
+const AreaInfluencers = lazy(() => import('./pages/influencers/AreaInfluencers'))
 const Feedbacks = lazy(() => import('./pages/Feedbacks'))
 const Insights = lazy(() => import('./pages/Insights'))
 const Actions = lazy(() => import('./pages/Actions'))
@@ -108,6 +110,8 @@ const App = () => (
               {/* Política de privacidade — pública; o Google exige o link na tela
                   de permissão do login com Google e na página inicial. */}
               <Route path="/privacidade" element={<Privacidade />} />
+              {/* EasyFeed Influencers — fora do RotaProtegida: login próprio, separado do painel dos restaurantes. */}
+              <Route path="/influencers/*" element={<AreaInfluencers />} />
             </>
           )}
 

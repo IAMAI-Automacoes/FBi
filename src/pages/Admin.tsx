@@ -21,6 +21,7 @@ import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { useAuth } from '@/hooks/use-auth'
 import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
+import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
@@ -2217,6 +2218,7 @@ export default function Admin() {
         {/* ── WHATSAPP (o que o dono vê, só leitura) ── */}
         {activeTab === 'whatsapp' && <PainelWhatsappAdmin />}
 
+        {activeTab === 'influenciadores' && <PainelInfluenciadores />}
         {activeTab === 'agentes' && <PainelAgentes />}
 
         {/* ── MOTOR DE RESPOSTA ── */}
