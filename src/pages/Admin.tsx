@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
+  ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
   X, Video, FileText, FileSpreadsheet, Check, Play, MessageSquare, Tag, Users,
   RotateCcw, Search, Download, LogIn, Loader2,
 } from 'lucide-react'
@@ -21,6 +21,8 @@ import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { useAuth } from '@/hooks/use-auth'
 import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
+import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
 import { PainelMotorResposta } from '@/pages/admin/PainelMotorResposta'
 import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
@@ -53,7 +55,7 @@ import { MessageMenu } from '@/components/MessageMenu'
 import { EmojiInputButton } from '@/components/EmojiPicker'
 import { QuoteBox, type QuoteInfo } from '@/components/QuoteBox'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
-import { BOTAO_PILULA_AZUL_VAZADO, BOTAO_PILULA_VERDE_VAZADA, BOTAO_PILULA_VERMELHA_VAZADA } from '@/lib/estilos-botao'
+import { BOTAO_PILULA_AZUL, BOTAO_PILULA_VERDE_VAZADA } from '@/lib/estilos-botao'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -1136,11 +1138,7 @@ function RowActions({ onEdit, onDelete, deleting }: { onEdit: () => void; onDele
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-type Tab = 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'pagamentos' | 'cupons' | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
-
-const TAB_LABELS: Record<Tab, string> = {
-  suporte: 'Suporte', whatsapp: 'WhatsApp', contas: 'Contas', vendedores: 'Vendedores', pagamentos: 'Pagamentos', cupons: 'Cupons', afiliados: 'Afiliados', agentes: 'Agentes de IA', conhecimento: 'Conhecimento', uso_ia: 'Uso de IA', motor: 'Motor de resposta',
-}
+type Tab = AbaAdmin
 
 // Filtro da aba Contas: separa os dois eixos (pagamento e exclusão) para o
 // admin achar rápido cada situação.
@@ -1626,34 +1624,17 @@ export default function Admin() {
   if (loadingAdmin || !isAdmin) return null
 
   return (
-    // `fixed inset-0` (e não h-screen): no celular, 100vh é maior que a área
-    // visível, e a página inteira rolava — o topo saía da tela.
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-white">
+    <SidebarProvider
+      // `fixed inset-0` (e não h-screen): no celular, 100vh é maior que a área
+      // visível, e a página inteira rolava — o topo saía da tela.
+      className="fixed inset-0 min-h-0 overflow-hidden bg-white"
+      style={{ '--sidebar-width': LARGURA_MENU_ADMIN } as React.CSSProperties}
+    >
       {dialogo}
-      {/* Header — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
-      {!ehAppMensagens && (
-      <div className="shrink-0 bg-white border-b border-gray-200" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <div className="px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-gray-700 transition-colors">
-            <ArrowLeft className="h-4 w-4" /> Dashboard
-          </Link>
-          <span className="text-gray-300">|</span>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-amber-500" />
-            <span className="font-semibold text-gray-800 text-[15px]">Painel Admin</span>
-          </div>
-        </div>
-        <div className="flex px-4 overflow-x-auto">
-          {(['suporte', 'whatsapp', 'contas', 'vendedores', 'pagamentos', 'cupons', 'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor'] as Tab[]).map((tab) => (
-            <button key={tab} onClick={() => trocarAba(tab)}
-              className={cn('px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap',
-                activeTab === tab ? 'border-[#1D4ED8] text-[#1D4ED8]' : 'border-transparent text-gray-500 hover:text-gray-700')}>
-              {TAB_LABELS[tab]}
-            </button>
-          ))}
-        </div>
-      </div>
-      )}
+      {/* Menu lateral — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
+      {!ehAppMensagens && <MenuAdmin aba={activeTab} onTrocar={trocarAba} />}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {!ehAppMensagens && <TopoAdminCelular aba={activeTab} />}
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-hidden flex">
@@ -1851,41 +1832,53 @@ export default function Admin() {
                             )}
                           </Td>
 
-                          {/* Ações: entrar na conta e exclusão reversível. O
-                              acesso pago é controlado por pagamento real ou
-                              cupom — não há como "tornar pagante" pelo painel. */}
+                          {/* Ações: duas colunas de largura fixa, para os botões ficarem
+                              alinhados em todas as linhas. À esquerda a ação principal
+                              (Entrar; Restaurar na conta excluída); à direita a lixeira.
+                              O acesso pago é controlado por pagamento real ou cupom —
+                              não há como "tornar pagante" pelo painel. */}
                           <Td>
-                            <div className="flex items-center gap-2">
-                              {!excluida && (!c.email || c.email.toLowerCase() !== (euAdmin?.email ?? '').toLowerCase()) && (
-                                <button
-                                  onClick={() => entrarNaContaDoCliente(c)}
-                                  disabled={entrandoContaId !== null}
-                                  title="Entrar nesta conta com acesso total, como o cliente vê"
-                                  className={cn(BOTAO_PILULA_AZUL_VAZADO, 'inline-flex h-8 items-center gap-1.5 px-3.5 text-[12px] disabled:opacity-60')}
-                                >
-                                  {entrandoContaId === c.id
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <LogIn className="h-3.5 w-3.5" />}
-                                  Entrar
-                                </button>
-                              )}
-                              <button
-                                onClick={() => alternarExclusao(c)}
-                                disabled={salvando}
-                                title={excluida
-                                  ? 'Restaurar: devolve o acesso e os dados'
-                                  : 'Excluir: remove o acesso de vez, mas guarda os dados no banco'}
-                                className={cn(
-                                  'h-8 text-[12px]',
-                                  excluida ? BOTAO_PILULA_VERDE_VAZADA : BOTAO_PILULA_VERMELHA_VAZADA,
-                                )}
-                              >
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-[112px]">
                                 {excluida ? (
-                                  <><RotateCcw className="h-3.5 w-3.5" /> Restaurar</>
-                                ) : (
-                                  <><Trash2 className="h-3.5 w-3.5" /> Excluir</>
+                                  <button
+                                    onClick={() => alternarExclusao(c)}
+                                    disabled={salvando}
+                                    title="Restaurar: devolve o acesso e os dados"
+                                    className={cn(BOTAO_PILULA_VERDE_VAZADA, 'h-8 w-full px-3 text-[12px] font-semibold')}
+                                  >
+                                    {salvando
+                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      : <RotateCcw className="h-3.5 w-3.5" />}
+                                    Restaurar
+                                  </button>
+                                ) : (!c.email || c.email.toLowerCase() !== (euAdmin?.email ?? '').toLowerCase()) && (
+                                  <button
+                                    onClick={() => entrarNaContaDoCliente(c)}
+                                    disabled={entrandoContaId !== null}
+                                    title="Entrar nesta conta com acesso total, como o cliente vê"
+                                    className={cn(BOTAO_PILULA_AZUL, 'inline-flex h-8 w-full items-center justify-center gap-1.5 px-3 text-[12px] font-semibold')}
+                                  >
+                                    {entrandoContaId === c.id
+                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      : <LogIn className="h-3.5 w-3.5" />}
+                                    Entrar
+                                  </button>
                                 )}
-                              </button>
+                              </div>
+                              <div className="w-8">
+                                {!excluida && (
+                                  <button
+                                    onClick={() => alternarExclusao(c)}
+                                    disabled={salvando}
+                                    title="Excluir: remove o acesso de vez, mas guarda os dados no banco"
+                                    aria-label={`Excluir ${c.nome_restaurante || c.email || 'conta'}`}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-50"
+                                  >
+                                    {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </Td>
                         </tr>
@@ -2325,7 +2318,8 @@ export default function Admin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </SidebarProvider>
   )
 }
 
