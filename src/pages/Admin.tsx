@@ -1163,7 +1163,7 @@ const EMPTY_AFILIADO = {
 }
 const EMPTY_CUPON = {
   cupom: '', data_expiracao: '',
-  valor: '', dias_validade: '', vezes_uso_maximo: '', ativo: true,
+  dias_validade: '', vezes_uso_maximo: '', ativo: true,
 }
 
 export default function Admin() {

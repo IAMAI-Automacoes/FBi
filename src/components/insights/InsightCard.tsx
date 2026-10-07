@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL, BOTAO_PILULA_AZUL_VAZADO } from '@/lib/estilos-botao'
 import { totalPontos, type Insight } from '@/lib/tipos/insight'
-import { PRIORIDADES, estiloPrioridade } from '@/lib/prioridade'
+import { PRIORIDADES, estiloPrioridade, pesoPrioridade } from '@/lib/prioridade'
 import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
 
 interface InsightCardProps {
@@ -51,7 +51,9 @@ export function InsightCard({
 }: InsightCardProps) {
   const prio = insight.prioridade || 'OBSERVACAO'
   const elogio = ehElogio(insight)
-  const ehObservacaoElogio = (prio === 'OBSERVACAO' || prio === 'OBSERVAÇÃO') && elogio
+  // Nível de observação (nem urgente nem importante), com a mesma tolerância de
+  // grafia de `estiloPrioridade`.
+  const ehObservacaoElogio = pesoPrioridade(prio) === 1 && elogio
   const config = ehObservacaoElogio ? PRIORIDADES.ELOGIO : estiloPrioridade(prio)
 
   // Conta PONTOS SEPARADOS, que é exatamente o que a telinha lista — antes

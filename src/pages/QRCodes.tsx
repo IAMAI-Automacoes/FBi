@@ -1297,7 +1297,7 @@ export default function QRCodes() {
             <FiltroPeriodo
               periodo={periodo}
               datas={intervalo}
-              onPeriodo={setPeriodo}
+              onPeriodo={(p) => setPeriodo(p)}
               onDatas={setIntervalo}
               presets={PRESETS_QR}
             />

@@ -80,19 +80,16 @@ export function FeedbacksRelacionadosPopover({
       // As duas tabelas de vínculo têm a mesma forma (uma coluna apontando para
       // `feedbacks_restaurante`), então muda só de onde ler e por qual coluna
       // filtrar — o resto do achatamento e do JSX serve aos dois.
-      const tabela = origem.tipo === 'insight' ? 'insight_feedback' : 'feedback_acao'
-      const coluna = origem.tipo === 'insight' ? 'insight_id' : 'acao_id'
-
-      const { data, error } = await supabase
-        .from(tabela)
-        .select(
-          `feedback_restaurante_id,
+      // (Uma consulta por tabela: com o nome da tabela variável, o TypeScript
+      // não aceita a coluna do filtro.)
+      const campos = `feedback_restaurante_id,
            feedbacks_restaurante!inner(
              id, texto_original, resumo, categoria, sentimento, created_at,
              feedbacks_originais(id, texto_original, created_at)
-           )`,
-        )
-        .eq(coluna, origem.id)
+           )`
+      const { data, error } = origem.tipo === 'insight'
+        ? await supabase.from('insight_feedback').select(campos).eq('insight_id', origem.id)
+        : await supabase.from('feedback_acao').select(campos).eq('acao_id', origem.id)
       if (error) throw error
 
       const lista: PontoLigado[] = (data ?? []).map((linha) => {

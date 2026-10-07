@@ -670,7 +670,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
     setTasks(updatedTasks)
 
     if (mudouStatus) {
-      doMoveStatusApi(activeId, original.status, indicador.status, movedTask)
+      doMoveStatusApi(activeId, original.status, indicador.status)
     }
 
     const changedOrders = updatedTasks

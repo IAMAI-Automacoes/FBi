@@ -298,7 +298,8 @@ export function EditorDaPaginaDoCliente({
   const escolherImagem = async (arquivo: File) => {
     const url = await onSubirImagem(arquivo)
     if (!url) return
-    const novo = { ...novaLogo(elementos), url }
+    // Na próxima posição livre, como o texto novo (e o cartaz, em QRCodes).
+    const novo = novaLogo(url, elementos)
     onChange([...elementos, novo])
     setSelecionado(novo.id)
     setTextoSelecionado(null)

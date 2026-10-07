@@ -20,7 +20,7 @@ const ALTURA_ITEM = 56
 export function RoletaNumerica({ min, max, value, onChange, className }: RoletaNumericaProps) {
   const ref = useRef<HTMLDivElement>(null)
   const numeros = useMemo(() => Array.from({ length: max - min + 1 }, (_, i) => min + i), [min, max])
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Centraliza no valor inicial ao montar — como o popup remonta este
   // componente toda vez que abre, isso já cobre "abrir de novo com o valor
