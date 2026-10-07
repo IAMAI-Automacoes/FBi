@@ -72,7 +72,7 @@ export default function Privacidade() {
         <Secao titulo="1. Quem somos">
           <p>
             O EasyFeed (easyfeed.com.br) é uma plataforma de feedback para restaurantes, desenvolvida pela IAMAI.
-            O responsável pelos dados é <b>Guilherme Luiz Longo Brandi</b>, CNPJ <b>53.582.840/0001-76</b>
+            O responsável pelos dados é <b>Guilherme Luiz Longo Brandi</b>, CNPJ <b>53.582.840/0001-76</b>{' '}
             ("IAMAI", "nós"). Contato e encarregado de dados: <a href={`mailto:${EMAIL}`} style={linkEstilo}>{EMAIL}</a>.
           </p>
           <p>
