@@ -21,9 +21,34 @@ export interface DepsRecuperar {
   gerarLink: (email: string) => Promise<{ link: string; nome: string | null } | null>
   /** Entrega ao n8n; null = n8n não configurado. Devolve se deu certo. */
   enviarN8n: ((p: { email: string; nome: string | null; link: string; validadeMinutos: number }) => Promise<boolean>) | null
-  /** O e-mail padrão do Supabase (reserva). */
-  enviarPeloSupabase: (email: string) => Promise<void>
+  /**
+   * O e-mail padrão do Supabase (reserva). Devolve `esperarSegundos` quando o
+   * Supabase recusa por ter mandado outro há menos de 1 minuto.
+   */
+  enviarPeloSupabase: (email: string) => Promise<{ esperarSegundos?: number } | void>
+  /** Continua o trabalho depois de responder (EdgeRuntime.waitUntil). Sem ele, espera junto. */
+  emSegundoPlano?: (tarefa: Promise<unknown>) => void
+  esperar?: (ms: number) => Promise<void>
   agora?: () => number
+}
+
+const esperaPedida = (r: { esperarSegundos?: number } | void) => (r ? r.esperarSegundos ?? 0 : 0)
+
+/**
+ * Manda pela reserva. O link gerado para o n8n já conta como envio no Supabase,
+ * que só deixa mandar outro depois de ~1 minuto: nesse caso, tenta de novo
+ * quando liberar, depois de responder à tela.
+ */
+async function mandarPelaReserva(email: string, deps: DepsRecuperar): Promise<void> {
+  const segundos = esperaPedida(await deps.enviarPeloSupabase(email))
+  if (!segundos) return
+  const esperar = deps.esperar ?? ((ms: number) => new Promise<void>((ok) => setTimeout(ok, ms)))
+  const depois = esperar((segundos + 2) * 1000)
+    .then(() => deps.enviarPeloSupabase(email))
+    .then((de) => { if (esperaPedida(de)) console.error('recuperar-senha: Supabase recusou de novo pelo limite de 1 minuto') })
+    .catch((e) => console.error('recuperar-senha: reserva falhou na segunda tentativa', e))
+  if (deps.emSegundoPlano) deps.emSegundoPlano(depois)
+  else await depois
 }
 
 export interface Resultado { status: number; corpo: Record<string, unknown> }
@@ -53,7 +78,7 @@ export async function pedirRecuperacao(emailBruto: unknown, deps: DepsRecuperar)
   await deps.registrar(email, deps.ipHash)
 
   if (!deps.enviarN8n) {
-    await deps.enviarPeloSupabase(email)
+    await mandarPelaReserva(email, deps)
     return { status: 200, corpo: { ok: true } }
   }
 
@@ -62,7 +87,7 @@ export async function pedirRecuperacao(emailBruto: unknown, deps: DepsRecuperar)
     gerado = await deps.gerarLink(email)
   } catch (e) {
     console.error('recuperar-senha: falha ao gerar o link; vai pelo Supabase', e)
-    await deps.enviarPeloSupabase(email)
+    await mandarPelaReserva(email, deps)
     return { status: 200, corpo: { ok: true } }
   }
   if (!gerado) return { status: 200, corpo: { ok: true } } // sem conta com esse e-mail
@@ -70,7 +95,7 @@ export async function pedirRecuperacao(emailBruto: unknown, deps: DepsRecuperar)
   const enviado = await deps.enviarN8n({ email, nome: gerado.nome, link: gerado.link, validadeMinutos: VALIDADE_MINUTOS }).catch(() => false)
   if (!enviado) {
     console.error('recuperar-senha: n8n não confirmou o envio; vai pelo Supabase')
-    await deps.enviarPeloSupabase(email)
+    await mandarPelaReserva(email, deps)
   }
   return { status: 200, corpo: { ok: true } }
 }

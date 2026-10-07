@@ -36,3 +36,13 @@ E-mail sem conta no EasyFeed recebe a mesma resposta "enviado" na tela, mas nada
 Na tela de login, "Esqueci a senha", com o seu e-mail. Deve chegar "Crie sua nova senha do EasyFeed" de nao-responda@easyfeed.com.br; o botão abre a tela de criar nova senha. Para ver se saiu pelo n8n, olhe as execuções do workflow.
 
 Se o e-mail cair no spam: na Hostinger, confira se o domínio easyfeed.com.br tem SPF, DKIM e DMARC configurados (Hostinger → E-mails → Configurações de DNS).
+
+## Quando não chega
+
+O log da função **recuperar-senha** (Supabase → Edge Functions → recuperar-senha → Logs) mostra o que o n8n respondeu:
+
+- `n8n respondeu 403` + "Authorization data is wrong!": a credencial Header Auth do nó "Recebe pedido" não bate com o segredo. Confira Name `x-easyfeed-segredo` e o Value **sem espaço, aspas ou crase** antes ou depois. Depois de salvar a credencial, desative e ative o workflow.
+- `n8n respondeu 404`: o workflow está desativado, ou o caminho do webhook mudou.
+- `n8n respondeu 502`: o n8n recebeu, mas o SMTP falhou. Veja o erro na execução do workflow (Executions) e confira usuário, senha, porta 465 e SSL da credencial SMTP.
+
+Em qualquer desses casos, o e-mail sai pelo Supabase como reserva. Se o Supabase acabou de gerar o link para o n8n, ele só deixa mandar outro depois de ~1 minuto, e a função espera esse minuto sozinha. Então o e-mail de reserva chega cerca de 1 minuto depois.

@@ -40,6 +40,7 @@
     "../previa-link/*.ts",
     "../google-perfil/*.ts",
     "../google-oauth-callback/*.ts",
-    "../recuperar-senha/*.ts"
+    "../recuperar-senha/*.ts",
+    "../salvy-webhook/*.ts"
   ]
 }

@@ -17,6 +17,8 @@ export function clienteAdmin() {
 export interface RestauranteAutenticado {
   id: number
   auth_user_id: string
+  /** E-mail do login (para conferir admin da plataforma, por exemplo). */
+  email: string
   assinatura_status: string
   // deno-lint-ignore no-explicit-any
   linha: any
@@ -58,6 +60,7 @@ export async function autenticarRestaurante(
     restaurante: {
       id: Number(rest.id),
       auth_user_id: userData.user.id,
+      email: userData.user.email ?? '',
       assinatura_status: rest.assinatura_status,
       linha: rest,
     },

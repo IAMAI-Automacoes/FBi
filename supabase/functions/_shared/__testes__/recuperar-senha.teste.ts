@@ -14,7 +14,7 @@ function ok(nome: string, cond: boolean, detalhe?: unknown) {
 }
 
 const AGORA = Date.UTC(2026, 9, 7, 12, 0, 0)
-function cenario(over: Partial<DepsRecuperar> & { pedidos?: Array<{ email: string; ip: string; em: number }>; contas?: Record<string, string | null>; n8n?: 'ok' | 'falha' | 'sem' | 'erro' } = {}) {
+function cenario(over: Partial<DepsRecuperar> & { pedidos?: Array<{ email: string; ip: string; em: number }>; contas?: Record<string, string | null>; n8n?: 'ok' | 'falha' | 'sem' | 'erro'; supabaseEspera?: number } = {}) {
   const pedidos = over.pedidos ?? []
   const feito: string[] = []
   const contas = over.contas ?? { 'dono@restaurante.com': 'Raver Brandi' }
@@ -29,7 +29,12 @@ function cenario(over: Partial<DepsRecuperar> & { pedidos?: Array<{ email: strin
       if (over.n8n === 'erro') throw new Error('rede')
       return over.n8n !== 'falha'
     },
-    enviarPeloSupabase: async (email) => { feito.push(`supabase:${email}`) },
+    enviarPeloSupabase: async (email) => {
+      // Recusa só a primeira vez (como o Supabase logo depois do link gerado para o n8n).
+      if (over.supabaseEspera && !feito.includes('supabase-recusou')) { feito.push('supabase-recusou'); return { esperarSegundos: over.supabaseEspera } }
+      feito.push(`supabase:${email}`)
+    },
+    esperar: async (ms) => { feito.push(`esperou:${ms}`) },
     agora: () => AGORA,
     ...over,
   }
@@ -89,6 +94,29 @@ ok('e-mail inválido', normalizarEmail('sem-arroba') === null && normalizarEmail
   const c = cenario({ n8n: 'erro' })
   await pedirRecuperacao('dono@restaurante.com', c.deps)
   ok('n8n fora do ar (erro de rede): manda pelo Supabase', c.feito.at(-1) === 'supabase:dono@restaurante.com')
+}
+{
+  // O caso real de 07/10: o link gerado para o n8n conta como envio, e o Supabase só deixa outro depois de 1 minuto.
+  const segundoPlano: Promise<unknown>[] = []
+  let liberar = () => {}
+  const c = cenario({ n8n: 'falha', supabaseEspera: 59, emSegundoPlano: (p) => { segundoPlano.push(p) } })
+  // Segura a espera até a resposta ter saído.
+  c.deps.esperar = (ms) => new Promise<void>((ok) => { liberar = () => { c.feito.push(`esperou:${ms}`); ok() } })
+  const r = await pedirRecuperacao('dono@restaurante.com', c.deps)
+  ok('reserva barrada pelo limite de 1 minuto: responde ok na hora', r.status === 200 && r.corpo.ok === true && segundoPlano.length === 1 && !c.feito.includes('supabase:dono@restaurante.com'), c.feito)
+  liberar()
+  await Promise.all(segundoPlano)
+  ok('...e manda pelo Supabase depois de esperar (59 + 2 s), em segundo plano', c.feito.slice(-2).join() === 'esperou:61000,supabase:dono@restaurante.com', c.feito)
+}
+{
+  const c = cenario({ n8n: 'falha', supabaseEspera: 30 })
+  await pedirRecuperacao('dono@restaurante.com', c.deps)
+  ok('sem segundo plano: espera junto e manda', c.feito.slice(-2).join() === 'esperou:32000,supabase:dono@restaurante.com', c.feito)
+}
+{
+  const c = cenario({ n8n: 'falha' })
+  await pedirRecuperacao('dono@restaurante.com', c.deps)
+  ok('reserva sem limite: manda na hora, sem esperar', !c.feito.some((f) => f.startsWith('esperou')), c.feito)
 }
 {
   const c = cenario({ gerarLink: async () => { throw new Error('auth fora') } })

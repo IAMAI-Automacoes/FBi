@@ -39,7 +39,8 @@ const navigation = [
   { name: 'Ações', href: '/acoes', icon: Zap, modulo: 'acoes' },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart, modulo: 'relatorios' },
   // Avaliações do Google: só o admin da plataforma vê enquanto o Google não
-  // libera a API para o EasyFeed. Para liberar aos clientes: apague `soAdmin`.
+  // libera a API para o EasyFeed. Para liberar aos clientes: apague `soAdmin`,
+  // o SoAdminPlataforma da rota (App.tsx) e o SO_ADMIN da função google-perfil.
   { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },

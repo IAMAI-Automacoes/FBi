@@ -61,13 +61,23 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify(p),
           signal: AbortSignal.timeout(20_000),
         })
+        // O motivo fica no log da função (403 = segredo da credencial do n8n diferente).
+        if (!resp.ok) console.error(`recuperar-senha: n8n respondeu ${resp.status}`, (await resp.text().catch(() => '')).slice(0, 300))
         return resp.ok
       }
       : null,
     enviarPeloSupabase: async (email) => {
       const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo })
-      if (error) console.error('recuperar-senha: e-mail padrão do Supabase falhou', error.message)
+      if (!error) return
+      if (error.code === 'over_email_send_rate_limit' || error.status === 429) {
+        // "For security purposes, you can only request this after 59 seconds."
+        return { esperarSegundos: Number(/(\d+)\s*seconds?/.exec(error.message ?? '')?.[1] ?? 60) }
+      }
+      console.error('recuperar-senha: e-mail padrão do Supabase falhou', error.message)
     },
+    emSegundoPlano: typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil
+      ? (tarefa) => EdgeRuntime.waitUntil(tarefa)
+      : undefined,
   })
   return json(r.corpo, r.status)
 })

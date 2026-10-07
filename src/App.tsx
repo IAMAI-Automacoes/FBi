@@ -39,6 +39,7 @@ const CheckoutSucesso = lazy(() => import('./pages/CheckoutSucesso'))
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
+import { SoAdminPlataforma } from './components/SoAdminPlataforma'
 import { AvisosDoPainel } from './components/whatsapp/Notificacoes'
 import { PedirNotificacoes } from './components/PedirNotificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
@@ -175,8 +176,11 @@ const App = () => (
               <Route
                 path="/google"
                 element={
+                  // Só o admin até o Google liberar a API (ver SO_ADMIN em google-perfil).
                   <RotaPermitida modulo="relatorios">
-                    <Google />
+                    <SoAdminPlataforma>
+                      <Google />
+                    </SoAdminPlataforma>
                   </RotaPermitida>
                 }
               />

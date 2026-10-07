@@ -17,6 +17,13 @@ import {
   aplicarLocais, clienteGoogle, configGoogle, escolherLocal, lerToken, marcarAguardandoGoogle, sincronizarRestaurante,
 } from '../_shared/google-operacoes.ts'
 
+/**
+ * Enquanto o Google não libera a API, só o admin da plataforma usa (a página
+ * /google e o menu também). Para liberar aos clientes: false aqui, e tirar o
+ * SoAdminPlataforma da rota (App.tsx) e o soAdmin do menu (AppSidebar.tsx).
+ */
+const SO_ADMIN = true
+
 const INTERVALO_MINIMO_MS = 60_000
 /** Leitura começada há menos que isto ainda pode estar rodando: o cron pula. */
 const EM_ANDAMENTO_MS = 90_000
@@ -63,6 +70,10 @@ Deno.serve(async (req: Request) => {
   // ── Dono do restaurante ──
   const auth = await autenticarRestaurante(req, db)
   if (auth.ok === false) return json({ error: auth.erro }, auth.status)
+  if (SO_ADMIN) {
+    const { data: admin } = await db.from('platform_admins').select('email').eq('email', auth.restaurante.email).maybeSingle()
+    if (!admin) return json({ error: 'Disponível só para o admin por enquanto' }, 403)
+  }
   const restauranteId = auth.restaurante.id
   if (!cfg) return json({ ok: false, motivo: 'nao_configurado' })
   const google = clienteGoogle(cfg)
