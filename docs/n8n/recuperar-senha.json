@@ -1,0 +1,168 @@
+{
+  "name": "EasyFeed - Recuperação de senha",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## EasyFeed - Recuperação de senha\nA função **recuperar-senha** do Supabase chama este webhook com `{ email, nome, link, validadeMinutos }` e o cabeçalho **x-easyfeed-segredo**.\n\n1. **Recebe pedido**: só aceita quem manda o segredo certo (credencial Header Auth).\n2. **Monta o e-mail**: confere o e-mail e se o link é mesmo de recuperação do Supabase do EasyFeed.\n3. **Envia o e-mail**: pela caixa nao-responda@easyfeed.com.br (SMTP da Hostinger).\n4. **Responde** 200 (enviado) ou 502 (falhou). No 502 a função manda pelo Supabase, como reserva.",
+        "height": 300,
+        "width": 760,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -360
+      ],
+      "id": "2f596fc6-1d20-4da1-b6c6-d482f645edf3",
+      "name": "Nota - Como funciona"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "easyfeed-recuperar-senha",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "133e9bd2-674a-4306-89ac-28194753b0b2",
+      "name": "Recebe pedido",
+      "webhookId": "5d6f8a2e-4f1b-4c3e-9b7a-6e2d1c0a9f31",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "EasyFeed - segredo da recuperação"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o e-mail de recuperação de senha a partir do que a função\n// recuperar-senha do Supabase mandou: { email, nome, link, validadeMinutos }.\nconst b = $input.first().json.body || {};\n\nconst email = String(b.email || '').trim().toLowerCase();\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('E-mail inválido: ' + email);\n\n// Só aceita o link oficial de recuperação do Supabase do EasyFeed: ninguém\n// consegue usar este workflow para mandar outro link pelo nosso domínio.\nconst link = String(b.link || '').trim();\nif (!link.startsWith('https://lixrcruilisncfhfhndo.supabase.co/auth/v1/verify?')) throw new Error('Link de recuperação inesperado.');\n\nconst esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst primeiroNome = String(b.nome || '').trim().split(/\\s+/)[0].slice(0, 40);\nconst oi = primeiroNome ? 'Oi, ' + primeiroNome + '!' : 'Oi!';\nconst minutos = Number(b.validadeMinutos) || 60;\nconst validade = minutos % 60 === 0 ? (minutos / 60 === 1 ? '1 hora' : (minutos / 60) + ' horas') : minutos + ' minutos';\n\nconst assunto = 'Crie sua nova senha do EasyFeed';\n\nconst html = `<!doctype html>\n<html lang=\"pt-BR\">\n<body style=\"margin:0;padding:0;background:#F1F5F9;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#F1F5F9;padding:32px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:520px;background:#FFFFFF;border-radius:14px;border:1px solid #E2E8F0;\">\n        <tr><td style=\"padding:28px 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;\">\n          <div style=\"font-size:22px;font-weight:700;color:#2563EB;\">EasyFeed</div>\n        </td></tr>\n        <tr><td style=\"padding:12px 28px 4px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#334155;\">\n          <p style=\"margin:0 0 14px 0;font-size:17px;color:#0F172A;font-weight:700;\">${esc(oi)}</p>\n          <p style=\"margin:0 0 14px 0;\">Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, é só clicar no botão:</p>\n        </td></tr>\n        <tr><td align=\"center\" style=\"padding:10px 28px 18px 28px;\">\n          <a href=\"${esc(link)}\" style=\"display:inline-block;background:#2563EB;color:#FFFFFF;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;padding:13px 26px;border-radius:10px;\">Criar nova senha</a>\n        </td></tr>\n        <tr><td style=\"padding:0 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#475569;\">\n          <p style=\"margin:0 0 12px 0;\">O link vale por ${validade} e só funciona uma vez.</p>\n          <p style=\"margin:0 0 12px 0;\">Se não foi você que pediu, pode ignorar este e-mail. Sua senha continua a mesma.</p>\n          <p style=\"margin:0 0 4px 0;\">Equipe EasyFeed</p>\n        </td></tr>\n        <tr><td style=\"padding:16px 28px 26px 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#94A3B8;\">\n          Se o botão não abrir, copie e cole este endereço no navegador:<br>\n          <a href=\"${esc(link)}\" style=\"color:#2563EB;word-break:break-all;\">${esc(link)}</a>\n        </td></tr>\n      </table>\n      <p style=\"font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#94A3B8;margin:16px 0 0 0;\">EasyFeed, um produto da IAMAI · easyfeed.com.br<br>Este e-mail é automático, não precisa responder.</p>\n    </td></tr>\n  </table>\n</body>\n</html>`;\n\nconst texto = [\n  oi,\n  '',\n  'Recebemos um pedido para trocar a senha da sua conta no EasyFeed. Para criar uma nova, abra este link:',\n  link,\n  '',\n  'O link vale por ' + validade + ' e só funciona uma vez.',\n  'Se não foi você que pediu, pode ignorar este e-mail. Sua senha continua a mesma.',\n  '',\n  'Equipe EasyFeed',\n  'EasyFeed, um produto da IAMAI · easyfeed.com.br',\n].join('\\n');\n\nreturn [{ json: { para: email, assunto, html, texto } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "6ce2ffac-aadd-4d0e-bcec-ac84ea6b4e22",
+      "name": "Monta o e-mail"
+    },
+    {
+      "parameters": {
+        "fromEmail": "EasyFeed <nao-responda@easyfeed.com.br>",
+        "toEmail": "={{ $json.para }}",
+        "subject": "={{ $json.assunto }}",
+        "emailFormat": "both",
+        "text": "={{ $json.texto }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "a6389529-d5a2-4a66-8ed7-56ad15bfd73b",
+      "name": "Envia o e-mail",
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "SMTP EasyFeed (Hostinger)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -100
+      ],
+      "id": "e1847e3f-fc5f-47bd-8f8d-4642acc59b91",
+      "name": "Responde enviado"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, motivo: 'envio' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        100
+      ],
+      "id": "250a3082-c7b3-44c5-befe-5d6f4a3f2bd2",
+      "name": "Responde falha"
+    }
+  ],
+  "connections": {
+    "Recebe pedido": {
+      "main": [
+        [
+          {
+            "node": "Monta o e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta o e-mail": {
+      "main": [
+        [
+          {
+            "node": "Envia o e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia o e-mail": {
+      "main": [
+        [
+          {
+            "node": "Responde enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

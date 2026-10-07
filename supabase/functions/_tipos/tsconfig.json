@@ -39,6 +39,7 @@
     "../guardar-midia/*.ts",
     "../previa-link/*.ts",
     "../google-perfil/*.ts",
-    "../google-oauth-callback/*.ts"
+    "../google-oauth-callback/*.ts",
+    "../recuperar-senha/*.ts"
   ]
 }

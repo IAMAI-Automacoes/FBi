@@ -315,11 +315,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error }
   }
 
+  // "Esqueci a senha" passa pela função recuperar-senha: o e-mail sai pelo
+  // domínio do EasyFeed (n8n + Hostinger), com trava contra abuso. Se a função
+  // não responder, cai no e-mail padrão do Supabase — a recuperação nunca para.
   const recuperarSenha = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.functions.invoke('recuperar-senha', { body: { email } })
+    if (!error) return { error: null }
+
+    let corpo: { motivo?: string } | null = null
+    try { corpo = await (error as any).context?.json?.() } catch { /* sem corpo */ }
+    if (corpo?.motivo === 'muitas_tentativas') {
+      return { error: { message: 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.' } }
+    }
+    if (corpo?.motivo === 'email_invalido') return { error: { message: 'Confira o e-mail digitado.' } }
+
+    const { error: erroPadrao } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/recuperar-senha`,
     })
-    return { error }
+    return { error: erroPadrao }
   }
 
   // Rebusca o restaurante do usuário logado. O `usuario` era carregado só uma
