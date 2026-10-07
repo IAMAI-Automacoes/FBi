@@ -130,6 +130,9 @@ export function RodapeVendas() {
           <Link to="/login" style={{ color: 'inherit', textDecoration: 'none' }}>
             Entrar
           </Link>
+          <Link to="/privacidade" style={{ color: 'inherit', textDecoration: 'none' }}>
+            Privacidade
+          </Link>
           <a
             href="https://wa.me/5511952138636"
             target="_blank"

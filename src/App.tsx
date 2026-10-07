@@ -24,6 +24,7 @@ const Actions = lazy(() => import('./pages/Actions'))
 const AcoesArquivadas = lazy(() => import('./pages/AcoesArquivadas'))
 const Reports = lazy(() => import('./pages/Reports'))
 const Google = lazy(() => import('./pages/Google'))
+const Privacidade = lazy(() => import('./pages/Privacidade'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
 const Garcons = lazy(() => import('./pages/Garcons'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -100,6 +101,9 @@ const App = () => (
               {/* Landing de vendas — pública. `/` mostra Vendas para visitante
                   (deslogado) e o painel para quem está logado (ver RotaProtegida). */}
               <Route path="/vendas" element={<Vendas />} />
+              {/* Política de privacidade — pública; o Google exige o link na tela
+                  de permissão do login com Google e na página inicial. */}
+              <Route path="/privacidade" element={<Privacidade />} />
             </>
           )}
 

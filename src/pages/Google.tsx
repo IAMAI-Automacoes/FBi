@@ -200,6 +200,10 @@ export default function Google() {
             </p>
           </div>
           <BotaoGoogle onClick={() => executar('conectar')} carregando={ocupado === 'conectar'} />
+          <p className="text-xs text-gray-400">
+            O EasyFeed só lê as avaliações. Veja como os dados são usados na{' '}
+            <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">política de privacidade</a>.
+          </p>
         </Cartao>
       </div>
     )
@@ -405,7 +409,8 @@ export default function Google() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        Dados do Google, atualizados a cada 2 minutos. O EasyFeed só lê as avaliações; nada é publicado no seu perfil.
+        Dados do Google, atualizados a cada 2 minutos. O EasyFeed só lê as avaliações; nada é publicado no seu perfil.{' '}
+        <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">Política de privacidade</a>
       </p>
     </div>
   )
