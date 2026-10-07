@@ -41,6 +41,7 @@
     "../google-perfil/*.ts",
     "../google-oauth-callback/*.ts",
     "../recuperar-senha/*.ts",
-    "../salvy-webhook/*.ts"
+    "../salvy-webhook/*.ts",
+    "../entrar-na-conta/*.ts"
   ]
 }

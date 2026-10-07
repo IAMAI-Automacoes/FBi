@@ -4,10 +4,13 @@ import { supabase } from '@/lib/supabase/client'
 import { desinscreverDesteAparelho } from '@/lib/push'
 import { MODO_DEMO } from '@/lib/demo'
 import { buscarMeuAcesso, type AcessoConta, type SessaoDemo } from '@/lib/queries/demo'
+import { buscarAcessoAdmin, estouDentroDeOutraConta, voltarParaMinhaConta, type AcessoAdmin } from '@/lib/acesso-admin'
 
 export interface UsuarioDados {
   id: string             // UUID do auth.users — usado em operações de auth
   restaurante_id: number | null  // restaurantes.id (bigint) — usado em queries de dados
+  /** Nome do restaurante (coluna de `restaurantes`, vem do select('*')). */
+  nome_restaurante?: string | null
   email: string | null
   nome: string | null
   cargo: string | null
@@ -55,6 +58,9 @@ interface AuthContextType {
   /** Preenchido quando ESTA sessão é uma demonstração aberta por código — até
       quando ela vale. Nulo no login normal, inclusive no do próprio vendedor. */
   sessaoDemo: SessaoDemo | null
+  /** Preenchido quando ESTA sessão é o admin da plataforma dentro da conta de um
+      cliente (painel Admin → Contas → "Entrar"). Quem confirma é o banco. */
+  acessoAdmin: AcessoAdmin | null
   /** Relê vendedor e demonstração no banco sem mexer no resto. Falha de rede não
       muda nada — uma demonstração em andamento não cai por instabilidade. */
   recarregarAcesso: () => Promise<void>
@@ -106,6 +112,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [ehAdminPlataforma, setEhAdminPlataforma] = useState(false)
   const [ehVendedor, setEhVendedor] = useState(false)
   const [sessaoDemo, setSessaoDemo] = useState<SessaoDemo | null>(null)
+  const [acessoAdmin, setAcessoAdmin] = useState<AcessoAdmin | null>(null)
 
   const aplicarAcesso = useCallback((acesso: AcessoConta) => {
     setEhVendedor(acesso.ehVendedor)
@@ -169,10 +176,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
+    // Admin dentro da conta de um cliente: resolvido junto do usuário, porque o
+    // gate de rota decide com ele (sem paywall nessa sessão).
+    const buscarAcessoDoAdmin = async () => {
+      try {
+        setAcessoAdmin(await buscarAcessoAdmin())
+      } catch (err) {
+        console.error('Erro ao verificar acesso do admin:', err)
+        setAcessoAdmin(null)
+      }
+    }
+
     const fetchUsuario = async (userAuth: User) => {
       setBuscandoUsuario(true)
       try {
-        await Promise.all([buscarAdminPlataforma(userAuth.email), buscarAcesso()])
+        await Promise.all([buscarAdminPlataforma(userAuth.email), buscarAcesso(), buscarAcessoDoAdmin()])
         const { data, error } = await supabase
           .from('restaurantes')
           .select('*')
@@ -228,6 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setEhAdminPlataforma(false)
         setEhVendedor(false)
         setSessaoDemo(null)
+        setAcessoAdmin(null)
         setLoading(false)
       }
     })
@@ -296,6 +315,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const logout = async () => {
+    // Admin dentro da conta de um cliente: "Sair" volta para a conta dele. O
+    // logout normal ('global') derrubaria o cliente em todos os aparelhos.
+    if (acessoAdmin || estouDentroDeOutraConta()) {
+      await voltarParaMinhaConta()
+      return { error: null }
+    }
     setLoading(true)
     // Marca de "admin pulou pagamento" é por sessão de uso — some ao sair, pra o
     // admin ver a tela de assinatura de novo no próximo login.
@@ -353,7 +378,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, acessoAdmin, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

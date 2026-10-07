@@ -55,7 +55,7 @@ function SairDoLoginComumNaDemo() {
 }
 
 export function RotaProtegida() {
-  const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, sessaoDemo, logout } = useAuth()
+  const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, sessaoDemo, acessoAdmin, logout } = useAuth()
   const location = useLocation()
 
   // `buscandoUsuario && !usuario` cobre a janela do login: ali `loading` já é
@@ -174,6 +174,11 @@ export function RotaProtegida() {
   // onboarding, então quem criava conta e não pagava caía na configuração
   // inicial e entrava no software. Onboarding é atrito de compra: só depois
   // que o dinheiro entrou (ou, para o admin, depois que ele optou por pular).
+  // Admin dentro da conta de um cliente (painel Admin → Contas → "Entrar"):
+  // acesso total, sem paywall nem onboarding obrigatório. Quem confirma que a
+  // sessão é do admin é o banco (`acesso_admin_atual`), não o navegador.
+  if (acessoAdmin) return <Outlet />
+
   if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
   }

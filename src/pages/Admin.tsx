@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   ShieldCheck, ArrowLeft, Send, Paperclip, Plus, Pencil, Trash2,
   X, Video, FileText, FileSpreadsheet, Check, Play, MessageSquare, Tag, Users,
-  RotateCcw, Search, Download,
+  RotateCcw, Search, Download, LogIn, Loader2,
 } from 'lucide-react'
 import { format, isToday, isYesterday } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -18,6 +18,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { usePlatformAdmin } from '@/hooks/use-platform-admin'
+import { useAuth } from '@/hooks/use-auth'
+import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
 import { PainelMotorResposta } from '@/pages/admin/PainelMotorResposta'
@@ -51,7 +53,7 @@ import { MessageMenu } from '@/components/MessageMenu'
 import { EmojiInputButton } from '@/components/EmojiPicker'
 import { QuoteBox, type QuoteInfo } from '@/components/QuoteBox'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
-import { BOTAO_PILULA_VERDE_VAZADA, BOTAO_PILULA_VERMELHA_VAZADA } from '@/lib/estilos-botao'
+import { BOTAO_PILULA_AZUL_VAZADO, BOTAO_PILULA_VERDE_VAZADA, BOTAO_PILULA_VERMELHA_VAZADA } from '@/lib/estilos-botao'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const WA_TEAL = '#128C7E'
@@ -1184,7 +1186,12 @@ export default function Admin() {
       (window.navigator as unknown as { standalone?: boolean }).standalone === true) &&
     (paramApp === 'mensagens' || appLembrado === 'mensagens')
   // ?restaurante=<id>: aba WhatsApp com aquele restaurante (recarregar mantém).
-  const [activeTab, setActiveTab] = useState<Tab>(() => (new URLSearchParams(location.search).has('restaurante') ? 'whatsapp' : 'suporte'))
+  // ?aba=contas: volta da conta de um cliente ("Voltar para minha conta").
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const q = new URLSearchParams(location.search)
+    if (q.has('restaurante')) return 'whatsapp'
+    return q.get('aba') === 'contas' ? 'contas' : 'suporte'
+  })
   const trocarAba = (tab: Tab) => {
     // Saindo da aba WhatsApp: os parâmetros dela (?restaurante=, ?chat=…) saem da URL.
     if (activeTab === 'whatsapp' && tab !== 'whatsapp' && location.search) navigate('/admin', { replace: true })
@@ -1239,6 +1246,8 @@ export default function Admin() {
   const [salvandoContaId, setSalvandoContaId] = useState<number | null>(null)
   const [buscaConta, setBuscaConta] = useState('')
   const [filtroConta, setFiltroConta] = useState<FiltroConta>('todas')
+  const [entrandoContaId, setEntrandoContaId] = useState<number | null>(null)
+  const { user: euAdmin } = useAuth()
   const [vendedores, setVendedores] = useState<VendedorAdmin[]>([])
   const [salvandoVendedor, setSalvandoVendedor] = useState<string | null>(null)
   const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
@@ -1382,6 +1391,18 @@ export default function Admin() {
   }, [confirmar, loadVendedores])
   useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
 
+
+  // Um clique: abre a conta do cliente com acesso total (a página recarrega já
+  // dentro dela). A barra embaixo leva de volta para a conta do admin.
+  const entrarNaContaDoCliente = useCallback(async (conta: ContaAdmin) => {
+    setEntrandoContaId(conta.id)
+    try {
+      await entrarNaConta(conta.id)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Não foi possível abrir a conta.')
+      setEntrandoContaId(null)
+    }
+  }, [])
 
   const alternarExclusao = useCallback(async (conta: ContaAdmin) => {
     const excluindo = !conta.excluida_em
@@ -1830,11 +1851,24 @@ export default function Admin() {
                             )}
                           </Td>
 
-                          {/* Ação: só exclusão reversível. O acesso pago é
-                              controlado por pagamento real ou cupom — não há
-                              como "tornar pagante" pelo painel. */}
+                          {/* Ações: entrar na conta e exclusão reversível. O
+                              acesso pago é controlado por pagamento real ou
+                              cupom — não há como "tornar pagante" pelo painel. */}
                           <Td>
                             <div className="flex items-center gap-2">
+                              {!excluida && (!c.email || c.email.toLowerCase() !== (euAdmin?.email ?? '').toLowerCase()) && (
+                                <button
+                                  onClick={() => entrarNaContaDoCliente(c)}
+                                  disabled={entrandoContaId !== null}
+                                  title="Entrar nesta conta com acesso total, como o cliente vê"
+                                  className={cn(BOTAO_PILULA_AZUL_VAZADO, 'inline-flex h-8 items-center gap-1.5 px-3.5 text-[12px] disabled:opacity-60')}
+                                >
+                                  {entrandoContaId === c.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <LogIn className="h-3.5 w-3.5" />}
+                                  Entrar
+                                </button>
+                              )}
                               <button
                                 onClick={() => alternarExclusao(c)}
                                 disabled={salvando}

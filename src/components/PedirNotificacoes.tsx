@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { BellRing, X } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { estouDentroDeOutraConta } from '@/lib/acesso-admin'
 import { iphoneSemApp, pedirPermissaoEInscrever, pushSuportado } from '@/lib/push'
 import { PassoAPassoIphone } from '@/components/InstalarApp'
 
@@ -38,6 +39,8 @@ export function PedirNotificacoes() {
     // Sem login (na raiz o visitante vê a página de vendas) ou em página de
     // entrada/compra: não pergunta.
     if (!user || adiado() || FORA.some((r) => pathname.startsWith(r))) { setEstado(null); return }
+    // Admin dentro da conta de um cliente: não é o aparelho do cliente.
+    if (estouDentroDeOutraConta()) { setEstado(null); return }
     if (iphoneSemApp()) { setEstado('iphone'); return }
     if (pushSuportado() && Notification.permission === 'default') { setEstado('pedir'); return }
     setEstado(null)

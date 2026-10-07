@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import { idDoAparelho } from '@/lib/aparelho'
+import { estouDentroDeOutraConta } from '@/lib/acesso-admin'
 
 /**
  * Inscrição do aparelho no Web Push — usada pelo admin da plataforma
@@ -46,6 +47,9 @@ export function iphoneSemApp(): boolean {
  */
 export async function inscreverPush(authUserId: string): Promise<boolean> {
   if (!authUserId || !pushSuportado() || Notification.permission !== 'granted') return false
+  // Admin dentro da conta de um cliente: o aparelho é do admin. Inscrever aqui
+  // passaria as notificações do cliente para ele (e tiraria as do admin).
+  if (estouDentroDeOutraConta()) return false
   try {
     const reg = await navigator.serviceWorker.ready
     const sub =

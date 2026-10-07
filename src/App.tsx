@@ -40,6 +40,7 @@ import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
 import { SoAdminPlataforma } from './components/SoAdminPlataforma'
+import { BarraAcessoAdmin } from './components/BarraAcessoAdmin'
 import { AvisosDoPainel } from './components/whatsapp/Notificacoes'
 import { PedirNotificacoes } from './components/PedirNotificacoes'
 import { ManifestPorRota } from './components/ManifestPorRota'
@@ -62,6 +63,8 @@ const App = () => (
         <AtualizacaoDoApp />
         {/* Notificações do navegador p/ o admin da plataforma (mensagens de clientes) */}
         <AdminNotificacoes />
+        {/* Admin dentro da conta de um cliente: de quem é a conta + "Voltar para minha conta" */}
+        <BarraAcessoAdmin />
         {/* Dono: inscrição no push e sons de WhatsApp e suporte, em qualquer página logada */}
         <AvisosDoPainel />
         {/* Pergunta (PC e celular) se pode mandar notificações */}
