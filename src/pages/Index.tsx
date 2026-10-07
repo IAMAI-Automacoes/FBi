@@ -5,6 +5,7 @@ import { KpiCards } from '@/components/dashboard/KpiCards'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { RecentFeedbacks } from '@/components/dashboard/RecentFeedbacks'
 import { TemasFeedback } from '@/components/dashboard/TemasFeedback'
+import { DivisaoAvaliacoes } from '@/components/dashboard/DivisaoAvaliacoes'
 import {
   buscarKpis,
   buscarTendencia,
@@ -147,41 +148,7 @@ export default function Index() {
 
           {/* Como as avaliações se dividem — mesmo bloco (e mesma lógica) da
               aba Relatórios, só que sempre visível aqui na Visão Geral. */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h3 className="text-base font-bold text-gray-900">Como as avaliações se dividem</h3>
-            <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="flex shrink-0 gap-6">
-                {[
-                  { valor: data.kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
-                  { valor: data.kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: 'Neutras' },
-                  { valor: data.kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
-                  { valor: data.kpis.suggestionPercent, cor: 'text-sky-600', dot: 'bg-sky-500', label: 'Sugestões' },
-                ].map((s) => (
-                  <div key={s.label}>
-                    <p className={`text-2xl font-bold ${s.cor}`}>{s.valor}%</p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
-                      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                      {s.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                <div className="flex h-full w-full">
-                  {[
-                    { n: data.kpis.positivos, cor: 'bg-green-500' },
-                    { n: data.kpis.neutros, cor: 'bg-slate-400' },
-                    { n: data.kpis.negativos, cor: 'bg-red-500' },
-                    { n: data.kpis.sugestoes, cor: 'bg-sky-500' },
-                  ].map((s, i) =>
-                    s.n > 0 ? (
-                      <div key={i} className={s.cor} style={{ width: `${(s.n / data.kpis.totalFeedbacks) * 100}%` }} />
-                    ) : null,
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <DivisaoAvaliacoes kpis={data.kpis} />
 
           <TrendChart data={data.chartData} categories={data.categories} />
           <TemasFeedback

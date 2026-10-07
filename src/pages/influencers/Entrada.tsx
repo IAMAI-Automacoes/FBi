@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MailCheck } from 'lucide-react'
 import { consultarEntrada, entrarComSenha, ErroEntrada, pedirLinkDeSenha } from './dados'
-import { authInputBlur, authInputFocus, authInputStyle, Aviso, BotaoPrincipal, BotaoTexto, LayoutEntrada, TituloEntrada } from './ui'
+import { authInputBlur, authInputFocus, authInputStyle, Aviso, BotaoPrincipal, BotaoTexto, LayoutEntrada, TituloEntrada, rotuloCampo } from './ui'
 
 type Etapa = 'email' | 'senha' | 'link' | 'sem_acesso'
 
@@ -78,16 +78,15 @@ export default function Entrada() {
     setErro(null)
   }
 
-  const rotulo = 'text-[13px] font-medium text-slate-700'
 
   return (
     <LayoutEntrada>
       {etapa === 'email' && (
         <>
           <TituloEntrada titulo="Entrar" subtitulo="Acesso dos parceiros do EasyFeed. Digite o e-mail que você passou para a nossa equipe." />
-          <form onSubmit={continuar} className="flex flex-col gap-5">
-            <label className="flex flex-col gap-1.5">
-              <span className={rotulo}>E-mail</span>
+          <form onSubmit={continuar} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <span style={rotuloCampo}>E-mail</span>
               <input
                 type="email" autoComplete="email" placeholder="voce@email.com" required autoFocus
                 value={email} onChange={(e) => setEmail(e.target.value)} disabled={carregando}
@@ -106,9 +105,9 @@ export default function Entrada() {
             titulo="Digite sua senha"
             subtitulo={<>Entrando como <strong className="font-semibold text-slate-900">{email}</strong>.</>}
           />
-          <form onSubmit={entrar} className="flex flex-col gap-5">
-            <label className="flex flex-col gap-1.5">
-              <span className={rotulo}>Senha</span>
+          <form onSubmit={entrar} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <span style={rotuloCampo}>Senha</span>
               <input
                 type="password" autoComplete="current-password" placeholder="••••••••" required autoFocus
                 value={senha} onChange={(e) => setSenha(e.target.value)} disabled={carregando}

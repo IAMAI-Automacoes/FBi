@@ -94,7 +94,6 @@ export function TemasFeedback({
   dias: number
 }) {
   const [temas, setTemas] = useState<TemaFeedback[]>([])
-  const [sentimento, setSentimento] = useState<SentimentoFiltro>('todos')
   const [carregado, setCarregado] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -117,6 +116,17 @@ export function TemasFeedback({
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId, carregar])
+
+  return <TemasFeedbackLista temas={temas} carregado={carregado} />
+}
+
+/**
+ * Só a parte visual de "O que os clientes estão comentando": as abas e os
+ * grupos de pílulas. Usada aqui (temas do restaurante) e no EasyFeed
+ * Influencers (temas anônimos de todos), para as duas telas serem iguais.
+ */
+export function TemasFeedbackLista({ temas, carregado }: { temas: TemaFeedback[]; carregado: boolean }) {
+  const [sentimento, setSentimento] = useState<SentimentoFiltro>('todos')
 
   // Em "Todos": os grupos fixos e os que têm algum tema; numa aba: só aquele grupo.
   const grupos = GRUPOS

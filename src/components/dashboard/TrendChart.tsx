@@ -114,8 +114,8 @@ export function TrendChart({ data, categories }: TrendChartProps) {
       <CardHeader className="p-5 pb-0 border-b-0 space-y-0">
         <CardTitle className="text-base font-semibold">Tendência de Sentimento</CardTitle>
       </CardHeader>
-      <CardContent className="p-5 pt-6 flex items-start gap-6">
-        <div className="flex-1 min-w-0 h-[280px]">
+      <CardContent className="p-5 pt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
+        <div className="w-full min-w-0 h-[240px] sm:flex-1 sm:h-[280px]">
           <ChartContainer config={chartConfig} className="w-full h-full">
             <AreaChart data={dataComFlag} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
@@ -194,9 +194,9 @@ export function TrendChart({ data, categories }: TrendChartProps) {
           </ChartContainer>
         </div>
 
-        <div className="w-px bg-border/50 self-stretch shrink-0" />
+        <div className="hidden sm:block w-px bg-border/50 self-stretch shrink-0" />
 
-        <div className="w-44 shrink-0 flex flex-col">
+        <div className="w-full sm:w-44 shrink-0 flex flex-col">
           <p className="text-sm font-semibold text-foreground mb-1">Categorias de Feedback</p>
           <p className="text-[11px] text-muted-foreground mb-2">Nº de reclamações por categoria</p>
           {categoriasOrdenadas.length === 0 ? (

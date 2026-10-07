@@ -21,6 +21,7 @@ import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { useAuth } from '@/hooks/use-auth'
 import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
+import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -1103,20 +1104,6 @@ function ConversaView({
 }
 
 // ── CRUD Table genérica ───────────────────────────────────────────────────────
-function CrudTable({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-      {/* min-w: no celular a tabela rola dentro do card em vez de espremer/cortar. */}
-      <table className="w-full text-sm min-w-[560px]">{children}</table>
-    </div>
-  )
-}
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left px-4 py-2.5 text-[12px] font-semibold text-gray-500 bg-gray-50 border-b border-gray-300">{children}</th>
-}
-function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={cn('px-4 py-3', className)}>{children}</td>
-}
 function BadgeBool({ v }: { v: boolean }) {
   return (
     <span className={cn('text-[11px] px-2 py-0.5 rounded-full font-medium', v ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500')}>

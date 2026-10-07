@@ -2,7 +2,17 @@
  * O painel do EasyFeed Influencers: o formato do que vem do banco
  * (`influencers_painel`) e as contas da tela. Sem React nem Supabase, para dar
  * para testar no Node.
+ *
+ * A tela usa os MESMOS componentes da Visão Geral dos restaurantes (KpiCards,
+ * TrendChart, TemasFeedbackLista): as funções `kpisDoPainel`, `serieDoGrafico`,
+ * `categoriasDoGrafico` e `temasParaLista` convertem os dados anônimos para o
+ * formato deles, com as mesmas contas de `buscarKpis`/`buscarTendencia`
+ * (src/lib/queries/visao-geral.ts).
  */
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import type { CategoryScore, DashboardData, PeriodInfo } from './queries/visao-geral'
+import type { TemaFeedback } from './queries/temas'
 
 export type TipoPonto = 'reclamacao' | 'elogio' | 'sugestao' | 'neutro'
 
@@ -25,16 +35,138 @@ export interface CategoriaPainel {
   total_anterior: number
 }
 
+export interface TotaisPorTipo {
+  pontos: number
+  reclamacoes: number
+  elogios: number
+  sugestoes: number
+  neutros: number
+}
+
 export interface DadosPainel {
   periodo: { dias: number }
   culinaria: string | null
   culinarias: string[]
-  totais: { pontos: number; reclamacoes: number; elogios: number; sugestoes: number; neutros: number; pontos_anterior: number }
+  totais: TotaisPorTipo & { pontos_anterior: number }
+  totais_anterior: TotaisPorTipo
   categorias: CategoriaPainel[]
   temas: TemaPainel[]
   em_alta: TemaPainel[]
   frases: { tipo: TipoPonto; texto: string; categoria: string }[]
-  evolucao: { intervalo: 'dia' | 'semana'; pontos: { inicio: string; reclamacoes: number; elogios: number; sugestoes: number }[] }
+  /** Por dia até 31 dias; por mês acima (igual ao gráfico da Visão Geral). */
+  evolucao: {
+    intervalo: 'dia' | 'mes'
+    pontos: { inicio: string; reclamacoes: number; elogios: number; neutros: number; sugestoes: number }[]
+  }
+}
+
+// ── No formato da Visão Geral ─────────────────────────────────────────────────
+
+/** 7, 30 ou 90 dias → o período dos componentes da Visão Geral. */
+export function periodoDoPainel(dias: number): PeriodInfo {
+  return dias <= 7 ? '7d' : dias <= 30 ? '30d' : '90d'
+}
+
+/** Índice 0-100 da Visão Geral: elogio 100, neutro 50, reclamação 0; sugestão fica fora. */
+export function sentimentoGeral(t: { elogios: number; neutros: number; reclamacoes: number }): number | null {
+  const base = t.elogios + t.neutros + t.reclamacoes
+  return base === 0 ? null : Math.round((t.elogios * 100 + t.neutros * 50) / base)
+}
+
+/** Os números do topo, no formato do `KpiCards` (mesma regra de `buscarKpis`). */
+export function kpisDoPainel(d: DadosPainel): DashboardData['kpis'] {
+  const t = d.totais
+  const a = d.totais_anterior
+  const total = t.pontos
+  const prevTotal = a.pontos
+  const hasPrevData = prevTotal > 0
+  // Comparar 3 contra 1 dá "+200%", que engana: só compara com base mínima.
+  const prevConfiavel = prevTotal >= 3
+  const sentiment = sentimentoGeral(t) ?? 0
+  const prevSentiment = sentimentoGeral(a) ?? 0
+  const variacaoTotal = hasPrevData ? Math.round(((total - prevTotal) / prevTotal) * 100) : 0
+  const totalTrend = !hasPrevData ? (total > 0 ? 'novo' : '—') : `${variacaoTotal >= 0 ? '+' : ''}${variacaoTotal}%`
+  const difSentimento = sentiment - prevSentiment
+  const sentimentTrend = !hasPrevData
+    ? (total > 0 ? 'novo' : '—')
+    : difSentimento === 0 ? 'estável' : `${difSentimento >= 0 ? '+' : ''}${difSentimento} pts`
+  const avaliativos = t.elogios + t.neutros + t.reclamacoes
+  const nps = avaliativos ? Math.round(((t.elogios - t.reclamacoes) / avaliativos) * 100) : 0
+  return {
+    totalFeedbacks: total,
+    totalTrend,
+    sentiment,
+    sentimentTrend,
+    nps,
+    npsTrend: '—',
+    criticalTheme: '',
+    criticalPercent: 0,
+    hasPrevData,
+    prevConfiavel,
+    prevTotal,
+    positivos: t.elogios,
+    negativos: t.reclamacoes,
+    neutros: t.neutros,
+    sugestoes: t.sugestoes,
+    positivePercent: pct(t.elogios, total),
+    negativePercent: pct(t.reclamacoes, total),
+    neutralPercent: pct(t.neutros, total),
+    suggestionPercent: pct(t.sugestoes, total),
+    semClassificacao: 0,
+    positivePercentTrend: '—',
+    totalMensagens: total,
+    mensagensTrend: totalTrend,
+    prevMensagens: prevTotal,
+    prevSentiment,
+  }
+}
+
+/** "2026-10-07" como data local (sem virar o dia anterior pelo fuso). */
+function dataLocal(iso: string): Date {
+  const [a, m, d] = iso.split('-').map(Number)
+  return new Date(a, m - 1, d)
+}
+
+/** A série do gráfico "Tendência de Sentimento", com os mesmos rótulos da Visão Geral. */
+export function serieDoGrafico(d: DadosPainel): DashboardData['chartData'] {
+  const rotulo = (iso: string) => {
+    const data = dataLocal(iso)
+    if (d.evolucao.intervalo === 'mes') return format(data, 'MMM', { locale: ptBR })
+    return d.periodo.dias <= 7 ? format(data, 'EE', { locale: ptBR }) : format(data, 'd MMM', { locale: ptBR })
+  }
+  return d.evolucao.pontos.map((p) => ({
+    date: rotulo(p.inicio),
+    sentiment: sentimentoGeral(p),
+    avaliacoes: p.elogios + p.neutros + p.reclamacoes,
+    positivos: p.elogios,
+    negativos: p.reclamacoes,
+    neutros: p.neutros,
+    sugestoes: p.sugestoes,
+  }))
+}
+
+/** As categorias da lateral do gráfico (ranqueadas por reclamação, como na Visão Geral). */
+export function categoriasDoGrafico(d: DadosPainel): CategoryScore[] {
+  return d.categorias.map((c) => ({
+    name: c.nome,
+    score: sentimentoGeral(c) ?? 0,
+    count: c.total,
+    trend: 'neutral' as const,
+    negativeCount: c.reclamacoes,
+  }))
+}
+
+/** Os temas no formato da lista "O que os clientes estão comentando". */
+export function temasParaLista(d: DadosPainel): TemaFeedback[] {
+  return d.temas.map((t) => ({ id: `${t.tipo}:${t.rotulo}`, rotulo: rotuloBonito(t.rotulo), tipo: t.tipo, quantidade: t.mencoes }))
+}
+
+/** O sentimento como a Visão Geral grava, para o selo do cartão de feedback. */
+export const SENTIMENTO_DO_TIPO: Record<TipoPonto, string> = {
+  reclamacao: 'Negativo',
+  elogio: 'Positivo',
+  sugestao: 'Sugestão',
+  neutro: 'Neutro',
 }
 
 /** "comida fria" → "Comida fria". */
@@ -48,17 +180,6 @@ export function pct(parte: number, total: number): number {
   return total > 0 ? Math.round((parte / total) * 100) : 0
 }
 
-/** Variação contra o período anterior: null quando não havia nada antes (não dá para comparar). */
-export function variacao(atual: number, anterior: number): number | null {
-  return anterior > 0 ? Math.round(((atual - anterior) / anterior) * 100) : null
-}
-
-export const ROTULO_TIPO: Record<TipoPonto, string> = {
-  reclamacao: 'Reclamações',
-  elogio: 'Elogios',
-  sugestao: 'Sugestões',
-  neutro: 'Neutros',
-}
 
 // ── Ideias de pauta ───────────────────────────────────────────────────────────
 
@@ -125,15 +246,15 @@ export function ideiasDePauta(d: DadosPainel): Pauta[] {
     })
   }
 
-  // O que mais cresceu e ainda não virou pauta acima (neutro não rende vídeo).
+  // O que mais cresceu e ainda não virou pauta acima. Só com base de
+  // comparação (3 menções antes, a mesma regra dos números do topo): de 1 para
+  // 3 não é tendência. Neutro não rende vídeo.
   const jaUsados = new Set([reclamacao?.rotulo, elogio?.rotulo, sugestao?.rotulo])
-  const alta = d.em_alta.find((t) => t.tipo !== 'neutro' && !jaUsados.has(t.rotulo))
+  const alta = d.em_alta.find((t) => t.tipo !== 'neutro' && t.mencoes_anterior >= 3 && !jaUsados.has(t.rotulo))
   if (alta) {
     pautas.push({
       titulo: `Está crescendo: “${rotuloBonito(alta.rotulo).toLocaleLowerCase('pt-BR')}”`,
-      porque: alta.mencoes_anterior > 0
-        ? `Passou de ${alta.mencoes_anterior} para ${alta.mencoes} menções, comparando com o período anterior.`
-        : `Apareceu ${vezes(alta.mencoes)} ${periodo}, e não tinha aparecido no período anterior.`,
+      porque: `Passou de ${alta.mencoes_anterior} para ${alta.mencoes} menções, comparando com o período anterior.`,
     })
   }
 

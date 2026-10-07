@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { EyeOff, Lightbulb, MessagesSquare } from 'lucide-react'
 import { useInfluencer } from './contexto'
 import { salvarPerfil } from './dados'
-import { authInputBlur, authInputFocus, authInputStyle, Aviso, BotaoPrincipal, LayoutEntrada, TituloEntrada } from './ui'
+import { authInputBlur, authInputFocus, authInputStyle, Aviso, BotaoPrincipal, LayoutEntrada, TituloEntrada, rotuloCampo } from './ui'
 
 const COMO_FUNCIONA = [
   {
@@ -49,7 +49,6 @@ export default function BoasVindas() {
     }
   }
 
-  const rotulo = 'text-[13px] font-medium text-slate-700'
 
   return (
     <LayoutEntrada>
@@ -58,17 +57,17 @@ export default function BoasVindas() {
       {passo === 1 ? (
         <>
           <TituloEntrada titulo="Que bom ter você aqui" subtitulo="Conta um pouco sobre você. Leva menos de um minuto." />
-          <form onSubmit={salvar} className="flex flex-col gap-5">
-            <label className="flex flex-col gap-1.5">
-              <span className={rotulo}>Como podemos te chamar?</span>
+          <form onSubmit={salvar} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <span style={rotuloCampo}>Como podemos te chamar?</span>
               <input
                 type="text" autoComplete="given-name" placeholder="Seu nome" required autoFocus maxLength={60}
                 value={nome} onChange={(e) => setNome(e.target.value)} disabled={salvando}
                 style={authInputStyle} onFocus={authInputFocus} onBlur={authInputBlur}
               />
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={rotulo}>Seu @ principal <span className="font-normal text-slate-400">(opcional)</span></span>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <span style={rotuloCampo}>Seu @ principal <span className="font-normal text-slate-400">(opcional)</span></span>
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">@</span>
                 <input
@@ -78,8 +77,8 @@ export default function BoasVindas() {
                 />
               </div>
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={rotulo}>Cidade <span className="font-normal text-slate-400">(opcional)</span></span>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <span style={rotuloCampo}>Cidade <span className="font-normal text-slate-400">(opcional)</span></span>
               <input
                 type="text" autoComplete="address-level2" placeholder="São Paulo" maxLength={60}
                 value={cidade} onChange={(e) => setCidade(e.target.value)} disabled={salvando}

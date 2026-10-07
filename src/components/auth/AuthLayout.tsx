@@ -48,7 +48,9 @@ export function authInputBlur(e: React.FocusEvent<HTMLInputElement>) {
 }
 
 /* ───────── Painel esquerdo (showcase) ───────── */
-function ShowcasePanel() {
+/* `conteudo`: troca o texto e a composição (o EasyFeed Influencers usa a mesma
+   moldura com o texto dele). Sem ele, é o painel do login dos restaurantes. */
+function ShowcasePanel({ conteudo }: { conteudo?: ReactNode }) {
   const cardHoverIn = (e: React.MouseEvent<HTMLDivElement>) => {
     const el = e.currentTarget
     el.style.transform = `${el.dataset.rot || ''} translateY(-4px)`
@@ -82,6 +84,7 @@ function ShowcasePanel() {
           <BrandMark size={68} />
         </div>
 
+        {conteudo ?? (<>
         {/* Headline */}
         <div style={{ marginTop: '44px', maxWidth: '440px' }}>
           <h2 style={{ fontSize: '36px', fontWeight: 700, lineHeight: 1.13, color: '#0F172A', letterSpacing: '-0.025em', marginBottom: '16px' }}>
@@ -208,16 +211,17 @@ function ShowcasePanel() {
             </div>
           </div>
         </div>
+        </>)}
       </div>
     </div>
   )
 }
 
 /* ───────── Layout compartilhado das telas de auth ───────── */
-export function AuthLayout({ children }: { children: ReactNode }) {
+export function AuthLayout({ children, vitrine }: { children: ReactNode; vitrine?: ReactNode }) {
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#FFFFFF' }}>
-      <ShowcasePanel />
+      <ShowcasePanel conteudo={vitrine} />
 
       {/* ─── PAINEL DIREITO ─── */}
       <div className="flex-1 flex items-center justify-center" style={{ position: 'relative', padding: '32px 24px', background: 'linear-gradient(155deg, #EAF1FF 0%, #F0F4FF 40%, #EAF7FB 100%)', overflow: 'hidden' }}>
