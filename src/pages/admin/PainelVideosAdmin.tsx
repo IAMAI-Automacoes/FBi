@@ -11,10 +11,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
-import { formatarDuracao, formatarTamanho, idDoRequisito, ordinal, ROTULO_STATUS, type Missao, type Recompensa, type Requisito } from '@/lib/missoes'
 import {
-  acaoVideos, buscarRecompensas, buscarTodasMissoes, buscarTodosEnvios, buscarTodosPremios, linkDoVideo, marcarPremioAplicado,
-  removerRecompensa, salvarMissao, salvarRecompensa, type EnvioAdmin, type PremioAdmin,
+  DURACAO_TETO_S, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito, ordinal, ROTULO_STATUS, rotuloDuracao, rotuloPeriodo,
+  type Missao, type Recompensa,
+} from '@/lib/missoes'
+import {
+  acaoVideos, buscarMaxPorAno, buscarRecompensas, buscarTodasMissoes, buscarTodosEnvios, buscarTodosPremios, linkDoVideo, marcarPremioAplicado,
+  removerRecompensa, salvarMaxPorAno, salvarMissao, salvarRecompensa, type EnvioAdmin, type MissaoParaSalvar, type PremioAdmin,
 } from '@/lib/queries/missoes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 
@@ -93,6 +96,11 @@ function DetalheEnvio({ envio, onFechar, onMudou }: { envio: EnvioAdmin | null; 
               </ul>
             ) : null}
             {a?.conteudo_adequado === false && <p className="text-[13px] text-rose-700">Conteúdo inadequado: {a.problema_conteudo}</p>}
+            {a?.roteiro && (
+              <p className={cn('text-[12px]', a.roteiro.seguido ? 'text-emerald-700' : 'text-amber-700')}>
+                Roteiro {a.roteiro.seguido ? 'seguido' : 'não seguido'}{a.roteiro.comentario ? `: ${a.roteiro.comentario}` : ''}
+              </p>
+            )}
             {a?.resumo && <p className="text-[12px] text-gray-500">Resumo da IA: {a.resumo}</p>}
             {a?.erro && <p className="rounded-lg bg-amber-50 p-2 font-mono text-[11px] text-amber-800">{a.erro}</p>}
 
@@ -120,15 +128,26 @@ function DetalheEnvio({ envio, onFechar, onMudou }: { envio: EnvioAdmin | null; 
 
 // ── Criar ou editar uma missão ───────────────────────────────────────────────
 
-interface Rascunho { id?: number; titulo: string; descricao: string; requisitos: Requisito[]; ordem: number; ativa: boolean }
+type Rascunho = MissaoParaSalvar
+
+/** O que está errado no rascunho (null = pode salvar). */
+function problemaDoRascunho(m: Rascunho): string | null {
+  if (!m.titulo.trim()) return 'Dê um título.'
+  if (!m.requisitos.some((r) => r.texto.trim())) return 'Ponha pelo menos um requisito.'
+  if (m.duracao_max_s != null && (m.duracao_max_s < 5 || m.duracao_max_s > DURACAO_TETO_S)) return `A duração máxima vai de 5 a ${DURACAO_TETO_S} segundos.`
+  if (m.duracao_min_s != null && m.duracao_min_s > (m.duracao_max_s ?? DURACAO_TETO_S)) return 'A duração mínima passa da máxima.'
+  if (m.disponivel_de && m.disponivel_ate && m.disponivel_de > m.disponivel_ate) return 'O período termina antes de começar.'
+  return null
+}
+const segundos = (v: string) => (v.trim() === '' ? null : Math.max(0, Math.round(Number(v)) || 0))
 
 function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | null; onFechar: () => void; onSalvo: () => void }) {
   const [m, setM] = useState<Rascunho | null>(rascunho)
   const [salvando, setSalvando] = useState(false)
   useEffect(() => setM(rascunho), [rascunho])
 
-  const textos = m?.requisitos.map((r) => r.texto.trim()).filter(Boolean) ?? []
-  const valido = !!m && m.titulo.trim() !== '' && textos.length > 0
+  const problema = m ? problemaDoRascunho(m) : null
+  const valido = !!m && !problema
 
   const salvar = async () => {
     if (!m || !valido) return
@@ -187,6 +206,37 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
                   </button>
                 </div>
               </div>
+              <div>
+                <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Roteiro para gravar</p>
+                <Textarea
+                  value={m.roteiro}
+                  onChange={(e) => setM({ ...m, roteiro: e.target.value })}
+                  rows={5}
+                  placeholder={'Um passo por linha. Ex.:\nDiga seu nome e o nome do restaurante.\nConte uma coisa que melhorou com o EasyFeed.'}
+                  className="text-[13px]"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">O cliente vê como lista numerada. A IA confere se ele seguiu, mas quem aprova são os requisitos.</p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Duração do vídeo (segundos)</p>
+                  <div className="flex items-center gap-2">
+                    <input type="number" min={0} className={cn(campo, 'w-24')} value={m.duracao_min_s ?? ''} onChange={(e) => setM({ ...m, duracao_min_s: segundos(e.target.value) })} placeholder="mín." />
+                    <span className="text-[12px] text-gray-400">a</span>
+                    <input type="number" min={5} max={DURACAO_TETO_S} className={cn(campo, 'w-24')} value={m.duracao_max_s ?? ''} onChange={(e) => setM({ ...m, duracao_max_s: segundos(e.target.value) })} placeholder="máx." />
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-400">Vazio: sem mínimo e até 3 min. Máximo de 5 min.</p>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Período (vazio = sempre)</p>
+                  <div className="flex items-center gap-2">
+                    <input type="date" className={cn(campo, 'w-40')} value={m.disponivel_de ?? ''} onChange={(e) => setM({ ...m, disponivel_de: e.target.value || null })} />
+                    <span className="text-[12px] text-gray-400">a</span>
+                    <input type="date" className={cn(campo, 'w-40')} value={m.disponivel_ate ?? ''} onChange={(e) => setM({ ...m, disponivel_ate: e.target.value || null })} />
+                  </div>
+                </div>
+              </div>
+              {problema && m.titulo.trim() && <p className="text-[12px] text-rose-600">{problema}</p>}
               <div className="flex items-center justify-between gap-3">
                 <label className="flex items-center gap-2 text-[13px] text-gray-700">
                   Ordem
@@ -270,6 +320,9 @@ export function PainelVideosAdmin() {
   const [premios, setPremios] = useState<PremioAdmin[]>([])
   const [missoes, setMissoes] = useState<Missao[]>([])
   const [recompensas, setRecompensas] = useState<Recompensa[]>([])
+  const [maxPorAno, setMaxPorAno] = useState<number | null>(null)
+  const [textoMax, setTextoMax] = useState('')
+  const [salvandoMax, setSalvandoMax] = useState(false)
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]['chave']>('todos')
   const [aberto, setAberto] = useState<EnvioAdmin | null>(null)
   const [editando, setEditando] = useState<Rascunho | null>(null)
@@ -277,7 +330,9 @@ export function PainelVideosAdmin() {
 
   const carregar = useCallback(async () => {
     try {
-      const [e, p, m, r] = await Promise.all([buscarTodosEnvios(), buscarTodosPremios(), buscarTodasMissoes(), buscarRecompensas()])
+      const [e, p, m, r, max] = await Promise.all([buscarTodosEnvios(), buscarTodosPremios(), buscarTodasMissoes(), buscarRecompensas(), buscarMaxPorAno()])
+      setMaxPorAno(max)
+      setTextoMax(max == null ? '' : String(max))
       setEnvios(e)
       setPremios(p)
       setMissoes(m)
@@ -325,6 +380,25 @@ export function PainelVideosAdmin() {
       setMexendo(null)
     }
   }
+  const salvarMax = async () => {
+    const n = textoMax.trim() === '' ? null : Math.round(Number(textoMax))
+    if (n !== null && (!Number.isFinite(n) || n < 1)) return setTextoMax(maxPorAno == null ? '' : String(maxPorAno))
+    if (n === maxPorAno) return
+    setSalvandoMax(true)
+    try {
+      await salvarMaxPorAno(n)
+      setMaxPorAno(n)
+      toast.success(n == null ? 'Sem limite por ano.' : `Limite: ${n} ${n === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} por ano.`)
+    } catch {
+      toast.error('Não foi possível salvar o limite.')
+    } finally {
+      setSalvandoMax(false)
+    }
+  }
+  const hoje = hojeSP()
+  const ROTULO_PERIODO = { sempre: 'Sempre', agendada: 'Agendada', no_ar: 'No ar', encerrada: 'Encerrada' } as const
+  const COR_PERIODO = { sempre: 'bg-gray-100 text-gray-600', agendada: 'bg-blue-50 text-blue-700', no_ar: 'bg-emerald-50 text-emerald-700', encerrada: 'bg-gray-100 text-gray-500' } as const
+
   const novoDegrau = async () => {
     const ordem = (recompensas.at(-1)?.ordem ?? 0) + 1
     try {
@@ -369,7 +443,7 @@ export function PainelVideosAdmin() {
               <TabsTrigger value="envios">Vídeos enviados{paraRevisar ? ` (${paraRevisar})` : ''}</TabsTrigger>
               <TabsTrigger value="premios">Prêmios{pendentes ? ` (${pendentes})` : ''}</TabsTrigger>
               <TabsTrigger value="missoes">Missões</TabsTrigger>
-              <TabsTrigger value="escada">Escada de prêmios</TabsTrigger>
+              <TabsTrigger value="escada">Escada e limite</TabsTrigger>
             </TabsList>
 
             <TabsContent value="envios">
@@ -420,11 +494,12 @@ export function PainelVideosAdmin() {
                 <p className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-[13px] text-gray-500">Nenhum prêmio ganho ainda.</p>
               ) : (
                 <CrudTable>
-                  <thead><tr><Th>Restaurante</Th><Th>Degrau</Th><Th>Prêmio</Th><Th>Ganho em</Th><Th>Situação</Th><Th className="text-right" /></tr></thead>
+                  <thead><tr><Th>Restaurante</Th><Th>Ano</Th><Th>Degrau</Th><Th>Prêmio</Th><Th>Ganho em</Th><Th>Situação</Th><Th className="text-right" /></tr></thead>
                   <tbody>
                     {premiosOrdenados.map((p) => (
                       <tr key={p.id} className="border-b border-gray-100 last:border-0">
                         <Td className="font-medium text-gray-800">{p.restaurante}</Td>
+                        <Td className="text-[12px] tabular-nums text-gray-500">{p.ano}</Td>
                         <Td className="whitespace-nowrap text-[12px] text-gray-500">{ordinal(p.recompensa_ordem)}</Td>
                         <Td className="text-gray-700">{p.descricao}</Td>
                         <Td className="whitespace-nowrap text-[12px] text-gray-500">{quando(p.criado_em)}</Td>
@@ -449,12 +524,19 @@ export function PainelVideosAdmin() {
 
             <TabsContent value="missoes">
               <div className="mb-3 flex justify-end">
-                <Button size="sm" onClick={() => setEditando({ titulo: '', descricao: '', requisitos: [{ id: '', texto: '' }], ordem: (missoes.at(-1)?.ordem ?? 0) + 1, ativa: true })} className="bg-[#1D4ED8] hover:bg-[#1E40AF]">
+                <Button
+                  size="sm"
+                  onClick={() => setEditando({
+                    titulo: '', descricao: '', requisitos: [{ id: '', texto: '' }], ordem: (missoes.at(-1)?.ordem ?? 0) + 1, ativa: true,
+                    roteiro: '', duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null,
+                  })}
+                  className="bg-[#1D4ED8] hover:bg-[#1E40AF]"
+                >
                   <Plus className="mr-1 h-4 w-4" /> Nova missão
                 </Button>
               </div>
               <CrudTable>
-                <thead><tr><Th>Missão</Th><Th>Requisitos</Th><Th>Ativa</Th><Th className="text-right">Editar</Th></tr></thead>
+                <thead><tr><Th>Missão</Th><Th>Período</Th><Th>Duração</Th><Th>Requisitos</Th><Th>Ativa</Th><Th className="text-right">Editar</Th></tr></thead>
                 <tbody>
                   {missoes.map((m) => (
                     <tr key={m.id} className="border-b border-gray-100 last:border-0">
@@ -462,7 +544,12 @@ export function PainelVideosAdmin() {
                         <p className="font-medium text-gray-800">{m.titulo}</p>
                         {m.descricao && <p className="text-[12px] text-gray-500">{m.descricao}</p>}
                       </Td>
-                      <Td className="text-[12px] text-gray-600">{m.requisitos.length}</Td>
+                      <Td>
+                        <Pilula className={COR_PERIODO[estadoDoPeriodo(m, hoje)]}>{ROTULO_PERIODO[estadoDoPeriodo(m, hoje)]}</Pilula>
+                        {rotuloPeriodo(m) && <p className="mt-0.5 text-[11px] text-gray-400">{rotuloPeriodo(m)}</p>}
+                      </Td>
+                      <Td className="whitespace-nowrap text-[12px] text-gray-600">{rotuloDuracao(m)}</Td>
+                      <Td className="text-[12px] text-gray-600">{m.requisitos.length}{m.roteiro.trim() ? ' · com roteiro' : ''}</Td>
                       <Td><Switch checked={m.ativa} disabled={mexendo === `m${m.id}`} onCheckedChange={() => alternarMissao(m)} /></Td>
                       <Td className="text-right">
                         <button onClick={() => setEditando({ ...m })} title="Editar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">
@@ -477,8 +564,27 @@ export function PainelVideosAdmin() {
             </TabsContent>
 
             <TabsContent value="escada">
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-gray-800">Máximo de vídeos aprovados por ano, por restaurante</p>
+                  <p className="text-[11px] text-gray-500">Somando todas as missões. Os vídeos em análise contam. Vazio = sem limite.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={textoMax}
+                    onChange={(e) => setTextoMax(e.target.value)}
+                    onBlur={salvarMax}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    placeholder="Sem limite"
+                    className={cn(campo, 'w-28')}
+                  />
+                  {salvandoMax && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+                </div>
+              </div>
               <p className="mb-3 text-[12px] text-gray-500">
-                O que o restaurante ganha a cada missão cumprida: a 1ª dá o primeiro prêmio, a 2ª o segundo, e assim por diante. Mudar o texto não muda o que já foi ganho.
+                O que o restaurante ganha a cada missão cumprida no ano: a 1ª dá o primeiro prêmio, a 2ª o segundo, e assim por diante. A escada recomeça em 1º de janeiro. Mudar o texto não muda o que já foi ganho. Por enquanto os prêmios são de exemplo.
               </p>
               <div className="rounded-xl border border-gray-200 bg-white">
                 {recompensas.map((r, i) => (
@@ -486,6 +592,11 @@ export function PainelVideosAdmin() {
                 ))}
                 {recompensas.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-gray-500">Nenhum prêmio na escada.</p>}
               </div>
+              {maxPorAno != null && recompensas.length > maxPorAno && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                  Com o limite de {maxPorAno} por ano, {recompensas.length - maxPorAno === 1 ? `o prêmio da ${ordinal(maxPorAno + 1)} nunca é alcançado` : `os prêmios da ${ordinal(maxPorAno + 1)} em diante nunca são alcançados`}.
+                </p>
+              )}
               <button onClick={novoDegrau} className="mt-3 inline-flex items-center gap-1 text-[12px] font-medium text-[#1D4ED8] hover:underline">
                 <Plus className="h-3.5 w-3.5" /> Prêmio da {ordinal((recompensas.at(-1)?.ordem ?? 0) + 1)}
               </button>

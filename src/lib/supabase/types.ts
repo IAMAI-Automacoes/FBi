@@ -3203,10 +3203,29 @@ export type Database = {
         }
         Relationships: []
       }
+      video_config: {
+        Row: {
+          atualizado_em: string
+          id: boolean
+          max_por_ano: number | null
+        }
+        Insert: {
+          atualizado_em?: string
+          id?: boolean
+          max_por_ano?: number | null
+        }
+        Update: {
+          atualizado_em?: string
+          id?: boolean
+          max_por_ano?: number | null
+        }
+        Relationships: []
+      }
       video_envios: {
         Row: {
           analisado_em: string | null
           analise: Json | null
+          aprovado_em: string | null
           atualizado_em: string
           autorizou_uso: boolean
           caminho: string
@@ -3226,6 +3245,7 @@ export type Database = {
         Insert: {
           analisado_em?: string | null
           analise?: Json | null
+          aprovado_em?: string | null
           atualizado_em?: string
           autorizou_uso: boolean
           caminho: string
@@ -3245,6 +3265,7 @@ export type Database = {
         Update: {
           analisado_em?: string | null
           analise?: Json | null
+          aprovado_em?: string | null
           atualizado_em?: string
           autorizou_uso?: boolean
           caminho?: string
@@ -3284,9 +3305,14 @@ export type Database = {
           atualizado_em: string
           criado_em: string
           descricao: string
+          disponivel_ate: string | null
+          disponivel_de: string | null
+          duracao_max_s: number | null
+          duracao_min_s: number | null
           id: number
           ordem: number
           requisitos: Json
+          roteiro: string
           titulo: string
         }
         Insert: {
@@ -3294,9 +3320,14 @@ export type Database = {
           atualizado_em?: string
           criado_em?: string
           descricao?: string
+          disponivel_ate?: string | null
+          disponivel_de?: string | null
+          duracao_max_s?: number | null
+          duracao_min_s?: number | null
           id?: never
           ordem?: number
           requisitos?: Json
+          roteiro?: string
           titulo: string
         }
         Update: {
@@ -3304,15 +3335,21 @@ export type Database = {
           atualizado_em?: string
           criado_em?: string
           descricao?: string
+          disponivel_ate?: string | null
+          disponivel_de?: string | null
+          duracao_max_s?: number | null
+          duracao_min_s?: number | null
           id?: never
           ordem?: number
           requisitos?: Json
+          roteiro?: string
           titulo?: string
         }
         Relationships: []
       }
       video_premios: {
         Row: {
+          ano: number
           aplicado_em: string | null
           aplicado_por: string | null
           criado_em: string
@@ -3324,6 +3361,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          ano: number
           aplicado_em?: string | null
           aplicado_por?: string | null
           criado_em?: string
@@ -3335,6 +3373,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          ano?: number
           aplicado_em?: string | null
           aplicado_por?: string | null
           criado_em?: string

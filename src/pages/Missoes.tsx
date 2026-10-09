@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { CheckCircle2, Circle, Clapperboard, Clock, Gift, Loader2, Play, Upload, XCircle } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronDown, Circle, Clapperboard, Clock, Gift, ListOrdered, Loader2, Play, Timer, Upload, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
@@ -12,11 +12,12 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import {
-  escadaDePremios, formatarDuracao, formatarTamanho, mimeDoArquivo, ordinal, podeMandar, problemaDoArquivo, ROTULO_STATUS,
+  anoSP, aprovadosNoAno, duracaoDaMissao, escadaDePremios, formatarDuracao, formatarTamanho, hojeSP, inicioDoAnoSP, mimeDoArquivo,
+  missaoDisponivel, ordinal, passosDoRoteiro, podeMandar, problemaDoArquivo, ROTULO_STATUS, rotuloDuracao, rotuloPeriodo,
   situacaoDaMissao, type Degrau, type EnvioVideo, type Missao, type PremioVideo, type Recompensa, type Situacao,
 } from '@/lib/missoes'
 import {
-  acaoVideos, buscarEnvios, buscarMissoes, buscarPremios, buscarRecompensas, linkDoVideo, subirVideo,
+  acaoVideos, buscarEnvios, buscarMaxPorAno, buscarMissoes, buscarPremios, buscarRecompensas, linkDoVideo, subirVideo,
 } from '@/lib/queries/missoes'
 
 /* Missões de vídeo: o restaurante grava um vídeo falando do EasyFeed, a IA
@@ -57,6 +58,19 @@ function Selo({ className, children }: { className: string; children: ReactNode 
 }
 
 const quando = (iso: string) => format(parseISO(iso), "dd/MM 'às' HH:mm", { locale: ptBR })
+
+function ListaRoteiro({ passos }: { passos: string[] }) {
+  return (
+    <ol className="space-y-1.5">
+      {passos.map((p, i) => (
+        <li key={i} className="flex gap-2.5 text-sm text-gray-700">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[11px] font-semibold text-blue-700">{i + 1}</span>
+          <span>{p}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
 
 // ── A escada de prêmios ──────────────────────────────────────────────────────
 
@@ -135,7 +149,10 @@ function EnviarVideo({ missao, onFechar, onEnviado }: { missao: Missao | null; o
     return () => URL.revokeObjectURL(u)
   }, [arquivo])
 
-  const problema = arquivo ? problemaDoArquivo({ nome: arquivo.name, tipo: arquivo.type, tamanho: arquivo.size, duracao }) : null
+  const problema = arquivo && missao
+    ? problemaDoArquivo({ nome: arquivo.name, tipo: arquivo.type, tamanho: arquivo.size, duracao }, duracaoDaMissao(missao))
+    : null
+  const passos = passosDoRoteiro(missao?.roteiro)
   const enviando = progresso !== null
 
   const enviar = async () => {
@@ -167,6 +184,12 @@ function EnviarVideo({ missao, onFechar, onEnviado }: { missao: Missao | null; o
           <DialogDescription>{missao?.titulo}</DialogDescription>
         </DialogHeader>
 
+        {passos.length > 0 && (
+          <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Roteiro para gravar</p>
+            <ListaRoteiro passos={passos} />
+          </div>
+        )}
         {missao && (
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">O vídeo precisa</p>
@@ -200,7 +223,7 @@ function EnviarVideo({ missao, onFechar, onEnviado }: { missao: Missao | null; o
           >
             <Upload className="h-6 w-6 text-gray-400" />
             <span className="text-sm font-medium text-gray-700">Escolher o vídeo</span>
-            <span className="text-xs text-gray-500">MP4, MOV ou WEBM, até 3 minutos e 300 MB</span>
+            <span className="text-xs text-gray-500">MP4, MOV ou WEBM · {missao ? rotuloDuracao(missao) : 'Até 3 min'} · até 300 MB</span>
           </button>
         ) : (
           <div className="space-y-2">
@@ -253,13 +276,19 @@ function EnviarVideo({ missao, onFechar, onEnviado }: { missao: Missao | null; o
 
 // ── Uma missão ───────────────────────────────────────────────────────────────
 
-function CartaoMissao({ missao, envios, onEnviar, onAssistir }: {
+function CartaoMissao({ missao, envios, bloqueadoNoAno, onEnviar, onAssistir }: {
   missao: Missao
   envios: EnvioVideo[]
+  /** Chegou ao limite de vídeos do ano: não manda mais nenhum até janeiro. */
+  bloqueadoNoAno: boolean
   onEnviar: () => void
   onAssistir: (e: EnvioVideo) => void
 }) {
+  const [verRoteiro, setVerRoteiro] = useState(false)
   const { situacao, ultimo, tentativasRestantes } = situacaoDaMissao(missao.id, envios)
+  const passos = passosDoRoteiro(missao.roteiro)
+  const periodo = rotuloPeriodo(missao)
+  const sobreRoteiro = situacao !== 'analisando' ? ultimo?.analise?.roteiro : undefined
   const avaliados = ultimo?.analise?.requisitos ?? []
   const avaliacao = (id: string) => (situacao === 'aprovada' || situacao === 'reprovada' || situacao === 'sem_tentativas') ? avaliados.find((a) => a.id === id) : undefined
 
@@ -269,6 +298,10 @@ function CartaoMissao({ missao, envios, onEnviar, onAssistir }: {
         <div>
           <h3 className="text-base font-bold text-gray-900">{missao.titulo}</h3>
           {missao.descricao && <p className="mt-0.5 text-sm text-gray-500">{missao.descricao}</p>}
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+            {periodo && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{periodo}</span>}
+            <span className="inline-flex items-center gap-1"><Timer className="h-3.5 w-3.5" />{rotuloDuracao(missao)}</span>
+          </div>
         </div>
         <Selo className={COR_SITUACAO[situacao]}>
           {situacao === 'analisando' && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -294,6 +327,26 @@ function CartaoMissao({ missao, envios, onEnviar, onAssistir }: {
         })}
       </ul>
 
+      {passos.length > 0 && (
+        <div className="rounded-lg border border-gray-100">
+          <button
+            type="button"
+            onClick={() => setVerRoteiro((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <span className="inline-flex items-center gap-2"><ListOrdered className="h-4 w-4 text-blue-600" /> Roteiro para gravar ({passos.length} {passos.length === 1 ? 'passo' : 'passos'})</span>
+            <ChevronDown className={cn('h-4 w-4 text-gray-400 transition-transform', verRoteiro && 'rotate-180')} />
+          </button>
+          {verRoteiro && <div className="border-t border-gray-100 px-3 py-3"><ListaRoteiro passos={passos} /></div>}
+        </div>
+      )}
+      {sobreRoteiro?.comentario && (
+        <p className="flex gap-2 text-xs text-gray-500">
+          <ListOrdered className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', sobreRoteiro.seguido ? 'text-green-600' : 'text-amber-500')} />
+          <span>Roteiro: {sobreRoteiro.comentario}</span>
+        </p>
+      )}
+
       {ultimo?.motivo && situacao !== 'analisando' && (
         <p className={cn('rounded-lg px-3 py-2 text-sm', situacao === 'aprovada' ? 'bg-green-50 text-green-800' : situacao === 'em_revisao' ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-800')}>
           {ultimo.motivo}
@@ -316,7 +369,10 @@ function CartaoMissao({ missao, envios, onEnviar, onAssistir }: {
               <Play className="mr-1.5 h-3.5 w-3.5" /> Ver vídeo
             </Button>
           )}
-          {podeMandar(situacao) && (
+          {podeMandar(situacao) && bloqueadoNoAno && (
+            <span className="self-center text-xs font-medium text-gray-500">Limite do ano atingido</span>
+          )}
+          {podeMandar(situacao) && !bloqueadoNoAno && (
             <Button size="sm" onClick={onEnviar} className="bg-[#1D4ED8] hover:bg-[#1E40AF]">
               <Upload className="mr-1.5 h-3.5 w-3.5" /> {situacao === 'nao_enviada' ? 'Enviar vídeo' : 'Mandar outro'}
             </Button>
@@ -337,13 +393,17 @@ export default function Missoes() {
   const [recompensas, setRecompensas] = useState<Recompensa[]>([])
   const [envios, setEnvios] = useState<EnvioVideo[]>([])
   const [premios, setPremios] = useState<PremioVideo[]>([])
+  const [maxPorAno, setMaxPorAno] = useState<number | null>(null)
   const [enviarPara, setEnviarPara] = useState<Missao | null>(null)
   const [assistindo, setAssistindo] = useState<EnvioVideo | null>(null)
 
   const carregar = useCallback(async () => {
     if (!restauranteId) return
     try {
-      const [m, r, e, p] = await Promise.all([buscarMissoes(), buscarRecompensas(), buscarEnvios(restauranteId), buscarPremios(restauranteId)])
+      const [m, r, e, p, max] = await Promise.all([
+        buscarMissoes(), buscarRecompensas(), buscarEnvios(restauranteId), buscarPremios(restauranteId), buscarMaxPorAno(),
+      ])
+      setMaxPorAno(max)
       setMissoes(m)
       setRecompensas(r)
       setEnvios(e)
@@ -365,8 +425,14 @@ export default function Missoes() {
     return () => clearInterval(t)
   }, [emAnalise, carregar])
 
-  const aprovadas = useMemo(() => new Set(envios.filter((e) => e.status === 'aprovado').map((e) => e.missao_id)).size, [envios])
-  const degraus = useMemo(() => escadaDePremios(recompensas, premios, aprovadas), [recompensas, premios, aprovadas])
+  // A escada e o limite contam por ano (recomeçam em 1º de janeiro, horário de Brasília).
+  const hoje = hojeSP()
+  const ano = anoSP()
+  const aprovadas = useMemo(() => aprovadosNoAno(envios, inicioDoAnoSP()), [envios])
+  const degraus = useMemo(() => escadaDePremios(recompensas, premios, aprovadas, ano), [recompensas, premios, aprovadas, ano])
+  const emAnaliseAgora = envios.filter((e) => e.status === 'analisando').length
+  const limiteAtingido = maxPorAno != null && aprovadas + emAnaliseAgora >= maxPorAno
+  const disponiveis = missoes.filter((m) => missaoDisponivel(m, hoje))
   const enviados = envios.filter((e) => e.status !== 'enviando')
   const tituloMissao = (id: number) => missoes.find((m) => m.id === id)?.titulo ?? 'Missão'
 
@@ -392,29 +458,41 @@ export default function Missoes() {
         </p>
       </div>
 
-      {degraus.length > 0 && (
+      {(degraus.length > 0 || maxPorAno != null) && (
         <Cartao>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-bold text-gray-900">Seus prêmios</h2>
+            <h2 className="text-base font-bold text-gray-900">Seus prêmios em {ano}</h2>
             <span className="text-sm text-gray-500">
-              {aprovadas === 0 ? 'Nenhuma missão cumprida ainda' : `${aprovadas} ${aprovadas === 1 ? 'missão cumprida' : 'missões cumpridas'}`}
+              {maxPorAno != null
+                ? `${aprovadas} de ${maxPorAno} ${maxPorAno === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} este ano`
+                : aprovadas === 0 ? 'Nenhuma missão cumprida este ano' : `${aprovadas} ${aprovadas === 1 ? 'missão cumprida' : 'missões cumpridas'} este ano`}
             </span>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {degraus.map((d) => <DegrauPremio key={d.ordem} d={d} />)}
-          </div>
+          <p className="mt-1 text-xs text-gray-400">A escada recomeça em 1º de janeiro.</p>
+          {limiteAtingido && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {aprovadas >= (maxPorAno ?? 0)
+                ? `Você chegou ao limite de ${maxPorAno} vídeos aprovados este ano. Em janeiro a escada recomeça e dá para mandar de novo.`
+                : `Contando os vídeos em análise, você chegou ao limite de ${maxPorAno} deste ano. Se algum não for aprovado, libera de novo.`}
+            </p>
+          )}
+          {degraus.length > 0 && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {degraus.map((d) => <DegrauPremio key={d.ordem} d={d} />)}
+            </div>
+          )}
         </Cartao>
       )}
 
-      {missoes.length === 0 ? (
+      {disponiveis.length === 0 ? (
         <Cartao className="flex flex-col items-center gap-2 py-10 text-center">
           <Clapperboard className="h-8 w-8 text-gray-300" />
           <p className="text-sm text-gray-500">Nenhuma missão disponível agora.</p>
         </Cartao>
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
-          {missoes.map((m) => (
-            <CartaoMissao key={m.id} missao={m} envios={envios} onEnviar={() => setEnviarPara(m)} onAssistir={setAssistindo} />
+          {disponiveis.map((m) => (
+            <CartaoMissao key={m.id} missao={m} envios={envios} bloqueadoNoAno={limiteAtingido} onEnviar={() => setEnviarPara(m)} onAssistir={setAssistindo} />
           ))}
         </div>
       )}

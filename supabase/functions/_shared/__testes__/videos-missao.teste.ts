@@ -4,8 +4,9 @@
  *   node --experimental-strip-types supabase/functions/_shared/__testes__/videos-missao.teste.ts
  */
 import {
-  caminhoDoEnvio, decidirResultado, emBlocos, lerRequisitos, LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo,
-  montarPromptAnalise, podeEnviar, type EnvioResumo, type Missao,
+  caminhoDoEnvio, contagemDoAno, decidirResultado, duracaoDaMissao, emBlocos, hojeSP, inicioDoAnoSP, lerRequisitos,
+  LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo, montarPromptAnalise, noPeriodo, passosDoRoteiro, podeEnviar,
+  type EnvioResumo, type Missao,
 } from '../videos-missao.ts'
 import { tratarVideos, type DepsVideos, type EnvioCompleto } from '../../videos-missao/handler.ts'
 
@@ -44,7 +45,10 @@ ok('tipo: vazio vai pela extensão (MOV do iPhone)', mimeDoVideo('', 'IMG_0001.M
 ok('tipo: imagem não passa', mimeDoVideo('image/png', 'foto.png') === '')
 ok('caminho: pasta do restaurante e extensão do tipo', caminhoDoEnvio(11, 'abc', 'video/quicktime') === 'restaurante_11/abc.mov' && caminhoDoEnvio(11, 'abc', 'video/mp4') === 'restaurante_11/abc.mp4')
 
-const base = { missao: MISSAO, envios: [] as EnvioResumo[], mime: 'video/mp4', tamanho: 10_000_000, duracao: 45, autorizou: true, agora: AGORA }
+const base = {
+  missao: MISSAO as Missao, envios: [] as EnvioResumo[], ano: { aprovados: 0, emAnalise: 0 }, maxPorAno: 4 as number | null,
+  hoje: '2026-10-10', mime: 'video/mp4', tamanho: 10_000_000, duracao: 45 as number | null, autorizou: true, agora: AGORA,
+}
 const motivo = (over: Partial<typeof base>) => { const r = podeEnviar({ ...base, ...over }); return r.ok ? 'ok' : r.motivo }
 ok('pode enviar: tudo certo', motivo({}) === 'ok')
 ok('missão desativada', motivo({ missao: { ...MISSAO, ativa: false } }) === 'missao_inativa' && motivo({ missao: null }) === 'missao_inativa')
@@ -58,7 +62,40 @@ ok('sem autorizar o uso', motivo({ autorizou: false }) === 'sem_autorizacao')
 ok('não é vídeo', motivo({ mime: '' }) === 'tipo_invalido')
 ok('arquivo vazio', motivo({ tamanho: 0 }) === 'arquivo_vazio')
 ok('passa de 300 MB', motivo({ tamanho: LIMITE_BYTES + 1 }) === 'muito_grande' && motivo({ tamanho: LIMITE_BYTES }) === 'ok')
-ok('passa de 3 minutos', motivo({ duracao: 181 }) === 'muito_longo' && motivo({ duracao: null }) === 'ok')
+ok('passa de 3 minutos (sem duração definida na missão)', motivo({ duracao: 181 }) === 'muito_longo' && motivo({ duracao: null }) === 'ok')
+
+// Ferramentas do admin: período, duração por missão, limite do ano
+ok('fora do período da missão', motivo({ missao: { ...MISSAO, disponivel_ate: '2026-10-09' } }) === 'fora_do_periodo'
+  && motivo({ missao: { ...MISSAO, disponivel_de: '2026-10-11' } }) === 'fora_do_periodo')
+ok('no período (inclusive o último dia)', motivo({ missao: { ...MISSAO, disponivel_de: '2026-10-01', disponivel_ate: '2026-10-10' } }) === 'ok')
+const curta = { ...MISSAO, duracao_min_s: 30, duracao_max_s: 60 }
+ok('mais curto que o mínimo da missão', motivo({ missao: curta, duracao: 20 }) === 'muito_curto')
+ok('mais longo que o máximo da missão', motivo({ missao: curta, duracao: 61 }) === 'muito_longo' && motivo({ missao: curta, duracao: 60 }) === 'ok')
+ok('duração desconhecida não trava nem com mínimo', motivo({ missao: curta, duracao: null }) === 'ok')
+ok('limite do ano: aprovados + em análise', motivo({ ano: { aprovados: 3, emAnalise: 1 } }) === 'limite_ano' && motivo({ ano: { aprovados: 3, emAnalise: 0 } }) === 'ok')
+ok('sem limite no ano (vazio)', motivo({ ano: { aprovados: 40, emAnalise: 3 }, maxPorAno: null }) === 'ok')
+ok('missão já cumprida vem antes do limite do ano', motivo({ envios: [envioR('aprovado')], ano: { aprovados: 9, emAnalise: 0 } }) === 'ja_aprovada')
+ok('duração: máximo da missão nunca passa de 5 min; mínimo maior que o máximo é cortado',
+  JSON.stringify(duracaoDaMissao({ duracao_min_s: null, duracao_max_s: 900 })) === '{"min":null,"max":300}'
+  && JSON.stringify(duracaoDaMissao({ duracao_min_s: 400, duracao_max_s: 120 })) === '{"min":120,"max":120}'
+  && duracaoDaMissao({}).max === 180)
+ok('período: sem datas é sempre', noPeriodo({}, '2026-01-01') && !noPeriodo({ disponivel_ate: '2025-12-31' }, '2026-01-01'))
+ok('hoje em Brasília (23h de 31/12 em Brasília ainda é 31/12)', hojeSP(Date.parse('2027-01-01T02:00:00Z')) === '2026-12-31' && hojeSP(Date.parse('2027-01-01T03:00:00Z')) === '2027-01-01')
+ok('o ano recomeça em 1º de janeiro, meia-noite de Brasília', inicioDoAnoSP(AGORA) === '2026-01-01T00:00:00-03:00')
+const doAno = contagemDoAno([
+  { id: 'a', status: 'aprovado', criado_em: '2026-03-01T00:00:00Z', aprovado_em: '2026-03-02T00:00:00Z' },
+  { id: 'b', status: 'aprovado', criado_em: '2025-12-30T00:00:00Z', aprovado_em: '2025-12-31T23:00:00-03:00' },
+  { id: 'c', status: 'analisando', criado_em: new Date(AGORA - 60_000).toISOString() },
+  { id: 'd', status: 'analisando', criado_em: new Date(AGORA - 40 * 60_000).toISOString() },
+  { id: 'e', status: 'reprovado', criado_em: '2026-05-01T00:00:00Z' },
+], inicioDoAnoSP(AGORA), AGORA)
+ok('conta do ano: só aprovados deste ano e análises que não travaram', doAno.aprovados === 1 && doAno.emAnalise === 1, doAno)
+
+// Roteiro
+ok('passos do roteiro: um por linha, sem a numeração digitada', JSON.stringify(passosDoRoteiro('1. Diga seu nome\n\n2) Mostre o QR\n- Termine sorrindo')) === '["Diga seu nome","Mostre o QR","Termine sorrindo"]')
+const comRoteiro = { ...MISSAO, roteiro: 'Diga seu nome\nMostre o salão' }
+ok('prompt: o roteiro entra como guia, sem decidir', montarPromptAnalise(comRoteiro).includes('ROTEIRO SUGERIDO') && montarPromptAnalise(comRoteiro).includes('2. Mostre o salão')
+  && montarPromptAnalise(comRoteiro).includes('quem decide são os REQUISITOS') && !montarPromptAnalise(MISSAO).includes('ROTEIRO'))
 
 const prompt = montarPromptAnalise(MISSAO)
 ok('prompt: a missão e os requisitos numerados', prompt.includes('MISSÃO: Depoimento sobre o EasyFeed') && prompt.includes('1. Fala o nome "EasyFeed" em voz alta') && prompt.includes('3. O vídeo tem pelo menos 30 segundos.'))
@@ -78,6 +115,9 @@ ok('conteúdo inadequado: reprovado mesmo cumprindo tudo', v.status === 'reprova
 ok('JSON com texto em volta ainda é lido', decidirResultado(MISSAO, 'Aqui: ' + JSON.stringify(resposta([true, true, true])) + ' fim').status === 'aprovado')
 ok('resposta fora do formato: erro', decidirResultado(MISSAO, 'não sei').status === 'erro' && decidirResultado(MISSAO, { requisitos: [] }).status === 'erro')
 ok('IA pulou um requisito: erro (não aprova nem reprova no chute)', decidirResultado(MISSAO, resposta([true, true])).status === 'erro')
+v = decidirResultado(comRoteiro, resposta([true, true, true], { roteiro_seguido: false, comentario_roteiro: 'Faltou mostrar o salão.' }))
+ok('roteiro não seguido: ainda aprova (quem decide são os requisitos), mas registra', v.status === 'aprovado' && v.analise?.roteiro?.seguido === false && v.analise?.roteiro?.comentario === 'Faltou mostrar o salão.')
+ok('sem roteiro na missão: não registra roteiro', decidirResultado(MISSAO, resposta([true, true, true], { roteiro_seguido: true })).analise?.roteiro === undefined)
 
 // Blocos do upload
 const streamDe = (pedacos: number[]) => new ReadableStream<Uint8Array>({
@@ -90,14 +130,16 @@ ok('blocos: tamanho exato não deixa bloco vazio no fim', JSON.stringify(await t
 ok('blocos: stream vazio não manda nada', JSON.stringify(await tamanhos([], 5)) === '[]')
 
 // ── A função (handler) ───────────────────────────────────────────────────────
-function cenario(over: { quem?: { restauranteId: number | null; email: string; ehAdmin: boolean } | null; envios?: EnvioCompleto[]; arquivos?: Record<string, number>; ia?: () => Promise<unknown> } = {}) {
+function cenario(over: { quem?: { restauranteId: number | null; email: string; ehAdmin: boolean } | null; envios?: EnvioCompleto[]; arquivos?: Record<string, number>; ia?: () => Promise<unknown>; maxPorAno?: number | null; doAno?: EnvioResumo[] } = {}) {
   const feito: string[] = []
   const envios = new Map<string, EnvioCompleto>((over.envios ?? []).map((e) => [e.id, { ...e }]))
   const arquivos: Record<string, number> = { ...(over.arquivos ?? {}) }
   const segundoPlano: Promise<unknown>[] = []
   const deps: DepsVideos = {
     quemPede: async () => ('quem' in over ? over.quem! : { restauranteId: 11, email: 'Raver@Exemplo.com', ehAdmin: true }),
-    missao: async (id) => (id === 1 ? MISSAO : id === 2 ? { ...MISSAO, id: 2, ativa: false } : null),
+    missao: async (id) => (id === 1 ? MISSAO : id === 2 ? { ...MISSAO, id: 2, ativa: false } : id === 3 ? { ...MISSAO, id: 3, duracao_min_s: 60 } : null),
+    enviosDoAno: async () => over.doAno ?? [],
+    maxPorAno: async () => ('maxPorAno' in over ? over.maxPorAno! : 4),
     enviosDaMissao: async (rid, mid) => [...envios.values()].filter((e) => e.restaurante_id === rid && e.missao_id === mid),
     descartarAbandonados: async (rid, mid) => {
       for (const e of [...envios.values()]) if (e.restaurante_id === rid && e.missao_id === mid && e.status === 'enviando') { envios.delete(e.id); feito.push(`descartou:${e.id}`) }
@@ -148,6 +190,13 @@ r = await tratarVideos(pedido, cenario({ envios: [envioC('ok', 'aprovado')] }).d
 ok('missão já cumprida: recusa', r.corpo.motivo === 'ja_aprovada')
 r = await tratarVideos(pedido, cenario({ quem: { restauranteId: null, email: 'admin@x.com', ehAdmin: true } }).deps)
 ok('login sem restaurante: recusa', r.status === 403 && r.corpo.motivo === 'sem_restaurante')
+const aprovadosEsteAno = [1, 2, 3, 4].map((i) => ({ id: `a${i}`, status: 'aprovado', criado_em: '2026-02-01T00:00:00Z', aprovado_em: '2026-02-02T00:00:00Z' }))
+r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno }).deps)
+ok('limite do ano (4 aprovados): recusa com a mensagem', r.status === 409 && r.corpo.motivo === 'limite_ano' && String(r.corpo.error).includes('janeiro'))
+r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno, maxPorAno: null }).deps)
+ok('sem limite configurado: deixa', r.status === 200)
+r = await tratarVideos({ ...pedido, missao_id: 3 }, cenario().deps)
+ok('vídeo mais curto que o mínimo da missão (41 s de 60): recusa', r.status === 409 && r.corpo.motivo === 'muito_curto')
 
 // Analisar
 c = cenario({ envios: [envioC('e1', 'enviando')], arquivos: { 'restaurante_11/e1.mp4': 777 } })

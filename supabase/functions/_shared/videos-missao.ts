@@ -10,8 +10,10 @@
 
 /** 300 MB: o mesmo file_size_limit do bucket videos-clientes. */
 export const LIMITE_BYTES = 300 * 1024 * 1024
-/** Vídeo de até 3 minutos (custo e tempo de análise). */
-export const DURACAO_MAXIMA_S = 180
+/** Duração máxima quando a missão não define a dela (custo e tempo de análise). */
+export const DURACAO_PADRAO_MAX_S = 180
+/** Nenhuma missão aceita mais que isto. */
+export const DURACAO_TETO_S = 300
 /** Reprovações por missão antes de travar (cada análise custa). */
 export const MAX_REPROVADOS = 5
 /** Análise que passou disso sem terminar travou: libera um envio novo. */
@@ -30,12 +32,25 @@ const POR_EXTENSAO: Record<string, string> = {
 export const TIPOS_ACEITOS = [...new Set(Object.values(POR_EXTENSAO))]
 
 export interface Requisito { id: string; texto: string }
-export interface Missao { id: number; titulo: string; descricao: string; requisitos: Requisito[]; ativa: boolean }
-export interface EnvioResumo { id: string; status: string; criado_em: string; atualizado_em?: string | null }
+export interface Missao {
+  id: number
+  titulo: string
+  descricao: string
+  requisitos: Requisito[]
+  ativa: boolean
+  /** Passo a passo para gravar (um por linha). */
+  roteiro?: string
+  duracao_min_s?: number | null
+  duracao_max_s?: number | null
+  /** 'AAAA-MM-DD', horário de Brasília, inclusive. */
+  disponivel_de?: string | null
+  disponivel_ate?: string | null
+}
+export interface EnvioResumo { id: string; status: string; criado_em: string; atualizado_em?: string | null; aprovado_em?: string | null }
 
 export type MotivoRecusa =
-  | 'missao_inativa' | 'ja_aprovada' | 'em_analise' | 'limite_tentativas'
-  | 'sem_autorizacao' | 'tipo_invalido' | 'arquivo_vazio' | 'muito_grande' | 'muito_longo'
+  | 'missao_inativa' | 'fora_do_periodo' | 'ja_aprovada' | 'em_analise' | 'limite_tentativas' | 'limite_ano'
+  | 'sem_autorizacao' | 'tipo_invalido' | 'arquivo_vazio' | 'muito_grande' | 'muito_curto' | 'muito_longo'
 
 /** Os requisitos como vieram do jsonb: só os que têm texto, com id único. */
 export function lerRequisitos(bruto: unknown): Requisito[] {
@@ -70,10 +85,49 @@ export function caminhoDoEnvio(restauranteId: number, envioId: string, mime: str
 const travada = (e: EnvioResumo, agora: number) =>
   agora - new Date(e.atualizado_em ?? e.criado_em).getTime() > ANALISE_TRAVADA_MS
 
+// ── Datas no horário de Brasília (sem horário de verão desde 2019: -03:00) ──
+
+/** Hoje em Brasília, 'AAAA-MM-DD'. */
+export function hojeSP(agora: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(agora))
+}
+
+/** 1º de janeiro deste ano, meia-noite em Brasília (a escada e o limite recomeçam aí). */
+export function inicioDoAnoSP(agora: number): string {
+  return `${hojeSP(agora).slice(0, 4)}-01-01T00:00:00-03:00`
+}
+
+/** A missão está no período dela hoje? (sem datas = sempre) */
+export function noPeriodo(m: Pick<Missao, 'disponivel_de' | 'disponivel_ate'>, hoje: string): boolean {
+  return (!m.disponivel_de || hoje >= m.disponivel_de) && (!m.disponivel_ate || hoje <= m.disponivel_ate)
+}
+
+/** Quanto o vídeo desta missão pode durar, em segundos. */
+export function duracaoDaMissao(m: Pick<Missao, 'duracao_min_s' | 'duracao_max_s'>): { min: number | null; max: number } {
+  const max = Math.min(DURACAO_TETO_S, m.duracao_max_s ?? DURACAO_PADRAO_MAX_S)
+  return { min: m.duracao_min_s ? Math.min(m.duracao_min_s, max) : null, max }
+}
+
+/** Vídeos do restaurante que contam para o limite do ano: aprovados neste ano e os em análise. */
+export function contagemDoAno(envios: EnvioResumo[], inicioDoAno: string, agora: number): { aprovados: number; emAnalise: number } {
+  const desde = new Date(inicioDoAno).getTime()
+  return {
+    aprovados: envios.filter((e) => e.status === 'aprovado' && e.aprovado_em && new Date(e.aprovado_em).getTime() >= desde).length,
+    emAnalise: envios.filter((e) => e.status === 'analisando' && !travada(e, agora)).length,
+  }
+}
+
 /** Pode mandar um vídeo novo para esta missão? */
 export function podeEnviar(p: {
   missao: Missao | null
+  /** Os envios do restaurante NESTA missão. */
   envios: EnvioResumo[]
+  /** Vídeos do restaurante no ano (todas as missões), ver contagemDoAno. */
+  ano: { aprovados: number; emAnalise: number }
+  /** Vídeos aprovados por ano, por restaurante; null = sem limite. */
+  maxPorAno: number | null
+  /** Hoje em Brasília, 'AAAA-MM-DD'. */
+  hoje: string
   mime: string
   tamanho: number
   duracao: number | null
@@ -82,33 +136,50 @@ export function podeEnviar(p: {
 }): { ok: true } | { ok: false; motivo: MotivoRecusa } {
   const recusa = (motivo: MotivoRecusa) => ({ ok: false as const, motivo })
   if (!p.missao || !p.missao.ativa) return recusa('missao_inativa')
+  if (!noPeriodo(p.missao, p.hoje)) return recusa('fora_do_periodo')
   if (p.envios.some((e) => e.status === 'aprovado')) return recusa('ja_aprovada')
   if (p.envios.some((e) => e.status === 'analisando' && !travada(e, p.agora))) return recusa('em_analise')
   if (p.envios.filter((e) => e.status === 'reprovado').length >= MAX_REPROVADOS) return recusa('limite_tentativas')
+  // Os que estão em análise contam: se todos forem aprovados, não pode passar do limite.
+  if (p.maxPorAno != null && p.ano.aprovados + p.ano.emAnalise >= p.maxPorAno) return recusa('limite_ano')
   if (!p.autorizou) return recusa('sem_autorizacao')
   if (!TIPOS_ACEITOS.includes(p.mime)) return recusa('tipo_invalido')
   if (!(p.tamanho > 0)) return recusa('arquivo_vazio')
   if (p.tamanho > LIMITE_BYTES) return recusa('muito_grande')
-  if (p.duracao != null && p.duracao > DURACAO_MAXIMA_S) return recusa('muito_longo')
+  const { min, max } = duracaoDaMissao(p.missao)
+  if (p.duracao != null && min != null && p.duracao < min) return recusa('muito_curto')
+  if (p.duracao != null && p.duracao > max) return recusa('muito_longo')
   return { ok: true }
 }
 
 export const MENSAGENS_RECUSA: Record<MotivoRecusa, string> = {
   missao_inativa: 'Esta missão não está mais disponível.',
+  fora_do_periodo: 'Esta missão não está disponível agora.',
   ja_aprovada: 'Você já cumpriu esta missão.',
   em_analise: 'Seu vídeo desta missão ainda está sendo analisado. Espere o resultado.',
   limite_tentativas: 'Você chegou ao limite de tentativas desta missão.',
+  limite_ano: 'Você chegou ao limite de vídeos deste ano. Em janeiro dá para mandar de novo.',
   sem_autorizacao: 'Para mandar o vídeo, é preciso autorizar o uso na divulgação.',
   tipo_invalido: 'Esse arquivo não é um vídeo aceito. Use MP4, MOV ou WEBM.',
   arquivo_vazio: 'O arquivo está vazio.',
   muito_grande: 'O vídeo passa de 300 MB. Grave um mais curto ou em qualidade menor.',
-  muito_longo: 'O vídeo passa de 3 minutos. Grave um mais curto.',
+  muito_curto: 'O vídeo é mais curto do que esta missão pede.',
+  muito_longo: 'O vídeo passa do tempo máximo desta missão. Grave um mais curto.',
 }
 
 // ── A análise ────────────────────────────────────────────────────────────────
 
+/** Os passos do roteiro (um por linha, sem a numeração que o admin digitou). */
+export function passosDoRoteiro(roteiro: unknown): string[] {
+  return String(roteiro ?? '').split(/\r?\n/).map((l) => l.replace(/^\s*(\d+[.)-]|[-•*])\s*/, '').trim()).filter(Boolean)
+}
+
 export function montarPromptAnalise(missao: Missao): string {
   const lista = missao.requisitos.map((r, i) => `${i + 1}. ${r.texto}`).join('\n')
+  const passos = passosDoRoteiro(missao.roteiro)
+  const roteiro = passos.length
+    ? `\n\nROTEIRO SUGERIDO (o restaurante recebeu este passo a passo para gravar; use para entender o vídeo, mas quem decide são os REQUISITOS):\n${passos.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDiga em "roteiro_seguido" (true ou false) se o vídeo seguiu o roteiro no geral e, em "comentario_roteiro", uma frase curta para o restaurante sobre isso.`
+    : ''
   return `Você confere um vídeo que o dono ou alguém da equipe de um restaurante gravou falando do EasyFeed, para cumprir uma missão e ganhar um prêmio.
 
 O EasyFeed é um sistema para restaurantes: os clientes mandam a opinião pelo WhatsApp (pelo QR Code na mesa), o restaurante vê tudo organizado num painel, recebe ideias do que melhorar e avisa o cliente quando muda alguma coisa.
@@ -123,7 +194,7 @@ Assista o vídeo inteiro e ouça o áudio. Para cada requisito, pelo número, di
 
 Confira também se o conteúdo é adequado: é um vídeo de verdade, gravado pelo restaurante, falando do EasyFeed de forma honesta; não é tela preta, vídeo de outra empresa ou baixado da internet, e não tem palavrão, ofensa ou conteúdo impróprio. Se não for adequado, "conteudo_adequado": false e explique em "problema_conteudo" (uma frase); se for, "problema_conteudo": "".
 
-"resumo": uma ou duas frases sobre o que aparece no vídeo, para a equipe do EasyFeed.`
+"resumo": uma ou duas frases sobre o que aparece no vídeo, para a equipe do EasyFeed.${roteiro}`
 }
 
 /** O formato da resposta da IA (responseSchema do Gemini). */
@@ -145,6 +216,9 @@ export const SCHEMA_ANALISE = {
     conteudo_adequado: { type: 'BOOLEAN' },
     problema_conteudo: { type: 'STRING' },
     resumo: { type: 'STRING' },
+    // Só quando a missão tem roteiro (informativo: não decide).
+    roteiro_seguido: { type: 'BOOLEAN' },
+    comentario_roteiro: { type: 'STRING' },
   },
   required: ['requisitos', 'conteudo_adequado', 'problema_conteudo', 'resumo'],
 }
@@ -155,6 +229,8 @@ export interface Analise {
   conteudo_adequado: boolean
   problema_conteudo: string
   resumo: string
+  /** Se o vídeo seguiu o roteiro (só informativo; quem decide são os requisitos). */
+  roteiro?: { seguido: boolean; comentario: string }
 }
 export interface Veredito {
   status: 'aprovado' | 'reprovado' | 'erro'
@@ -199,6 +275,9 @@ export function decidirResultado(missao: Missao, bruto: unknown): Veredito {
     conteudo_adequado: r.conteudo_adequado,
     problema_conteudo: frase(r.problema_conteudo),
     resumo: frase(r.resumo, 600),
+  }
+  if (passosDoRoteiro(missao.roteiro).length && typeof r.roteiro_seguido === 'boolean') {
+    analise.roteiro = { seguido: r.roteiro_seguido, comentario: frase(r.comentario_roteiro) }
   }
   if (!analise.conteudo_adequado) {
     return { status: 'reprovado', analise, motivo: `O vídeo não foi aceito: ${analise.problema_conteudo || 'o conteúdo não está de acordo com a missão.'}` }

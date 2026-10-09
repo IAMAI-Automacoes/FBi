@@ -3,8 +3,9 @@
  *   node --experimental-strip-types src/lib/__testes__/missoes.teste.ts
  */
 import {
-  escadaDePremios, formatarDuracao, formatarTamanho, idDoRequisito, lerRequisitos, LIMITE_BYTES, mimeDoArquivo,
-  podeMandar, problemaDoArquivo, situacaoDaMissao, type EnvioVideo, type PremioVideo,
+  aprovadosNoAno, duracaoDaMissao, escadaDePremios, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito,
+  inicioDoAnoSP, lerRequisitos, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, passosDoRoteiro, podeMandar,
+  problemaDoArquivo, rotuloDuracao, rotuloPeriodo, situacaoDaMissao, type EnvioVideo, type Missao, type PremioVideo,
 } from '../missoes.ts'
 
 let falhas = 0
@@ -28,11 +29,30 @@ ok('arquivo que não é vídeo', problemaDoArquivo({ ...arq, nome: 'a.pdf', tipo
 ok('passou de 300 MB: diz o tamanho', problemaDoArquivo({ ...arq, tamanho: LIMITE_BYTES + 5 * 1024 * 1024 })!.includes('305 MB'))
 ok('passou de 3 min: diz a duração', problemaDoArquivo({ ...arq, duracao: 200 })!.includes('3 min 20 s'))
 ok('duração desconhecida não trava', problemaDoArquivo({ ...arq, duracao: null }) === null)
+const lim = duracaoDaMissao({ duracao_min_s: 30, duracao_max_s: 60 })
+ok('missão de 30 s a 1 min: curto demais', problemaDoArquivo({ ...arq, duracao: 20 }, lim)!.includes('pelo menos 30 s'))
+ok('missão de 30 s a 1 min: longo demais', problemaDoArquivo({ ...arq, duracao: 75 }, lim)!.includes('máximo desta missão é 1 min'))
+ok('missão de 30 s a 1 min: 45 s passa', problemaDoArquivo({ ...arq, duracao: 45 }, lim) === null)
+ok('duração: sem nada é até 3 min; máximo nunca passa de 5 min', duracaoDaMissao({ duracao_min_s: null, duracao_max_s: null }).max === 180 && duracaoDaMissao({ duracao_min_s: null, duracao_max_s: 999 }).max === 300)
+ok('rótulo da duração', rotuloDuracao({ duracao_min_s: 30, duracao_max_s: 120 }) === 'De 30 s a 2 min' && rotuloDuracao({ duracao_min_s: null, duracao_max_s: null }) === 'Até 3 min')
+
+// Período e datas de Brasília
+ok('hoje em Brasília (23h de 31/12 ainda é 31/12)', hojeSP(Date.parse('2027-01-01T02:00:00Z')) === '2026-12-31')
+ok('o ano começa à meia-noite de Brasília', inicioDoAnoSP(Date.parse('2026-10-10T12:00:00Z')) === '2026-01-01T00:00:00-03:00')
+const m = (over: Partial<Missao> = {}): Missao => ({ id: 1, titulo: 'X', descricao: '', requisitos: [], ordem: 1, ativa: true, roteiro: '', duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null, ...over })
+ok('período inclusive nas duas pontas', noPeriodo(m({ disponivel_de: '2026-10-01', disponivel_ate: '2026-10-31' }), '2026-10-31') && !noPeriodo(m({ disponivel_ate: '2026-10-31' }), '2026-11-01'))
+ok('disponível: ativa e no período', missaoDisponivel(m(), '2026-10-10') && !missaoDisponivel(m({ ativa: false }), '2026-10-10') && !missaoDisponivel(m({ disponivel_de: '2026-11-01' }), '2026-10-10'))
+ok('rótulo do período', rotuloPeriodo(m({ disponivel_ate: '2026-10-31' })) === 'Até 31/10' && rotuloPeriodo(m({ disponivel_de: '2026-11-01', disponivel_ate: '2026-11-30' })) === 'De 01/11 a 30/11'
+  && rotuloPeriodo(m({ disponivel_de: '2026-11-01' })) === 'A partir de 01/11' && rotuloPeriodo(m()) === null)
+ok('estado do período para o admin', estadoDoPeriodo(m(), '2026-10-10') === 'sempre' && estadoDoPeriodo(m({ disponivel_de: '2026-11-01' }), '2026-10-10') === 'agendada'
+  && estadoDoPeriodo(m({ disponivel_ate: '2026-10-09' }), '2026-10-10') === 'encerrada' && estadoDoPeriodo(m({ disponivel_ate: '2026-10-10' }), '2026-10-10') === 'no_ar')
+ok('passos do roteiro: um por linha, sem a numeração', JSON.stringify(passosDoRoteiro('1. Diga seu nome\n\n2) Mostre o QR\n• Sorria')) === '["Diga seu nome","Mostre o QR","Sorria"]' && passosDoRoteiro(null).length === 0)
 ok('tamanho e duração legíveis', formatarTamanho(5.25 * 1024 * 1024) === '5,3 MB' && formatarTamanho(2048) === '2 KB' && formatarDuracao(45) === '45 s' && formatarDuracao(120) === '2 min')
 
 const envio = (id: string, missao: number, status: EnvioVideo['status'], dia: number): EnvioVideo => ({
   id, restaurante_id: 11, missao_id: missao, caminho: `restaurante_11/${id}.mp4`, nome_arquivo: 'v.mp4', tamanho_bytes: 1, duracao_segundos: 40,
   status, analise: null, motivo: null, analisado_em: null, revisado_por: null, criado_em: `2026-10-${String(dia).padStart(2, '0')}T10:00:00Z`,
+  aprovado_em: status === 'aprovado' ? `2026-10-${String(dia).padStart(2, '0')}T11:00:00Z` : null,
 })
 ok('missão sem envio: não enviada', situacaoDaMissao(1, []).situacao === 'nao_enviada')
 ok('envio ainda subindo não conta', situacaoDaMissao(1, [envio('a', 1, 'enviando', 1)]).situacao === 'nao_enviada')
@@ -44,17 +64,20 @@ ok('5 reprovações: sem tentativas', situacaoDaMissao(1, [1, 2, 3, 4, 5].map((d
 ok('erro da análise: em revisão (pode mandar outro)', situacaoDaMissao(1, [envio('a', 1, 'erro', 1)]).situacao === 'em_revisao' && podeMandar('em_revisao'))
 ok('outra missão não interfere', situacaoDaMissao(2, [envio('a', 1, 'aprovado', 1)]).situacao === 'nao_enviada')
 ok('não pode mandar em análise, aprovada ou sem tentativas', !podeMandar('analisando') && !podeMandar('aprovada') && !podeMandar('sem_tentativas'))
+ok('aprovados no ano: só os aprovados deste ano', aprovadosNoAno([envio('a', 1, 'aprovado', 1), envio('b', 2, 'reprovado', 2), { ...envio('c', 3, 'aprovado', 3), aprovado_em: '2025-12-31T12:00:00Z' }], '2026-01-01T00:00:00-03:00') === 1)
 
 const recompensas = [{ ordem: 2, descricao: '20%' }, { ordem: 1, descricao: '10%' }, { ordem: 3, descricao: '1 mês grátis' }]
-const premio = (ordem: number, status: PremioVideo['status'], descricao = `p${ordem}`): PremioVideo => ({
-  id: `p${ordem}`, restaurante_id: 11, recompensa_ordem: ordem, descricao, envio_id: `e${ordem}`, status, aplicado_em: null, criado_em: '2026-10-01T00:00:00Z',
+const premio = (ordem: number, status: PremioVideo['status'], descricao = `p${ordem}`, ano = 2026): PremioVideo => ({
+  id: `p${ordem}-${ano}`, restaurante_id: 11, recompensa_ordem: ordem, ano, descricao, envio_id: `e${ordem}`, status, aplicado_em: null, criado_em: '2026-10-01T00:00:00Z',
 })
-let esc = escadaDePremios(recompensas, [], 0)
+let esc = escadaDePremios(recompensas, [], 0, 2026)
 ok('nenhuma missão: a 1ª é a próxima, as outras depois (em ordem)', esc.map((d) => `${d.ordem}:${d.estado}:${d.faltam}`).join() === '1:proximo:1,2:futuro:2,3:futuro:3')
-esc = escadaDePremios(recompensas, [premio(1, 'aplicado', '10% (texto da época)'), premio(2, 'pendente')], 2)
+esc = escadaDePremios(recompensas, [premio(1, 'aplicado', '10% (texto da época)'), premio(2, 'pendente')], 2, 2026)
 ok('ganhos: aplicado e pendente com o texto da época; o 3º é o próximo', esc.map((d) => `${d.ordem}:${d.estado}`).join() === '1:aplicado,2:pendente,3:proximo' && esc[0].descricao === '10% (texto da época)')
-esc = escadaDePremios(recompensas, [premio(1, 'cancelado')], 0)
+esc = escadaDePremios(recompensas, [premio(1, 'cancelado')], 0, 2026)
 ok('prêmio cancelado não conta como ganho', esc[0].estado === 'proximo')
+esc = escadaDePremios(recompensas, [premio(1, 'aplicado', 'do ano passado', 2025), premio(2, 'aplicado', 'do ano passado', 2025)], 0, 2026)
+ok('a escada recomeça no ano novo: prêmios de 2025 não contam em 2026', esc.map((d) => d.estado).join() === 'proximo,futuro,futuro')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nmissões (tela): tudo certo')
 process.exit(falhas ? 1 : 0)

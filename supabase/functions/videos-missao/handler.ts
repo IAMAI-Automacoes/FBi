@@ -13,8 +13,8 @@
 // O prêmio (degrau da escada) quem dá é o banco, quando o envio vira aprovado.
 
 import {
-  ANALISE_TRAVADA_MS, caminhoDoEnvio, decidirResultado, MENSAGENS_RECUSA, mimeDoVideo, podeEnviar,
-  type EnvioResumo, type Missao, type MotivoRecusa,
+  ANALISE_TRAVADA_MS, caminhoDoEnvio, contagemDoAno, decidirResultado, hojeSP, inicioDoAnoSP, MENSAGENS_RECUSA,
+  mimeDoVideo, podeEnviar, type EnvioResumo, type Missao, type MotivoRecusa,
 } from '../_shared/videos-missao.ts'
 
 /**
@@ -42,6 +42,10 @@ export interface DepsVideos {
   quemPede: () => Promise<{ restauranteId: number | null; email: string; ehAdmin: boolean } | null>
   missao: (id: number) => Promise<Missao | null>
   enviosDaMissao: (restauranteId: number, missaoId: number) => Promise<EnvioResumo[]>
+  /** Envios do restaurante que contam no ano: aprovados desde `desde` e os em análise. */
+  enviosDoAno: (restauranteId: number, desde: string) => Promise<EnvioResumo[]>
+  /** Vídeos aprovados por ano, por restaurante (video_config); null = sem limite. */
+  maxPorAno: () => Promise<number | null>
   /** Envios que ficaram em "enviando" (o upload não terminou): apaga linha e arquivo. */
   descartarAbandonados: (restauranteId: number, missaoId: number) => Promise<void>
   criarEnvio: (linha: Record<string, unknown>) => Promise<void>
@@ -125,8 +129,18 @@ export async function tratarVideos(corpo: Record<string, unknown>, deps: DepsVid
       const tamanho = Number(corpo.tamanho_bytes)
       const duracaoBruta = Number(corpo.duracao_segundos)
       const duracao = Number.isFinite(duracaoBruta) && duracaoBruta > 0 ? Math.round(duracaoBruta * 100) / 100 : null
-      const envios = missao ? await deps.enviosDaMissao(quem.restauranteId, missaoId) : []
-      const pode = podeEnviar({ missao, envios, mime, tamanho, duracao, autorizou: corpo.autorizou_uso === true, agora: deps.agora() })
+      const agora = deps.agora()
+      const [envios, doAno, maxPorAno] = missao
+        ? await Promise.all([
+          deps.enviosDaMissao(quem.restauranteId, missaoId),
+          deps.enviosDoAno(quem.restauranteId, inicioDoAnoSP(agora)),
+          deps.maxPorAno(),
+        ])
+        : [[], [], null] as [EnvioResumo[], EnvioResumo[], number | null]
+      const pode = podeEnviar({
+        missao, envios, ano: contagemDoAno(doAno, inicioDoAnoSP(agora), agora), maxPorAno, hoje: hojeSP(agora),
+        mime, tamanho, duracao, autorizou: corpo.autorizou_uso === true, agora,
+      })
       if (pode.ok === false) return recusaDaMissao(pode.motivo)
 
       await deps.descartarAbandonados(quem.restauranteId, missaoId)

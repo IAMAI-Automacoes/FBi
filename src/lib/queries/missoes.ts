@@ -12,6 +12,8 @@ const BUCKET = 'videos-clientes'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paraMissao = (l: any): Missao => ({
   id: Number(l.id), titulo: l.titulo, descricao: l.descricao ?? '', requisitos: lerRequisitos(l.requisitos), ordem: l.ordem ?? 0, ativa: !!l.ativa,
+  roteiro: l.roteiro ?? '', duracao_min_s: l.duracao_min_s ?? null, duracao_max_s: l.duracao_max_s ?? null,
+  disponivel_de: l.disponivel_de ?? null, disponivel_ate: l.disponivel_ate ?? null,
 })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paraEnvio = (l: any): EnvioVideo => ({
@@ -19,9 +21,12 @@ const paraEnvio = (l: any): EnvioVideo => ({
   duracao_segundos: l.duracao_segundos == null ? null : Number(l.duracao_segundos), analise: (l.analise ?? null) as AnaliseVideo | null,
 })
 
-/** As missões ativas, na ordem (o admin vê todas em buscarTodasMissoes). */
+/**
+ * As missões que o restaurante enxerga: as ativas e as que ele já mandou vídeo
+ * (a RLS decide). Quais aparecem para enviar agora é com missaoDisponivel.
+ */
 export async function buscarMissoes(): Promise<Missao[]> {
-  const { data, error } = await supabase.from('video_missoes').select('*').eq('ativa', true).order('ordem').order('id')
+  const { data, error } = await supabase.from('video_missoes').select('*').order('ordem').order('id')
   if (error) throw error
   return (data ?? []).map(paraMissao)
 }
@@ -30,6 +35,18 @@ export async function buscarRecompensas(): Promise<Recompensa[]> {
   const { data, error } = await supabase.from('video_recompensas').select('ordem, descricao').order('ordem')
   if (error) throw error
   return data ?? []
+}
+
+/** Vídeos aprovados por ano, por restaurante (somando todas as missões); null = sem limite. */
+export async function buscarMaxPorAno(): Promise<number | null> {
+  const { data, error } = await supabase.from('video_config').select('max_por_ano').eq('id', true).maybeSingle()
+  if (error) throw error
+  return data?.max_por_ano ?? null
+}
+
+export async function salvarMaxPorAno(max: number | null): Promise<void> {
+  const { error } = await supabase.from('video_config').upsert({ id: true, max_por_ano: max })
+  if (error) throw error
 }
 
 export async function buscarEnvios(restauranteId: number): Promise<EnvioVideo[]> {
@@ -102,8 +119,26 @@ export async function buscarTodasMissoes(): Promise<Missao[]> {
   return (data ?? []).map(paraMissao)
 }
 
-export async function salvarMissao(m: { id?: number; titulo: string; descricao: string; requisitos: Requisito[]; ordem: number; ativa: boolean }): Promise<void> {
-  const linha = { titulo: m.titulo.trim(), descricao: m.descricao.trim(), requisitos: m.requisitos as unknown as never, ordem: m.ordem, ativa: m.ativa }
+export interface MissaoParaSalvar {
+  id?: number
+  titulo: string
+  descricao: string
+  requisitos: Requisito[]
+  ordem: number
+  ativa: boolean
+  roteiro: string
+  duracao_min_s: number | null
+  duracao_max_s: number | null
+  disponivel_de: string | null
+  disponivel_ate: string | null
+}
+
+export async function salvarMissao(m: MissaoParaSalvar): Promise<void> {
+  const linha = {
+    titulo: m.titulo.trim(), descricao: m.descricao.trim(), requisitos: m.requisitos as unknown as never, ordem: m.ordem, ativa: m.ativa,
+    roteiro: m.roteiro.trim(), duracao_min_s: m.duracao_min_s, duracao_max_s: m.duracao_max_s,
+    disponivel_de: m.disponivel_de || null, disponivel_ate: m.disponivel_ate || null,
+  }
   const { error } = m.id
     ? await supabase.from('video_missoes').update(linha).eq('id', m.id)
     : await supabase.from('video_missoes').insert(linha)

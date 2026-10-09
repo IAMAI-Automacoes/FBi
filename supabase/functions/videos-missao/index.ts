@@ -43,8 +43,21 @@ Deno.serve(async (req: Request) => {
       }
     },
     missao: async (id) => {
-      const { data } = await db.from('video_missoes').select('id, titulo, descricao, requisitos, ativa').eq('id', id).maybeSingle()
+      const { data } = await db.from('video_missoes')
+        .select('id, titulo, descricao, requisitos, ativa, roteiro, duracao_min_s, duracao_max_s, disponivel_de, disponivel_ate')
+        .eq('id', id).maybeSingle()
       return data ? { ...data, id: Number(data.id), requisitos: lerRequisitos(data.requisitos) } : null
+    },
+    enviosDoAno: async (restauranteId, desde) => {
+      const { data, error } = await db.from('video_envios').select('id, status, criado_em, atualizado_em, aprovado_em')
+        .eq('restaurante_id', restauranteId)
+        .or(`and(status.eq.aprovado,aprovado_em.gte.${desde}),status.eq.analisando`)
+      if (error) throw error
+      return data ?? []
+    },
+    maxPorAno: async () => {
+      const { data } = await db.from('video_config').select('max_por_ano').eq('id', true).maybeSingle()
+      return data?.max_por_ano ?? null
     },
     enviosDaMissao: async (restauranteId, missaoId) => {
       const { data, error } = await db.from('video_envios').select('id, status, criado_em, atualizado_em')
