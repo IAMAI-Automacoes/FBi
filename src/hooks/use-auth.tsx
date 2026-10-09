@@ -317,6 +317,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (insertError) {
         console.error('Erro ao criar restaurante:', insertError)
+        // EasyFeed e Influencers não compartilham login: e-mail de parceiro influencer não vira restaurante.
+        if (insertError.message?.includes('EMAIL_DE_INFLUENCER')) {
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+          return { error: { message: 'Este e-mail é de um parceiro do EasyFeed Influencers. Use outro e-mail para a conta do restaurante.' } }
+        }
         return { error: insertError }
       }
 

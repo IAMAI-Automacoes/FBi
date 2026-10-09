@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
 import Vendas from '@/pages/Vendas'
@@ -57,6 +57,19 @@ function SairDoLoginComumNaDemo() {
 export function RotaProtegida() {
   const { session, usuario, loading, buscandoUsuario, ehAdminPlataforma, sessaoDemo, acessoAdmin, contaDeInfluencer, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // EasyFeed e EasyFeed Influencers não compartilham login: uma conta só de
+  // influencer que entrou por aqui sai na hora ('local': só desta área) e
+  // volta para o login com o aviso.
+  useEffect(() => {
+    if (!contaDeInfluencer) return
+    navigate('/login', {
+      replace: true,
+      state: { avisoAuth: 'Este e-mail é de um parceiro do EasyFeed Influencers e não tem conta de restaurante. Entre com o e-mail da conta do restaurante.' },
+    })
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+  }, [contaDeInfluencer, navigate])
 
   // `buscandoUsuario && !usuario` cobre a janela do login: ali `loading` já é
   // false (veio do getSession inicial, que não achou sessão), a sessão acabou
@@ -81,30 +94,8 @@ export function RotaProtegida() {
     )
   }
 
-  // Conta só do EasyFeed Influencers que entrou pelo login dos restaurantes: os
-  // dois têm logins separados, então ela não entra aqui.
-  if (!usuario && contaDeInfluencer) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-6 text-center">
-        <p className="text-base font-semibold text-gray-900">Esta conta é do EasyFeed Influencers</p>
-        <p className="mt-2 max-w-sm text-sm text-gray-500">
-          O painel dos restaurantes tem outro login. Entre pela área de parceiros.
-        </p>
-        <div className="mt-6 flex gap-3">
-          <a href="/influencers" className={`${BOTAO_PILULA_AZUL} inline-flex items-center no-underline`}>
-            Ir para a área de parceiros
-          </a>
-          <button
-            // 'local': sai só daqui, sem derrubar o login dela na área de parceiros.
-            onClick={() => supabase.auth.signOut({ scope: 'local' }).finally(() => window.location.assign('/login'))}
-            className="h-10 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700"
-          >
-            Sair
-          </button>
-        </div>
-      </div>
-    )
-  }
+  // Conta só do EasyFeed Influencers: enquanto sai (efeito acima), nada aparece.
+  if (!usuario && contaDeInfluencer) return <Carregando />
 
   // Carregamento terminou, há sessão, mas o cadastro do restaurante não veio.
   // `use-auth` tenta criar a linha sozinho quando ela não existe; se aquele

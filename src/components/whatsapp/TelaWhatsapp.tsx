@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { Eye, Lock, WifiOff } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Eye, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
@@ -23,7 +23,8 @@ import { WA } from '@/components/whatsapp/pecas'
 export interface RestauranteDaTela {
   id: number
   nome: string | null
-  /** Tem instância do WhatsApp conectada (whatsapp_token). */
+  /** WhatsApp conectado de verdade. As páginas só abrem esta tela conectadas
+   *  (senão mostram WhatsappDesconectado); aqui ele só decide o WhatsApp Business. */
   conectado: boolean
   /** WhatsApp pessoal do dono (o "Enviar mensagem" abre nele). */
   whatsappDono: string | null
@@ -297,15 +298,6 @@ export function TelaWhatsapp({ restaurante, modo, paramsBase, className }: {
 
   const aviso = (
     <>
-      {!restaurante.conectado && (
-        <div className="flex shrink-0 items-start gap-3 bg-[#FDECEA] px-4 py-3 text-[13.5px] text-gray-700">
-          <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-          <p>
-            <span className="font-medium text-gray-900">WhatsApp desconectado.</span> Mensagens novas não chegam aqui.{' '}
-            {!admin && <Link to="/configuracoes" className="font-medium text-[#027EB5] underline">Conectar</Link>}
-          </p>
-        </div>
-      )}
       {!admin && <AvisoNotificacoes />}
     </>
   )

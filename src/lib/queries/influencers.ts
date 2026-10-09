@@ -38,6 +38,10 @@ export async function adicionarInfluenciador(email: string, valorMensal: number 
     .insert({ email: email.trim().toLowerCase(), valor_mensal: valorMensal })
   if (error) {
     if (error.code === '23505') throw new Error('Esse e-mail já está na lista.')
+    // EasyFeed e Influencers não compartilham login: o mesmo e-mail não pode ser das duas coisas.
+    if (error.message?.includes('EMAIL_DE_RESTAURANTE')) {
+      throw new Error('Esse e-mail já é de uma conta de restaurante do EasyFeed. Use outro e-mail para o acesso de influencer.')
+    }
     if (error.code === '23514') throw new Error('Confira o e-mail digitado.')
     throw error
   }

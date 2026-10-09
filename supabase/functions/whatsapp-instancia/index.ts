@@ -79,6 +79,39 @@ function nomeInstancia(nome: string | null | undefined, id: number): string {
   return limpo.slice(0, 60)
 }
 
+// ── Rotina de 5 em 5 min (cron): confere a conexão de todos os restaurantes ──
+// e grava `whatsapp_conectado`. É o que faz a tela WhatsApp (do dono e do
+// admin) saber quando o WhatsApp caiu pelo celular, sem ninguém abrir nada.
+// uazapi fora do ar ou com erro: não muda o que estava gravado.
+// deno-lint-ignore no-explicit-any
+async function verificarTodos(admin: any, BASE: string): Promise<void> {
+  const { data: lista } = await admin
+    .from('restaurantes')
+    .select('id, whatsapp_token, whatsapp_conectado')
+    .or('whatsapp_token.not.is.null,whatsapp_conectado.eq.true')
+  for (const r of lista ?? []) {
+    let conectado: boolean | null = false
+    if (r.whatsapp_token) {
+      try {
+        const resp = await fetch(`${BASE}/instance/status`, {
+          headers: { 'Content-Type': 'application/json', token: r.whatsapp_token },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (resp.status === 404 || resp.status === 401) conectado = false
+        else if (resp.ok) conectado = extractConnected(await resp.json().catch(() => ({})))
+        else conectado = null
+      } catch {
+        conectado = null
+      }
+    }
+    if (conectado === null) continue
+    await admin
+      .from('restaurantes')
+      .update({ whatsapp_conectado: conectado, whatsapp_status_em: new Date().toISOString() })
+      .eq('id', r.id)
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -108,13 +141,24 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Configuração da API do WhatsApp ausente (UAZAPI_BASE_URL / UAZAPI_ADMIN_TOKEN).' }, 500)
     }
 
+    const body = await req.json().catch(() => ({}))
+    const action = String(body.action ?? '')
+
+    if (action === 'verificar_todos') {
+      const { data: segredo } = await admin.from('integracao_config').select('valor').eq('chave', 'PUSH_TRIGGER_SECRET').maybeSingle()
+      if (!segredo?.valor || req.headers.get('x-cron-secret') !== segredo.valor) return json({ error: 'unauthorized' }, 401)
+      const trabalho = verificarTodos(admin, BASE)
+      // Responde já e termina em segundo plano (o pg_net corta a conexão em segundos).
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(trabalho)
+      else await trabalho
+      return json({ ok: true }, 202)
+    }
+
     const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
     if (userErr || !userData?.user) return json({ error: 'Invalid token' }, 401)
     // Na demonstração o WhatsApp é o da conta de verdade do vendedor.
     if (await ehSessaoDemo(admin, jwt)) return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
     const userId = userData.user.id
-    const body = await req.json().catch(() => ({}))
-    const action = String(body.action ?? '')
 
     // Painel do admin, aba WhatsApp: o admin da plataforma vê o WhatsApp de
     // qualquer restaurante. Só a ação "fotos" (leitura) aceita outro
@@ -151,6 +195,13 @@ Deno.serve(async (req: Request) => {
     async function setToken(novo: string | null) {
       token = novo
       await admin.from('restaurantes').update({ whatsapp_token: novo }).eq('id', rest.id)
+    }
+    // O que a tela WhatsApp usa para mostrar (ou não) as conversas.
+    async function setConectado(conectado: boolean) {
+      await admin
+        .from('restaurantes')
+        .update({ whatsapp_conectado: conectado, whatsapp_status_em: new Date().toISOString() })
+        .eq('id', rest.id)
     }
 
     // Cria a instância (admintoken). adminField01 = id do restaurante → roteamento no n8n.
@@ -256,6 +307,7 @@ Deno.serve(async (req: Request) => {
       } catch { /* best-effort: as credenciais são limpas de qualquer forma */ }
       await setToken(null)
       await setNumero(null)
+      await setConectado(false)
       return json({ hasInstance: false, connected: false, qrcode: null, numero: null, recusado: MOTIVO_NUMERO_DO_DONO })
     }
 
@@ -270,14 +322,20 @@ Deno.serve(async (req: Request) => {
 
     // ── status: consulta estado atual (usado no polling) ────────────────────────
     if (action === 'status') {
-      if (!token) return json({ hasInstance: false, connected: false, qrcode: null, numero: rest.numero_whatsapp ?? null })
+      if (!token) {
+        await setConectado(false)
+        return json({ hasInstance: false, connected: false, qrcode: null, numero: rest.numero_whatsapp ?? null })
+      }
       const { status, data } = await callInstance('status', 'GET')
       if (status === 404 || status === 401) {
         // Instância inexistente/token inválido → limpa para permitir recriar
         await setToken(null)
+        await setConectado(false)
         return json({ hasInstance: false, connected: false, qrcode: null, numero: null })
       }
       const connected = extractConnected(data)
+      // Só grava com resposta boa da uazapi: erro dela não derruba a tela.
+      if (status < 400) await setConectado(connected)
       const numero = extractNumero(data)
       // Só na conexão NOVA (número ainda não gravado): um restaurante que já
       // está funcionando não é derrubado por esta checagem.
@@ -325,6 +383,7 @@ Deno.serve(async (req: Request) => {
         return await recusarNumeroDoDono()
       }
       if (connected && numero) await setNumero(numero)
+      if (status < 400) await setConectado(connected)
       return json({ hasInstance: true, connected, qrcode: connected ? null : extractQr(data), numero: connected ? numero : null })
     }
 
@@ -343,6 +402,7 @@ Deno.serve(async (req: Request) => {
       }
       await setToken(null)
       await setNumero(null)
+      await setConectado(false)
       return json({ hasInstance: false, connected: false, qrcode: null, numero: null })
     }
 

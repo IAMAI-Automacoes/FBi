@@ -2421,7 +2421,9 @@ export type Database = {
           ultima_atualizacao_banner: string | null
           whatsapp_admin_token: string | null
           whatsapp_base_url: string | null
+          whatsapp_conectado: boolean
           whatsapp_dono: string | null
+          whatsapp_status_em: string | null
           whatsapp_token: string | null
         }
         Insert: {
@@ -2476,7 +2478,9 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_conectado?: boolean
           whatsapp_dono?: string | null
+          whatsapp_status_em?: string | null
           whatsapp_token?: string | null
         }
         Update: {
@@ -2531,7 +2535,9 @@ export type Database = {
           ultima_atualizacao_banner?: string | null
           whatsapp_admin_token?: string | null
           whatsapp_base_url?: string | null
+          whatsapp_conectado?: boolean
           whatsapp_dono?: string | null
+          whatsapp_status_em?: string | null
           whatsapp_token?: string | null
         }
         Relationships: []
@@ -3672,6 +3678,7 @@ export type Database = {
           tipo_culinaria: string
         }[]
       }
+      influencers_sem_acento: { Args: { p: string }; Returns: string }
       influencers_tipo: { Args: { p_sentimento: string }; Returns: string }
       janela_demo_atual: { Args: never; Returns: number }
       limpar_contas_abandonadas: { Args: never; Returns: number }

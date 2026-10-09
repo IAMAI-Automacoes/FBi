@@ -220,7 +220,7 @@ export default function Painel() {
                   </Avatar>
                   <div className="flex flex-col space-y-0.5 overflow-hidden">
                     <p className="truncate text-sm font-semibold leading-none text-foreground">{nome}</p>
-                    <p className="truncate text-xs text-muted-foreground">{perfil?.arroba ? `@${perfil.arroba}` : sessao?.user.email}</p>
+                    <p className="truncate text-xs text-muted-foreground">{sessao?.user.email}</p>
                   </div>
                 </div>
               </div>

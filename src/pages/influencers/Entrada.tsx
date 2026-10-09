@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MailCheck } from 'lucide-react'
+import { useInfluencer } from './contexto'
 import { consultarEntrada, entrarComSenha, ErroEntrada, pedirLinkDeSenha } from './dados'
 import { authInputBlur, authInputFocus, authInputStyle, Aviso, BotaoPrincipal, BotaoTexto, LayoutEntrada, TituloEntrada, rotuloCampo } from './ui'
 
@@ -9,6 +10,7 @@ type Etapa = 'email' | 'senha' | 'link' | 'sem_acesso'
    fora da lista → sem acesso; já tem senha → senha; primeiro acesso → link no
    e-mail para criar a senha (confirma que o e-mail é dele). */
 export default function Entrada() {
+  const { avisoEntrada, limparAvisoEntrada } = useInfluencer()
   const [etapa, setEtapa] = useState<Etapa>('email')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -37,6 +39,7 @@ export default function Entrada() {
   const continuar = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro(null)
+    limparAvisoEntrada()
     setCarregando(true)
     try {
       irPara(await consultarEntrada(email))
@@ -85,6 +88,7 @@ export default function Entrada() {
         <>
           <TituloEntrada titulo="Entrar" subtitulo="Acesso dos parceiros do EasyFeed. Digite o e-mail que você passou para a nossa equipe." />
           <form onSubmit={continuar} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {avisoEntrada && <Aviso>{avisoEntrada}</Aviso>}
             <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
               <span style={rotuloCampo}>E-mail</span>
               <input

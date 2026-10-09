@@ -23,13 +23,12 @@ const COMO_FUNCIONA = [
   },
 ]
 
-/* Primeiro acesso: como chamar a pessoa (e o @), depois o que tem no painel. */
+/* Primeiro acesso: como chamar a pessoa, depois o que tem no painel. */
 export default function BoasVindas() {
   const { perfil, recarregarPerfil } = useInfluencer()
   const navigate = useNavigate()
   const [passo, setPasso] = useState<1 | 2>(perfil?.onboarding_em ? 2 : 1)
   const [nome, setNome] = useState(perfil?.nome ?? '')
-  const [arroba, setArroba] = useState(perfil?.arroba ?? '')
   const [cidade, setCidade] = useState(perfil?.cidade ?? '')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -39,7 +38,7 @@ export default function BoasVindas() {
     setErro(null)
     setSalvando(true)
     try {
-      await salvarPerfil(nome, arroba, cidade)
+      await salvarPerfil(nome, cidade)
       await recarregarPerfil()
       setPasso(2)
     } catch (err) {
@@ -65,17 +64,6 @@ export default function BoasVindas() {
                 value={nome} onChange={(e) => setNome(e.target.value)} disabled={salvando}
                 style={authInputStyle} onFocus={authInputFocus} onBlur={authInputBlur}
               />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-              <span style={rotuloCampo}>Seu @ principal <span className="font-normal text-slate-400">(opcional)</span></span>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">@</span>
-                <input
-                  type="text" placeholder="seuperfil" maxLength={40}
-                  value={arroba} onChange={(e) => setArroba(e.target.value.replace(/^@+/, ''))} disabled={salvando}
-                  style={{ ...authInputStyle, paddingLeft: '32px' }} onFocus={authInputFocus} onBlur={authInputBlur}
-                />
-              </div>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
               <span style={rotuloCampo}>Cidade <span className="font-normal text-slate-400">(opcional)</span></span>

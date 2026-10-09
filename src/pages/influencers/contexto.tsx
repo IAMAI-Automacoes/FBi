@@ -16,6 +16,9 @@ interface EstadoInfluencer {
   perfil: PerfilInfluencer | null
   recarregarPerfil: () => Promise<void>
   sair: () => Promise<void>
+  /** Por que a pessoa voltou para a entrada (ex.: e-mail fora da lista). */
+  avisoEntrada: string | null
+  limparAvisoEntrada: () => void
 }
 
 const Contexto = createContext<EstadoInfluencer | null>(null)
@@ -29,6 +32,7 @@ export function ProvedorInfluencer({ children }: { children: ReactNode }) {
   // De qual e-mail é o `perfil` atual: até chegar o do e-mail logado, está carregando
   // (sem isto, a tela piscava "sem acesso" entre a sessão e o perfil chegarem).
   const [perfilDe, setPerfilDe] = useState<string | null>(null)
+  const [avisoEntrada, setAvisoEntrada] = useState<string | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -55,7 +59,15 @@ export function ProvedorInfluencer({ children }: { children: ReactNode }) {
       return
     }
     try {
-      setPerfil(await buscarMeuPerfil(email))
+      const p = await buscarMeuPerfil(email)
+      if (!p) {
+        // Logado aqui mas fora da lista (conta de restaurante, ou tirado pelo
+        // admin): os logins não se misturam, então sai daqui na hora.
+        setAvisoEntrada(`${email} não tem acesso ao EasyFeed Influencers. Se você é parceiro, fale com a nossa equipe.`)
+        await sairDaArea()
+        setSessao(null)
+      }
+      setPerfil(p)
     } catch {
       setPerfil(null)
     } finally {
@@ -73,7 +85,7 @@ export function ProvedorInfluencer({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <Contexto.Provider value={{ carregando: carregandoSessao || (!!email && perfilDe !== email), sessao, perfil, recarregarPerfil, sair }}>
+    <Contexto.Provider value={{ carregando: carregandoSessao || (!!email && perfilDe !== email), sessao, perfil, recarregarPerfil, sair, avisoEntrada, limparAvisoEntrada: () => setAvisoEntrada(null) }}>
       {children}
     </Contexto.Provider>
   )

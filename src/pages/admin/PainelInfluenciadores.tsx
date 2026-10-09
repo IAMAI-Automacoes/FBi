@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { Check, Copy, Loader2, Plus, Trash2 } from 'lucide-react'
+import { Check, Copy, ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Switch } from '@/components/ui/switch'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
@@ -174,13 +174,23 @@ export function PainelInfluenciadores() {
               Entram em easyfeed.com.br/influencers e veem, sem identificar ninguém, o que os clientes de restaurante comentam.
             </p>
           </div>
-          <button
-            onClick={copiarLink}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            {copiado ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-            {copiado ? 'Link copiado' : 'Copiar link'}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={copiarLink}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              {copiado ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiado ? 'Link copiado' : 'Copiar link'}
+            </button>
+            <a
+              href={LINK_DA_AREA}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-medium text-gray-700 no-underline transition-colors hover:bg-gray-50"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Abrir link
+            </a>
+          </div>
         </div>
 
         <form className="mb-2 flex flex-col gap-2 sm:flex-row" onSubmit={adicionar}>
@@ -210,7 +220,7 @@ export function PainelInfluenciadores() {
         </form>
         {erro && <p className="mb-2 text-[12px] text-red-600">{erro}</p>}
         <p className="mb-4 text-[12px] text-gray-500">
-          {lista.length} {lista.length === 1 ? 'influenciador' : 'influenciadores'} · {formatarReais(total)} por mês. No primeiro acesso, a pessoa recebe um link no e-mail para criar a senha.
+          {lista.length} {lista.length === 1 ? 'influenciador' : 'influenciadores'} · {formatarReais(total)} por mês (só anotação: ainda não cobra nada). No primeiro acesso, a pessoa recebe um link no e-mail para criar a senha.
         </p>
 
         {carregando ? (
@@ -237,7 +247,6 @@ export function PainelInfluenciadores() {
                       <div className="flex flex-col">
                         <span className="font-medium text-gray-800">
                           {inf.nome || inf.email}
-                          {inf.arroba && <span className="font-normal text-gray-400"> · @{inf.arroba}</span>}
                         </span>
                         {inf.nome && <span className="text-[12px] text-gray-400">{inf.email}</span>}
                       </div>

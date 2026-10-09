@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { buscarRestaurantesWhatsapp, type RestauranteWhatsappAdmin } from '@/lib/queries/admin'
 import { formatarTelefone, normalizarBusca } from '@/lib/whatsapp/formatacao'
 import { TelaWhatsapp } from '@/components/whatsapp/TelaWhatsapp'
+import { WhatsappDesconectado } from '@/components/whatsapp/WhatsappDesconectado'
 import { Avatar, WA } from '@/components/whatsapp/pecas'
 
 /**
@@ -87,8 +88,8 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
                       {[r.email, r.numero_whatsapp ? formatarTelefone(r.numero_whatsapp) : null].filter(Boolean).join(' · ') || 'sem e-mail'}
                     </p>
                   </div>
-                  {!r.numero_whatsapp && (
-                    <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">sem WhatsApp</span>
+                  {!r.conectado && (
+                    <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">desconectado</span>
                   )}
                   {escolhido?.id === r.id && <Check className="h-4 w-4 shrink-0 text-[#128C7E]" />}
                 </CommandItem>
@@ -133,7 +134,7 @@ export function PainelWhatsappAdmin() {
   const escolhido = useMemo(() => lista?.find((r) => r.id === idUrl) ?? null, [lista, idUrl])
   const paramsBase = useMemo(() => (escolhido ? { restaurante: String(escolhido.id) } : undefined), [escolhido])
   const restauranteDaTela = useMemo(() => (escolhido
-    ? { id: escolhido.id, nome: escolhido.nome, conectado: escolhido.temInstancia, whatsappDono: escolhido.whatsapp_dono }
+    ? { id: escolhido.id, nome: escolhido.nome, conectado: escolhido.conectado, whatsappDono: escolhido.whatsapp_dono }
     : null), [escolhido])
 
   if (erro) {
@@ -176,23 +177,28 @@ export function PainelWhatsappAdmin() {
         <span
           className={cn(
             'hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium sm:flex',
-            escolhido.numero_whatsapp ? 'bg-[#D9FDD3] text-[#0A6E46]' : 'bg-gray-100 text-gray-500',
+            escolhido.conectado ? 'bg-[#D9FDD3] text-[#0A6E46]' : 'bg-red-50 text-red-600',
           )}
         >
-          <span className={cn('h-1.5 w-1.5 rounded-full', escolhido.numero_whatsapp ? 'bg-[#25D366]' : 'bg-gray-400')} />
-          {escolhido.numero_whatsapp ? 'Conectado' : 'Desconectado'}
+          <span className={cn('h-1.5 w-1.5 rounded-full', escolhido.conectado ? 'bg-[#25D366]' : 'bg-red-500')} />
+          {escolhido.conectado ? 'Conectado' : 'Desconectado'}
         </span>
         <EscolherRestaurante lista={lista} escolhido={escolhido} aoEscolher={escolher} aberto={aberto} aoMudarAberto={setAberto} compacto />
       </div>
 
       <div className="min-h-0 flex-1">
-        <TelaWhatsapp
-          key={escolhido.id}
-          modo="admin"
-          restaurante={restauranteDaTela}
-          paramsBase={paramsBase}
-          className="relative flex h-full overflow-hidden bg-white"
-        />
+        {/* Só com o WhatsApp conectado de verdade; senão, o mesmo aviso que o dono vê. */}
+        {escolhido.conectado ? (
+          <TelaWhatsapp
+            key={escolhido.id}
+            modo="admin"
+            restaurante={restauranteDaTela}
+            paramsBase={paramsBase}
+            className="relative flex h-full overflow-hidden bg-white"
+          />
+        ) : (
+          <WhatsappDesconectado modo="admin" className="flex h-full" />
+        )}
       </div>
     </div>
   )

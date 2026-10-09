@@ -563,13 +563,15 @@ export interface RestauranteWhatsappAdmin {
   whatsapp_dono: string | null
   /** Tem instância criada na uazapi (whatsapp_token). */
   temInstancia: boolean
+  /** WhatsApp conectado de verdade (conferido com a uazapi; ver whatsapp_conectado). */
+  conectado: boolean
   excluida_em: string | null
 }
 
 export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappAdmin[]> {
   const { data, error } = await supabase
     .from('restaurantes')
-    .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, excluida_em')
+    .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, whatsapp_conectado, excluida_em')
     .order('nome_restaurante', { ascending: true })
   if (error) throw error
   return ((data ?? []) as any[]).map((r) => ({
@@ -580,6 +582,7 @@ export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappA
     numero_whatsapp: r.numero_whatsapp || null,
     whatsapp_dono: r.whatsapp_dono || null,
     temInstancia: !!r.whatsapp_token,
+    conectado: r.whatsapp_conectado === true,
     excluida_em: r.excluida_em ?? null,
   }))
 }

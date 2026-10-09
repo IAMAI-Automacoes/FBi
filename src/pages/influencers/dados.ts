@@ -53,8 +53,9 @@ export async function buscarMeuPerfil(email: string): Promise<PerfilInfluencer |
   return data ?? null
 }
 
-export async function salvarPerfil(nome: string, arroba: string, cidade: string): Promise<void> {
-  const { data, error } = await supabaseInfluencers.rpc('influencer_salvar_perfil', { p_nome: nome, p_arroba: arroba, p_cidade: cidade })
+export async function salvarPerfil(nome: string, cidade: string): Promise<void> {
+  // Sem @: o influenciador não precisa de nome de usuário.
+  const { data, error } = await supabaseInfluencers.rpc('influencer_salvar_perfil', { p_nome: nome, p_arroba: '', p_cidade: cidade })
   if (error || data !== true) throw new Error('Não foi possível salvar agora. Tente de novo.')
 }
 
