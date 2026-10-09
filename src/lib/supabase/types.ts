@@ -535,25 +535,31 @@ export type Database = {
       }
       contatos: {
         Row: {
+          aviso_parar_em: string | null
           created_at: string
           id: string
           opt_out_em: string | null
+          opt_out_motivo: string | null
           restaurante_id: number
           telefone: string
           ultimo_envio_em: string | null
         }
         Insert: {
+          aviso_parar_em?: string | null
           created_at?: string
           id?: string
           opt_out_em?: string | null
+          opt_out_motivo?: string | null
           restaurante_id: number
           telefone: string
           ultimo_envio_em?: string | null
         }
         Update: {
+          aviso_parar_em?: string | null
           created_at?: string
           id?: string
           opt_out_em?: string | null
+          opt_out_motivo?: string | null
           restaurante_id?: number
           telefone?: string
           ultimo_envio_em?: string | null
@@ -3197,6 +3203,183 @@ export type Database = {
         }
         Relationships: []
       }
+      video_envios: {
+        Row: {
+          analisado_em: string | null
+          analise: Json | null
+          atualizado_em: string
+          autorizou_uso: boolean
+          caminho: string
+          criado_em: string
+          duracao_segundos: number | null
+          id: string
+          mime: string
+          missao_id: number
+          motivo: string | null
+          nome_arquivo: string
+          restaurante_id: number
+          revisado_em: string | null
+          revisado_por: string | null
+          status: string
+          tamanho_bytes: number
+        }
+        Insert: {
+          analisado_em?: string | null
+          analise?: Json | null
+          atualizado_em?: string
+          autorizou_uso: boolean
+          caminho: string
+          criado_em?: string
+          duracao_segundos?: number | null
+          id?: string
+          mime: string
+          missao_id: number
+          motivo?: string | null
+          nome_arquivo?: string
+          restaurante_id: number
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string
+          tamanho_bytes: number
+        }
+        Update: {
+          analisado_em?: string | null
+          analise?: Json | null
+          atualizado_em?: string
+          autorizou_uso?: boolean
+          caminho?: string
+          criado_em?: string
+          duracao_segundos?: number | null
+          id?: string
+          mime?: string
+          missao_id?: number
+          motivo?: string | null
+          nome_arquivo?: string
+          restaurante_id?: number
+          revisado_em?: string | null
+          revisado_por?: string | null
+          status?: string
+          tamanho_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_envios_missao_id_fkey"
+            columns: ["missao_id"]
+            isOneToOne: false
+            referencedRelation: "video_missoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_envios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_missoes: {
+        Row: {
+          ativa: boolean
+          atualizado_em: string
+          criado_em: string
+          descricao: string
+          id: number
+          ordem: number
+          requisitos: Json
+          titulo: string
+        }
+        Insert: {
+          ativa?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string
+          id?: never
+          ordem?: number
+          requisitos?: Json
+          titulo: string
+        }
+        Update: {
+          ativa?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string
+          id?: never
+          ordem?: number
+          requisitos?: Json
+          titulo?: string
+        }
+        Relationships: []
+      }
+      video_premios: {
+        Row: {
+          aplicado_em: string | null
+          aplicado_por: string | null
+          criado_em: string
+          descricao: string
+          envio_id: string
+          id: string
+          recompensa_ordem: number
+          restaurante_id: number
+          status: string
+        }
+        Insert: {
+          aplicado_em?: string | null
+          aplicado_por?: string | null
+          criado_em?: string
+          descricao: string
+          envio_id: string
+          id?: string
+          recompensa_ordem: number
+          restaurante_id: number
+          status?: string
+        }
+        Update: {
+          aplicado_em?: string | null
+          aplicado_por?: string | null
+          criado_em?: string
+          descricao?: string
+          envio_id?: string
+          id?: string
+          recompensa_ordem?: number
+          restaurante_id?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_premios_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: true
+            referencedRelation: "video_envios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_premios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_recompensas: {
+        Row: {
+          atualizado_em: string
+          descricao: string
+          ordem: number
+        }
+        Insert: {
+          atualizado_em?: string
+          descricao: string
+          ordem: number
+        }
+        Update: {
+          atualizado_em?: string
+          descricao?: string
+          ordem?: number
+        }
+        Relationships: []
+      }
       whatsapp_fotos: {
         Row: {
           atualizada_em: string
@@ -3527,6 +3710,20 @@ export type Database = {
           gasto: number
           limite: number
           permitido: boolean
+        }[]
+      }
+      contato_contexto_parar: {
+        Args: { p_restaurante_id: number; p_telefone: string }
+        Returns: Json
+      }
+      contato_parar_atualizacoes: {
+        Args: {
+          p_motivo?: string
+          p_restaurante_id: number
+          p_telefone: string
+        }
+        Returns: {
+          marcou: boolean
         }[]
       }
       conversas_whatsapp: {

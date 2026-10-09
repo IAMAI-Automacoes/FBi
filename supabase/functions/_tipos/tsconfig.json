@@ -43,6 +43,7 @@
     "../recuperar-senha/*.ts",
     "../salvy-webhook/*.ts",
     "../entrar-na-conta/*.ts",
-    "../acesso-influencer/*.ts"
+    "../acesso-influencer/*.ts",
+    "../videos-missao/*.ts"
   ]
 }

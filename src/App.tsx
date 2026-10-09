@@ -26,6 +26,7 @@ const Actions = lazy(() => import('./pages/Actions'))
 const AcoesArquivadas = lazy(() => import('./pages/AcoesArquivadas'))
 const Reports = lazy(() => import('./pages/Reports'))
 const Google = lazy(() => import('./pages/Google'))
+const Missoes = lazy(() => import('./pages/Missoes'))
 const Privacidade = lazy(() => import('./pages/Privacidade'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
 const Garcons = lazy(() => import('./pages/Garcons'))
@@ -187,6 +188,17 @@ const App = () => (
                   <RotaPermitida modulo="relatorios">
                     <SoAdminPlataforma>
                       <Google />
+                    </SoAdminPlataforma>
+                  </RotaPermitida>
+                }
+              />
+              <Route
+                path="/missoes"
+                element={
+                  // Só o admin por enquanto (ver SO_ADMIN em videos-missao).
+                  <RotaPermitida modulo="visao_geral">
+                    <SoAdminPlataforma>
+                      <Missoes />
                     </SoAdminPlataforma>
                   </RotaPermitida>
                 }

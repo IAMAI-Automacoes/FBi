@@ -23,6 +23,7 @@ import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
+import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
@@ -2206,6 +2207,7 @@ export default function Admin() {
         {activeTab === 'whatsapp' && <PainelWhatsappAdmin />}
 
         {activeTab === 'influenciadores' && <PainelInfluenciadores />}
+        {activeTab === 'videos' && <PainelVideosAdmin />}
         {activeTab === 'agentes' && <PainelAgentes />}
 
         {/* ── MOTOR DE RESPOSTA ── */}

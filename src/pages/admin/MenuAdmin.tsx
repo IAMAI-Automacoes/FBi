@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, BookOpen, Bot, Briefcase, Building2, Gauge, Handshake, LifeBuoy, Megaphone, ShieldCheck, Ticket, Wallet, Workflow,
+  ArrowLeft, BookOpen, Bot, Briefcase, Building2, Clapperboard, Gauge, Handshake, LifeBuoy, Megaphone, ShieldCheck, Ticket, Wallet, Workflow,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -16,7 +16,7 @@ import {
 import { WhatsappIcon } from '@/components/WhatsappIcon'
 
 export type AbaAdmin =
-  | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'pagamentos' | 'cupons'
+  | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'videos' | 'pagamentos' | 'cupons'
   | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
 
 export const ABAS_ADMIN: { key: AbaAdmin; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -25,6 +25,7 @@ export const ABAS_ADMIN: { key: AbaAdmin; label: string; icon: React.ComponentTy
   { key: 'contas', label: 'Contas', icon: Building2 },
   { key: 'vendedores', label: 'Vendedores', icon: Briefcase },
   { key: 'influenciadores', label: 'Influenciadores', icon: Megaphone },
+  { key: 'videos', label: 'Vídeos', icon: Clapperboard },
   { key: 'pagamentos', label: 'Pagamentos', icon: Wallet },
   { key: 'cupons', label: 'Cupons', icon: Ticket },
   { key: 'afiliados', label: 'Afiliados', icon: Handshake },

@@ -10,6 +10,7 @@ import {
   Users,
   HelpCircle,
   Star,
+  Clapperboard,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -44,6 +45,10 @@ const navigation = [
   { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },
+  // Missões de vídeo: só o admin da plataforma por enquanto. Para liberar aos
+  // clientes: apague `soAdmin`, o SoAdminPlataforma da rota (App.tsx) e o
+  // SO_ADMIN da função videos-missao.
+  { name: 'Missões', href: '/missoes', icon: Clapperboard, modulo: 'visao_geral', soAdmin: true },
 ]
 
 export function AppSidebar() {
