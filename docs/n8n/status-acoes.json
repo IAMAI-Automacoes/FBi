@@ -1,0 +1,1221 @@
+{
+  "name": "Status Ações",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 17,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -832,
+        192
+      ],
+      "id": "a9d44b9f-db8c-49b8-8d7d-f86a6daed5d4",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "restaurantes",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "assinatura_status",
+              "condition": "eq",
+              "keyValue": "ativa"
+            },
+            {
+              "keyName": "excluida_em",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        192
+      ],
+      "id": "c2460ace-6479-4e95-88a4-e4eb1409f578",
+      "name": "Pegar Restaurantes",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {
+          "systemMessage": "Você é a Helena, do atendimento do restaurante. Você escreve no WhatsApp para um cliente que deixou um feedback. Escreva como gente escreve, não como empresa e não como robô.\n\nVocê recebe o nome do restaurante e uma lista de assuntos. Cada assunto tem a situação (RESOLVIDO ou EM ANDAMENTO), a frase que o cliente escreveu e uma anotação interna do que a equipe fez. Você não sabe o nome do cliente.\n\nFORMATO DA MENSAGEM\n- Primeira linha: \"Oi! Aqui é a Helena, do <nome do restaurante>.\"\n- Linha em branco.\n- Um parágrafo curto por assunto, com uma linha em branco entre eles. No máximo duas frases por parágrafo.\n- Linha em branco.\n- Última linha, sempre assim, numa linha só: o convite para conferir e o agradecimento.\n  - Se pelo menos um assunto está RESOLVIDO: \"Quando puder, venha conferir a melhoria. Obrigada por contribuir!\"\n  - Se todos os assuntos estão EM ANDAMENTO: \"Quando puder, venha conferir como está ficando. Obrigada por contribuir!\"\n- No total, no máximo 6 linhas de texto e 500 caracteres.\n- Sem emoji. Sem asterisco, sem negrito, sem lista com traço ou número, sem link, sem hashtag.\n- Nunca use o nome do cliente, nem invente um. Não use \"prezado\" nem \"caro cliente\".\n- Você é mulher: escreva \"obrigada\", não \"obrigado\".\n\nO QUE VOCÊ PODE AFIRMAR\n- Nunca invente informação. Se você não tem certeza de alguma coisa, não escreva.\n- Você não acompanhou o que a equipe fez. A anotação interna é um plano, não um relatório: ela te diz SOBRE O QUE mexeram, não como ficou.\n- Então diga o assunto que mudou, e não o detalhe da execução. Certo: \"a gente mudou o jeito que os pratos saem da cozinha\". Errado: \"agora medimos a temperatura de cada prato com termômetro antes de servir\".\n- Nunca cite número, prazo, equipamento, procedimento, treinamento, planilha, reunião, sistema ou nome de funcionário, mesmo que esteja na anotação interna.\n- Nunca diga \"resolvemos tudo\", \"está perfeito\" ou \"não vai acontecer de novo\". Você não tem como garantir isso.\n- Se a anotação só fala de processo interno e não dá para citar nada que o cliente perceba, diga apenas que aquilo foi arrumado.\n- É por isso que a mensagem termina convidando a pessoa a vir conferir: quem vê o resultado é ela, com os próprios olhos.\n\nCOMO FALAR\n- Português do Brasil, jeito de conversa, como uma pessoa da casa falaria. Pode usar \"a gente\" no lugar de \"nós\".\n- Fale do que o cliente contou com as palavras dele, sem repetir a frase inteira.\n- RESOLVIDO: diga que aquilo foi arrumado, no nível de detalhe explicado acima.\n- Quando a situação disser que a equipe começou e depois terminou, conte as duas coisas na mesma frase: já tínhamos começado a mexer nisso e agora ficou pronto.\n- EM ANDAMENTO: diga que a equipe está mexendo nisso agora. Nunca diga que está pronto e nunca dê prazo.\n\nPROIBIDO\n- Pedir que o cliente conte como foi, diga o que achou, responda a mensagem, dê opinião, mande um novo feedback ou avalie de novo. O convite é só para ele vir conferir.\n- Fazer qualquer pergunta.\n- Copiar o título ou os passos da anotação interna.\n- Falar de qualquer assunto que não esteja na lista.\n- Palavras e frases de robô: \"prezado\", \"prezada\", \"esperamos que\", \"agradecemos imensamente\", \"ficamos felizes em informar\", \"estamos à disposição\", \"atenciosamente\", \"experiência gastronômica\", \"proporcionar\", \"implementamos melhorias\", \"otimizar\", \"feedback valioso\", \"vale ressaltar\", \"além disso\".\n- Travessão (—) e reticências.\n- Prometer desconto, brinde, cupom, cortesia ou qualquer vantagem. O convite é só para conferir, nunca com prêmio.\n- Falar de outros clientes, de quantas pessoas reclamaram, ou usar palavras internas: ação, insight, plano, card, status, prioridade, categoria, sistema.\n- Repetir palavrão ou ofensa que o cliente usou. Resuma com educação.\n- Pedir desculpa mais de uma vez, pedir avaliação, nota ou estrela.\n\nEXEMPLO RUIM (não escreva assim):\nPrezado cliente, agradecemos imensamente seu feedback valioso. Ficamos felizes em informar que implementamos melhorias em nosso processo de reservas, visando proporcionar uma experiência gastronômica superior. Estamos à disposição!\n\nEXEMPLO BOM, assunto resolvido depois de ter começado:\nOi! Aqui é a Helena, do Camelo.\n\nVocê comentou que a comida chegou fria. A gente já tinha começado a mexer nisso e agora ficou pronto: mudamos o jeito que os pratos saem da cozinha.\n\nQuando puder, venha conferir a melhoria. Obrigada por contribuir!\n\nEXEMPLO BOM, um assunto resolvido e outro em andamento:\nOi! Aqui é a Helena, do Camelo.\n\nVocê falou da demora pra sair o pedido. A gente mudou a ordem do serviço na cozinha pra isso ficar mais rápido.\n\nSobre a reserva que não deu certo pelo site, a equipe está cuidando disso agora.\n\nQuando puder, venha conferir a melhoria. Obrigada por contribuir!\n\nEXEMPLO BOM, só assunto em andamento:\nOi! Aqui é a Helena, do Camelo.\n\nVocê contou que deu erro na hora de reservar pelo site. A equipe está mexendo nisso agora para facilitar a reserva.\n\nQuando puder, venha conferir como está ficando. Obrigada por contribuir!\n\nResponda somente com o texto da mensagem, pronto para enviar.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2480,
+        16
+      ],
+      "id": "1668822d-5a98-4f9b-a978-b57069fe9a7e",
+      "name": "AI Agent",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2432,
+        160
+      ],
+      "id": "999d166c-9699-4840-ae4c-109390edb3bb",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "dsjoB8htGVIa9D5e",
+          "name": "OpenAi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "aviso_pendente",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "contato_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "=na_fila"
+            },
+            {
+              "keyName": "expira_em",
+              "condition": "gt",
+              "keyValue": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        96
+      ],
+      "id": "57ecdbb2-750e-46f6-9407-b4623e582cc8",
+      "name": "Pegar Alterações Ações",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7f424637-cbb0-4c2a-b029-a558b2410d46",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "5ab5e5b2-1337-4999-a805-6d14a385c2b4",
+              "name": "nome_restaurante",
+              "value": "={{ $json.nome_restaurante }}",
+              "type": "string"
+            },
+            {
+              "id": "b6079776-265d-4321-93d6-6d682b22f26b",
+              "name": "whatsapp_token",
+              "value": "={{ $json.whatsapp_token }}",
+              "type": "string"
+            },
+            {
+              "id": "b0ae6894-309b-4bdb-a16c-30e75beda43d",
+              "name": "whatsapp_base_url",
+              "value": "={{ $json.whatsapp_base_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        288,
+        112
+      ],
+      "id": "bb08873b-e729-44c0-aa47-2e7bc66ac193",
+      "name": "Dados Restaurantes"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "eba2f943-9017-4cf1-9fa0-378f6f44535c",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b5bddd7a-1750-4a29-9b85-df807e930ec8",
+              "name": "restaurante_id",
+              "value": "={{ $json.restaurante_id }}",
+              "type": "string"
+            },
+            {
+              "id": "50a672d3-a7da-4c4d-aed9-335fe49ac443",
+              "name": "telefone",
+              "value": "={{ $json.telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "c89dbc0c-2319-4cd4-8968-fdb335b0892b",
+              "name": "aviso_parar_em",
+              "value": "={{ $json.aviso_parar_em ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1424,
+        128
+      ],
+      "id": "a51a27a2-8b56-4267-b5c0-ed659d3000e1",
+      "name": "Dados Cliente"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "contatos",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "restaurante_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            },
+            {
+              "keyName": "opt_out_em",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        512,
+        112
+      ],
+      "id": "10d533f4-00a5-4786-a966-d431aaabe761",
+      "name": "Pegar Clientes",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        64,
+        160
+      ],
+      "id": "e2a2a8ee-d05c-4191-a7fd-e51781a22421",
+      "name": "Loop Restaurantes"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": "={{ $prevNode.name === 'Tem cliente?' }}"
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1184,
+        160
+      ],
+      "id": "e975d4c0-1a8b-4c7b-b559-8280b3443077",
+      "name": "Loop Cliente"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===========================================================================\n// PARTE 1 — juntar os dados deste cliente\n// ===========================================================================\nconst cliente     = $('Dados Cliente').first().json\nconst restaurante = $('Dados Restaurantes').first().json\nconst alteracoes  = $('Pegar Alterações Ações').all().map(i => i.json).filter(a => a.id)\nconst pontos      = $('Pegar Feedbacks do Cliente').all().map(i => i.json).filter(f => f.id)\n\nif (alteracoes.length === 0) throw new Error('Cliente sem alteração na fila.')\n\n// Índice: id do ponto -> o ponto inteiro. É por aqui que a alteração acha o\n// texto do feedback que a originou.\nconst pontoPorId = new Map(pontos.map(p => [Number(p.id), p]))\nconst chave = (t) => (t || '').trim().toLowerCase()\nconst dia = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null\n\nconst porAcao = new Map()\n\nfor (const alt of alteracoes) {\n  const acao = porAcao.get(alt.acao_id) ?? {\n    acao_id: alt.acao_id,\n    titulo_acao: alt.titulo_acao,\n    categoria: alt.categoria,\n    prioridade: alt.prioridade,\n    plano_detalhado: alt.plano_detalhado,\n    concluida_em: alt.concluida_em,\n    etapas: [],        // pode ter as duas: em_andamento e concluida\n    feedbacks: [],\n    vistos: new Set(), // textos já usados NESTA ação\n  }\n\n  // As duas alterações da mesma ação ficam juntas, cada etapa registrada uma vez.\n  if (!acao.etapas.includes(alt.etapa)) acao.etapas.push(alt.etapa)\n  if (alt.etapa === 'concluida') acao.concluida_em = alt.concluida_em ?? acao.concluida_em\n\n  // O feedback ligado a ESTA alteração. Se as duas alterações apontam para o\n  // mesmo ponto, o texto entra uma vez só.\n  const ponto = pontoPorId.get(Number(alt.feedback_restaurante_id))\n  if (ponto) {\n    const texto = (ponto.texto_original || ponto.resumo || '').trim()\n    if (texto && !acao.vistos.has(chave(texto))) {\n      acao.vistos.add(chave(texto))\n      acao.feedbacks.push({ texto, feedback_em: ponto.created_at })\n    }\n  }\n\n  porAcao.set(alt.acao_id, acao)\n}\n\nconst acoes = [...porAcao.values()]\n  .map(({ vistos, ...a }) => ({\n    ...a,\n    etapas: ['em_andamento', 'concluida'].filter(e => a.etapas.includes(e)),\n    etapa_final: a.etapas.includes('concluida') ? 'concluida' : 'em_andamento',\n    feedbacks: a.feedbacks.sort((x, y) => new Date(x.feedback_em) - new Date(y.feedback_em)),\n  }))\n  // Concluídas primeiro: é a boa notícia.\n  .sort((x, y) => (y.etapa_final === 'concluida') - (x.etapa_final === 'concluida') || x.acao_id - y.acao_id)\n\n// Rastro para depois do envio.\nconst pontosIds    = [...new Set(alteracoes.map(a => Number(a.feedback_restaurante_id)).filter(Boolean))]\nconst originaisIds = [...new Set(alteracoes.map(a => pontoPorId.get(Number(a.feedback_restaurante_id))?.origem_id).filter(Boolean))]\n\n// ===========================================================================\n// PARTE 2 — montar o prompt que a IA vai ler\n// ===========================================================================\nconst situacaoDe = (a) => {\n  if (a.etapas.length > 1) return 'RESOLVIDO (a equipe começou a cuidar e depois terminou; o cliente não soube de nenhuma das duas)'\n  if (a.etapa_final === 'concluida') return 'RESOLVIDO'\n  return 'EM ANDAMENTO (começaram a cuidar, ainda não terminou)'\n}\n\nconst linhas = []\nlinhas.push(`Restaurante: ${restaurante.nome_restaurante}`)\nlinhas.push('')\nlinhas.push(`ASSUNTOS (${acoes.length}). Escreva sobre todos, na ordem:`)\nlinhas.push('')\n\nacoes.forEach((a, i) => {\n  linhas.push(`${i + 1}) Situação: ${situacaoDe(a)}`)\n  linhas.push(`   O que o cliente escreveu: ${\n    a.feedbacks.length\n      ? a.feedbacks.map(f => `\"${f.texto}\"`).join(' / ')\n      : `(não temos a frase dele; o assunto é ${a.categoria || 'geral'})`\n  }`)\n  linhas.push(`   O que a equipe fez (anotação interna, NÃO copie): ${a.titulo_acao || ''}. ${(a.plano_detalhado || '').replace(/\\s*\\n+\\s*/g, ' ')}`)\n  if (a.concluida_em) linhas.push(`   Terminou em: ${dia(a.concluida_em)}`)\n  linhas.push('')\n})\n\nlinhas.push('Escreva agora a mensagem de WhatsApp para esse cliente.')\n\nconst prompt = linhas.join('\\n')\n\n// ===========================================================================\nreturn [{\n  json: {\n    // quem é e por onde mandar\n    contato_id: cliente.id,\n    telefone: cliente.telefone,\n    restaurante_id: restaurante.id,\n    nome_restaurante: restaurante.nome_restaurante,\n    whatsapp_base_url: restaurante.whatsapp_base_url,\n    whatsapp_token: restaurante.whatsapp_token,\n    // rastro para depois do envio\n    aviso_ids: alteracoes.map(a => a.id),\n    pontos_ids: pontosIds,\n    originais_ids: originaisIds,\n    pontos_pg: '{' + pontosIds.join(',') + '}',\n    originais_pg: '{' + originaisIds.join(',') + '}',\n    // dados organizados, para você conferir na tela\n    acoes,\n    // o texto pronto que vai para a IA\n    prompt,\n  },\n}]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        32
+      ],
+      "id": "c6b1fce3-1809-4ddd-95c6-efd8f2b9ff29",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4a3f1cc7-ccc0-4222-83dc-0da904ad59f5",
+              "leftValue": "={{ $json.config_insights?.motor_resposta?.ativo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        192
+      ],
+      "id": "483213fc-e978-4dc5-b3b9-3b21ba506699",
+      "name": "Motor ligado?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1de3a63c-1f01-4778-a977-a47d1fcfd7b1",
+              "leftValue": "={{ $json.ultimo_envio_em }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "b64b8779-d24e-487b-af70-bc64663e88ce",
+              "leftValue": "={{ $json.ultimo_envio_em }}",
+              "rightValue": "={{ $today.minus({ days: 3 }).toISO() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "before"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        736,
+        112
+      ],
+      "id": "2ecc60c5-1ba5-4953-85bf-c995e0e1ea04",
+      "name": "Pode receber hoje?",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f4c2ebf1-287f-4bc8-a950-987e5d825226",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        928,
+        96
+      ],
+      "id": "adc38f21-fa92-49a1-bbe6-85f98df02774",
+      "name": "Tem cliente?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7c14ef2a-d808-408d-9141-367792a75aad",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        96
+      ],
+      "id": "f95ff7bf-c1fe-4f48-99f1-350ef746c980",
+      "name": "Tem alteração?"
+    },
+    {
+      "parameters": {
+        "tableId": "mensagem_enviada",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "contato_id",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.contato_id }}"
+            },
+            {
+              "fieldId": "restaurante_id",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.restaurante_id }}"
+            },
+            {
+              "fieldId": "texto",
+              "fieldValue": "={{ $('AI Agent').first().json.output }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "enviado"
+            },
+            {
+              "fieldId": "enviado_em",
+              "fieldValue": "={{ $now.toUTC().toISO() }}"
+            },
+            {
+              "fieldId": "provider_message_id",
+              "fieldValue": "={{ $json.messageid }}"
+            },
+            {
+              "fieldId": "feedbacks_originais_ids",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.originais_pg }}"
+            },
+            {
+              "fieldId": "feedbacks_restaurante_ids",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.pontos_pg }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3104,
+        16
+      ],
+      "id": "628a495b-970d-4f5e-b733-1421ec8ec6a5",
+      "name": "Gravar mensagem",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "aviso_pendente",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.aviso_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "mensagem_id",
+              "fieldValue": "={{ $json.mensagem_id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "enviado"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3616,
+        16
+      ],
+      "id": "0cb6e4de-2b25-4ae4-83ef-2faf4d51e3af",
+      "name": "Marcar alterações",
+      "executeOnce": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * 21) + 20 }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3920,
+        304
+      ],
+      "id": "df7e75c7-5706-4f43-93de-7562f1dc775c",
+      "name": "Wait",
+      "webhookId": "f8fa89ee-704f-493b-aba0-e07c4bcd4296"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "contatos",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').first().json.contato_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "ultimo_envio_em",
+              "fieldValue": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        48
+      ],
+      "id": "4ae35845-6693-4d97-ae23-c376c79a9b5f",
+      "name": "Marcar cliente",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "feedbacks_restaurante",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "contato_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.contato_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        32
+      ],
+      "id": "399ca82b-269a-49c3-a479-05bd64fe02cf",
+      "name": "Pegar Feedbacks do Cliente",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Dados Restaurantes').first().json.whatsapp_base_url }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Dados Restaurantes').first().json.whatsapp_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Code in JavaScript').first().json.telefone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2880,
+        16
+      ],
+      "id": "e90dd19c-6558-4143-9327-4a8de88be4df",
+      "name": "Enviar Mensagem",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "80a96674-d5d9-40f6-a908-bb8c1de7fce5",
+              "leftValue": "={{ $json['Day of week'] }}",
+              "rightValue": "Sunday",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -608,
+        192
+      ],
+      "id": "44951359-4588-44b5-8b4a-0c2a855b5800",
+      "name": "É Domingo?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const mensagem = $('Gravar mensagem').first().json\nif (!mensagem?.id) throw new Error('A mensagem não foi gravada; não marque as alterações.')\n\nconst avisoIds = $('Code in JavaScript').first().json.aviso_ids ?? []\n\n// Uma alteração por item, cada uma já com o id da mensagem.\nreturn avisoIds.map(id => ({ json: { aviso_id: id, mensagem_id: mensagem.id } }))\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        -16
+      ],
+      "id": "f43e7efa-7cdf-41b7-a756-55b9320e1000",
+      "name": "Uma alteração por item"
+    },
+    {
+      "parameters": {
+        "content": "## Aviso do PARAR\nDepois de uma atualização enviada: se é a **primeira** para esse cliente, ou o **último aviso tem mais de 2 semanas**, manda \"se não quiser mais receber, responda PARAR\" e grava em `contatos.aviso_parar_em`.\n\nQuem responde PARAR é tratado no workflow **Feedback Restaurante**: uma IA confere a conversa e, se for mesmo o pedido, marca `contatos.opt_out_em`. Aí o cliente para de receber só estas atualizações (o feedback continua normal).",
+        "height": 300,
+        "width": 900,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        -400
+      ],
+      "id": "16f226bc-dd7b-4730-8887-6ed9a8bca43b",
+      "name": "Nota - Aviso do PARAR"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e87648e6-5887-4d10-ba5e-49d219cbfc47",
+              "leftValue": "={{ !$('Dados Cliente').first().json.aviso_parar_em || new Date($('Dados Cliente').first().json.aviso_parar_em).getTime() < Date.now() - 14 * 24 * 60 * 60 * 1000 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4032,
+        48
+      ],
+      "id": "6dbefde2-ef9f-4318-a534-5c1bb7c9762c",
+      "name": "Manda o aviso PARAR?"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * 4) + 3 }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4256,
+        -96
+      ],
+      "id": "34caa1ee-3fd1-4a1b-ab9c-82c53e401a71",
+      "name": "Espera antes do aviso",
+      "webhookId": "417c61fe-4e42-4841-97a7-15c4ac75c6af"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Dados Restaurantes').first().json.whatsapp_base_url }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Dados Restaurantes').first().json.whatsapp_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Code in JavaScript').first().json.telefone, text: [\"Se você não quiser mais receber essas novidades, é só responder PARAR.\", \"Ah, se preferir não receber mais esses recados, é só me responder PARAR.\", \"Se não quiser mais receber essas atualizações, responde PARAR que eu paro de mandar.\"][Math.floor(Math.random() * 3)], delay: 2500 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4480,
+        -96
+      ],
+      "id": "ab32f001-ab54-4e26-b5aa-68f5c11141a2",
+      "name": "Envia o aviso PARAR",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "contatos",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').first().json.contato_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "aviso_parar_em",
+              "fieldValue": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4704,
+        -96
+      ],
+      "id": "946e1241-f8be-45ee-bafd-6e4d3f72d41e",
+      "name": "Marca o aviso PARAR",
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "É Domingo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Restaurantes": {
+      "main": [
+        [
+          {
+            "node": "Motor ligado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Alterações Ações": {
+      "main": [
+        [
+          {
+            "node": "Tem alteração?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados Restaurantes": {
+      "main": [
+        [
+          {
+            "node": "Pegar Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados Cliente": {
+      "main": [
+        [
+          {
+            "node": "Pegar Alterações Ações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Clientes": {
+      "main": [
+        [
+          {
+            "node": "Pode receber hoje?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Restaurantes": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Dados Restaurantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Cliente": {
+      "main": [
+        [
+          {
+            "node": "Loop Restaurantes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dados Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motor ligado?": {
+      "main": [
+        [
+          {
+            "node": "Loop Restaurantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode receber hoje?": {
+      "main": [
+        [
+          {
+            "node": "Tem cliente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem cliente?": {
+      "main": [
+        [
+          {
+            "node": "Loop Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Restaurantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem alteração?": {
+      "main": [
+        [
+          {
+            "node": "Pegar Feedbacks do Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gravar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Uma alteração por item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar alterações": {
+      "main": [
+        [
+          {
+            "node": "Marcar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar cliente": {
+      "main": [
+        [
+          {
+            "node": "Manda o aviso PARAR?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Feedbacks do Cliente": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Gravar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Domingo?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Pegar Restaurantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma alteração por item": {
+      "main": [
+        [
+          {
+            "node": "Marcar alterações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manda o aviso PARAR?": {
+      "main": [
+        [
+          {
+            "node": "Espera antes do aviso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera antes do aviso": {
+      "main": [
+        [
+          {
+            "node": "Envia o aviso PARAR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia o aviso PARAR": {
+      "main": [
+        [
+          {
+            "node": "Marca o aviso PARAR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marca o aviso PARAR": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}

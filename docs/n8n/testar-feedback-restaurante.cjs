@@ -237,5 +237,102 @@ erro = null
 try { roda('Separa os pontos', {}, { 'Monta a resposta': montado }) } catch (e) { erro = e.message }
 ok('sem id da origem: erro visível', !!erro)
 
+// ── 3. PARAR (as atualizações das ações) ─────────────────────────────────────
+const destinos = (de, saida = 0, tipo = 'main') => (wf.connections[de]?.[tipo]?.[saida] ?? []).map((c) => c.node)
+for (const nome of ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'Modelo do parar', 'É para parar?', 'Marca para não receber', 'Marcou agora?', 'Confirma que parou']) ok(`PARAR: nó existe: ${nome}`, !!porNome(nome))
+ok('PARAR: sai da mensagem juntada, junto com a resposta normal', destinos('Sou a última mensagem?').includes('Pediu para parar?') && destinos('Sou a última mensagem?').includes('Limpa o buffer'))
+ok('PARAR: roda antes da resposta normal (fica acima no canvas, executionOrder v1)', wf.settings.executionOrder === 'v1'
+  && porNome('Pediu para parar?').position[1] < porNome('Limpa o buffer').position[1] && porNome('Pediu para parar?').position[1] < porNome('Limpa buffer antigo').position[1])
+const caminho = ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'É para parar?', 'Marca para não receber', 'Marcou agora?', 'Confirma que parou']
+ok('PARAR: caminho na ordem certa', caminho.slice(0, -1).every((de, i) => destinos(de).join() === caminho[i + 1]))
+ok('PARAR: "Marcou agora?" falso não faz nada', destinos('Marcou agora?', 1).length === 0)
+ok('PARAR: a IA do parar usa o próprio modelo (temperatura 0, JSON)', destinos('Modelo do parar', 0, 'ai_languageModel').join() === 'Decide se é para parar'
+  && JSON.stringify(porNome('Modelo do parar').parameters.options) === '{"temperature":0,"responseFormat":"json_object"}')
+ok('PARAR: nenhum nó que chama fora trava o fluxo (falhou, segue)', ['Conversa recente', 'Decide se é para parar', 'Marca para não receber', 'Confirma que parou'].every((n) => porNome(n).onError === 'continueRegularOutput'))
+for (const [nome, fn] of [['Conversa recente', 'contato_contexto_parar'], ['Marca para não receber', 'contato_parar_atualizacoes']]) {
+  const n = porNome(nome)
+  ok(`PARAR: "${nome}" chama a função ${fn} com a credencial do Supabase`, n.parameters.method === 'POST' && n.parameters.url.endsWith('/rest/v1/rpc/' + fn)
+    && n.parameters.authentication === 'predefinedCredentialType' && n.parameters.nodeCredentialType === 'supabaseApi' && !!n.credentials?.supabaseApi)
+}
+const corpoDe = (nome, json) => JSON.parse(new Function('$json', 'return (' + porNome(nome).parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(json))
+ok('PARAR: busca a conversa pelo restaurante e telefone', JSON.stringify(corpoDe('Conversa recente', { restauranteId: 11, telefone: '5511932903005' })) === '{"p_restaurante_id":11,"p_telefone":"5511932903005"}')
+ok('PARAR: marca com o motivo', JSON.stringify(corpoDe('Marca para não receber', { restauranteId: 11, telefone: '5511932903005', motivo: 'PARAR' })) === '{"p_restaurante_id":11,"p_telefone":"5511932903005","p_motivo":"PARAR"}')
+const marcouAgora = (j) => new Function('$json', 'return (' + porNome('Marcou agora?').parameters.conditions.conditions[0].leftValue.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(j)
+ok('PARAR: confirma só quando marcou agora', marcouAgora({ marcou: true }) === true && marcouAgora({ marcou: false }) === false && marcouAgora({ error: 'falhou' }) === false)
+
+// Pediu para parar? (o filtro barato)
+const juntadaParar = (textoCompleto) => ({ restauranteId: 11, telefone: '5511932903005', baseUrl: 'https://iamai-ia.uazapi.com', token: 'tok-123', textoCompleto, ateId: 9, remoteId: 'r' })
+const passa = (txt) => roda('Pediu para parar?', juntadaParar(txt)).length === 1
+for (const txt of ['PARAR', 'parar', 'Pare', 'pare!', 'Para!', 'Oi\nPara', 'stop', 'Para de me mandar mensagem', 'para de mandar essas coisas', 'Não quero mais receber', 'nao quero mais essas mensagens', 'Não me mande mais isso', 'Me tira da lista', 'chega de mensagem', 'quero cancelar essas mensagens', 'Como faço pra não receber mais?', 'não precisa mais me avisar', 'quero me descadastrar', 'A comida estava ótima. Mas pode PARAR de mandar novidade']) {
+  ok(`PARAR: filtro deixa passar "${txt.replace('\n', ' / ')}"`, passa(txt))
+}
+for (const txt of ['Fui lá para comemorar meu aniversário', 'O garçom não parava de falar', 'Parei o carro na frente e fui bem atendido', 'Parabéns pelo atendimento!', 'Comprei para minha mãe e ela amou', 'Separaram minha mesa rapidinho', 'Obrigado!', 'A música não para nunca']) {
+  ok(`PARAR: filtro barra "${txt}"`, !passa(txt))
+}
+r = roda('Pediu para parar?', juntadaParar('PARAR'))[0].json
+ok('PARAR: o filtro leva só o necessário', JSON.stringify(Object.keys(r).sort()) === '["baseUrl","restauranteId","telefone","textoCompleto","token"]')
+
+// Monta o contexto
+const pediu = roda('Pediu para parar?', juntadaParar('Para de me mandar mensagem'))[0].json
+const ctxParar = (ctx) => roda('Monta o contexto', ctx, { 'Pediu para parar?': pediu })
+ok('PARAR: telefone que não é contato das atualizações: não segue', ctxParar({ contato_id: null, ja_parou: false, conversa: [] }).length === 0)
+ok('PARAR: quem já parou: não segue (nem confirma de novo)', ctxParar({ contato_id: 5, ja_parou: true, conversa: [] }).length === 0)
+ok('PARAR: falhou a consulta: não segue', ctxParar({ error: 'falhou' }).length === 0)
+r = ctxParar({
+  contato_id: 5, ja_parou: false, aviso_parar_em: '2026-10-08T15:00:00Z',
+  ultima_atualizacao: { texto: 'Trocamos a música ambiente por sua causa!', enviada_em: '2026-10-08T14:59:00Z' },
+  conversa: [
+    { quem: 'restaurante', texto: 'Trocamos a música ambiente por sua causa!', enviada_em: '2026-10-08T14:59:00Z' },
+    { quem: 'restaurante', texto: 'Se não quiser mais receber, responda PARAR.', enviada_em: '2026-10-08T15:00:00Z' },
+    { quem: 'cliente', texto: 'Para de me mandar mensagem', enviada_em: '2026-10-08T15:10:00Z' },
+  ],
+})
+const contexto = r[0]?.json.contexto || ''
+ok('PARAR: o contexto tem a mensagem nova, a conversa e a última atualização',
+  contexto.includes('Para de me mandar mensagem') && contexto.includes('RESTAURANTE: Trocamos a música') && contexto.includes('CLIENTE: Para de me mandar')
+  && contexto.includes('ÚLTIMA ATUALIZAÇÃO') && contexto.includes('já avisou'), contexto)
+ok('PARAR: horário da conversa em Brasília', contexto.includes('[08/10, 12:10]') || contexto.includes('[08/10 12:10]'), contexto)
+ok('PARAR: o contexto continua com os dados do envio', r[0].json.restauranteId === 11 && r[0].json.token === 'tok-123')
+ok('PARAR: sem conversa nem atualização ainda: avisa a IA', ctxParar({ contato_id: 5, ja_parou: false, conversa: [] })[0].json.contexto.includes('nenhuma mensagem anterior')
+  && ctxParar({ contato_id: 5, ja_parou: false, conversa: [] })[0].json.contexto.includes('ainda não mandou nenhuma atualização'))
+
+// É para parar? (a decisão da IA)
+const montado2 = ctxParar({ contato_id: 5, ja_parou: false, conversa: [] })[0].json
+const decide = (text) => roda('É para parar?', { text }, { 'Monta o contexto': montado2 })
+r = decide('{"parar": true, "certeza": "alta", "motivo": "pediu para parar"}')
+ok('PARAR: "parar" com certeza alta: marca', r.length === 1 && r[0].json.restauranteId === 11 && r[0].json.telefone === '5511932903005' && r[0].json.motivo === 'Para de me mandar mensagem')
+ok('PARAR: certeza média: não marca', decide('{"parar": true, "certeza": "media", "motivo": "x"}').length === 0)
+ok('PARAR: certeza baixa: não marca', decide('{"parar": true, "certeza": "baixa", "motivo": "x"}').length === 0)
+ok('PARAR: "parar": false: não marca', decide('{"parar": false, "certeza": "alta", "motivo": "preposição"}').length === 0)
+ok('PARAR: "parar" como texto ("true"): não marca', decide('{"parar": "true", "certeza": "alta"}').length === 0)
+ok('PARAR: JSON com texto em volta ainda é lido', decide('Resultado: {"parar": true, "certeza": "Alta", "motivo": "x"}').length === 1)
+ok('PARAR: resposta fora do formato: não marca', decide('acho que sim').length === 0 && decide('').length === 0)
+r = roda('É para parar?', { error: 'OpenAI fora' }, { 'Monta o contexto': montado2 })
+ok('PARAR: IA falhou: não marca', r.length === 0)
+const longo = roda('Monta o contexto', { contato_id: 5, ja_parou: false, conversa: [] }, { 'Pediu para parar?': { ...pediu, textoCompleto: 'PARAR ' + 'x'.repeat(900) } })[0].json
+ok('PARAR: motivo curto (300)', roda('É para parar?', { text: '{"parar":true,"certeza":"alta"}' }, { 'Monta o contexto': longo })[0].json.motivo.length === 300)
+
+// O prompt da IA do parar
+const promptParar = porNome('Decide se é para parar').parameters.messages.messageValues[0].message
+ok('PARAR: prompt pede cuidado ("Na dúvida", false) e só JSON', promptParar.includes('Na dúvida') && promptParar.includes('"parar": false') && promptParar.includes('SOMENTE com um objeto JSON'))
+ok('PARAR: a IA lê o contexto montado', porNome('Decide se é para parar').parameters.text === '={{ $json.contexto }}')
+ok('PARAR: a IA principal trata pedido para parar como "outro" (não responde "só opiniões")', porNome('Analisa a mensagem').parameters.messages.messageValues[0].message.includes('"PARAR" → {"tipo": "outro"'))
+
+// Confirma que parou
+const confirma = () => {
+  const $ = (n) => ({ first: () => ({ json: n === 'É para parar?' ? { telefone: '5511932903005', baseUrl: 'https://x.uazapi.com', token: 't' } : {} }) })
+  const ex = (s) => new Function('$', 'return (' + s.replace(/^=\{\{\s*/, '').replace(/\s*\}\}.*$/, '') + ')')($)
+  const n = porNome('Confirma que parou').parameters
+  return { url: ex(n.url) + '/send/text', token: ex(n.headerParameters.parameters[0].value), corpo: JSON.parse(ex(n.jsonBody)) }
+}
+const confirmacoes = new Set()
+for (let i = 0; i < 60; i++) {
+  const c = confirma()
+  confirmacoes.add(c.corpo.text)
+  if (c.url !== 'https://x.uazapi.com/send/text' || c.token !== 't' || c.corpo.number !== '5511932903005' || c.corpo.delay !== 2500) ok('PARAR: confirmação vai pela instância do restaurante', false, JSON.stringify(c))
+}
+ok('PARAR: confirmação sorteada entre os textos prontos', confirmacoes.size >= 2, [...confirmacoes].join(' | '))
+ok('PARAR: confirmação sem travessão nem emoji, e lembra que o feedback continua', [...confirmacoes].every((t) => !/—/.test(t) && !/\p{Extended_Pictographic}/u.test(t) && /escrever aqui|mandar mensagem aqui/.test(t)))
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nworkflow: tudo certo')
 process.exit(falhas ? 1 : 0)

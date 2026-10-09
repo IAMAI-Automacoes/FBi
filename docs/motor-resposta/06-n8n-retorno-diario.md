@@ -239,13 +239,10 @@ Muitas mensagens seguidas de um número comercial é o que o WhatsApp bloqueia.
 - **Horário de corte.** A mensagem só entra na fila 2 h depois que o dono move o card
   (mais até 10 min do cron). Card movido até umas 7h50 sai na rodada das 10h do mesmo
   dia; depois disso, no dia seguinte.
-- **Opt-out ainda não é automático.** Se a mensagem disser "responda SAIR para não
-  receber mais", o fluxo de entrada precisa tratar o SAIR antes de gravar como feedback:
-
-  ```
-  PATCH https://lixrcruilisncfhfhndo.supabase.co/rest/v1/contatos?restaurante_id=eq.{id}&telefone=eq.{só dígitos}
-  (mesmos headers do passo 2)
-  { "opt_out_em": "{{ $now.toISO() }}" }
-  ```
-
-  Com `opt_out_em` preenchido, o cliente sai da fila e para de ganhar aviso novo.
+- **Opt-out (PARAR) é automático desde 2026-10-09.** Depois de uma atualização, o
+  workflow "Status Ações" avisa "se não quiser mais receber, responda PARAR" (na
+  primeira e depois a cada 2 semanas, `contatos.aviso_parar_em`). O workflow
+  "Feedback Restaurante" pega o PARAR, uma IA confere a conversa e a função
+  `contato_parar_atualizacoes` preenche `contatos.opt_out_em`. Com ela preenchida, o
+  cliente sai da fila e para de ganhar aviso novo; o feedback continua normal. Detalhes
+  em `docs/n8n/README.md`, seção PARAR.
