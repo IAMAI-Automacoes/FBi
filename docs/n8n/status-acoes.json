@@ -210,7 +210,7 @@
               "type": "string"
             },
             {
-              "id": "c89dbc0c-2319-4cd4-8968-fdb335b0892b",
+              "id": "f258d048-815c-408a-9134-f05c96a9e43e",
               "name": "aviso_parar_em",
               "value": "={{ $json.aviso_parar_em ?? '' }}",
               "type": "string"
@@ -651,21 +651,11 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "number",
-              "value": "={{ $('Code in JavaScript').first().json.telefone }}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $json.output }}"
-            }
-          ]
-        },
         "options": {
-          "timeout": 30000
-        }
+          "timeout": 60000
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Code in JavaScript').first().json.telefone, text: $json.output, delay: Math.min(25000, Math.max(8000, Math.round(String($json.output || '').length * (45 + Math.random() * 30)) + 2000 + Math.floor(Math.random() * 3000))), readchat: true, readmessages: true }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
@@ -737,7 +727,7 @@
         4000,
         -400
       ],
-      "id": "16f226bc-dd7b-4730-8887-6ed9a8bca43b",
+      "id": "620c176a-cf89-4375-8f2c-01ed850ad55b",
       "name": "Nota - Aviso do PARAR"
     },
     {
@@ -751,7 +741,7 @@
           },
           "conditions": [
             {
-              "id": "e87648e6-5887-4d10-ba5e-49d219cbfc47",
+              "id": "1d89a2f2-ff72-41fa-864a-94a69eb74d85",
               "leftValue": "={{ !$('Dados Cliente').first().json.aviso_parar_em || new Date($('Dados Cliente').first().json.aviso_parar_em).getTime() < Date.now() - 14 * 24 * 60 * 60 * 1000 }}",
               "rightValue": "",
               "operator": {
@@ -772,7 +762,7 @@
         4032,
         48
       ],
-      "id": "6dbefde2-ef9f-4318-a534-5c1bb7c9762c",
+      "id": "bda22ac7-b266-4392-abe3-fd4ede69fd37",
       "name": "Manda o aviso PARAR?"
     },
     {
@@ -785,9 +775,9 @@
         4256,
         -96
       ],
-      "id": "34caa1ee-3fd1-4a1b-ab9c-82c53e401a71",
+      "id": "ea43f492-6555-4ecf-9903-e64683fb176f",
       "name": "Espera antes do aviso",
-      "webhookId": "417c61fe-4e42-4841-97a7-15c4ac75c6af"
+      "webhookId": "b698b96d-b95f-4260-ba98-a0246348f379"
     },
     {
       "parameters": {
@@ -804,7 +794,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $('Code in JavaScript').first().json.telefone, text: [\"Se você não quiser mais receber essas novidades, é só responder PARAR.\", \"Ah, se preferir não receber mais esses recados, é só me responder PARAR.\", \"Se não quiser mais receber essas atualizações, responde PARAR que eu paro de mandar.\"][Math.floor(Math.random() * 3)], delay: 2500 }) }}",
+        "jsonBody": "={{ JSON.stringify({ number: $('Code in JavaScript').first().json.telefone, text: [\"Se você não quiser mais receber essas novidades, é só responder PARAR.\", \"Ah, se preferir não receber mais esses recados, é só me responder PARAR.\", \"Se não quiser mais receber essas atualizações, responde PARAR que eu paro de mandar.\"][Math.floor(Math.random() * 3)], delay: Math.floor(Math.random() * 3001) + 3500, readchat: true, readmessages: true }) }}",
         "options": {
           "timeout": 30000
         }
@@ -815,7 +805,7 @@
         4480,
         -96
       ],
-      "id": "ab32f001-ab54-4e26-b5aa-68f5c11141a2",
+      "id": "cb94987a-8cec-484c-98e9-856804af809a",
       "name": "Envia o aviso PARAR",
       "onError": "continueErrorOutput"
     },
@@ -847,7 +837,7 @@
         4704,
         -96
       ],
-      "id": "946e1241-f8be-45ee-bafd-6e4d3f72d41e",
+      "id": "3282f93c-d3d8-405a-b821-45b285a0ca57",
       "name": "Marca o aviso PARAR",
       "executeOnce": true,
       "credentials": {

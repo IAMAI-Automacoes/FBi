@@ -53,14 +53,31 @@ const corpo = () => {
   return JSON.parse(new Function('$', `return (${expr(no('Envia o aviso PARAR').parameters.jsonBody)})`)($))
 }
 const textos = new Set()
+const esperas = new Set()
 for (let i = 0; i < 60; i++) {
   const b = corpo()
   textos.add(b.text)
-  if (b.number !== '5511999998888' || b.delay !== 2500) ok('corpo do envio', false, JSON.stringify(b))
+  esperas.add(b.delay)
+  if (b.number !== '5511999998888' || !(b.delay >= 3500 && b.delay <= 6500) || b.readchat !== true || b.readmessages !== true) ok('corpo do envio', false, JSON.stringify(b))
 }
-ok('envia para o número do cliente, com "digitando"', true)
+ok('aviso: número do cliente, "digitando..." sorteado (3,5 a 6,5 s) e mensagens lidas', esperas.size > 10)
 ok('sorteia entre os textos prontos', textos.size >= 2, [...textos].join(' | '))
 ok('todo texto pede para responder PARAR, sem travessão nem emoji', [...textos].every((t) => /PARAR/.test(t) && !/—/.test(t) && !/\p{Extended_Pictographic}/u.test(t)))
+
+// A atualização: como gente
+const envio = no('Enviar Mensagem')
+const corpoAtualizacao = (output) => {
+  const $ = (nome) => ({ first: () => ({ json: nome === 'Code in JavaScript' ? { telefone: '5511999998888' } : {} }) })
+  return JSON.parse(new Function('$', '$json', `return (${expr(envio.parameters.jsonBody)})`)($, { output }))
+}
+const longo = 'Oi! Lembra que você comentou da demora no atendimento? A gente contratou mais um garçom pro fim de semana e mudou a ordem da cozinha. Volta pra ver!'
+const atualizacoes = Array.from({ length: 60 }, () => corpoAtualizacao(longo))
+ok('atualização: o texto da IA para o número do cliente', atualizacoes.every((b) => b.number === '5511999998888' && b.text === longo))
+ok('atualização: "digitando..." sorteado pelo tamanho do texto (8 a 25 s)', atualizacoes.every((b) => b.delay >= 8000 && b.delay <= 25000) && new Set(atualizacoes.map((b) => b.delay)).size > 20)
+ok('atualização curta: pelo menos 8 s; muito longa: no máximo 25 s', corpoAtualizacao('Oi!').delay >= 8000 && corpoAtualizacao('x'.repeat(5000)).delay === 25000)
+ok('atualização: mensagens do cliente lidas', atualizacoes.every((b) => b.readchat === true && b.readmessages === true))
+ok('atualização: timeout maior que o "digitando..." e sem retry (repetir duplicaria)', envio.parameters.options.timeout > 25000 && !envio.retryOnFail && !envio.parameters.bodyParameters)
+ok('entre um cliente e outro: Wait sorteado de 20 a 40 s', no('Wait').parameters.amount === '={{ Math.floor(Math.random() * 21) + 20 }}')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nstatus ações: tudo certo')
 process.exit(falhas ? 1 : 0)
