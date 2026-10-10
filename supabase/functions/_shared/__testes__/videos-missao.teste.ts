@@ -5,7 +5,7 @@
  */
 import {
   caminhoDoEnvio, contagemDoAno, decidirResultado, duracaoDaMissao, emBlocos, hojeSP, inicioDoAnoSP, lerRequisitos,
-  LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo, montarPromptAnalise, noPeriodo, passosDoRoteiro, podeEnviar,
+  LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo, montarPromptAnalise, noPeriodo, passosDoRoteiro, podeEnviar, proximaMissao,
   type EnvioResumo, type Missao,
 } from '../videos-missao.ts'
 import { tratarVideos, type DepsVideos, type EnvioCompleto } from '../../videos-missao/handler.ts'
@@ -47,12 +47,14 @@ ok('tipo: imagem não passa', mimeDoVideo('image/png', 'foto.png') === '')
 ok('caminho: pasta do restaurante e extensão do tipo', caminhoDoEnvio(11, 'abc', 'video/quicktime') === 'restaurante_11/abc.mov' && caminhoDoEnvio(11, 'abc', 'video/mp4') === 'restaurante_11/abc.mp4')
 
 const base = {
-  missao: MISSAO as Missao, envios: [] as EnvioResumo[], ano: { aprovados: 0, emAnalise: 0 }, maxPorAno: 4 as number | null,
+  missao: MISSAO as Missao, envios: [] as EnvioResumo[], proximaId: 1 as number | null, ano: { aprovados: 0, emAnalise: 0 }, maxPorAno: 4 as number | null,
   hoje: '2026-10-10', mime: 'video/mp4', tamanho: 10_000_000, duracao: 45 as number | null, autorizou: true, agora: AGORA,
 }
 const motivo = (over: Partial<typeof base>) => { const r = podeEnviar({ ...base, ...over }); return r.ok ? 'ok' : r.motivo }
 ok('pode enviar: tudo certo', motivo({}) === 'ok')
 ok('missão desativada', motivo({ missao: { ...MISSAO, ativa: false } }) === 'missao_inativa' && motivo({ missao: null }) === 'missao_inativa')
+ok('só a missão da vez aceita vídeo', motivo({ proximaId: 2 }) === 'nao_liberada' && motivo({ proximaId: null }) === 'nao_liberada')
+ok('missão já cumprida diz isso (não "não liberada")', motivo({ envios: [envioR('aprovado')], proximaId: 2 }) === 'ja_aprovada')
 ok('missão já cumprida', motivo({ envios: [envioR('reprovado'), envioR('aprovado')] }) === 'ja_aprovada')
 ok('vídeo ainda em análise', motivo({ envios: [envioR('analisando', 3)] }) === 'em_analise')
 ok('análise travada (mais de 15 min) libera', motivo({ envios: [envioR('analisando', 20)] }) === 'ok')
@@ -91,6 +93,23 @@ const doAno = contagemDoAno([
   { id: 'e', status: 'reprovado', criado_em: '2026-05-01T00:00:00Z' },
 ], inicioDoAnoSP(AGORA), AGORA)
 ok('conta do ano: só aprovados deste ano e análises que não travaram', doAno.aprovados === 1 && doAno.emAnalise === 1, doAno)
+
+// A fila de missões
+const fila = [
+  { id: 7, ativa: true, ordem: 3 },
+  { id: 5, ativa: true, ordem: 1 },
+  { id: 6, ativa: true, ordem: 2 },
+  { id: 4, ativa: false, ordem: 0 },
+]
+const da = (missao_id: number, status: string) => ({ missao_id, status })
+const prox = (envios: { missao_id: number; status: string }[], missoes = fila, hoje = '2026-10-10') => proximaMissao(missoes, envios, hoje)?.id ?? null
+ok('fila: sem envios, a primeira pela ordem (desativada não entra)', prox([]) === 5)
+ok('fila: cumpriu a 1ª, vem a 2ª', prox([da(5, 'aprovado')]) === 6)
+ok('fila: em análise ou reprovada continua sendo a da vez', prox([da(5, 'analisando')]) === 5 && prox([da(5, 'reprovado'), da(5, 'erro')]) === 5)
+ok(`fila: ${MAX_REPROVADOS} reprovações pula para a próxima`, prox(Array.from({ length: MAX_REPROVADOS }, () => da(5, 'reprovado'))) === 6)
+ok('fila: cumpriu todas, null', prox([da(5, 'aprovado'), da(6, 'aprovado'), da(7, 'aprovado')]) === null)
+ok('fila: fora do período é pulada', prox([], [{ id: 5, ativa: true, ordem: 1, disponivel_de: '2026-11-01' }, { id: 6, ativa: true, ordem: 2 }]) === 6)
+ok('fila: mesma ordem desempata pelo id', prox([], [{ id: 9, ativa: true, ordem: 1 }, { id: 8, ativa: true, ordem: 1 }]) === 8)
 
 // Roteiro
 ok('passos do roteiro: um por linha, sem a numeração digitada', JSON.stringify(passosDoRoteiro('1. Diga seu nome\n\n2) Mostre o QR\n- Termine sorrindo')) === '["Diga seu nome","Mostre o QR","Termine sorrindo"]')
@@ -131,7 +150,7 @@ ok('blocos: tamanho exato não deixa bloco vazio no fim', JSON.stringify(await t
 ok('blocos: stream vazio não manda nada', JSON.stringify(await tamanhos([], 5)) === '[]')
 
 // ── A função (handler) ───────────────────────────────────────────────────────
-function cenario(over: { quem?: { restauranteId: number | null; email: string; ehAdmin: boolean } | null; envios?: EnvioCompleto[]; arquivos?: Record<string, number>; ia?: () => Promise<unknown>; maxPorAno?: number | null; doAno?: EnvioResumo[] } = {}) {
+function cenario(over: { quem?: { restauranteId: number | null; email: string; ehAdmin: boolean } | null; envios?: EnvioCompleto[]; arquivos?: Record<string, number>; ia?: () => Promise<unknown>; maxPorAno?: number | null; doAno?: EnvioCompleto[] } = {}) {
   const feito: string[] = []
   const envios = new Map<string, EnvioCompleto>((over.envios ?? []).map((e) => [e.id, { ...e }]))
   const arquivos: Record<string, number> = { ...(over.arquivos ?? {}) }
@@ -139,9 +158,10 @@ function cenario(over: { quem?: { restauranteId: number | null; email: string; e
   const deps: DepsVideos = {
     quemPede: async () => ('quem' in over ? over.quem! : { restauranteId: 11, email: 'Raver@Exemplo.com', ehAdmin: true }),
     missao: async (id) => (id === 1 ? MISSAO : id === 2 ? { ...MISSAO, id: 2, ativa: false } : id === 3 ? { ...MISSAO, id: 3, duracao_min_s: 60 } : null),
-    enviosDoAno: async () => over.doAno ?? [],
+    // A fila: 1, depois 3 (a 2 está desativada e nem vem).
+    missoes: async () => [{ id: 3, ativa: true, ordem: 2 }, { id: 1, ativa: true, ordem: 1 }],
     maxPorAno: async () => ('maxPorAno' in over ? over.maxPorAno! : 4),
-    enviosDaMissao: async (rid, mid) => [...envios.values()].filter((e) => e.restaurante_id === rid && e.missao_id === mid),
+    enviosDoRestaurante: async (rid) => [...envios.values(), ...(over.doAno ?? [])].filter((e) => e.restaurante_id === rid),
     descartarAbandonados: async (rid, mid) => {
       for (const e of [...envios.values()]) if (e.restaurante_id === rid && e.missao_id === mid && e.status === 'enviando') { envios.delete(e.id); feito.push(`descartou:${e.id}`) }
     },
@@ -191,13 +211,18 @@ r = await tratarVideos(pedido, cenario({ envios: [envioC('ok', 'aprovado')] }).d
 ok('missão já cumprida: recusa', r.corpo.motivo === 'ja_aprovada')
 r = await tratarVideos(pedido, cenario({ quem: { restauranteId: null, email: 'admin@x.com', ehAdmin: true } }).deps)
 ok('login sem restaurante: recusa', r.status === 403 && r.corpo.motivo === 'sem_restaurante')
-const aprovadosEsteAno = [1, 2, 3, 4].map((i) => ({ id: `a${i}`, status: 'aprovado', criado_em: '2026-02-01T00:00:00Z', aprovado_em: '2026-02-02T00:00:00Z' }))
+// Aprovados em missões que já saíram da fila (11 a 14).
+const aprovadosEsteAno = [1, 2, 3, 4].map((i) => ({ ...envioC(`a${i}`, 'aprovado', { missao_id: 10 + i, criado_em: '2026-02-01T00:00:00Z' }), aprovado_em: '2026-02-02T00:00:00Z' }))
 r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno }).deps)
 ok('limite do ano (4 aprovados): recusa com a mensagem', r.status === 409 && r.corpo.motivo === 'limite_ano' && String(r.corpo.error).includes('janeiro'))
 r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno, maxPorAno: null }).deps)
 ok('sem limite configurado: deixa', r.status === 200)
 r = await tratarVideos({ ...pedido, missao_id: 3 }, cenario().deps)
-ok('vídeo mais curto que o mínimo da missão (41 s de 60): recusa', r.status === 409 && r.corpo.motivo === 'muito_curto')
+ok('missão que ainda não é a da vez: recusa', r.status === 409 && r.corpo.motivo === 'nao_liberada' && String(r.corpo.error).includes('missão da vez'))
+r = await tratarVideos({ ...pedido, missao_id: 3 }, cenario({ envios: [envioC('ok', 'aprovado')] }).deps)
+ok('cumpriu a 1ª: a 3ª vira a da vez (aqui, curta demais: 41 s de 60)', r.status === 409 && r.corpo.motivo === 'muito_curto')
+r = await tratarVideos({ ...pedido, missao_id: 3, duracao_segundos: 75 }, cenario({ envios: [envioC('ok', 'aprovado')] }).deps)
+ok('cumpriu a 1ª: manda para a da vez', r.status === 200)
 
 // Analisar
 c = cenario({ envios: [envioC('e1', 'enviando')], arquivos: { 'restaurante_11/e1.mp4': 777 } })

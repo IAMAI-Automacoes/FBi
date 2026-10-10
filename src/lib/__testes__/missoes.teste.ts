@@ -5,7 +5,7 @@
 import {
   aprovadosNoAno, duracaoDaMissao, escadaDePremios, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito,
   inicioDoAnoSP, lerRequisitos, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, passosDoRoteiro, podeMandar,
-  problemaDoArquivo, rotuloDuracao, rotuloPeriodo, situacaoDaMissao, type EnvioVideo, type Missao, type PremioVideo,
+  problemaDoArquivo, proximaMissao, rotuloDuracao, rotuloPeriodo, situacaoDaMissao, type EnvioVideo, type Missao, type PremioVideo,
 } from '../missoes.ts'
 
 let falhas = 0
@@ -64,6 +64,14 @@ ok('5 reprovações: sem tentativas', situacaoDaMissao(1, [1, 2, 3, 4, 5].map((d
 ok('erro da análise: em revisão (pode mandar outro)', situacaoDaMissao(1, [envio('a', 1, 'erro', 1)]).situacao === 'em_revisao' && podeMandar('em_revisao'))
 ok('outra missão não interfere', situacaoDaMissao(2, [envio('a', 1, 'aprovado', 1)]).situacao === 'nao_enviada')
 ok('não pode mandar em análise, aprovada ou sem tentativas', !podeMandar('analisando') && !podeMandar('aprovada') && !podeMandar('sem_tentativas'))
+const fila = [m({ id: 7, ordem: 3 }), m({ id: 5, ordem: 1 }), m({ id: 6, ordem: 2 }), m({ id: 4, ordem: 0, ativa: false })]
+const prox = (envios: EnvioVideo[], missoes = fila) => proximaMissao(missoes, envios, '2026-10-10')?.id ?? null
+ok('fila: sem envios, a primeira pela ordem (desativada não entra)', prox([]) === 5)
+ok('fila: cumpriu a 1ª, aparece só a 2ª', prox([envio('a', 5, 'aprovado', 1)]) === 6)
+ok('fila: em análise, reprovada ou em revisão continua a da vez', prox([envio('a', 5, 'analisando', 1)]) === 5 && prox([envio('a', 5, 'reprovado', 1), envio('b', 5, 'erro', 2)]) === 5)
+ok('fila: sem tentativas pula para a próxima', prox([1, 2, 3, 4, 5].map((d) => envio(`r${d}`, 5, 'reprovado', d))) === 6)
+ok('fila: cumpriu todas, nenhuma', prox([envio('a', 5, 'aprovado', 1), envio('b', 6, 'aprovado', 2), envio('c', 7, 'aprovado', 3)]) === null)
+ok('fila: fora do período é pulada', prox([], [m({ id: 5, ordem: 1, disponivel_de: '2026-11-01' }), m({ id: 6, ordem: 2 })]) === 6)
 ok('aprovados no ano: só os aprovados deste ano', aprovadosNoAno([envio('a', 1, 'aprovado', 1), envio('b', 2, 'reprovado', 2), { ...envio('c', 3, 'aprovado', 3), aprovado_em: '2025-12-31T12:00:00Z' }], '2026-01-01T00:00:00-03:00') === 1)
 
 const recompensas = [{ ordem: 2, descricao: '20%' }, { ordem: 1, descricao: '10%' }, { ordem: 3, descricao: '1 mês grátis' }]

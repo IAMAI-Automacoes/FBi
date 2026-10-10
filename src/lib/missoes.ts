@@ -209,6 +209,22 @@ export function podeMandar(s: Situacao): boolean {
 }
 
 /**
+ * As missões são uma fila: o restaurante só vê a primeira (pela ordem do
+ * admin) que ainda não cumpriu, e só ela aceita vídeo. Pula as desativadas, as
+ * fora do período e as que esgotaram as tentativas. null = não sobrou nenhuma.
+ * A função videos-missao confere a mesma regra (proximaMissao no _shared).
+ */
+export function proximaMissao(missoes: Missao[], envios: Pick<EnvioVideo, 'missao_id' | 'status'>[], hoje: string): Missao | null {
+  return missoes
+    .filter((m) => missaoDisponivel(m, hoje))
+    .sort((a, b) => a.ordem - b.ordem || a.id - b.id)
+    .find((m) => {
+      const daMissao = envios.filter((e) => e.missao_id === m.id)
+      return !daMissao.some((e) => e.status === 'aprovado') && daMissao.filter((e) => e.status === 'reprovado').length < MAX_REPROVADOS
+    }) ?? null
+}
+
+/**
  * A escada de prêmios do restaurante: cada degrau ganho (com a situação do
  * prêmio), o próximo e os que vêm depois.
  */

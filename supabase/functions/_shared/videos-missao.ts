@@ -38,6 +38,8 @@ export interface Missao {
   descricao: string
   requisitos: Requisito[]
   ativa: boolean
+  /** Posição na fila de missões (o restaurante faz uma de cada vez, nesta ordem). */
+  ordem?: number | null
   /** Passo a passo para gravar (um por linha). */
   roteiro?: string
   duracao_min_s?: number | null
@@ -47,9 +49,11 @@ export interface Missao {
   disponivel_ate?: string | null
 }
 export interface EnvioResumo { id: string; status: string; criado_em: string; atualizado_em?: string | null; aprovado_em?: string | null }
+export type MissaoNaFila = Pick<Missao, 'id' | 'ativa' | 'ordem' | 'disponivel_de' | 'disponivel_ate'>
+export interface EnvioDaFila extends EnvioResumo { missao_id: number }
 
 export type MotivoRecusa =
-  | 'missao_inativa' | 'fora_do_periodo' | 'ja_aprovada' | 'em_analise' | 'limite_tentativas' | 'limite_ano'
+  | 'missao_inativa' | 'fora_do_periodo' | 'ja_aprovada' | 'em_analise' | 'limite_tentativas' | 'nao_liberada' | 'limite_ano'
   | 'sem_autorizacao' | 'tipo_invalido' | 'arquivo_vazio' | 'muito_grande' | 'muito_curto' | 'muito_longo'
 
 /** Os requisitos como vieram do jsonb: só os que têm texto, com id único. */
@@ -117,11 +121,29 @@ export function contagemDoAno(envios: EnvioResumo[], inicioDoAno: string, agora:
   }
 }
 
+/**
+ * As missões são uma fila: o restaurante só vê e só manda vídeo para a primeira
+ * (pela ordem do admin) que ainda não cumpriu. Pula as desativadas, as fora do
+ * período e as que esgotaram as tentativas. null = não sobrou nenhuma. A tela
+ * usa a mesma regra (proximaMissao em src/lib/missoes.ts).
+ */
+export function proximaMissao<M extends MissaoNaFila>(missoes: M[], envios: Pick<EnvioDaFila, 'missao_id' | 'status'>[], hoje: string): M | null {
+  return missoes
+    .filter((m) => m.ativa && noPeriodo(m, hoje))
+    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || a.id - b.id)
+    .find((m) => {
+      const daMissao = envios.filter((e) => e.missao_id === m.id)
+      return !daMissao.some((e) => e.status === 'aprovado') && daMissao.filter((e) => e.status === 'reprovado').length < MAX_REPROVADOS
+    }) ?? null
+}
+
 /** Pode mandar um vídeo novo para esta missão? */
 export function podeEnviar(p: {
   missao: Missao | null
   /** Os envios do restaurante NESTA missão. */
   envios: EnvioResumo[]
+  /** A missão da vez do restaurante (proximaMissao); só ela aceita vídeo. */
+  proximaId: number | null
   /** Vídeos do restaurante no ano (todas as missões), ver contagemDoAno. */
   ano: { aprovados: number; emAnalise: number }
   /** Vídeos aprovados por ano, por restaurante; null = sem limite. */
@@ -140,6 +162,7 @@ export function podeEnviar(p: {
   if (p.envios.some((e) => e.status === 'aprovado')) return recusa('ja_aprovada')
   if (p.envios.some((e) => e.status === 'analisando' && !travada(e, p.agora))) return recusa('em_analise')
   if (p.envios.filter((e) => e.status === 'reprovado').length >= MAX_REPROVADOS) return recusa('limite_tentativas')
+  if (p.proximaId !== p.missao.id) return recusa('nao_liberada')
   // Os que estão em análise contam: se todos forem aprovados, não pode passar do limite.
   if (p.maxPorAno != null && p.ano.aprovados + p.ano.emAnalise >= p.maxPorAno) return recusa('limite_ano')
   if (!p.autorizou) return recusa('sem_autorizacao')
@@ -158,6 +181,7 @@ export const MENSAGENS_RECUSA: Record<MotivoRecusa, string> = {
   ja_aprovada: 'Você já cumpriu esta missão.',
   em_analise: 'Seu vídeo desta missão ainda está sendo analisado. Espere o resultado.',
   limite_tentativas: 'Você chegou ao limite de tentativas desta missão.',
+  nao_liberada: 'Esta missão ainda não foi liberada. Cumpra antes a missão da vez.',
   limite_ano: 'Você chegou ao limite de vídeos deste ano. Em janeiro dá para mandar de novo.',
   sem_autorizacao: 'Para mandar o vídeo, é preciso autorizar o uso na divulgação.',
   tipo_invalido: 'Esse arquivo não é um vídeo aceito. Use MP4, MOV ou WEBM.',

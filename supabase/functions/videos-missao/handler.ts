@@ -4,7 +4,8 @@
 //
 // Ações (POST { acao }), com o login do restaurante:
 //   criar_envio → { missao_id, nome_arquivo, tamanho_bytes, duracao_segundos, mime, autorizou_uso }:
-//                 confere as regras, abre o envio e devolve onde subir o arquivo
+//                 confere as regras (só a missão da vez aceita vídeo), abre o
+//                 envio e devolve onde subir o arquivo
 //   analisar    → { envio_id }: o arquivo já subiu; a IA assiste em segundo plano (202)
 // Só o admin da plataforma:
 //   admin_analisar_de_novo → { envio_id }
@@ -14,7 +15,7 @@
 
 import {
   ANALISE_TRAVADA_MS, caminhoDoEnvio, contagemDoAno, decidirResultado, hojeSP, inicioDoAnoSP, MENSAGENS_RECUSA,
-  mimeDoVideo, podeEnviar, type EnvioResumo, type Missao, type MotivoRecusa,
+  mimeDoVideo, podeEnviar, proximaMissao, type EnvioDaFila, type Missao, type MissaoNaFila, type MotivoRecusa,
 } from '../_shared/videos-missao.ts'
 
 /**
@@ -41,9 +42,10 @@ export interface DepsVideos {
   /** Quem chamou (pelo login); restauranteId null = login sem restaurante. */
   quemPede: () => Promise<{ restauranteId: number | null; email: string; ehAdmin: boolean } | null>
   missao: (id: number) => Promise<Missao | null>
-  enviosDaMissao: (restauranteId: number, missaoId: number) => Promise<EnvioResumo[]>
-  /** Envios do restaurante que contam no ano: aprovados desde `desde` e os em análise. */
-  enviosDoAno: (restauranteId: number, desde: string) => Promise<EnvioResumo[]>
+  /** As missões ativas (a fila: o restaurante faz uma de cada vez, pela ordem). */
+  missoes: () => Promise<MissaoNaFila[]>
+  /** Todos os envios do restaurante, de todas as missões e anos. */
+  enviosDoRestaurante: (restauranteId: number) => Promise<EnvioDaFila[]>
   /** Vídeos aprovados por ano, por restaurante (video_config); null = sem limite. */
   maxPorAno: () => Promise<number | null>
   /** Envios que ficaram em "enviando" (o upload não terminou): apaga linha e arquivo. */
@@ -130,16 +132,16 @@ export async function tratarVideos(corpo: Record<string, unknown>, deps: DepsVid
       const duracaoBruta = Number(corpo.duracao_segundos)
       const duracao = Number.isFinite(duracaoBruta) && duracaoBruta > 0 ? Math.round(duracaoBruta * 100) / 100 : null
       const agora = deps.agora()
-      const [envios, doAno, maxPorAno] = missao
-        ? await Promise.all([
-          deps.enviosDaMissao(quem.restauranteId, missaoId),
-          deps.enviosDoAno(quem.restauranteId, inicioDoAnoSP(agora)),
-          deps.maxPorAno(),
-        ])
-        : [[], [], null] as [EnvioResumo[], EnvioResumo[], number | null]
+      const hoje = hojeSP(agora)
+      const [todos, fila, maxPorAno] = missao
+        ? await Promise.all([deps.enviosDoRestaurante(quem.restauranteId), deps.missoes(), deps.maxPorAno()])
+        : [[], [], null] as [EnvioDaFila[], MissaoNaFila[], number | null]
       const pode = podeEnviar({
-        missao, envios, ano: contagemDoAno(doAno, inicioDoAnoSP(agora), agora), maxPorAno, hoje: hojeSP(agora),
-        mime, tamanho, duracao, autorizou: corpo.autorizou_uso === true, agora,
+        missao,
+        envios: todos.filter((e) => e.missao_id === missaoId),
+        proximaId: proximaMissao(fila, todos, hoje)?.id ?? null,
+        ano: contagemDoAno(todos, inicioDoAnoSP(agora), agora),
+        maxPorAno, hoje, mime, tamanho, duracao, autorizou: corpo.autorizou_uso === true, agora,
       })
       if (pode.ok === false) return recusaDaMissao(pode.motivo)
 

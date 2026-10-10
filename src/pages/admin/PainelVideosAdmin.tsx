@@ -238,8 +238,8 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
               </div>
               {problema && m.titulo.trim() && <p className="text-[12px] text-rose-600">{problema}</p>}
               <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-[13px] text-gray-700">
-                  Ordem
+                <label className="flex items-center gap-2 text-[13px] text-gray-700" title="Posição na fila: o restaurante faz as missões nesta ordem, uma de cada vez.">
+                  Ordem na fila
                   <input type="number" className={cn(campo, 'w-20')} value={m.ordem} onChange={(e) => setM({ ...m, ordem: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="flex items-center gap-2 text-[13px] text-gray-700">
@@ -523,7 +523,10 @@ export function PainelVideosAdmin() {
             </TabsContent>
 
             <TabsContent value="missoes">
-              <div className="mb-3 flex justify-end">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="min-w-0 flex-1 text-[12px] text-gray-500">
+                  As missões são uma fila: o restaurante vê só a da vez e, quando cumpre, aparece a seguinte, nesta ordem. Desativada ou fora do período é pulada.
+                </p>
                 <Button
                   size="sm"
                   onClick={() => setEditando({
@@ -536,10 +539,11 @@ export function PainelVideosAdmin() {
                 </Button>
               </div>
               <CrudTable>
-                <thead><tr><Th>Missão</Th><Th>Período</Th><Th>Duração</Th><Th>Requisitos</Th><Th>Ativa</Th><Th className="text-right">Editar</Th></tr></thead>
+                <thead><tr><Th>Ordem</Th><Th>Missão</Th><Th>Período</Th><Th>Duração</Th><Th>Requisitos</Th><Th>Ativa</Th><Th className="text-right">Editar</Th></tr></thead>
                 <tbody>
                   {missoes.map((m) => (
                     <tr key={m.id} className="border-b border-gray-100 last:border-0">
+                      <Td className="text-[12px] font-semibold text-gray-500 tabular-nums">{m.ordem}</Td>
                       <Td>
                         <p className="font-medium text-gray-800">{m.titulo}</p>
                         {m.descricao && <p className="text-[12px] text-gray-500">{m.descricao}</p>}

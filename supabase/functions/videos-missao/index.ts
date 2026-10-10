@@ -48,22 +48,20 @@ Deno.serve(async (req: Request) => {
         .eq('id', id).maybeSingle()
       return data ? { ...data, id: Number(data.id), requisitos: lerRequisitos(data.requisitos) } : null
     },
-    enviosDoAno: async (restauranteId, desde) => {
-      const { data, error } = await db.from('video_envios').select('id, status, criado_em, atualizado_em, aprovado_em')
-        .eq('restaurante_id', restauranteId)
-        .or(`and(status.eq.aprovado,aprovado_em.gte.${desde}),status.eq.analisando`)
+    missoes: async () => {
+      const { data, error } = await db.from('video_missoes').select('id, ativa, ordem, disponivel_de, disponivel_ate').eq('ativa', true)
       if (error) throw error
-      return data ?? []
+      return (data ?? []).map((m: { id: number }) => ({ ...m, id: Number(m.id) }))
+    },
+    enviosDoRestaurante: async (restauranteId) => {
+      const { data, error } = await db.from('video_envios').select('id, missao_id, status, criado_em, atualizado_em, aprovado_em')
+        .eq('restaurante_id', restauranteId)
+      if (error) throw error
+      return (data ?? []).map((e: { missao_id: number }) => ({ ...e, missao_id: Number(e.missao_id) }))
     },
     maxPorAno: async () => {
       const { data } = await db.from('video_config').select('max_por_ano').eq('id', true).maybeSingle()
       return data?.max_por_ano ?? null
-    },
-    enviosDaMissao: async (restauranteId, missaoId) => {
-      const { data, error } = await db.from('video_envios').select('id, status, criado_em, atualizado_em')
-        .eq('restaurante_id', restauranteId).eq('missao_id', missaoId)
-      if (error) throw error
-      return data ?? []
     },
     descartarAbandonados: async (restauranteId, missaoId) => {
       const { data } = await db.from('video_envios').select('id, caminho')
