@@ -4,7 +4,7 @@
  */
 import {
   aprovadosNoAno, duracaoDaMissao, escadaDePremios, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito,
-  inicioDoAnoSP, lerRequisitos, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, passosDoRoteiro, podeMandar,
+  inicioDoAnoSP, lerRequisitos, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, podeMandar,
   problemaDoArquivo, proximaMissao, rotuloDuracao, rotuloPeriodo, situacaoDaMissao, type EnvioVideo, type Missao, type PremioVideo,
 } from '../missoes.ts'
 
@@ -39,14 +39,13 @@ ok('rótulo da duração', rotuloDuracao({ duracao_min_s: 30, duracao_max_s: 120
 // Período e datas de Brasília
 ok('hoje em Brasília (23h de 31/12 ainda é 31/12)', hojeSP(Date.parse('2027-01-01T02:00:00Z')) === '2026-12-31')
 ok('o ano começa à meia-noite de Brasília', inicioDoAnoSP(Date.parse('2026-10-10T12:00:00Z')) === '2026-01-01T00:00:00-03:00')
-const m = (over: Partial<Missao> = {}): Missao => ({ id: 1, titulo: 'X', descricao: '', requisitos: [], ordem: 1, ativa: true, roteiro: '', duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null, ...over })
+const m = (over: Partial<Missao> = {}): Missao => ({ id: 1, titulo: 'X', descricao: '', requisitos: [], ordem: 1, ativa: true, duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null, ...over })
 ok('período inclusive nas duas pontas', noPeriodo(m({ disponivel_de: '2026-10-01', disponivel_ate: '2026-10-31' }), '2026-10-31') && !noPeriodo(m({ disponivel_ate: '2026-10-31' }), '2026-11-01'))
 ok('disponível: ativa e no período', missaoDisponivel(m(), '2026-10-10') && !missaoDisponivel(m({ ativa: false }), '2026-10-10') && !missaoDisponivel(m({ disponivel_de: '2026-11-01' }), '2026-10-10'))
 ok('rótulo do período', rotuloPeriodo(m({ disponivel_ate: '2026-10-31' })) === 'Até 31/10' && rotuloPeriodo(m({ disponivel_de: '2026-11-01', disponivel_ate: '2026-11-30' })) === 'De 01/11 a 30/11'
   && rotuloPeriodo(m({ disponivel_de: '2026-11-01' })) === 'A partir de 01/11' && rotuloPeriodo(m()) === null)
 ok('estado do período para o admin', estadoDoPeriodo(m(), '2026-10-10') === 'sempre' && estadoDoPeriodo(m({ disponivel_de: '2026-11-01' }), '2026-10-10') === 'agendada'
   && estadoDoPeriodo(m({ disponivel_ate: '2026-10-09' }), '2026-10-10') === 'encerrada' && estadoDoPeriodo(m({ disponivel_ate: '2026-10-10' }), '2026-10-10') === 'no_ar')
-ok('passos do roteiro: um por linha, sem a numeração', JSON.stringify(passosDoRoteiro('1. Diga seu nome\n\n2) Mostre o QR\n• Sorria')) === '["Diga seu nome","Mostre o QR","Sorria"]' && passosDoRoteiro(null).length === 0)
 ok('tamanho e duração legíveis', formatarTamanho(5.25 * 1024 * 1024) === '5,3 MB' && formatarTamanho(2048) === '2 KB' && formatarDuracao(45) === '45 s' && formatarDuracao(120) === '2 min')
 
 const envio = (id: string, missao: number, status: EnvioVideo['status'], dia: number): EnvioVideo => ({

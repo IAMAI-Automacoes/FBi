@@ -200,7 +200,8 @@ export function AppSidebar() {
           {navigation
             .filter((item) => podeVer(item.modulo) && (!('soAdmin' in item) || ehAdminPlataforma))
             .map((item) => {
-              const isActive = location.pathname === item.href
+              // A subpágina (/acoes/arquivadas, /missoes/historico) marca o item de cima.
+              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}/`))
               return (
                 <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton

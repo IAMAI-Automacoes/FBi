@@ -12,7 +12,7 @@ const BUCKET = 'videos-clientes'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const paraMissao = (l: any): Missao => ({
   id: Number(l.id), titulo: l.titulo, descricao: l.descricao ?? '', requisitos: lerRequisitos(l.requisitos), ordem: l.ordem ?? 0, ativa: !!l.ativa,
-  roteiro: l.roteiro ?? '', duracao_min_s: l.duracao_min_s ?? null, duracao_max_s: l.duracao_max_s ?? null,
+  duracao_min_s: l.duracao_min_s ?? null, duracao_max_s: l.duracao_max_s ?? null,
   disponivel_de: l.disponivel_de ?? null, disponivel_ate: l.disponivel_ate ?? null,
 })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,7 +126,6 @@ export interface MissaoParaSalvar {
   requisitos: Requisito[]
   ordem: number
   ativa: boolean
-  roteiro: string
   duracao_min_s: number | null
   duracao_max_s: number | null
   disponivel_de: string | null
@@ -137,7 +136,7 @@ export async function salvarMissao(m: MissaoParaSalvar): Promise<void> {
   const linha = {
     titulo: m.titulo.trim(), descricao: m.descricao.trim(), requisitos: m.requisitos as unknown as never, ordem: m.ordem, ativa: m.ativa,
     // A tela só deixa salvar com as duas durações definidas (o banco exige).
-    roteiro: m.roteiro.trim(), duracao_min_s: m.duracao_min_s ?? 0, duracao_max_s: m.duracao_max_s ?? 0,
+    duracao_min_s: m.duracao_min_s ?? 0, duracao_max_s: m.duracao_max_s ?? 0,
     disponivel_de: m.disponivel_de || null, disponivel_ate: m.disponivel_ate || null,
   }
   const { error } = m.id

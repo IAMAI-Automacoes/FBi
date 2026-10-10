@@ -5,7 +5,7 @@
  */
 import {
   caminhoDoEnvio, contagemDoAno, decidirResultado, duracaoDaMissao, emBlocos, hojeSP, inicioDoAnoSP, lerRequisitos,
-  LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo, montarPromptAnalise, noPeriodo, passosDoRoteiro, podeEnviar, proximaMissao,
+  LIMITE_BYTES, MAX_REPROVADOS, mimeDoVideo, montarPromptAnalise, noPeriodo, podeEnviar, proximaMissao,
   type EnvioResumo, type Missao,
 } from '../videos-missao.ts'
 import { tratarVideos, type DepsVideos, type EnvioCompleto } from '../../videos-missao/handler.ts'
@@ -111,15 +111,11 @@ ok('fila: cumpriu todas, null', prox([da(5, 'aprovado'), da(6, 'aprovado'), da(7
 ok('fila: fora do período é pulada', prox([], [{ id: 5, ativa: true, ordem: 1, disponivel_de: '2026-11-01' }, { id: 6, ativa: true, ordem: 2 }]) === 6)
 ok('fila: mesma ordem desempata pelo id', prox([], [{ id: 9, ativa: true, ordem: 1 }, { id: 8, ativa: true, ordem: 1 }]) === 8)
 
-// Roteiro
-ok('passos do roteiro: um por linha, sem a numeração digitada', JSON.stringify(passosDoRoteiro('1. Diga seu nome\n\n2) Mostre o QR\n- Termine sorrindo')) === '["Diga seu nome","Mostre o QR","Termine sorrindo"]')
-const comRoteiro = { ...MISSAO, roteiro: 'Diga seu nome\nMostre o salão' }
-ok('prompt: o roteiro entra como guia, sem decidir', montarPromptAnalise(comRoteiro).includes('ROTEIRO SUGERIDO') && montarPromptAnalise(comRoteiro).includes('2. Mostre o salão')
-  && montarPromptAnalise(comRoteiro).includes('quem decide são os REQUISITOS') && !montarPromptAnalise(MISSAO).includes('ROTEIRO'))
-
 const prompt = montarPromptAnalise(MISSAO)
 ok('prompt: a missão e os requisitos numerados', prompt.includes('MISSÃO: Depoimento sobre o EasyFeed') && prompt.includes('1. Fala o nome "EasyFeed" em voz alta') && prompt.includes('3. O vídeo tem pelo menos 30 segundos.'))
 ok('prompt: pede rigor e confere o conteúdo', prompt.includes('Na dúvida, false') && prompt.includes('conteudo_adequado'))
+ok('prompt: o restaurante grava do jeito dele, só os requisitos contam', prompt.includes('liberdade para gravar do jeito que quiser') && prompt.includes('confira só se cada requisito foi cumprido') && !/roteiro/i.test(prompt))
+ok('prompt: sem descrição não deixa linha solta', !montarPromptAnalise({ ...MISSAO, descricao: '  ' }).includes('EasyFeed\n\n\nREQUISITOS'))
 
 const resposta = (cumpriu: boolean[], extra: Record<string, unknown> = {}) => ({
   requisitos: cumpriu.map((c, i) => ({ numero: i + 1, cumpriu: c, motivo: c ? 'Cumpriu.' : 'Não deu para ver.' })),
@@ -135,9 +131,7 @@ ok('conteúdo inadequado: reprovado mesmo cumprindo tudo', v.status === 'reprova
 ok('JSON com texto em volta ainda é lido', decidirResultado(MISSAO, 'Aqui: ' + JSON.stringify(resposta([true, true, true])) + ' fim').status === 'aprovado')
 ok('resposta fora do formato: erro', decidirResultado(MISSAO, 'não sei').status === 'erro' && decidirResultado(MISSAO, { requisitos: [] }).status === 'erro')
 ok('IA pulou um requisito: erro (não aprova nem reprova no chute)', decidirResultado(MISSAO, resposta([true, true])).status === 'erro')
-v = decidirResultado(comRoteiro, resposta([true, true, true], { roteiro_seguido: false, comentario_roteiro: 'Faltou mostrar o salão.' }))
-ok('roteiro não seguido: ainda aprova (quem decide são os requisitos), mas registra', v.status === 'aprovado' && v.analise?.roteiro?.seguido === false && v.analise?.roteiro?.comentario === 'Faltou mostrar o salão.')
-ok('sem roteiro na missão: não registra roteiro', decidirResultado(MISSAO, resposta([true, true, true], { roteiro_seguido: true })).analise?.roteiro === undefined)
+ok('campo a mais na resposta da IA não entra na análise', !('roteiro' in (decidirResultado(MISSAO, resposta([true, true, true], { roteiro_seguido: true })).analise ?? {})))
 
 // Blocos do upload
 const streamDe = (pedacos: number[]) => new ReadableStream<Uint8Array>({

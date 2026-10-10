@@ -37,9 +37,11 @@ const routeTitles: Record<string, string> = {
   '/feedbacks': 'Feedbacks',
   '/insights': 'Insights',
   '/acoes': 'Ações',
+  '/acoes/arquivadas': 'Ações',
   '/relatorios': 'Relatórios',
   '/google': 'Google',
   '/missoes': 'Missões',
+  '/missoes/historico': 'Missões',
   '/qrcode': 'QR Codes',
   '/garcons': 'Garçons',
 }

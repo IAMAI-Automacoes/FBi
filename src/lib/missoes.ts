@@ -25,8 +25,6 @@ export interface Missao {
   requisitos: Requisito[]
   ordem: number
   ativa: boolean
-  /** Passo a passo para gravar (um por linha). */
-  roteiro: string
   duracao_min_s: number | null
   duracao_max_s: number | null
   /** 'AAAA-MM-DD' (horário de Brasília), inclusive. */
@@ -40,7 +38,6 @@ export interface AnaliseVideo {
   problema_conteudo?: string
   resumo?: string
   erro?: string
-  roteiro?: { seguido: boolean; comentario: string }
 }
 export type StatusEnvio = 'enviando' | 'analisando' | 'aprovado' | 'reprovado' | 'erro'
 export interface EnvioVideo {
@@ -155,11 +152,6 @@ export function estadoDoPeriodo(m: Pick<Missao, 'disponivel_de' | 'disponivel_at
   if (m.disponivel_de && hoje < m.disponivel_de) return 'agendada'
   if (m.disponivel_ate && hoje > m.disponivel_ate) return 'encerrada'
   return 'no_ar'
-}
-
-/** Os passos do roteiro (um por linha, sem a numeração que o admin digitou). */
-export function passosDoRoteiro(roteiro: string | null | undefined): string[] {
-  return String(roteiro ?? '').split(/\r?\n/).map((l) => l.replace(/^\s*(\d+[.)-]|[-•*])\s*/, '').trim()).filter(Boolean)
 }
 
 /** Vídeos aprovados neste ano (contam para o limite e para a escada). */

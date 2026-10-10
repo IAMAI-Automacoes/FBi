@@ -40,8 +40,6 @@ export interface Missao {
   ativa: boolean
   /** Posição na fila de missões (o restaurante faz uma de cada vez, nesta ordem). */
   ordem?: number | null
-  /** Passo a passo para gravar (um por linha). */
-  roteiro?: string
   duracao_min_s?: number | null
   duracao_max_s?: number | null
   /** 'AAAA-MM-DD', horário de Brasília, inclusive. */
@@ -193,32 +191,29 @@ export const MENSAGENS_RECUSA: Record<MotivoRecusa, string> = {
 
 // ── A análise ────────────────────────────────────────────────────────────────
 
-/** Os passos do roteiro (um por linha, sem a numeração que o admin digitou). */
-export function passosDoRoteiro(roteiro: unknown): string[] {
-  return String(roteiro ?? '').split(/\r?\n/).map((l) => l.replace(/^\s*(\d+[.)-]|[-•*])\s*/, '').trim()).filter(Boolean)
-}
-
+/**
+ * O pedido para a IA, montado a partir dos requisitos da missão. O restaurante
+ * grava do jeito que quiser: só os requisitos contam.
+ */
 export function montarPromptAnalise(missao: Missao): string {
   const lista = missao.requisitos.map((r, i) => `${i + 1}. ${r.texto}`).join('\n')
-  const passos = passosDoRoteiro(missao.roteiro)
-  const roteiro = passos.length
-    ? `\n\nROTEIRO SUGERIDO (o restaurante recebeu este passo a passo para gravar; use para entender o vídeo, mas quem decide são os REQUISITOS):\n${passos.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDiga em "roteiro_seguido" (true ou false) se o vídeo seguiu o roteiro no geral e, em "comentario_roteiro", uma frase curta para o restaurante sobre isso.`
-    : ''
+  const descricao = missao.descricao.trim() ? `${missao.descricao.trim()}\n` : ''
   return `Você confere um vídeo que o dono ou alguém da equipe de um restaurante gravou falando do EasyFeed, para cumprir uma missão e ganhar um prêmio.
 
 O EasyFeed é um sistema para restaurantes: os clientes mandam a opinião pelo WhatsApp (pelo QR Code na mesa), o restaurante vê tudo organizado num painel, recebe ideias do que melhorar e avisa o cliente quando muda alguma coisa.
 
 MISSÃO: ${missao.titulo}
-${missao.descricao}
-
+${descricao}
 REQUISITOS (o vídeo precisa cumprir TODOS):
 ${lista}
+
+O restaurante tem liberdade para gravar do jeito que quiser: a ordem, as palavras, o lugar, o tom e a edição são escolha dele. Não desconte nada pelo estilo nem cobre o que não está nos requisitos: confira só se cada requisito foi cumprido.
 
 Assista o vídeo inteiro e ouça o áudio. Para cada requisito, pelo número, diga se o vídeo cumpre (true ou false) e explique em UMA frase curta, em português, falando com o restaurante (ex.: "Você falou o nome EasyFeed logo no começo."). Seja justo e rigoroso: só marque true se der para ver ou ouvir com clareza. Na dúvida, false.
 
 Confira também se o conteúdo é adequado: é um vídeo de verdade, gravado pelo restaurante, falando do EasyFeed de forma honesta; não é tela preta, vídeo de outra empresa ou baixado da internet, e não tem palavrão, ofensa ou conteúdo impróprio. Se não for adequado, "conteudo_adequado": false e explique em "problema_conteudo" (uma frase); se for, "problema_conteudo": "".
 
-"resumo": uma ou duas frases sobre o que aparece no vídeo, para a equipe do EasyFeed.${roteiro}`
+"resumo": uma ou duas frases sobre o que aparece no vídeo, para a equipe do EasyFeed.`
 }
 
 /** O formato da resposta da IA (responseSchema do Gemini). */
@@ -240,9 +235,6 @@ export const SCHEMA_ANALISE = {
     conteudo_adequado: { type: 'BOOLEAN' },
     problema_conteudo: { type: 'STRING' },
     resumo: { type: 'STRING' },
-    // Só quando a missão tem roteiro (informativo: não decide).
-    roteiro_seguido: { type: 'BOOLEAN' },
-    comentario_roteiro: { type: 'STRING' },
   },
   required: ['requisitos', 'conteudo_adequado', 'problema_conteudo', 'resumo'],
 }
@@ -253,8 +245,6 @@ export interface Analise {
   conteudo_adequado: boolean
   problema_conteudo: string
   resumo: string
-  /** Se o vídeo seguiu o roteiro (só informativo; quem decide são os requisitos). */
-  roteiro?: { seguido: boolean; comentario: string }
 }
 export interface Veredito {
   status: 'aprovado' | 'reprovado' | 'erro'
@@ -299,9 +289,6 @@ export function decidirResultado(missao: Missao, bruto: unknown): Veredito {
     conteudo_adequado: r.conteudo_adequado,
     problema_conteudo: frase(r.problema_conteudo),
     resumo: frase(r.resumo, 600),
-  }
-  if (passosDoRoteiro(missao.roteiro).length && typeof r.roteiro_seguido === 'boolean') {
-    analise.roteiro = { seguido: r.roteiro_seguido, comentario: frase(r.comentario_roteiro) }
   }
   if (!analise.conteudo_adequado) {
     return { status: 'reprovado', analise, motivo: `O vídeo não foi aceito: ${analise.problema_conteudo || 'o conteúdo não está de acordo com a missão.'}` }

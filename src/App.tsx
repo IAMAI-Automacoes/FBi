@@ -27,6 +27,7 @@ const AcoesArquivadas = lazy(() => import('./pages/AcoesArquivadas'))
 const Reports = lazy(() => import('./pages/Reports'))
 const Google = lazy(() => import('./pages/Google'))
 const Missoes = lazy(() => import('./pages/Missoes'))
+const MissoesHistorico = lazy(() => import('./pages/MissoesHistorico'))
 const Privacidade = lazy(() => import('./pages/Privacidade'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
 const Garcons = lazy(() => import('./pages/Garcons'))
@@ -199,6 +200,16 @@ const App = () => (
                   <RotaPermitida modulo="visao_geral">
                     <SoAdminPlataforma>
                       <Missoes />
+                    </SoAdminPlataforma>
+                  </RotaPermitida>
+                }
+              />
+              <Route
+                path="/missoes/historico"
+                element={
+                  <RotaPermitida modulo="visao_geral">
+                    <SoAdminPlataforma>
+                      <MissoesHistorico />
                     </SoAdminPlataforma>
                   </RotaPermitida>
                 }

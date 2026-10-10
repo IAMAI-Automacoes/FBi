@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
     },
     missao: async (id) => {
       const { data } = await db.from('video_missoes')
-        .select('id, titulo, descricao, requisitos, ativa, roteiro, duracao_min_s, duracao_max_s, disponivel_de, disponivel_ate')
+        .select('id, titulo, descricao, requisitos, ativa, duracao_min_s, duracao_max_s, disponivel_de, disponivel_ate')
         .eq('id', id).maybeSingle()
       return data ? { ...data, id: Number(data.id), requisitos: lerRequisitos(data.requisitos) } : null
     },

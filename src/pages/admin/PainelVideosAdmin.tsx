@@ -96,11 +96,6 @@ function DetalheEnvio({ envio, onFechar, onMudou }: { envio: EnvioAdmin | null; 
               </ul>
             ) : null}
             {a?.conteudo_adequado === false && <p className="text-[13px] text-rose-700">Conteúdo inadequado: {a.problema_conteudo}</p>}
-            {a?.roteiro && (
-              <p className={cn('text-[12px]', a.roteiro.seguido ? 'text-emerald-700' : 'text-amber-700')}>
-                Roteiro {a.roteiro.seguido ? 'seguido' : 'não seguido'}{a.roteiro.comentario ? `: ${a.roteiro.comentario}` : ''}
-              </p>
-            )}
             {a?.resumo && <p className="text-[12px] text-gray-500">Resumo da IA: {a.resumo}</p>}
             {a?.erro && <p className="rounded-lg bg-amber-50 p-2 font-mono text-[11px] text-amber-800">{a.erro}</p>}
 
@@ -133,7 +128,6 @@ type Rascunho = MissaoParaSalvar
 /** O que está errado no rascunho (null = pode salvar). */
 function problemaDoRascunho(m: Rascunho): string | null {
   if (!m.titulo.trim()) return 'Dê um título.'
-  if (!m.roteiro.trim()) return 'Escreva o roteiro: é o que o restaurante vê para gravar.'
   if (!m.requisitos.some((r) => r.texto.trim())) return 'Ponha pelo menos um requisito.'
   if (m.duracao_min_s == null) return 'Defina a duração mínima (0 = sem mínimo).'
   if (m.duracao_max_s == null) return 'Defina a duração máxima.'
@@ -203,14 +197,14 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
           <>
             <DialogHeader>
               <DialogTitle>{m.id ? 'Editar missão' : 'Nova missão'}</DialogTitle>
-              <DialogDescription>O restaurante vê só o título e o roteiro. Os requisitos ficam com a IA, que confere cada um assistindo o vídeo.</DialogDescription>
+              <DialogDescription>O restaurante vê o título e os requisitos e grava do jeito que quiser. A IA assiste e confere cada requisito.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <input className={campo} value={m.titulo} onChange={(e) => setM({ ...m, titulo: e.target.value })} placeholder="Título (ex.: Depoimento sobre o EasyFeed)" />
               <Textarea value={m.descricao} onChange={(e) => setM({ ...m, descricao: e.target.value })} rows={2} placeholder="Descrição (só para a IA entender a missão)" className="text-[13px]" />
               <div>
                 <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Requisitos (o vídeo precisa cumprir todos)</p>
-                <p className="mb-2 text-[11px] text-gray-400">Escreva como algo que dá para ver ou ouvir no vídeo.</p>
+                <p className="mb-2 text-[11px] text-gray-400">O restaurante vê esta lista. Escreva como algo que dá para ver ou ouvir no vídeo.</p>
                 <div className="space-y-2">
                   {m.requisitos.map((r, i) => (
                     <div key={i} className="flex gap-2">
@@ -229,17 +223,6 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
                     <Plus className="h-3.5 w-3.5" /> Requisito
                   </button>
                 </div>
-              </div>
-              <div>
-                <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Roteiro para gravar</p>
-                <Textarea
-                  value={m.roteiro}
-                  onChange={(e) => setM({ ...m, roteiro: e.target.value })}
-                  rows={5}
-                  placeholder={'Um passo por linha. Ex.:\nDiga seu nome e o nome do restaurante.\nConte uma coisa que melhorou com o EasyFeed.'}
-                  className="text-[13px]"
-                />
-                <p className="mt-1 text-[11px] text-gray-400">O cliente vê como lista numerada, e não vê os requisitos: ponha no roteiro tudo o que eles pedem. A IA confere se ele seguiu, mas quem aprova são os requisitos.</p>
               </div>
               <div className="space-y-3">
                 <div>
@@ -554,7 +537,7 @@ export function PainelVideosAdmin() {
                   size="sm"
                   onClick={() => setEditando({
                     titulo: '', descricao: '', requisitos: [{ id: '', texto: '' }], ordem: (missoes.at(-1)?.ordem ?? 0) + 1, ativa: true,
-                    roteiro: '', duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null,
+                    duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null,
                   })}
                   className="bg-[#1D4ED8] hover:bg-[#1E40AF]"
                 >
@@ -576,7 +559,7 @@ export function PainelVideosAdmin() {
                         {rotuloPeriodo(m) && <p className="mt-0.5 text-[11px] text-gray-400">{rotuloPeriodo(m)}</p>}
                       </Td>
                       <Td className="whitespace-nowrap text-[12px] text-gray-600">{rotuloDuracao(m)}</Td>
-                      <Td className="text-[12px] text-gray-600">{m.requisitos.length}{m.roteiro.trim() ? ' · com roteiro' : ''}</Td>
+                      <Td className="text-[12px] text-gray-600">{m.requisitos.length}</Td>
                       <Td><Switch checked={m.ativa} disabled={mexendo === `m${m.id}`} onCheckedChange={() => alternarMissao(m)} /></Td>
                       <Td className="text-right">
                         <button onClick={() => setEditando({ ...m })} title="Editar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">

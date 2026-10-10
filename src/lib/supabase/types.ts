@@ -3312,7 +3312,6 @@ export type Database = {
           id: number
           ordem: number
           requisitos: Json
-          roteiro: string
           titulo: string
         }
         Insert: {
@@ -3327,7 +3326,6 @@ export type Database = {
           id?: never
           ordem?: number
           requisitos?: Json
-          roteiro?: string
           titulo: string
         }
         Update: {
@@ -3342,7 +3340,6 @@ export type Database = {
           id?: never
           ordem?: number
           requisitos?: Json
-          roteiro?: string
           titulo?: string
         }
         Relationships: []
