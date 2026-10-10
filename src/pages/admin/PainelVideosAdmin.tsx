@@ -133,13 +133,36 @@ type Rascunho = MissaoParaSalvar
 /** O que está errado no rascunho (null = pode salvar). */
 function problemaDoRascunho(m: Rascunho): string | null {
   if (!m.titulo.trim()) return 'Dê um título.'
+  if (!m.roteiro.trim()) return 'Escreva o roteiro: é o que o restaurante vê para gravar.'
   if (!m.requisitos.some((r) => r.texto.trim())) return 'Ponha pelo menos um requisito.'
-  if (m.duracao_max_s != null && (m.duracao_max_s < 5 || m.duracao_max_s > DURACAO_TETO_S)) return `A duração máxima vai de 5 a ${DURACAO_TETO_S} segundos.`
-  if (m.duracao_min_s != null && m.duracao_min_s > (m.duracao_max_s ?? DURACAO_TETO_S)) return 'A duração mínima passa da máxima.'
+  if (m.duracao_min_s == null) return 'Defina a duração mínima (0 = sem mínimo).'
+  if (m.duracao_max_s == null) return 'Defina a duração máxima.'
+  if (m.duracao_max_s < 5 || m.duracao_max_s > DURACAO_TETO_S) return `A duração máxima vai de 5 s a ${formatarDuracao(DURACAO_TETO_S)}.`
+  if (m.duracao_min_s >= m.duracao_max_s) return 'A duração mínima tem que ser menor que a máxima.'
   if (m.disponivel_de && m.disponivel_ate && m.disponivel_de > m.disponivel_ate) return 'O período termina antes de começar.'
   return null
 }
-const segundos = (v: string) => (v.trim() === '' ? null : Math.max(0, Math.round(Number(v)) || 0))
+
+/** Um tempo em minutos e segundos; vazio nos dois = ainda não definido. */
+function CampoTempo({ rotulo, valor, onMudar }: { rotulo: string; valor: number | null; onMudar: (segundos: number | null) => void }) {
+  const min = valor == null ? '' : String(Math.floor(valor / 60))
+  const seg = valor == null ? '' : String(valor % 60)
+  const mudar = (m: string, s: string) => {
+    if (m.trim() === '' && s.trim() === '') return onMudar(null)
+    onMudar(Math.max(0, Math.round(Number(m) || 0)) * 60 + Math.min(59, Math.max(0, Math.round(Number(s) || 0))))
+  }
+  return (
+    <div>
+      <p className="mb-1 text-[12px] text-gray-500">{rotulo}</p>
+      <div className="flex items-center gap-1.5">
+        <input type="number" min={0} max={5} aria-label={`${rotulo}: minutos`} className={cn(campo, 'w-16')} value={min} onChange={(e) => mudar(e.target.value, seg)} />
+        <span className="text-[12px] text-gray-500">min</span>
+        <input type="number" min={0} max={59} aria-label={`${rotulo}: segundos`} className={cn(campo, 'w-16')} value={seg} onChange={(e) => mudar(min, e.target.value)} />
+        <span className="text-[12px] text-gray-500">s</span>
+      </div>
+    </div>
+  )
+}
 
 function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | null; onFechar: () => void; onSalvo: () => void }) {
   const [m, setM] = useState<Rascunho | null>(rascunho)
@@ -180,13 +203,14 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
           <>
             <DialogHeader>
               <DialogTitle>{m.id ? 'Editar missão' : 'Nova missão'}</DialogTitle>
-              <DialogDescription>A IA confere cada requisito assistindo o vídeo. Escreva como algo que dá para ver ou ouvir.</DialogDescription>
+              <DialogDescription>O restaurante vê só o título e o roteiro. Os requisitos ficam com a IA, que confere cada um assistindo o vídeo.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <input className={campo} value={m.titulo} onChange={(e) => setM({ ...m, titulo: e.target.value })} placeholder="Título (ex.: Depoimento sobre o EasyFeed)" />
-              <Textarea value={m.descricao} onChange={(e) => setM({ ...m, descricao: e.target.value })} rows={2} placeholder="O que o restaurante precisa gravar" className="text-[13px]" />
+              <Textarea value={m.descricao} onChange={(e) => setM({ ...m, descricao: e.target.value })} rows={2} placeholder="Descrição (só para a IA entender a missão)" className="text-[13px]" />
               <div>
                 <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Requisitos (o vídeo precisa cumprir todos)</p>
+                <p className="mb-2 text-[11px] text-gray-400">Escreva como algo que dá para ver ou ouvir no vídeo.</p>
                 <div className="space-y-2">
                   {m.requisitos.map((r, i) => (
                     <div key={i} className="flex gap-2">
@@ -215,17 +239,16 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
                   placeholder={'Um passo por linha. Ex.:\nDiga seu nome e o nome do restaurante.\nConte uma coisa que melhorou com o EasyFeed.'}
                   className="text-[13px]"
                 />
-                <p className="mt-1 text-[11px] text-gray-400">O cliente vê como lista numerada. A IA confere se ele seguiu, mas quem aprova são os requisitos.</p>
+                <p className="mt-1 text-[11px] text-gray-400">O cliente vê como lista numerada, e não vê os requisitos: ponha no roteiro tudo o que eles pedem. A IA confere se ele seguiu, mas quem aprova são os requisitos.</p>
               </div>
               <div className="space-y-3">
                 <div>
-                  <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Duração do vídeo (segundos)</p>
-                  <div className="flex items-center gap-2">
-                    <input type="number" min={0} className={cn(campo, 'w-24')} value={m.duracao_min_s ?? ''} onChange={(e) => setM({ ...m, duracao_min_s: segundos(e.target.value) })} placeholder="mín." />
-                    <span className="text-[12px] text-gray-400">a</span>
-                    <input type="number" min={5} max={DURACAO_TETO_S} className={cn(campo, 'w-24')} value={m.duracao_max_s ?? ''} onChange={(e) => setM({ ...m, duracao_max_s: segundos(e.target.value) })} placeholder="máx." />
+                  <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Duração do vídeo</p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    <CampoTempo rotulo="Mínimo" valor={m.duracao_min_s} onMudar={(v) => setM({ ...m, duracao_min_s: v })} />
+                    <CampoTempo rotulo="Máximo" valor={m.duracao_max_s} onMudar={(v) => setM({ ...m, duracao_max_s: v })} />
                   </div>
-                  <p className="mt-1 text-[11px] text-gray-400">Vazio: sem mínimo e até 3 min. Máximo de 5 min.</p>
+                  <p className="mt-1 text-[11px] text-gray-400">Mínimo 0 = sem mínimo. O máximo vai até {formatarDuracao(DURACAO_TETO_S)} (mais que isso a análise demora demais).</p>
                 </div>
                 <div>
                   <p className="mb-1.5 text-[12px] font-semibold text-gray-600">Período (vazio = sempre)</p>
@@ -562,7 +585,9 @@ export function PainelVideosAdmin() {
                       </Td>
                     </tr>
                   ))}
-                  {missoes.length === 0 && <tr><Td className="text-center text-[13px] text-gray-500">Nenhuma missão ainda.</Td></tr>}
+                  {missoes.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-[13px] text-gray-500">Nenhuma missão ainda. Crie a primeira em <span className="font-medium text-gray-700">Nova missão</span>.</td></tr>
+                  )}
                 </tbody>
               </CrudTable>
             </TabsContent>

@@ -3307,8 +3307,8 @@ export type Database = {
           descricao: string
           disponivel_ate: string | null
           disponivel_de: string | null
-          duracao_max_s: number | null
-          duracao_min_s: number | null
+          duracao_max_s: number
+          duracao_min_s: number
           id: number
           ordem: number
           requisitos: Json
@@ -3322,8 +3322,8 @@ export type Database = {
           descricao?: string
           disponivel_ate?: string | null
           disponivel_de?: string | null
-          duracao_max_s?: number | null
-          duracao_min_s?: number | null
+          duracao_max_s: number
+          duracao_min_s: number
           id?: never
           ordem?: number
           requisitos?: Json
@@ -3337,8 +3337,8 @@ export type Database = {
           descricao?: string
           disponivel_ate?: string | null
           disponivel_de?: string | null
-          duracao_max_s?: number | null
-          duracao_min_s?: number | null
+          duracao_max_s?: number
+          duracao_min_s?: number
           id?: never
           ordem?: number
           requisitos?: Json

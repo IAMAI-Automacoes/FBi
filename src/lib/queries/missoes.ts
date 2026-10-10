@@ -136,7 +136,8 @@ export interface MissaoParaSalvar {
 export async function salvarMissao(m: MissaoParaSalvar): Promise<void> {
   const linha = {
     titulo: m.titulo.trim(), descricao: m.descricao.trim(), requisitos: m.requisitos as unknown as never, ordem: m.ordem, ativa: m.ativa,
-    roteiro: m.roteiro.trim(), duracao_min_s: m.duracao_min_s, duracao_max_s: m.duracao_max_s,
+    // A tela só deixa salvar com as duas durações definidas (o banco exige).
+    roteiro: m.roteiro.trim(), duracao_min_s: m.duracao_min_s ?? 0, duracao_max_s: m.duracao_max_s ?? 0,
     disponivel_de: m.disponivel_de || null, disponivel_ate: m.disponivel_ate || null,
   }
   const { error } = m.id
