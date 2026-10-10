@@ -9,6 +9,7 @@ import {
   type EnvioResumo, type Missao,
 } from '../videos-missao.ts'
 import { tratarVideos, type DepsVideos, type EnvioCompleto } from '../../videos-missao/handler.ts'
+import { perguntarSobreVideo } from '../gemini.ts'
 
 let falhas = 0
 function ok(nome: string, cond: boolean, detalhe?: unknown) {
@@ -250,6 +251,33 @@ r = await tratarVideos({ acao: 'admin_analisar_de_novo', envio_id: 'e11' }, c.de
 ok('análise travada (30 min) pode rodar de novo', r.status === 202)
 r = await tratarVideos({ acao: 'qualquer' }, cenario().deps)
 ok('ação desconhecida: 400', r.status === 400)
+
+// ── Gemini ocupado: tenta de novo e passa para o modelo reserva ──────────────
+const fetchOriginal = globalThis.fetch
+const chamadas: string[] = []
+const respostaIA = (status: number) => new Response(status === 200
+  ? JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] })
+  : JSON.stringify({ error: { code: status, message: 'ocupado' } }), { status })
+const comFetch = async (roteiro: number[], fn: () => Promise<unknown>) => {
+  chamadas.length = 0
+  const fila = [...roteiro]
+  globalThis.fetch = (async (url: string) => {
+    chamadas.push(String(url).split('/models/')[1]?.split(':')[0] ?? '')
+    return respostaIA(fila.shift() ?? 503)
+  }) as unknown as typeof fetch
+  try { return await fn() } catch (e) { return e } finally { globalThis.fetch = fetchOriginal }
+}
+const semEspera = async () => {}
+const cfgG = { chave: 'k', modelo: 'gemini-flash-latest' }
+const arqG = { name: 'files/x', uri: 'u', mimeType: 'video/mp4' }
+let rG = await comFetch([503, 503, 200], () => perguntarSobreVideo(cfgG, arqG, 'p', {}, semEspera))
+ok('Gemini ocupado duas vezes: tenta de novo e responde', rG === '{"ok":true}' && chamadas.join() === 'gemini-flash-latest,gemini-flash-latest,gemini-flash-latest', chamadas)
+rG = await comFetch([503, 503, 503, 200], () => perguntarSobreVideo(cfgG, arqG, 'p', {}, semEspera))
+ok('continua ocupado: passa para o modelo reserva', rG === '{"ok":true}' && chamadas.at(-1) === 'gemini-flash-lite-latest', chamadas)
+rG = await comFetch([400], () => perguntarSobreVideo(cfgG, arqG, 'p', {}, semEspera))
+ok('erro de verdade (400): não repete', rG instanceof Error && chamadas.length === 1 && (rG as { codigo?: string }).codigo === 'resposta')
+rG = await comFetch([], () => perguntarSobreVideo(cfgG, arqG, 'p', {}, semEspera))
+ok('ocupado o tempo todo: desiste com erro claro', rG instanceof Error && String((rG as Error).message).includes('ocupado') && chamadas.length === 6, chamadas)
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nmissões de vídeo: tudo certo')
 process.exit(falhas ? 1 : 0)

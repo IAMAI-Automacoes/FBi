@@ -2,8 +2,10 @@
  * Gemini direto (Google AI Studio), para a IA assistir vídeos: o OpenRouter só
  * aceita vídeo pequeno embutido. Usado pela função videos-missao.
  *
- * Chave em GEMINI_API_KEY (env da função); modelo em GEMINI_MODELO
- * (padrão gemini-2.5-flash, que vê a imagem e ouve o áudio).
+ * Chave em GEMINI_API_KEY (env da função); modelo em GEMINI_MODELO. O padrão é
+ * o apelido gemini-flash-latest (o Flash mais novo, que vê a imagem e ouve o
+ * áudio): quando o Google aposenta um modelo (o 2.5 já não abre para contas
+ * novas), ele passa para o seguinte sem precisar mexer aqui.
  *
  * Fluxo: sobe o arquivo na Files API (upload resumable em blocos de 8 MB, lendo
  * do Storage em stream: o vídeo nunca fica inteiro na memória), espera ficar
@@ -16,8 +18,10 @@ const BASE = 'https://generativelanguage.googleapis.com'
 const BLOCO = 8 * 1024 * 1024
 
 export class ErroGemini extends Error {
-  constructor(public codigo: 'sem_chave' | 'upload' | 'processamento' | 'timeout' | 'resposta', mensagem: string) {
+  codigo: 'sem_chave' | 'upload' | 'processamento' | 'timeout' | 'resposta'
+  constructor(codigo: ErroGemini['codigo'], mensagem: string) {
     super(mensagem)
+    this.codigo = codigo
   }
 }
 
@@ -26,7 +30,7 @@ export interface ConfigGemini { chave: string; modelo: string }
 export function configGemini(): ConfigGemini | null {
   const chave = (Deno.env.get('GEMINI_API_KEY') ?? '').trim()
   if (!chave) return null
-  return { chave, modelo: (Deno.env.get('GEMINI_MODELO') ?? '').trim() || 'gemini-2.5-flash' }
+  return { chave, modelo: (Deno.env.get('GEMINI_MODELO') ?? '').trim() || 'gemini-flash-latest' }
 }
 
 const cabecalho = (cfg: ConfigGemini, extra: Record<string, string> = {}) => ({ 'x-goog-api-key': cfg.chave, ...extra })
@@ -95,27 +99,52 @@ export async function esperarAtivo(cfg: ConfigGemini, arquivo: ArquivoGemini, li
   return atual
 }
 
-/** Pede a resposta em JSON (no formato do `schema`) sobre o vídeo. */
-export async function perguntarSobreVideo(cfg: ConfigGemini, arquivo: ArquivoGemini, prompt: string, schema: unknown): Promise<unknown> {
-  const r = await fetch(`${BASE}/v1beta/models/${encodeURIComponent(cfg.modelo)}:generateContent`, {
-    method: 'POST',
-    headers: cabecalho(cfg, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      contents: [{
-        role: 'user',
-        parts: [
-          { file_data: { mime_type: arquivo.mimeType, file_uri: arquivo.uri } },
-          { text: prompt },
-        ],
-      }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: schema },
-    }),
-  })
-  if (!r.ok) throw new ErroGemini('resposta', `Gemini: ${await textoDoErro(r)}`)
-  const dados = await r.json().catch(() => null)
-  const texto = (dados?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p?.text ?? '').join('')
-  if (!texto) throw new ErroGemini('resposta', 'O Gemini não respondeu nada.')
-  return texto
+/** Modelo reserva quando o principal está sobrecarregado (mesma família, mais leve). */
+const MODELO_RESERVA = 'gemini-flash-lite-latest'
+/** Espera antes de cada nova tentativa quando o Gemini responde "ocupado" (429/5xx). */
+const ESPERAS_MS = [4000, 12000]
+/** Status que valem tentar de novo: excesso de pedidos e "modelo com muita demanda". */
+const PASSAGEIRO = new Set([429, 500, 502, 503, 504])
+
+/**
+ * Pede a resposta em JSON (no formato do `schema`) sobre o vídeo. Se o Gemini
+ * disser que está ocupado, tenta de novo com espera crescente e, se continuar,
+ * passa para o modelo reserva. Erro de verdade (chave, pedido) não repete.
+ */
+export async function perguntarSobreVideo(
+  cfg: ConfigGemini, arquivo: ArquivoGemini, prompt: string, schema: unknown,
+  esperar: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<unknown> {
+  const modelos = [...new Set([cfg.modelo, MODELO_RESERVA])]
+  let ultimoErro = ''
+  for (const modelo of modelos) {
+    for (let tentativa = 0; tentativa <= ESPERAS_MS.length; tentativa++) {
+      if (tentativa > 0) await esperar(ESPERAS_MS[tentativa - 1])
+      const r = await fetch(`${BASE}/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+        method: 'POST',
+        headers: cabecalho(cfg, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { file_data: { mime_type: arquivo.mimeType, file_uri: arquivo.uri } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: schema },
+        }),
+      })
+      if (r.ok) {
+        const dados = await r.json().catch(() => null)
+        const texto = (dados?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p?.text ?? '').join('')
+        if (!texto) throw new ErroGemini('resposta', 'O Gemini não respondeu nada.')
+        return texto
+      }
+      ultimoErro = `${modelo}: ${await textoDoErro(r)}`
+      if (!PASSAGEIRO.has(r.status)) throw new ErroGemini('resposta', `Gemini ${ultimoErro}`)
+    }
+  }
+  throw new ErroGemini('resposta', `Gemini ocupado, tentou de novo e não deu: ${ultimoErro}`)
 }
 
 /** Apaga o arquivo do Gemini (de qualquer jeito ele some sozinho em 48 h). */
