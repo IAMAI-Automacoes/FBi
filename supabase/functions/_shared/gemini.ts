@@ -1,6 +1,7 @@
 /**
  * Gemini direto (Google AI Studio), para a IA assistir vídeos: o OpenRouter só
- * aceita vídeo pequeno embutido. Usado pela função videos-missao.
+ * aceita vídeo pequeno embutido. Usado pela função videos-missao e, para
+ * transcrever os áudios dos funcionários, pela função equipe.
  *
  * Chave em GEMINI_API_KEY (env da função); modelo em GEMINI_MODELO. O padrão é
  * o apelido gemini-flash-latest (o Flash mais novo, que vê a imagem e ouve o
@@ -106,15 +107,15 @@ const ESPERAS_MS = [4000, 12000]
 /** Status que valem tentar de novo: excesso de pedidos e "modelo com muita demanda". */
 const PASSAGEIRO = new Set([429, 500, 502, 503, 504])
 
+type Esperar = (ms: number) => Promise<void>
+const esperarDeVerdade: Esperar = (ms) => new Promise((r) => setTimeout(r, ms))
+
 /**
- * Pede a resposta em JSON (no formato do `schema`) sobre o vídeo. Se o Gemini
- * disser que está ocupado, tenta de novo com espera crescente e, se continuar,
- * passa para o modelo reserva. Erro de verdade (chave, pedido) não repete.
+ * Um generateContent. Se o Gemini disser que está ocupado, tenta de novo com
+ * espera crescente e, se continuar, passa para o modelo reserva. Erro de
+ * verdade (chave, pedido) não repete. Devolve o texto (pode vir vazio).
  */
-export async function perguntarSobreVideo(
-  cfg: ConfigGemini, arquivo: ArquivoGemini, prompt: string, schema: unknown,
-  esperar: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
-): Promise<unknown> {
+async function gerar(cfg: ConfigGemini, corpo: unknown, esperar: Esperar): Promise<string> {
   const modelos = [...new Set([cfg.modelo, MODELO_RESERVA])]
   let ultimoErro = ''
   for (const modelo of modelos) {
@@ -123,28 +124,55 @@ export async function perguntarSobreVideo(
       const r = await fetch(`${BASE}/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
         method: 'POST',
         headers: cabecalho(cfg, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { file_data: { mime_type: arquivo.mimeType, file_uri: arquivo.uri } },
-              { text: prompt },
-            ],
-          }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: schema },
-        }),
+        body: JSON.stringify(corpo),
       })
       if (r.ok) {
         const dados = await r.json().catch(() => null)
-        const texto = (dados?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p?.text ?? '').join('')
-        if (!texto) throw new ErroGemini('resposta', 'O Gemini não respondeu nada.')
-        return texto
+        return (dados?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p?.text ?? '').join('')
       }
       ultimoErro = `${modelo}: ${await textoDoErro(r)}`
       if (!PASSAGEIRO.has(r.status)) throw new ErroGemini('resposta', `Gemini ${ultimoErro}`)
     }
   }
   throw new ErroGemini('resposta', `Gemini ocupado, tentou de novo e não deu: ${ultimoErro}`)
+}
+
+/** Pede a resposta em JSON (no formato do `schema`) sobre o vídeo. */
+export async function perguntarSobreVideo(
+  cfg: ConfigGemini, arquivo: ArquivoGemini, prompt: string, schema: unknown, esperar: Esperar = esperarDeVerdade,
+): Promise<unknown> {
+  const texto = await gerar(cfg, {
+    contents: [{
+      role: 'user',
+      parts: [
+        { file_data: { mime_type: arquivo.mimeType, file_uri: arquivo.uri } },
+        { text: prompt },
+      ],
+    }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: schema },
+  }, esperar)
+  if (!texto) throw new ErroGemini('resposta', 'O Gemini não respondeu nada.')
+  return texto
+}
+
+/**
+ * Transcreve um áudio curto (mensagem de voz do WhatsApp), mandado embutido
+ * em base64. Devolve o texto falado; vazio quando não há fala.
+ */
+export async function transcreverAudio(
+  cfg: ConfigGemini, base64: string, mime = 'audio/mpeg', esperar: Esperar = esperarDeVerdade,
+): Promise<string> {
+  const texto = await gerar(cfg, {
+    contents: [{
+      role: 'user',
+      parts: [
+        { inline_data: { mime_type: mime, data: base64 } },
+        { text: 'Transcreva este áudio em português do Brasil, exatamente como foi falado, sem comentar nem resumir. Se não houver fala, responda com uma linha vazia.' },
+      ],
+    }],
+    generationConfig: { temperature: 0 },
+  }, esperar)
+  return texto.trim()
 }
 
 /** Apaga o arquivo do Gemini (de qualquer jeito ele some sozinho em 48 h). */

@@ -870,6 +870,350 @@ export type Database = {
           },
         ]
       }
+      equipe_convites: {
+        Row: {
+          criado_em: string
+          enviado_em: string | null
+          envio_id: number
+          erro: string | null
+          funcionario_id: number | null
+          id: number
+          message_id: string | null
+          respondeu_em: string | null
+          restaurante_id: number
+          status: string
+          telefone: string
+          tentou_em: string | null
+          texto: string
+        }
+        Insert: {
+          criado_em?: string
+          enviado_em?: string | null
+          envio_id: number
+          erro?: string | null
+          funcionario_id?: number | null
+          id?: never
+          message_id?: string | null
+          respondeu_em?: string | null
+          restaurante_id: number
+          status?: string
+          telefone: string
+          tentou_em?: string | null
+          texto: string
+        }
+        Update: {
+          criado_em?: string
+          enviado_em?: string | null
+          envio_id?: number
+          erro?: string | null
+          funcionario_id?: number | null
+          id?: never
+          message_id?: string | null
+          respondeu_em?: string | null
+          restaurante_id?: number
+          status?: string
+          telefone?: string
+          tentou_em?: string | null
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_convites_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_envios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_convites_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_convites_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_envios: {
+        Row: {
+          concluido_em: string | null
+          criado_em: string
+          criado_por: string
+          id: number
+          pergunta: string
+          restaurante_id: number
+          resumo: Json | null
+          resumo_em: string | null
+          status: string
+        }
+        Insert: {
+          concluido_em?: string | null
+          criado_em?: string
+          criado_por?: string
+          id?: never
+          pergunta: string
+          restaurante_id: number
+          resumo?: Json | null
+          resumo_em?: string | null
+          status?: string
+        }
+        Update: {
+          concluido_em?: string | null
+          criado_em?: string
+          criado_por?: string
+          id?: never
+          pergunta?: string
+          restaurante_id?: number
+          resumo?: Json | null
+          resumo_em?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_envios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_funcionarios: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          funcao: string
+          id: number
+          nome: string
+          opt_out_em: string | null
+          opt_out_motivo: string | null
+          restaurante_id: number
+          telefone: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          funcao?: string
+          id?: never
+          nome: string
+          opt_out_em?: string | null
+          opt_out_motivo?: string | null
+          restaurante_id: number
+          telefone: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          funcao?: string
+          id?: never
+          nome?: string
+          opt_out_em?: string | null
+          opt_out_motivo?: string | null
+          restaurante_id?: number
+          telefone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_funcionarios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_mensagens: {
+        Row: {
+          direcao: string
+          erro: string | null
+          id: number
+          message_id: string
+          pegou_em: string | null
+          processada_em: string | null
+          recebida_em: string
+          resposta_id: string | null
+          restaurante_id: number | null
+          status: string
+          telefone: string
+          tentativas: number
+          texto: string
+          tipo: string
+        }
+        Insert: {
+          direcao: string
+          erro?: string | null
+          id?: never
+          message_id: string
+          pegou_em?: string | null
+          processada_em?: string | null
+          recebida_em?: string
+          resposta_id?: string | null
+          restaurante_id?: number | null
+          status?: string
+          telefone: string
+          tentativas?: number
+          texto?: string
+          tipo?: string
+        }
+        Update: {
+          direcao?: string
+          erro?: string | null
+          id?: never
+          message_id?: string
+          pegou_em?: string | null
+          processada_em?: string | null
+          recebida_em?: string
+          resposta_id?: string | null
+          restaurante_id?: number | null
+          status?: string
+          telefone?: string
+          tentativas?: number
+          texto?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_mensagens_resposta_id_fkey"
+            columns: ["resposta_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_respostas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_mensagens_resposta_id_fkey"
+            columns: ["resposta_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_respostas_anonimas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_mensagens_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_pontos: {
+        Row: {
+          categoria: string
+          criado_em: string
+          id: number
+          resposta_id: string
+          restaurante_id: number
+          resumo: string
+          sentimento: string
+          texto_original: string
+        }
+        Insert: {
+          categoria: string
+          criado_em?: string
+          id?: never
+          resposta_id: string
+          restaurante_id: number
+          resumo?: string
+          sentimento: string
+          texto_original: string
+        }
+        Update: {
+          categoria?: string
+          criado_em?: string
+          id?: never
+          resposta_id?: string
+          restaurante_id?: number
+          resumo?: string
+          sentimento?: string
+          texto_original?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_pontos_resposta_id_fkey"
+            columns: ["resposta_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_respostas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_pontos_resposta_id_fkey"
+            columns: ["resposta_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_respostas_anonimas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_pontos_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_respostas: {
+        Row: {
+          criado_em: string
+          envio_id: number | null
+          funcionario_id: number | null
+          id: string
+          restaurante_id: number
+          sensivel: boolean
+          sentimento: string | null
+          texto_original: string
+        }
+        Insert: {
+          criado_em?: string
+          envio_id?: number | null
+          funcionario_id?: number | null
+          id?: string
+          restaurante_id: number
+          sensivel?: boolean
+          sentimento?: string | null
+          texto_original: string
+        }
+        Update: {
+          criado_em?: string
+          envio_id?: number | null
+          funcionario_id?: number | null
+          id?: string
+          restaurante_id?: number
+          sensivel?: boolean
+          sentimento?: string | null
+          texto_original?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_respostas_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_envios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_respostas_funcionario_id_fkey"
+            columns: ["funcionario_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_funcionarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_respostas_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback_acao: {
         Row: {
           acao_id: number
@@ -3447,6 +3791,51 @@ export type Database = {
       }
     }
     Views: {
+      equipe_respostas_anonimas: {
+        Row: {
+          dia: string | null
+          envio_id: number | null
+          id: string | null
+          restaurante_id: number | null
+          sensivel: boolean | null
+          sentimento: string | null
+          texto_original: string | null
+        }
+        Insert: {
+          dia?: never
+          envio_id?: number | null
+          id?: string | null
+          restaurante_id?: number | null
+          sensivel?: boolean | null
+          sentimento?: string | null
+          texto_original?: string | null
+        }
+        Update: {
+          dia?: never
+          envio_id?: number | null
+          id?: string | null
+          restaurante_id?: number | null
+          sensivel?: boolean | null
+          sentimento?: string | null
+          texto_original?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_respostas_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_envios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_respostas_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedbacks_livres: {
         Row: {
           categoria: string | null
@@ -3798,6 +4187,55 @@ export type Database = {
       eh_influencer: { Args: never; Returns: boolean }
       encerrar_acesso_admin: { Args: never; Returns: boolean }
       encerrar_sessoes_demo: { Args: never; Returns: number }
+      equipe_pegar_convite: {
+        Args: never
+        Returns: {
+          criado_em: string
+          enviado_em: string | null
+          envio_id: number
+          erro: string | null
+          funcionario_id: number | null
+          id: number
+          message_id: string | null
+          respondeu_em: string | null
+          restaurante_id: number
+          status: string
+          telefone: string
+          tentou_em: string | null
+          texto: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "equipe_convites"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      equipe_pegar_mensagens_prontas: {
+        Args: { p_espera_segundos?: number; p_telefones?: number }
+        Returns: {
+          direcao: string
+          erro: string | null
+          id: number
+          message_id: string
+          pegou_em: string | null
+          processada_em: string | null
+          recebida_em: string
+          resposta_id: string | null
+          restaurante_id: number | null
+          status: string
+          telefone: string
+          tentativas: number
+          texto: string
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "equipe_mensagens"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       expirar_assinaturas: { Args: never; Returns: number }
       feedbacks_para_geracao: {
         Args: { p_dias?: number; p_restaurante_id: number }

@@ -44,6 +44,8 @@
     "../salvy-webhook/*.ts",
     "../entrar-na-conta/*.ts",
     "../acesso-influencer/*.ts",
-    "../videos-missao/*.ts"
+    "../videos-missao/*.ts",
+    "../equipe/*.ts",
+    "../equipe-webhook/*.ts"
   ]
 }

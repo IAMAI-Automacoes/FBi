@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Star,
   Clapperboard,
+  HeartHandshake,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -49,6 +50,10 @@ const navigation = [
   // clientes: apague `soAdmin`, o SoAdminPlataforma da rota (App.tsx) e o
   // SO_ADMIN da função videos-missao.
   { name: 'Missões', href: '/missoes', icon: Clapperboard, modulo: 'visao_geral', soAdmin: true },
+  // Feedback da equipe (funcionários): só o admin da plataforma por enquanto.
+  // Para liberar aos donos: apague `soAdmin`, o SoAdminPlataforma da rota
+  // (App.tsx) e o SO_ADMIN da função equipe, e dê a eles a RLS das tabelas equipe_*.
+  { name: 'Equipe', href: '/equipe', icon: HeartHandshake, modulo: 'visao_geral', soAdmin: true },
 ]
 
 export function AppSidebar() {
