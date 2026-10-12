@@ -101,6 +101,38 @@ export function assuntoElegivelPorNota(nota: number, pessoasDistintas: number): 
   return pessoasDistintas >= pessoasNecessariasPorNota(nota)
 }
 
+/** Daqui para cima o assunto é GRAVE: na equipe, um relato só já basta. */
+export const NOTA_GRAVE_EQUIPE = 7.5
+
+/**
+ * Equipe: quantos FUNCIONÁRIOS distintos precisam ter relatado o assunto.
+ *
+ * A curva dos clientes (12 / 2^(nota/2,5)) foi calibrada para centenas de
+ * pessoas passando pelo salão: três relatos separam padrão de coincidência.
+ * Numa equipe de oito, três pessoas são quase metade dela, e a conta nunca
+ * fechava. Decisão do Raver (12/10/2026): proporcional ao tamanho da equipe.
+ *
+ *     grave (nota >= 7,5)  →  1
+ *     o resto              →  20% dos funcionários ativos, mínimo 2, teto 5
+ *
+ *     equipe de  5 → 2     10 → 2     15 → 3     20 → 4     30 → 5
+ *
+ * O teto existe porque, sem ele, uma equipe grande pediria mais gente do que
+ * os próprios clientes (3 para um problema comum). Equipe de uma pessoa só
+ * precisa de 1: não há segunda pessoa para confirmar.
+ */
+export function pessoasNecessariasEquipe(nota: number, funcionariosAtivos: number): number {
+  const n = Math.min(Math.max(Number.isFinite(nota) ? nota : 0, NOTA_MIN), NOTA_MAX)
+  if (n >= NOTA_GRAVE_EQUIPE) return 1
+  const ativos = Number.isFinite(funcionariosAtivos) && funcionariosAtivos > 0 ? Math.floor(funcionariosAtivos) : 0
+  const proporcional = Math.min(Math.max(Math.ceil(ativos * 0.2), 2), 5)
+  return ativos === 1 ? 1 : proporcional
+}
+
+export function assuntoElegivelEquipe(nota: number, funcionariosDistintos: number, funcionariosAtivos: number): boolean {
+  return funcionariosDistintos >= pessoasNecessariasEquipe(nota, funcionariosAtivos)
+}
+
 /**
  * Acima desta nota, elogio nenhum amortece.
  *

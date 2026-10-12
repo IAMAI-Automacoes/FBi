@@ -16,6 +16,8 @@
  * pena consultar a mensagem original antes de concluir.
  */
 
+import type { Publico } from './publico.ts'
+
 export type NivelGravidade = 0 | 1 | 2 | 3 | 4
 
 export interface ResultadoGravidade {
@@ -143,6 +145,103 @@ const LEXICO: NivelLexico[] = [
 ]
 
 /**
+ * O mesmo léxico para quem TRABALHA no restaurante (feedback da equipe).
+ *
+ * A escala é a mesma (4 = age com um relato só … 0 = elogio), mas o que é
+ * grave muda de mundo: não é cabelo na comida, é assédio, acidente, salário não
+ * pago. Sem esta lista, "o gerente me ameaçou" e "o salário atrasa todo mês"
+ * caíam no piso do sentimento (G2), como se fossem "comida fria".
+ *
+ *   4  risco a uma pessoa ou ilegalidade grave  → um relato basta
+ *   3  falha grave de gestão ou de condição de trabalho, e sinal de saída
+ *   2  problema comum do dia a dia
+ *   1  sugestão        0  elogio
+ */
+const LEXICO_EQUIPE: NivelLexico[] = [
+  {
+    nivel: 4,
+    fortes: [
+      // assédio, agressão, ameaça
+      'assedio', 'assediou', 'assediada', 'assediado', 'me assedia', 'passou a mao', 'passa a mao',
+      'me agrediu', 'foi agredido', 'foi agredida', 'me bateu', 'me empurrou', 'partiu pra cima',
+      'me ameacou', 'ameacou', 'fui ameacado', 'fui ameacada', 'ameacando', 'ameaca de',
+      // discriminação
+      'racismo', 'racista', 'homofobia', 'homofobico', 'homofobica', 'machismo', 'machista',
+      'xenofobia', 'discriminacao', 'discriminou', 'preconceito',
+      // acidente e risco
+      'me cortei', 'me queimei', 'queimadura', 'me machuquei', 'acidente de trabalho', 'sofri um acidente',
+      'fui parar no hospital', 'no pronto socorro', 'levei um choque', 'choque eletrico',
+      'vazamento de gas', 'cheiro de gas', 'fio desencapado', 'fio exposto', 'risco de incendio',
+      // salário não pago, sem registro, trabalhar doente
+      'sem registro', 'sem carteira assinada', 'carteira nao foi assinada', 'nao assinaram minha carteira',
+      'nao recebi o salario', 'nao recebi meu salario', 'nao pagaram o salario', 'salario nao foi pago',
+      'meses sem receber', 'trabalhar doente', 'trabalhei doente', 'nao aceitam atestado',
+      'nao aceitaram o atestado', 'nao aceitou meu atestado',
+      // a própria vida
+      'me matar', 'tirar minha vida', 'nao quero mais viver',
+    ],
+    fracos: ['ameaca', 'acidente', 'agrediu', 'agressao', 'choque'],
+  },
+  {
+    nivel: 3,
+    fortes: [
+      // dinheiro
+      'salario atrasado', 'salario atrasa', 'salario atrasou', 'atraso no salario', 'atraso de salario',
+      'atrasam o salario', 'atrasou o pagamento', 'pagamento atrasado', 'pagamento atrasa',
+      'hora extra nao paga', 'nao pagam hora extra', 'nao paga hora extra', 'nao recebo hora extra',
+      'desconto indevido', 'descontaram do meu salario', 'descontam do salario',
+      // tratamento
+      'grita com', 'gritou com', 'gritando com', 'grita comigo', 'gritou comigo', 'aos gritos',
+      'humilha', 'humilhou', 'humilhacao', 'humilhado', 'humilhada', 'xingou', 'xinga',
+      'falta de respeito', 'me destratou', 'destrata',
+      // jornada
+      'sem folga', 'nao tenho folga', 'sem descanso', 'dobrando', 'dobra de turno', 'dobrar turno',
+      'fecho e abro', 'fechar e abrir', 'sem intervalo', 'sem horario de almoco', 'sem pausa',
+      'trabalho por dois', 'trabalho de dois', 'faltando gente', 'falta gente', 'falta de funcionario',
+      // proteção
+      'sem epi', 'sem luva', 'sem equipamento de protecao', 'chao liso', 'piso liso', 'piso escorregadio',
+      // sinal de saída: é o que o dono mais quer evitar
+      'pedir demissao', 'pedir as contas', 'vou sair daqui', 'vou embora daqui',
+      'procurando outro emprego', 'procurando outro trabalho', 'nao aguento mais',
+      'esgotado', 'esgotada', 'burnout',
+    ],
+    fracos: ['grita', 'gritou', 'gritos', 'demissao', 'exausto', 'exausta'],
+  },
+  {
+    nivel: 2,
+    fortes: [
+      'em cima da hora', 'na vespera', 'equipamento quebrado', 'forno quebrado', 'fritadeira quebrada',
+      'vive quebrado', 'vive quebrada', 'esta quebrado', 'esta quebrada',
+      'falta uniforme', 'sem uniforme', 'falta material',
+      'ninguem avisa', 'ninguem avisou', 'fico sabendo pelos outros',
+      'ninguem ensina', 'ninguem me ensinou', 'sem treinamento', 'falta de treinamento',
+      'fofoca', 'panelinha', 'ninguem agradece', 'sem reconhecimento', 'falta de reconhecimento',
+      'salario baixo', 'ganho pouco', 'paga pouco', 'cliente grosseiro', 'cliente grosso',
+    ],
+    fracos: ['quebrado', 'quebrada', 'desorganizado', 'desorganizada', 'bagunca', 'baguncado'],
+  },
+  {
+    nivel: 1,
+    fortes: [
+      'poderia ter', 'seria bom se', 'seria legal se', 'sugiro', 'sugestao',
+      'deveria ter', 'senti falta', 'podia melhorar', 'podiam ter', 'seria bom ter',
+    ],
+    fracos: ['preferia', 'gostaria'],
+  },
+  {
+    nivel: 0,
+    fortes: [
+      'excelente', 'otimo', 'otima', 'maravilhoso', 'maravilhosa', 'adoro', 'adorei',
+      'gosto de trabalhar', 'gosto muito', 'amo trabalhar', 'equipe unida', 'ambiente bom',
+      'ambiente otimo', 'me sinto bem', 'parabens', 'muito bom', 'muito boa', 'nota dez',
+    ],
+    fracos: ['bom', 'boa', 'legal', 'tranquilo'],
+  },
+]
+
+const LEXICOS: Record<Publico, NivelLexico[]> = { cliente: LEXICO, equipe: LEXICO_EQUIPE }
+
+/**
  * Marcas de acento que o `normalize('NFD')` separa da letra base.
  *
  * Construída a partir de string (e não como literal `/[...]/`) de propósito:
@@ -189,10 +288,10 @@ function ocorrenciaValida(textoNorm: string, termo: string): boolean {
   }
 }
 
-function avaliarPorLexico(texto: string): ResultadoGravidade {
+function avaliarPorLexico(texto: string, publico: Publico = 'cliente'): ResultadoGravidade {
   const norm = normalizar(texto)
 
-  for (const faixa of LEXICO) {
+  for (const faixa of LEXICOS[publico]) {
     const fortes = faixa.fortes.filter((t) => ocorrenciaValida(norm, t))
     const fracos = faixa.fracos.filter((t) => ocorrenciaValida(norm, t))
     if (fortes.length === 0 && fracos.length === 0) continue
@@ -250,15 +349,22 @@ function pisoPorSentimento(sentimento?: string | null): NivelGravidade {
  * é tratado como cabelo); o sentimento garante que uma queixa não reconhecida
  * não caia para G0.
  */
-export function avaliarGravidade(texto: string, sentimento?: string | null): ResultadoGravidade {
-  const doLexico = avaliarPorLexico(texto)
+export function avaliarGravidade(
+  texto: string,
+  sentimento?: string | null,
+  /** De quem é o feedback: cada público tem a sua lista do que é grave. */
+  publico: Publico = 'cliente',
+): ResultadoGravidade {
+  const doLexico = avaliarPorLexico(texto, publico)
   const piso = pisoPorSentimento(sentimento)
 
   if (doLexico.G >= piso) return doLexico
 
   return {
     G: piso,
-    termos: [piso === 1 ? 'sugestao do cliente (melhoria)' : 'sentimento negativo (sem expressao especifica no lexico)'],
+    termos: [piso === 1
+      ? (publico === 'equipe' ? 'sugestao da equipe (melhoria)' : 'sugestao do cliente (melhoria)')
+      : 'sentimento negativo (sem expressao especifica no lexico)'],
     // Confiança baixa de propósito: sabemos que é queixa, não sabemos o quanto
     // é grave. É exatamente o caso em que vale a IA ler a mensagem original.
     confianca: 'baixa',
@@ -268,10 +374,11 @@ export function avaliarGravidade(texto: string, sentimento?: string | null): Res
 /** Gravidade de um conjunto de pontos: a do pior deles. */
 export function gravidadeMaxima(
   pontos: { texto: string; sentimento?: string | null }[],
+  publico: Publico = 'cliente',
 ): NivelGravidade {
   let maior: NivelGravidade = 0
   for (const p of pontos) {
-    const { G } = avaliarGravidade(p.texto, p.sentimento)
+    const { G } = avaliarGravidade(p.texto, p.sentimento, publico)
     if (G > maior) maior = G
   }
   return maior

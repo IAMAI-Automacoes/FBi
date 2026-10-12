@@ -33,13 +33,14 @@
 import { json, preflight } from '../_shared/cors.ts'
 import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, nomeDoAssistente } from '../_shared/perfil.ts'
 import { avaliarGravidade, normalizar, type NivelGravidade } from '../_shared/gravidade.ts'
 import { prioridadeAcaoManual } from '../_shared/limiar.ts'
-import { CATEGORIAS_EQUIPE, promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
+import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'categorizador_acao'
 
@@ -192,12 +193,12 @@ Deno.serve(async (req: Request) => {
 
     if (precisaCategoria) {
       try {
-        const prompt = promptDoPublico(montarPrompt(prompts, 'ef_categorizar_acao', PROMPT_CATEGORIA, {
+        const prompt = promptPara(prompts, 'ef_categorizar_acao', PROMPT_CATEGORIA, {
           nome: nomeDoAssistente(config?.mascote_config),
           perfil: blocoPerfil(config),
           titulo: acao.titulo_acao ?? '',
           plano: planoParaPrompt(acao.plano_detalhado),
-        }), publico)
+        }, publico)
         const { result } = await chamarIA(db, {
           messages: [{ role: 'user', content: prompt }],
           params,
@@ -299,7 +300,7 @@ Deno.serve(async (req: Request) => {
       const origensNegativas = new Set<string>()
       for (const f of base) {
         if (!(f.sentimento || '').toLowerCase().includes('negativ')) continue
-        negativos.push(avaliarGravidade(f.texto_original || f.resumo || '', f.sentimento).G)
+        negativos.push(avaliarGravidade(f.texto_original || f.resumo || '', f.sentimento, publico).G)
         if (f.origem_id) origensNegativas.add(f.origem_id)
       }
 
@@ -464,12 +465,12 @@ async function vincularFeedbacks(
     })
     .join('\n\n')
 
-  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_vincular_acao', PROMPT_VINCULO, {
+  const prompt = promptPara(ctx.prompts, 'ef_vincular_acao', PROMPT_VINCULO, {
     titulo: ctx.titulo,
     categoria: ctx.categoria,
     plano: ctx.plano,
     candidatos: lista,
-  }), ctx.publico)
+  }, ctx.publico)
 
   let escolhidos: number[] = []
   try {

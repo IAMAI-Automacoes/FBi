@@ -88,10 +88,13 @@ function TemaPill({ tema, tom }: { tema: TemaFeedback; tom: Tom }) {
 export function TemasFeedback({
   restauranteId,
   dias,
+  titulo,
 }: {
   restauranteId: number | null
   /** Janela em dias, vinda do filtro da PÁGINA. */
   dias: number
+  /** Na Visão Geral da equipe: "O que a equipe está comentando". */
+  titulo?: string
 }) {
   const [temas, setTemas] = useState<TemaFeedback[]>([])
   const [carregado, setCarregado] = useState(false)
@@ -117,7 +120,7 @@ export function TemasFeedback({
     return () => { supabase.removeChannel(ch) }
   }, [restauranteId, carregar])
 
-  return <TemasFeedbackLista temas={temas} carregado={carregado} />
+  return <TemasFeedbackLista temas={temas} carregado={carregado} titulo={titulo} />
 }
 
 /**
@@ -125,7 +128,7 @@ export function TemasFeedback({
  * grupos de pílulas. Usada aqui (temas do restaurante) e no EasyFeed
  * Influencers (temas anônimos de todos), para as duas telas serem iguais.
  */
-export function TemasFeedbackLista({ temas, carregado }: { temas: TemaFeedback[]; carregado: boolean }) {
+export function TemasFeedbackLista({ temas, carregado, titulo = 'O que os clientes estão comentando' }: { temas: TemaFeedback[]; carregado: boolean; titulo?: string }) {
   const [sentimento, setSentimento] = useState<SentimentoFiltro>('todos')
 
   // Em "Todos": os grupos fixos e os que têm algum tema; numa aba: só aquele grupo.
@@ -142,7 +145,7 @@ export function TemasFeedbackLista({ temas, carregado }: { temas: TemaFeedback[]
               Dois controles de data na mesma tela deixavam este bloco falando
               de 30 dias enquanto os números acima falavam de 7, sem nada
               dizendo que eram recortes diferentes. */}
-          <CardTitle className="text-base font-semibold">O que os clientes estão comentando</CardTitle>
+          <CardTitle className="text-base font-semibold">{titulo}</CardTitle>
         </div>
 
         {/* Filtro de sentimento — segmentado, discreto. Com cinco abas, quebra

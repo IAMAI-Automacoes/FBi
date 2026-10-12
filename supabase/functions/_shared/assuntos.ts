@@ -28,6 +28,8 @@
 
 import { avaliarGravidade, type NivelGravidade } from './gravidade.ts'
 import { assuntoElegivel, pessoasNecessarias, pontuarAssunto } from './limiar.ts'
+import { assuntoElegivelEquipe, pessoasNecessariasEquipe } from './avaliacao.ts'
+import type { Publico } from './publico.ts'
 import { entraEmInsight, polaridade } from './sentimento.ts'
 
 export interface PontoBruto {
@@ -39,6 +41,12 @@ export interface PontoBruto {
   origem_id: string | null
   tema_id: string | null
   created_at: string
+  /**
+   * Quem escreveu, só para CONTAR pessoas. Na equipe é o funcionário (a mesma
+   * pessoa que fala três vezes conta uma). Sem ele vale a mensagem (`origem_id`),
+   * que é como os clientes sempre foram contados. Nunca vai para o prompt.
+   */
+  pessoa?: string | null
 }
 
 export interface PontoDoAssunto {
@@ -116,10 +124,19 @@ function diasDesde(iso: string, agora: Date): number {
  */
 export function agruparEmAssuntos(
   pontos: PontoBruto[],
-  opcoes: { agora?: Date; reincidentes?: Set<string> } = {},
+  opcoes: {
+    agora?: Date
+    reincidentes?: Set<string>
+    /** De quem são os pontos: muda a lista do que é grave e a regra de quantas pessoas. */
+    publico?: Publico
+    /** Equipe: quantos funcionários ativos o restaurante tem (o limiar é proporcional). */
+    funcionariosAtivos?: number
+  } = {},
 ): Assunto[] {
   const agora = opcoes.agora ?? new Date()
   const reincidentes = opcoes.reincidentes ?? new Set<string>()
+  const publico: Publico = opcoes.publico ?? 'cliente'
+  const ativos = opcoes.funcionariosAtivos ?? 0
 
   const grupos = new Map<string, PontoBruto[]>()
   for (const p of pontos) {
@@ -163,7 +180,7 @@ export function agruparEmAssuntos(
     for (const p of brutos) {
       // O sentimento entra junto: é ele que impede uma queixa escrita fora do
       // léxico ("o sistema de reserva ficava travando") de virar G0.
-      const r = avaliarGravidade(textoDoPonto(p), p.sentimento)
+      const r = avaliarGravidade(textoDoPonto(p), p.sentimento, publico)
       if (r.G > gravidade) {
         gravidade = r.G
         termosGravidade = r.termos
@@ -174,8 +191,11 @@ export function agruparEmAssuntos(
     // PESSOAS, não pontos. O mesmo cliente que escreve "achei razoável" e "não
     // foi bom nem ruim" na mesma mensagem gera dois pontos e continua sendo uma
     // pessoa — contar pontos inflaria o volume e furaria o limiar sozinho.
-    const origens = new Set(brutos.map((p) => p.origem_id).filter(Boolean))
+    const origens = new Set(brutos.map((p) => p.pessoa ?? p.origem_id).filter(Boolean))
     const pessoas = origens.size > 0 ? origens.size : brutos.length
+    // Equipe: a conta é proporcional ao tamanho dela (nota = G * 2,5, a mesma
+    // equivalência de avaliacao.ts).
+    const daEquipe = publico === 'equipe'
 
     const diasDesdeMaisRecente = Math.min(...brutos.map((p) => diasDesde(p.created_at, agora)))
 
@@ -197,8 +217,8 @@ export function agruparEmAssuntos(
       confianca,
       pessoas,
       positivosDoTema: positivosPorTema.get(chave.replace(/\|(neg|pos)$/, '')) ?? 0,
-      pessoasNecessarias: pessoasNecessarias(gravidade),
-      elegivel: assuntoElegivel(gravidade, pessoas),
+      pessoasNecessarias: daEquipe ? pessoasNecessariasEquipe(gravidade * 2.5, ativos) : pessoasNecessarias(gravidade),
+      elegivel: daEquipe ? assuntoElegivelEquipe(gravidade * 2.5, pessoas, ativos) : assuntoElegivel(gravidade, pessoas),
       diasDesdeMaisRecente,
       score: pontuarAssunto({
         G: gravidade,

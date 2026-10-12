@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client'
 import { subDays, isAfter, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
+import type { Autoria } from '@/lib/equipe'
 
 export type PeriodInfo = '7d' | '30d' | '90d'
 
@@ -27,6 +28,8 @@ export interface FeedbackItem {
   /** Sentimento cru da MENSAGEM ORIGINAL: positivo|negativo|positivo e negativo|neutro. */
   sentiment: string
   timeAgo: string
+  /** Feedback da equipe: quem falou. Nulo nos feedbacks de cliente. */
+  autoria?: Autoria | null
 }
 
 export interface DashboardData {
@@ -536,5 +539,7 @@ export const buscarUltimosFeedbacks = async (
     categories: (f.categorias ?? []) as string[],
     sentiment: (f.sentimento || 'neutro') as string,
     timeAgo: formatarDataFeedback(f.created_at),
+    // Só no feedback da equipe: quem falou (ou que ainda pode ficar anônimo).
+    autoria: (f.autoria ?? null) as unknown as Autoria | null,
   }))
 }

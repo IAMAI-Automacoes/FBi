@@ -109,3 +109,129 @@ export const intervaloEntreConvitesMs = (sorteio: () => number = Math.random) =>
 export function digitandoConviteMs(texto: string, sorteio: () => number = Math.random): number {
   return Math.round(Math.min(25_000, Math.max(8_000, texto.length * (45 + sorteio() * 30) + 2_000 + sorteio() * 3_000)))
 }
+
+/**
+ * O alerta urgente da equipe: o texto que o DONO recebe no WhatsApp quando chega
+ * um relato grave. Leva o relato, e nunca o nome nem o telefone de quem falou
+ * (a pessoa ainda pode pedir anonimato).
+ */
+export function mensagemDoAlertaDaEquipe(resumo: string, relato: string): string {
+  const limpo = String(relato || '').replace(/\s+/g, ' ').trim()
+  const trecho = limpo.length > 900 ? limpo.slice(0, 900).trimEnd() + '…' : limpo
+  return [
+    `Alerta da equipe: ${String(resumo || '').trim() || 'chegou um relato grave.'}`,
+    '',
+    'Um funcionário relatou:',
+    `"${trecho}"`,
+    '',
+    'Quem falou só aparece no painel se a pessoa deixar. Veja em Equipe > Feedbacks.',
+  ].join('\n')
+}
+
+// ── Aviso para a equipe toda (ação concluída) ────────────────────────────────
+// Quando a gestão conclui uma ação que nasceu do que a equipe falou, o dono pode
+// contar para todos. O texto passa por ele antes de sair (a IA só rascunha), e
+// nunca diz quem falou.
+
+export const AVISO_MIN = 20
+export const AVISO_MAX = 600
+
+const ABERTURAS_AVISO = [
+  'Oi{nome}! Aqui é a {atendente}, {doRestaurante}.\nPassando pra contar uma novidade.',
+  'Olá{nome}, tudo bem? Aqui é a {atendente}, {doRestaurante}.\nTenho uma novidade sobre o que a equipe comentou.',
+  'Oi{nome}! Sou a {atendente}, {doRestaurante}.\nVim contar o que mudou por aqui.',
+]
+export const FRASE_RESPONDER_AVISO = 'Se quiser comentar, é só responder por aqui.'
+
+export function aberturaDoAviso(nome: unknown, restaurante: unknown, qual = 0): string {
+  const n = primeiroNome(nome)
+  return ABERTURAS_AVISO[Math.abs(Math.trunc(qual)) % ABERTURAS_AVISO.length]
+    .replace('{nome}', n ? `, ${n}` : '')
+    .replace('{atendente}', ATENDENTE)
+    .replace('{doRestaurante}', doRestaurante(restaurante))
+}
+
+/** O texto do aviso, limpo; null = não serve (curto ou longo demais). */
+export function validarAviso(t: unknown): string | null {
+  const limpo = String(t ?? '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  return limpo.length >= AVISO_MIN && limpo.length <= AVISO_MAX ? limpo : null
+}
+
+/** O rascunho quando a IA não escreveu (desligada, sem crédito ou fora do ar). */
+export function rascunhoPadraoDoAviso(titulo: unknown): string {
+  const t = String(titulo ?? '').replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '')
+  return t
+    ? `Vocês comentaram e a gestão cuidou disso:\n${t}.`
+    : 'A gestão concluiu uma ação que nasceu do que vocês comentaram.'
+}
+
+/** A mensagem inteira do aviso, para uma pessoa. */
+export function montarAviso(p: { nome: unknown; restaurante: unknown; texto: string; sorteio?: () => number }): string {
+  const qual = Math.floor((p.sorteio ?? Math.random)() * ABERTURAS_AVISO.length)
+  return [aberturaDoAviso(p.nome, p.restaurante, qual), p.texto.trim(), FRASE_RESPONDER_AVISO, FRASE_PARAR].join('\n\n')
+}
+
+/** O prompt do rascunho (agente `aviso_equipe`, chave `ef_equipe_aviso`). */
+export const PROMPT_AVISO = `Voce escreve uma mensagem curta de WhatsApp para a EQUIPE de um restaurante, contando que a gestao concluiu uma acao que nasceu do que a propria equipe comentou.
+
+Restaurante: {restaurante}
+Categoria: {categoria}
+A acao concluida: {titulo}
+O que foi feito: {plano}
+
+Regras:
+- De 2 a 4 linhas curtas, do jeito que uma pessoa escreve no WhatsApp. Sem saudacao e sem despedida: elas ja vem prontas antes e depois do seu texto.
+- Diga, de forma geral, o que a equipe tinha comentado ("voces comentaram que...") e o que mudou na pratica.
+- NUNCA diga nem insinue quem comentou. Nada de nome, cargo, turno ou setor de quem falou.
+- Nao prometa o que o plano nao diz. Nao invente data, valor nem numero.
+- Sem emoji, sem negrito, sem lista. Nada de "prezados", "colaboradores", "feedback" ou "alinhamento".
+- Se a acao tratar de assedio, ameaca, discriminacao, agressao ou de uma pessoa especifica, NAO conte o caso: escreva so que a gestao esta cuidando do assunto com seriedade, sem detalhes.
+
+Chame registrar_aviso com o texto.`
+
+export const SCHEMA_AVISO = {
+  type: 'object',
+  properties: { texto: { type: 'string', description: 'De 2 a 4 linhas curtas, sem saudacao nem despedida.' } },
+  required: ['texto'],
+}
+
+// ── Pedido automático ────────────────────────────────────────────────────────
+// O sistema pede feedback sozinho, de tempos em tempos (toda semana, a cada 15
+// dias ou todo mês), sempre de manhã e nunca no domingo.
+
+export const FREQUENCIAS_AUTOMATICAS = [7, 14, 30] as const
+export const frequenciaValida = (v: unknown): v is (typeof FREQUENCIAS_AUTOMATICAS)[number] =>
+  (FREQUENCIAS_AUTOMATICAS as readonly number[]).includes(Number(v))
+
+const DIA_MS = 86_400_000
+/** Brasília é UTC-3 o ano todo (sem horário de verão desde 2019). */
+const BRASILIA_MS = 3 * 3_600_000
+/** A hora em que o pedido automático entra na fila: 10h de Brasília. */
+const HORA_DO_AUTOMATICO = 10
+
+/** 10h de Brasília do dia em que `instante` cai lá; domingo vira segunda. */
+function manhaUtil(instante: number): number {
+  const local = new Date(instante - BRASILIA_MS)
+  let dia = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())
+  if (new Date(dia).getUTCDay() === 0) dia += DIA_MS
+  return dia + HORA_DO_AUTOMATICO * 3_600_000 + BRASILIA_MS
+}
+
+/** A próxima manhã útil DEPOIS de hoje (liga hoje, o primeiro pedido sai amanhã). */
+export function proximaManha(agora: number): number {
+  return manhaUtil(agora + DIA_MS)
+}
+
+/** Quando sai o próximo pedido, contando `cadaDias` a partir de `base`. */
+export function proximoPedido(base: number, cadaDias: number): number {
+  return manhaUtil(base + Math.max(1, Math.trunc(cadaDias)) * DIA_MS)
+}
+
+/**
+ * Ao ligar (ou mudar a frequência): o primeiro pedido automático respeita o
+ * último pedido que já saiu, para não mandar dois em seguida, e nunca cai hoje.
+ */
+export function primeiroPedidoAutomatico(agora: number, cadaDias: number, ultimoPedidoEm: number | null): number {
+  const pelaFrequencia = ultimoPedidoEm ? proximoPedido(ultimoPedidoEm, cadaDias) : 0
+  return Math.max(proximaManha(agora), pelaFrequencia)
+}

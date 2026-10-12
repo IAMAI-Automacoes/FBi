@@ -1,0 +1,113 @@
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { CalendarClock, Loader2, TriangleAlert } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { formatarAteQuando, FREQUENCIAS, PERGUNTA_MAX, PERGUNTA_MIN, ROTULO_FREQUENCIA, type Frequencia } from '@/lib/equipe'
+import { acaoEquipe, type PedidoAutomaticoConfig } from '@/lib/queries/equipe'
+import { Cartao, Rotulo } from './pecas'
+
+/* Pedido automático: o sistema pede feedback sozinho, de tempos em tempos, para
+   toda a equipe que pode receber. Quem guarda e dispara é a função equipe
+   (ações "auto_ler" e "auto_salvar"); a rotina do minuto cria o pedido quando
+   a data chega. */
+export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
+  const [salvo, setSalvo] = useState<PedidoAutomaticoConfig | null>(null)
+  const [ativo, setAtivo] = useState(false)
+  const [cada, setCada] = useState<Frequencia>(30)
+  const [pergunta, setPergunta] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const aplicar = (c: PedidoAutomaticoConfig) => {
+    setSalvo(c)
+    setAtivo(c.ativo)
+    setCada(c.cada_dias)
+    setPergunta(c.pergunta)
+  }
+
+  useEffect(() => {
+    acaoEquipe<PedidoAutomaticoConfig>('auto_ler').then((r) => {
+      if (!r.ok || typeof r.pergunta !== 'string') return setErro(r.error || 'Não foi possível ler o pedido automático.')
+      aplicar(r as PedidoAutomaticoConfig)
+    })
+  }, [])
+
+  const limpa = pergunta.trim()
+  const perguntaOk = limpa.length >= PERGUNTA_MIN && limpa.length <= PERGUNTA_MAX
+  const mudou = !!salvo && (ativo !== salvo.ativo || cada !== salvo.cada_dias || limpa !== salvo.pergunta.trim())
+
+  const salvar = async () => {
+    if (!perguntaOk) return
+    setSalvando(true)
+    setErro(null)
+    const r = await acaoEquipe<PedidoAutomaticoConfig>('auto_salvar', { ativo, cada_dias: cada, pergunta: limpa })
+    setSalvando(false)
+    if (!r.ok || typeof r.pergunta !== 'string') return setErro(r.error || 'Não foi possível salvar.')
+    aplicar(r as PedidoAutomaticoConfig)
+    toast.success(r.ativo && r.proximo_em ? `Pedido automático ligado. O próximo sai em ${formatarAteQuando(r.proximo_em)}.` : 'Pedido automático desligado.')
+    onMudou?.()
+  }
+
+  return (
+    <Cartao className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EFF6FF] text-[#1D4ED8]"><CalendarClock className="h-4.5 w-4.5" /></span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Pedir sozinho</p>
+            <p className="mt-0.5 text-sm text-gray-500">O sistema pede feedback para a equipe toda de tempos em tempos, sem você precisar clicar.</p>
+          </div>
+        </div>
+        {salvo
+          ? <Switch checked={ativo} onCheckedChange={setAtivo} aria-label="Ligar o pedido automático" />
+          : !erro && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+      </div>
+
+      {salvo && ativo && (
+        <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
+          <div>
+            <Rotulo>Frequência</Rotulo>
+            <Select value={String(cada)} onValueChange={(v) => setCada(Number(v) as Frequencia)}>
+              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FREQUENCIAS.map((f) => <SelectItem key={f} value={String(f)}>{ROTULO_FREQUENCIA[f]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Rotulo>A pergunta</Rotulo>
+            <Textarea value={pergunta} onChange={(e) => setPergunta(e.target.value)} rows={2} maxLength={PERGUNTA_MAX} className="mt-1.5" />
+            {!perguntaOk && <p className="mt-1 text-xs text-rose-600">Escreva a pergunta (de {PERGUNTA_MIN} a {PERGUNTA_MAX} letras).</p>}
+          </div>
+        </div>
+      )}
+
+      {salvo?.ativo && salvo.ultimo_erro && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>O último pedido automático não saiu: {salvo.ultimo_erro}</span>
+        </p>
+      )}
+
+      {erro && <p className="text-sm text-rose-600">{erro}</p>}
+
+      {salvo && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            {salvo.ativo && salvo.proximo_em
+              ? `Próximo pedido: ${formatarAteQuando(salvo.proximo_em)}. Sai de manhã, nunca no domingo.`
+              : 'Desligado: você pede quando quiser, no botão "Pedir feedback".'}
+          </p>
+          {mudou && (
+            <Button size="sm" onClick={salvar} disabled={salvando || (ativo && !perguntaOk)} className="bg-[#1D4ED8] hover:bg-[#1E40AF]">
+              {salvando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Salvar
+            </Button>
+          )}
+        </div>
+      )}
+    </Cartao>
+  )
+}

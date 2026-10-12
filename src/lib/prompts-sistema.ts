@@ -1,5 +1,6 @@
 import { getPersonalidadePrompt } from './mascote-config'
 import { promptOverride, dadoAtivo } from './ia/prompt-store'
+import { CATEGORIAS_EQUIPE } from './categorias-equipe'
 
 /** Interruptores de dados do assistente (admin liga/desliga cada bloco). */
 const DADOS = 'assistente_dados'
@@ -29,6 +30,32 @@ Como ler os números:
 - "Índice de satisfação" vai de 0 a 100 (positivo=100, neutro=50, negativo=0). Quanto maior, melhor.
 - Comparações com o período anterior só valem quando há base suficiente; com poucas avaliações
   a variação percentual engana.`
+
+/**
+ * O que muda quando a conversa é aberta nas páginas da EQUIPE (/equipe/*): os
+ * dados do contexto são o que os funcionários falaram, não os clientes. Entra
+ * logo depois da descrição do sistema. Editável no painel pela chave `sobre_equipe`.
+ */
+export const SOBRE_A_EQUIPE = `ATENÇÃO: ESTA CONVERSA É SOBRE A EQUIPE (as páginas "Equipe" do painel).
+Os números, feedbacks, insights e ações que aparecem abaixo NÃO são dos clientes: são de quem
+TRABALHA no restaurante, contando como é trabalhar lá. Os funcionários respondem pelo WhatsApp do
+restaurante, quando o dono pede ou por conta própria.
+
+O que muda nesta conversa:
+- As categorias são estas ${CATEGORIAS_EQUIPE.length}: ${CATEGORIAS_EQUIPE.join(', ')} (não as 14 dos clientes).
+- O assunto é gestão de pessoas: escala, pagamento, treinamento, comunicação, liderança, condições
+  de trabalho, e como fazer a equipe trabalhar bem e não ir embora.
+- SIGILO: você não sabe quem escreveu cada feedback e nunca tenta descobrir nem adivinhar (pelo
+  jeito de escrever, pelo assunto, pelo turno). Cada pessoa escolhe se o nome dela aparece. Se o dono
+  perguntar "quem falou isso?", diga isso e aponte a página Equipe → Feedbacks, onde o nome aparece
+  quando a pessoa deixou. Nunca sugira "conversar com quem reclamou": quando for preciso ouvir mais,
+  é ouvindo a equipe toda.
+- Assédio, discriminação, agressão ou ameaça: oriente a proteger quem relatou e a apurar com discrição.
+- O que você criar aqui (ação ou insight) vai para o quadro da EQUIPE, não para o dos clientes.
+- Nada do que se decide aqui é enviado aos funcionários sozinho. Quando o dono conclui uma ação, a
+  tela pergunta se ele quer avisar a equipe e mostra o texto antes.
+- Regra de trabalho (jornada, intervalo, hora extra, descanso, prazo de pagamento): cite a regra real
+  (CLT, convenção coletiva da categoria). Sem certeza, diga que precisa conferir em vez de chutar.`
 
 export const REGRAS_RESPOSTA = `SOBRE O QUE VOCÊ PODE RESPONDER:
 Você conversa com o dono do restaurante e é o assistente DESTE negócio. Seu assunto é
@@ -213,10 +240,14 @@ export function construirSystemPromptChef(
   const sobre = promptOverride('sobre_sistema') ?? SOBRE_O_SISTEMA
   const regras = promptOverride('regras_resposta') ?? REGRAS_RESPOSTA
 
+  // Conversa aberta nas páginas da equipe: os dados do contexto são dos funcionários.
+  const daEquipe = ctx.publico === 'equipe'
+  const sobreAEquipe = daEquipe ? `\n\n${promptOverride('sobre_equipe') ?? SOBRE_A_EQUIPE}` : ''
+
   let prompt = `Você é o ${nome}, assistente de IA do painel de um restaurante, especialista em gestão e operação.
 Personalidade: ${personalidade}
 
-${sobre}
+${sobre}${sobreAEquipe}
 
 ${regras}`
 
@@ -353,10 +384,10 @@ QUANDO OS DOIS SE CONTRADIZEM:
     prompt += bloco(
       'Números do período recente',
       [
-        `Avaliações: ${k.totalFeedbacks}`,
+        `${daEquipe ? 'Feedbacks da equipe' : 'Avaliações'}: ${k.totalFeedbacks}`,
         `Índice de satisfação: ${k.sentiment} de 100`,
         `Positivas: ${k.positivos} (${k.positivePercent}%) | Neutras: ${k.neutros} (${k.neutralPercent}%) | Negativas: ${k.negativos} (${k.negativePercent}%) | Sugestões: ${k.sugestoes ?? 0} (${k.suggestionPercent ?? 0}%)`,
-        'Sugestão é ideia de melhoria do cliente, sem relatar falha: não conta como satisfação nem insatisfação.',
+        `Sugestão é ideia de melhoria ${daEquipe ? 'do funcionário' : 'do cliente'}, sem relatar falha: não conta como satisfação nem insatisfação.`,
         k.criticalTheme && k.criticalTheme !== 'Nenhum'
           ? `Tema com mais reclamações: ${k.criticalTheme} (${k.criticalPercent}% negativas)`
           : '',
@@ -413,7 +444,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
 
   if (ctx.feedbacksRelacionados?.length) {
     prompt += bloco(
-      'Avaliações relacionadas a este insight',
+      daEquipe ? 'Feedbacks da equipe relacionados a este insight' : 'Avaliações relacionadas a este insight',
       ctx.feedbacksRelacionados
         .map((f: any) => `- [${f.categoria || 'Outros'} / ${f.sentimento || '?'}] "${(f.texto_original || f.resumo || '').replace(/\s+/g, ' ').slice(0, 300)}"`)
         .join('\n'),
@@ -422,7 +453,7 @@ QUANDO OS DOIS SE CONTRADIZEM:
 
   if (on('feedbacks') && ctx.feedbacks?.length) {
     prompt += bloco(
-      'Avaliações recentes dos clientes',
+      daEquipe ? 'Feedbacks recentes da equipe (sem dizer quem escreveu)' : 'Avaliações recentes dos clientes',
       ctx.feedbacks
         .map((f: any) => {
           const data = f.created_at ? new Date(f.created_at).toLocaleDateString('pt-BR') : ''

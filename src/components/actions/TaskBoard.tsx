@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { ActionStatus } from '@/lib/mock-data'
 import { TaskCard } from './TaskCard'
 import { DetalhesAcaoPanel } from './DetalhesAcaoPanel'
+import { AvisarEquipe } from '@/components/equipe/AvisarEquipe'
 import { TaskModal } from '@/components/insights/TaskModal'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
@@ -254,6 +255,12 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const { toast } = useToast()
   const { usuario } = useAuth()
   const { ehEquipe, caminho } = usePublico()
+  /**
+   * Equipe: a ação concluída que o dono pode contar para todos os funcionários
+   * (a janela mostra o texto antes; nada sai sem ele mandar). Nos clientes isso
+   * não existe: lá quem avisa é o motor de retorno, sozinho.
+   */
+  const [avisarAcao, setAvisarAcao] = useState<{ id: number; titulo: string } | null>(null)
   const [tasks, setTasks] = useState<ExtendedActionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTask, setActiveTask] = useState<ExtendedActionTask | null>(null)
@@ -417,6 +424,12 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       // 2h de carência e só então vira aviso — e essa rota funciona mesmo quando
       // o status muda pela API ou por outra aba. O disparo daqui era um segundo
       // caminho, que mandava a mensagem na hora e não sabia desfazer.
+
+      // Equipe: concluiu, pergunta se quer contar para todos (com o texto à vista).
+      if (ehEquipe && newStatus === 'CONCLUIDO' && oldStatus !== 'CONCLUIDO') {
+        const feita = tasks.find((t) => t.id === taskId)
+        setAvisarAcao({ id: parseInt(taskId), titulo: feita?.titulo_acao ?? 'Ação concluída' })
+      }
     } catch (_err) {
       toast({ title: 'Falha ao atualizar o status.', variant: 'destructive' })
       load({ silencioso: true }) // desfaz o movimento otimista sem piscar a tela
@@ -1085,9 +1098,13 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
               setDetalhesTask(null)
               handleDeleteTask(id)
             }}
+            onAvisarEquipe={ehEquipe && detalhesTask.status === 'CONCLUIDO'
+              ? () => setAvisarAcao({ id: parseInt(detalhesTask.id), titulo: detalhesTask.titulo_acao })
+              : undefined}
           />
         )}
       </div>
+      {ehEquipe && <AvisarEquipe acao={avisarAcao} onFechar={() => setAvisarAcao(null)} />}
     </DndContext>
   )
 }

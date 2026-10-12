@@ -9,6 +9,9 @@ import { chaveWhatsapp, paraCanonico, paraDigitosNacionais, telefoneNacionalVali
 
 export const PERGUNTA_MIN = 10
 export const PERGUNTA_MAX = 400
+/** O aviso de ação concluída (mesmos limites da função equipe). */
+export const AVISO_MIN = 20
+export const AVISO_MAX = 600
 
 export interface Funcionario {
   id: number
@@ -24,14 +27,27 @@ export interface Funcionario {
 }
 
 export type StatusEnvio = 'na_fila' | 'enviando' | 'concluido' | 'cancelado'
+/** 'pedido' pede a opinião da equipe; 'aviso' conta o que mudou quando uma ação é concluída. */
+export type TipoEnvio = 'pedido' | 'aviso'
 export interface Envio {
   id: number
   restaurante_id: number
+  /** A pergunta do pedido, ou o texto do aviso. */
   pergunta: string
   status: StatusEnvio
+  tipo: TipoEnvio
+  /** Só no aviso: a ação concluída. */
+  acao_id: number | null
+  /** E-mail de quem criou, ou 'automatico'. */
+  criado_por: string
   criado_em: string
   concluido_em: string | null
 }
+
+/** De quanto em quanto tempo o pedido automático sai (dias). */
+export const FREQUENCIAS = [7, 14, 30] as const
+export type Frequencia = (typeof FREQUENCIAS)[number]
+export const ROTULO_FREQUENCIA: Record<Frequencia, string> = { 7: 'Toda semana', 14: 'A cada 15 dias', 30: 'Todo mês' }
 export type StatusConvite = 'na_fila' | 'enviando' | 'enviado' | 'falhou' | 'cancelado'
 /** O convite como a página do restaurante vê: sem dizer de quem é. */
 export interface ConviteAnonimo { envio_id: number; status: StatusConvite; respondeu: boolean }
@@ -153,6 +169,22 @@ export function formatarAteQuando(iso: string): string {
 }
 
 /** "8 de 12 responderam (67%)". */
+/**
+ * Os números dos PEDIDOS de feedback para a Visão Geral da equipe: o último
+ * pedido e a taxa de resposta de todos. Aviso de ação concluída não entra: ele
+ * não pede resposta.
+ */
+export function resumoDosPedidos(envios: Pick<Envio, 'id' | 'tipo' | 'status' | 'criado_em'>[], convites: ConviteAnonimo[]) {
+  const pedidos = envios.filter((e) => e.tipo === 'pedido' && e.status !== 'cancelado')
+  const ids = new Set(pedidos.map((e) => e.id))
+  const ultimo = [...pedidos].sort((a, b) => b.criado_em.localeCompare(a.criado_em))[0] ?? null
+  return {
+    pedidos: pedidos.length,
+    geral: contasDoEnvio(convites.filter((c) => ids.has(c.envio_id))),
+    ultimo: ultimo ? { criado_em: ultimo.criado_em, contas: contasDoEnvio(convites.filter((c) => c.envio_id === ultimo.id)) } : null,
+  }
+}
+
 export function fraseDeRespostas(c: ContasDoEnvio): string {
   if (!c.enviados) return c.naFila ? 'Ainda saindo' : 'Ninguém recebeu'
   return `${c.responderam} de ${c.enviados} ${c.responderam === 1 ? 'respondeu' : 'responderam'} (${Math.round(c.taxa * 100)}%)`

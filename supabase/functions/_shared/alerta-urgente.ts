@@ -24,11 +24,27 @@
  * mas estava tudo impecável" tem a expressão e não é urgência. Mandar o dono
  * correr para o restaurante por causa disso queima a confiança no aviso — e um
  * aviso em que não se confia deixa de ser lido, inclusive quando é real.
+ *
+ * ## Equipe (feedback de funcionário)
+ *
+ * O mesmo aviso existe para a equipe, com três diferenças:
+ *   - o que é grave vem do léxico da EQUIPE (assédio, agressão, ameaça,
+ *     acidente, salário não pago) ou do relato que a entrada já marcou como
+ *     sensível; a triagem usa o prompt próprio (`ef_triagem_urgencia_equipe`);
+ *   - a mensagem leva o relato e NUNCA o nome nem o telefone de quem falou: a
+ *     pessoa ainda pode pedir anonimato. O nome só aparece no painel, se ela
+ *     deixar;
+ *   - sai DIRETO pela uazapi do restaurante, sem passar pelo n8n do alerta dos
+ *     clientes (aquele fluxo monta a mensagem com o telefone de quem escreveu).
  */
 import { chamarIA, ErroCota } from './openrouter.ts'
 import { paramsDoAgente } from './params.ts'
-import { carregarPrompts, montarPrompt } from './prompts.ts'
+import { carregarPrompts } from './prompts.ts'
 import { avaliarGravidade } from './gravidade.ts'
+import { promptPara } from './prompts-equipe.ts'
+import type { Publico } from './publico.ts'
+import { configUazapi, enviarTexto } from './uazapi.ts'
+import { mensagemDoAlertaDaEquipe } from './equipe.ts'
 
 // deno-lint-ignore no-explicit-any
 type Db = any
@@ -100,13 +116,26 @@ export async function talvezAlertarDono(
   // deno-lint-ignore no-explicit-any
   fb: any,
   texto: string,
+  /** De quem é o feedback. Na equipe o aviso sai sem o nome de quem falou. */
+  publico: Publico = 'cliente',
 ): Promise<ResultadoAlerta> {
   try {
     if (!fb.origem_id) return { urgente: false, motivo: 'ponto sem mensagem de origem' }
 
     // ── Etapa 1: o léxico, de graça ──
-    const { G, termos } = avaliarGravidade(texto, fb.sentimento)
-    if (G < 4) return { urgente: false, motivo: `gravidade ${G} pelo lexico` }
+    const { G, termos } = avaliarGravidade(texto, fb.sentimento, publico)
+    // Equipe: o relato que a entrada marcou como sensível (assédio, ameaça,
+    // risco…) também é candidato, mesmo escrito com palavras fora da lista.
+    let sensivel = false
+    if (publico === 'equipe' && G < 4) {
+      const { data: autoria } = await db
+        .from('equipe_autorias')
+        .select('sensivel')
+        .eq('feedback_original_id', fb.origem_id)
+        .maybeSingle()
+      sensivel = autoria?.sensivel === true
+    }
+    if (G < 4 && !sensivel) return { urgente: false, motivo: `gravidade ${G} pelo lexico` }
 
     // ── Etapa 2: a mensagem inteira e a confirmação da IA ──
     const { data: original } = await db
@@ -126,7 +155,7 @@ export async function talvezAlertarDono(
     // desta função.
     const nomeCliente: string | null = null
 
-    const triagem = await confirmarComIa(db, fb.restaurante_id, textoOriginal, texto, termos)
+    const triagem = await confirmarComIa(db, fb.restaurante_id, textoOriginal, texto, termos, publico)
     if (!triagem.urgente) return { urgente: false, motivo: triagem.motivo }
 
     // ── Etapa 3: reservar o direito de avisar ──
@@ -179,6 +208,14 @@ export async function talvezAlertarDono(
       }))
       .filter((p) => p.texto)
 
+    // ── Equipe: avisa direto, sem o nome ──
+    if (publico === 'equipe') {
+      const resumoEquipe = triagem.resumo || 'Chegou um relato grave da equipe.'
+      forcarInsights(fb.restaurante_id, 'equipe')
+      const enviado = await avisarDonoSobreAEquipe(db, fb.restaurante_id, reserva.id, resumoEquipe, textoOriginal)
+      return { urgente: true, motivo: resumoEquipe, enviado }
+    }
+
     const resumo = triagem.resumo || 'Feedback grave recebido.'
 
     // Texto pronto pra mandar como está — o n8n não precisa montar nada pra
@@ -203,15 +240,7 @@ export async function talvezAlertarDono(
     // pode estar livre mas ainda não ter cruzado o limiar de acúmulo. Nos
     // dois casos, "urgente" já justifica gerar agora, sem esperar: gravidade
     // 4 sozinha já torna QUALQUER assunto elegível (é preciso 1 pessoa só).
-    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/gerar-insights`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
-        'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
-      },
-      body: JSON.stringify({ restaurante_id: fb.restaurante_id, force: true }),
-    }).catch((e) => console.error('[alerta-urgente] falha ao forçar geração de insights:', e))
+    forcarInsights(fb.restaurante_id, 'cliente')
 
     const enviado = await dispararWebhook(db, fb.restaurante_id, {
       alerta_id: reserva.id,
@@ -234,12 +263,74 @@ export async function talvezAlertarDono(
   }
 }
 
+/** Dispara uma rodada de insights daquele público, sem esperar por ela. */
+function forcarInsights(restauranteId: number, publico: Publico) {
+  fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/gerar-insights`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+      'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
+    },
+    body: JSON.stringify({ restaurante_id: restauranteId, force: true, publico }),
+  }).catch((e) => console.error('[alerta-urgente] falha ao forçar geração de insights:', e))
+}
+
+/**
+ * Manda o alerta da equipe para o número do dono, pela instância do próprio
+ * restaurante. Nunca lança; o resultado fica em `alerta_urgente`.
+ */
+async function avisarDonoSobreAEquipe(
+  db: Db,
+  restauranteId: number,
+  alertaId: number,
+  resumo: string,
+  relato: string,
+): Promise<boolean> {
+  const marcar = async (campos: Record<string, unknown>) => {
+    await db.from('alerta_urgente').update(campos).eq('id', alertaId)
+  }
+  try {
+    const { data: r } = await db
+      .from('restaurantes')
+      .select('whatsapp_dono, whatsapp_token, whatsapp_base_url')
+      .eq('id', restauranteId)
+      .maybeSingle()
+
+    const dono = String(r?.whatsapp_dono ?? '').replace(/\D/g, '')
+    if (!dono) {
+      await marcar({ erro: 'número do dono não configurado' })
+      return false
+    }
+    const token = String(r?.whatsapp_token ?? '').trim()
+    // Instância antiga pode não ter o endereço gravado: vale o do servidor.
+    const base = String(r?.whatsapp_base_url ?? '').trim().replace(/\/+$/, '') || (await configUazapi(db))?.base || ''
+    if (!token || !base) {
+      await marcar({ erro: 'WhatsApp do restaurante não conectado' })
+      return false
+    }
+
+    const envio = await enviarTexto(base, token, { numero: dono, texto: mensagemDoAlertaDaEquipe(resumo, relato) })
+    if (!envio.ok) {
+      await marcar({ erro: envio.erro ?? 'falha no envio' })
+      return false
+    }
+    await marcar({ enviado_em: new Date().toISOString(), erro: null })
+    return true
+  } catch (err) {
+    console.error('[alerta-urgente] aviso da equipe falhou:', err)
+    await marcar({ erro: 'falha ao avisar o dono' }).catch(() => {})
+    return false
+  }
+}
+
 async function confirmarComIa(
   db: Db,
   restauranteId: number,
   original: string,
   trecho: string,
   termos: string[],
+  publico: Publico = 'cliente',
 ): Promise<{ urgente: boolean; resumo: string; motivo: string }> {
   const params = await paramsDoAgente(db, AGENTE, { max_tokens: 300 })
   // Agente desligado no painel: o léxico já viu risco sanitário, e engolir o
@@ -249,11 +340,11 @@ async function confirmarComIa(
 
   try {
     const prompts = await carregarPrompts(db)
-    const prompt = montarPrompt(prompts, 'ef_triagem_urgencia', PROMPT, {
+    const prompt = promptPara(prompts, 'ef_triagem_urgencia', PROMPT, {
       original,
       trecho,
       termos: termos.length ? termos.join(', ') : '(nenhum termo específico)',
-    })
+    }, publico)
 
     const { result } = await chamarIA(db, {
       messages: [{ role: 'user', content: prompt }],

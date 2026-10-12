@@ -4,13 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { DashboardData } from '@/lib/queries/visao-geral'
 import { FeedbackOriginalCard } from '@/components/FeedbackOriginalCard'
 
-export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recentFeedbacks'] }) {
+export function RecentFeedbacks({ feedbacks, verTodosEm = '/feedbacks' }: { feedbacks: DashboardData['recentFeedbacks']; verTodosEm?: string }) {
   return (
     <Card className="shadow-subtle">
       <CardHeader className="p-5 flex flex-row items-center justify-between border-b border-border">
         <CardTitle className="text-base font-semibold">Últimos Feedbacks</CardTitle>
         <Link
-          to="/feedbacks"
+          to={verTodosEm}
           className="text-xs font-medium text-primary flex items-center gap-1 hover:underline"
         >
           Ver todos <ArrowRight className="h-3 w-3" />
@@ -31,6 +31,7 @@ export function RecentFeedbacks({ feedbacks }: { feedbacks: DashboardData['recen
                   sentimento={item.sentiment}
                   categorias={item.categories}
                   quando={item.timeAgo}
+                  autoria={item.autoria}
                   truncar
                 />
               </div>

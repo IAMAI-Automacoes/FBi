@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getIniciais, corAvatar } from '@/lib/iniciais'
 import { Button } from '@/components/ui/button'
-import { Pencil, CalendarDays, Trash2, Link2, Loader2 } from 'lucide-react'
+import { Pencil, CalendarDays, Trash2, Link2, Loader2, Megaphone } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { estiloPrioridade } from '@/lib/prioridade'
@@ -39,6 +39,8 @@ interface DetalhesAcaoPanelProps {
   onEditar?: () => void
   /** Exclui a ação. Sem isso, o botão de excluir não aparece. */
   onExcluir?: () => void
+  /** Equipe, ação concluída: abre o aviso para todos os funcionários. */
+  onAvisarEquipe?: () => void
 }
 
 /**
@@ -59,7 +61,7 @@ interface DetalhesAcaoPanelProps {
  * entrega e quando —, e separá-los em dois blocos empurrava o plano para longe
  * sem ganhar nada.
  */
-export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: DetalhesAcaoPanelProps) {
+export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir, onAvisarEquipe }: DetalhesAcaoPanelProps) {
   const dataExibida = task.prazo
     ? format(parseISO(task.prazo), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
     : null
@@ -240,6 +242,22 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
                     botão de feedbacks é o que impede clicar em excluir quando
                     se queria ler os feedbacks. */}
                 <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {onAvisarEquipe && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={onAvisarEquipe}
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Avisar a equipe"
+                          className="h-9 w-9 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        >
+                          <Megaphone className="h-[18px] w-[18px]" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Avisar a equipe</TooltipContent>
+                    </Tooltip>
+                  )}
                   {onEditar && (
                   <Tooltip>
                     <TooltipTrigger asChild>

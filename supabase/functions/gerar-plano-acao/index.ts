@@ -1,8 +1,9 @@
 import { json, preflight } from '../_shared/cors.ts'
 import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
-import { promptDoPublico, publicoDe } from '../_shared/publico.ts'
+import { carregarPrompts } from '../_shared/prompts.ts'
+import { publicoDe } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, tomDoAssistente } from '../_shared/perfil.ts'
@@ -125,13 +126,13 @@ Deno.serve(async (req: Request) => {
       : ''
 
     const prompts = await carregarPrompts(db)
-    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
+    const prompt = promptPara(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
       tom: tomDoAssistente(restaurante?.mascote_config),
       perfil: blocoPerfil(restaurante),
       acao: contextoAcao,
       insights: blocoInsights,
       conhecimento: blocoConhecimento,
-    }), publico)
+    }, publico)
 
     // Único agente do sistema com busca na web ligada, e de propósito: é o
     // único que escreve instrução operacional que alguém vai EXECUTAR. Um plano

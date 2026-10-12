@@ -497,8 +497,9 @@ const PE = (s, c = 'Salário e benefícios', t = 'O salário atrasa') => ({ feed
 const montaEq = (obj, b = juntadaEq, falou = JA_FALOU, extra = {}) =>
   roda('Monta a resposta da equipe', { text: typeof obj === 'string' ? obj : JSON.stringify(obj) }, { 'Sou a última mensagem?': b, 'Já respondeu hoje?': falou, ...extra })[0].json
 o = montaEq({ tipo: 'feedback', pontos: [PE('Negativo')], sensivel: false })
-ok('equipe: feedback vira ponto com a categoria da equipe e agradece', o.ehFeedback && o.sentimentoGeral === 'Negativo' && o.pontos[0].categoria === 'Salário e benefícios' && o.respostas.length === 1 && o.respostas[0].tipo === 'feedback' && o.respostas[0].replyid === 'e1')
-ok('equipe: saída com o que a gravação precisa (e nada de telefone dentro dos pontos)', JSON.stringify(Object.keys(o).sort()) === JSON.stringify(['baseUrl', 'ehFeedback', 'pontos', 'resposta', 'respostas', 'restauranteId', 'sensivel', 'sentimentoGeral', 'telefone', 'textoCompleto', 'token'])
+ok('equipe: feedback vira ponto com a categoria da equipe; o texto de boas-vindas fica marcado como "só na primeira vez"', o.ehFeedback && o.sentimentoGeral === 'Negativo' && o.pontos[0].categoria === 'Salário e benefícios'
+  && o.respostas.length === 1 && o.respostas[0].tipo === 'feedback' && o.respostas[0].replyid === 'e1' && o.respostas[0].soNaPrimeira === true && o.citaFeedback === 'e1')
+ok('equipe: saída com o que a gravação precisa (e nada de telefone dentro dos pontos)', JSON.stringify(Object.keys(o).sort()) === JSON.stringify(['apresentacao', 'baseUrl', 'citaFeedback', 'ehFeedback', 'pontos', 'resposta', 'respostas', 'restauranteId', 'sensivel', 'sentimentoGeral', 'telefone', 'textoCompleto', 'token'])
   && JSON.stringify(Object.keys(o.pontos[0]).sort()) === '["categoria","resumo","sentimento","texto_original"]')
 ok('equipe: categoria de cliente (ou inventada) vira Outros; sem acento acha a certa', montaEq({ tipo: 'feedback', pontos: [PE('Negativo', 'Comida')] }).pontos[0].categoria === 'Outros'
   && montaEq({ tipo: 'feedback', pontos: [PE('Positivo', 'clima e colegas')] }).pontos[0].categoria === 'Clima e colegas')
@@ -519,7 +520,10 @@ const todasEq = [
 ]
 ok('equipe: nenhuma {variável} sobra e nada com cara de IA', todasEq.every((x) => !/[{}]|undefined|null/.test(x) && !CARA_DE_IA.test(x)), todasEq.find((x) => /[{}]|undefined|null/.test(x) || CARA_DE_IA.test(x)))
 ok('equipe: o agradecimento NÃO promete anonimato (a pessoa ainda vai escolher) nem chama de cliente', todasEq.filter((x) => !/Você que escolhe/.test(x)).every((x) => !/an[oô]nim|sem o seu nome|cliente/i.test(x)), todasEq.find((x) => !/Você que escolhe/.test(x) && /an[oô]nim|sem o seu nome|cliente/i.test(x)))
-ok('equipe: o sorteio varia', new Set(todasEq).size > 25)
+ok('equipe: o sorteio varia', new Set(todasEq).size > 10)
+ok('equipe: as boas-vindas dizem que a pessoa pode falar quando quiser e que a gestão lê', amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }).every((x) => /sempre que quiser|fica aberto/i.test(x) && /gest[ãa]o/.test(x)))
+o = montaEq({ tipo: 'feedback', pontos: [PE('Negativo', 'Liderança e gestão', 'O gerente me humilha')], sensivel: true })
+ok('equipe: a mensagem de apoio do relato grave NÃO é "só na primeira vez"', o.respostas[0].soNaPrimeira === false && /Ligue 180/.test(o.respostas[0].texto))
 ok('equipe: primeira resposta do dia se apresenta como a Helena do restaurante; nas outras, não', amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }, {}).every((x) => /^(Oi|Olá)[^\n]*Helena, do Camelo\.\n\n\S/.test(x))
   && amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }).every((x) => !/Helena/.test(x)))
 o = montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 1, pontos: [] })
@@ -564,10 +568,12 @@ ok('equipe: grava pela função equipe_registrar_feedback (texto inteiro, sentim
 ok('equipe: o feedback da equipe NÃO passa pelos nós que gravam o telefone do cliente', !['Salva a mensagem', 'Separa os pontos', 'Salva os pontos'].some((n) => [...destinos('É feedback da equipe?', 0), ...destinos('É feedback da equipe?', 1), ...destinos('Grava o feedback da equipe')].includes(n)))
 
 // Respostas da equipe e a pergunta do anonimato
-const GRAVOU = { ok: true, original_id: 'u1', autoria_id: 'a1', identidade: 'pendente', perguntar_identidade: true, sensivel: false, prazo_horas: 24 }
+const GRAVOU = { ok: true, original_id: 'u1', autoria_id: 'a1', identidade: 'pendente', primeiro: true, perguntar_identidade: true, sensivel: false, prazo_horas: 24 }
+const SEGUINTE = { ...GRAVOU, primeiro: false }
 const respostasEq = (m, gravado) => rodaCom('Respostas da equipe', {}, gravado === undefined ? { 'Monta a resposta da equipe': m } : { 'Monta a resposta da equipe': m, 'Grava o feedback da equipe': gravado })
 r = respostasEq(montadoEq, GRAVOU)
-ok('equipe: uma resposta por item, levando a pergunta do anonimato', r.length === 1 && r[0].json.texto === montadoEq.respostas[0].texto && r[0].json.perguntar === true && !!r[0].json.pergunta)
+ok('primeiro feedback da pessoa: as boas-vindas por escrito e, depois, o botão', r.length === 1 && r[0].json.temTexto === true && r[0].json.texto === montadoEq.respostas[0].texto && r[0].json.replyid === 'e1'
+  && r[0].json.perguntar === true && !!r[0].json.pergunta && r[0].json.pergunta.replyid === '' && !/Anotado/.test(r[0].json.pergunta.texto))
 const pg = r[0].json.pergunta
 ok('pergunta: dois botões de resposta com os ids que o "Lê a mensagem" reconhece', JSON.stringify(pg.botoes) === '["Ficar anônimo|equipe_anonimo","Mostrar meu nome|equipe_mostrar"]'
   && pg.botoes.every((b) => lê({ messageType: 'ButtonsResponseMessage', buttonOrListid: b.split('|')[1] }).length === 1))
@@ -576,17 +582,37 @@ ok('pergunta: diz o que acontece sem resposta (aparece o nome em 24 horas) e com
 ok('pergunta por escrito (reserva): mesma explicação, as duas palavras e o prazo', /ANÔNIMO ou MOSTRAR/.test(pg.textoSemBotao) && pg.textoSemBotao.endsWith(pg.rodape)
   && diz('ANÔNIMO') === 'anonimo' && diz('MOSTRAR') === 'identificado')
 ok('prazo configurado em dias aparece em dias', respostasEq(montadoEq, { ...GRAVOU, prazo_horas: 72 })[0].json.pergunta.rodape === 'Sem resposta em 3 dias, aparece com o seu nome.')
-ok('relato grave: sem resposta fica ANÔNIMO (nunca promete mostrar o nome)', respostasEq(montadoEq, { ...GRAVOU, sensivel: true })[0].json.pergunta.rodape === 'Sem resposta, fica anônima.')
-r = respostasEq(montadoEq, { ...GRAVOU, perguntar_identidade: false })
-ok('já perguntou nesta leva: agradece e não pergunta de novo', r.length === 1 && r[0].json.perguntar === false && r[0].json.pergunta === null)
+r = respostasEq(montadoEq, SEGUINTE)
+ok('do segundo feedback em diante: nenhum texto, só o botão, que confirma o recebimento e cita a mensagem', r.length === 1 && r[0].json.temTexto === false && r[0].json.texto === undefined && r[0].json.perguntar === true
+  && r[0].json.pergunta.texto.startsWith('Anotado, obrigada!\nQuer que essa resposta fique anônima?') && r[0].json.pergunta.replyid === 'e1' && r[0].json.pergunta.textoSemBotao.startsWith('Anotado, obrigada!'))
+ok('o botão nunca tem cara de IA nem sobra de variável', [pg, r[0].json.pergunta].every((p) => [p.texto, p.textoSemBotao, p.rodape].every((t) => !CARA_DE_IA.test(t) && !/[{}]|undefined|null/.test(t))))
+const montadoGrave = montaEq({ tipo: 'feedback', pontos: [PE('Negativo', 'Liderança e gestão', 'O gerente me humilha')], sensivel: true })
+for (const quando of [GRAVOU, SEGUINTE]) {
+  r = respostasEq(montadoGrave, { ...quando, sensivel: true })
+  ok(`relato grave (${quando.primeiro ? 'primeiro' : 'seguinte'}): a mensagem de apoio sai sempre, e a pergunta explica para que serve o nome`, r.length === 1 && r[0].json.temTexto === true && /Ligue 180/.test(r[0].json.texto)
+    && /consegue te procurar e ajudar/.test(r[0].json.pergunta.texto) && /n[ãa]o sabe quem contou/.test(r[0].json.pergunta.texto) && !/Anotado/.test(r[0].json.pergunta.texto))
+  ok(`relato grave (${quando.primeiro ? 'primeiro' : 'seguinte'}): sem resposta fica ANÔNIMO (nunca promete mostrar o nome)`, r[0].json.pergunta.rodape === 'Sem resposta, fica anônimo.' && r[0].json.pergunta.textoSemBotao.endsWith('Sem resposta, fica anônimo.'))
+}
+ok('pergunta no ar há poucos minutos (várias mensagens seguidas): silêncio, o botão que está na tela vale', respostasEq(montadoEq, { ...SEGUINTE, perguntar_identidade: false }).length === 0)
 ok('feedback que o banco não gravou (saiu do cadastro): não agradece nem pergunta', respostasEq(montadoEq, { ok: false, motivo: 'nao_e_da_equipe' }).length === 0)
 r = respostasEq(montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 1, pontos: [] }))
-ok('só pergunta (nada gravado): responde e não manda o botão', r.length === 1 && r[0].json.perguntar === false)
+ok('só pergunta (nada gravado): responde e não manda o botão', r.length === 1 && r[0].json.temTexto === true && r[0].json.perguntar === false && r[0].json.pergunta === null)
+const duasEqMontado = montaEq({ tipo: 'feedback', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 2, pontos: [{ ...PE('Positivo', 'Clima e colegas'), mensagem: 1 }] }, duasEq)
+r = respostasEq(duasEqMontado, SEGUINTE)
+ok('feedback seguinte + pergunta: sai só a resposta da pergunta, e depois o botão sem citar', r.length === 1 && r[0].json.temTexto === true && r[0].json.replyid === 'e2' && /Você que escolhe/.test(r[0].json.texto)
+  && r[0].json.perguntar === true && r[0].json.pergunta.replyid === '')
+r = respostasEq(montaEq({ tipo: 'feedback', pontos: [PE('Negativo')] }, juntadaEq, {}), GRAVOU)
+ok('primeiro feedback do dia: a Helena se apresenta no começo das boas-vindas', /^(Oi|Olá)[^\n]*Helena, do Camelo\.\n\n\S/.test(r[0].json.texto) && r[0].json.digitandoMs >= 3000)
+r = respostasEq(montaEq({ tipo: 'feedback', pontos: [PE('Negativo')] }, juntadaEq, {}), SEGUINTE)
+ok('feedback seguinte, primeira conversa do dia: só o botão, sem apresentação solta', r.length === 1 && r[0].json.temTexto === false && !/Helena/.test(r[0].json.pergunta.texto))
 ok('nada a responder: o ramo para', respostasEq(montaEq({ tipo: 'outro', pontos: [] })).length === 0)
 
 // O envio da equipe
-ok('equipe: respostas uma de cada vez; a pergunta só depois de todas', destinos('Respostas da equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 1).join() === 'Envia à equipe'
-  && destinos('Envia à equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 0).join() === 'Vai perguntar?' && porNome('Uma de cada vez (equipe)').parameters.batchSize === 1)
+ok('equipe: respostas uma de cada vez; a pergunta só depois de todas', destinos('Respostas da equipe').join() === 'Tem mensagem?' && destinos('Tem mensagem?', 0).join() === 'Uma de cada vez (equipe)'
+  && destinos('Uma de cada vez (equipe)', 1).join() === 'Envia à equipe' && destinos('Envia à equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 0).join() === 'Vai perguntar?'
+  && porNome('Uma de cada vez (equipe)').parameters.batchSize === 1)
+ok('"Tem mensagem?": sem texto (do segundo feedback em diante) vai direto para a pergunta', destinos('Tem mensagem?', 1).join() === 'Vai perguntar?'
+  && seVale('Tem mensagem?', { temTexto: true }) === true && seVale('Tem mensagem?', { temTexto: false, perguntar: true }) === false)
 const exprCom = (expr, $json, outros) => new Function('$', '$json', 'return (' + expr.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')((n) => ({ first: () => ({ json: outros[n] ?? {} }) }), $json)
 const item = respostasEq(montadoEq, GRAVOU)[0].json
 const CTX = { 'Monta a resposta da equipe': montadoEq, 'Respostas da equipe': item }
@@ -599,6 +625,10 @@ env = JSON.parse(exprCom(botao.parameters.jsonBody, {}, CTX))
 ok('botão: /send/menu da uazapi, type "button", com os dois botões, o rodapé e o "digitando..."', exprCom(botao.parameters.url.replace('/send/menu', ''), {}, CTX) + '/send/menu' === 'https://iamai-ia.uazapi.com/send/menu' && botao.parameters.url.endsWith('}}/send/menu')
   && env.number === '5511932903005' && env.type === 'button' && env.text === pg.texto && JSON.stringify(env.choices) === JSON.stringify(pg.botoes) && env.footerText === pg.rodape && env.delay >= 2500 && env.readchat === true)
 ok('botão: só botões de resposta (misturar com link ou ligação quebra no WhatsApp Web)', env.choices.every((c) => !/https?:|call:|copy:|url:/.test(c)))
+const soBotao = respostasEq(montadoEq, SEGUINTE)[0].json
+env = JSON.parse(exprCom(botao.parameters.jsonBody, {}, { ...CTX, 'Respostas da equipe': soBotao }))
+ok('botão sozinho: cita a mensagem do funcionário (replyid); depois de um texto, não cita', env.replyid === 'e1' && env.text.startsWith('Anotado, obrigada!')
+  && JSON.parse(exprCom(botao.parameters.jsonBody, {}, CTX)).replyid === undefined)
 ok('botão falhou (recurso fora do ar): a pergunta vai por escrito, e o prazo começa do mesmo jeito', botao.onError === 'continueErrorOutput' && !botao.retryOnFail && destinos('Manda o botão', 0).join() === 'Começa o prazo'
   && destinos('Manda o botão', 1).join() === 'Pergunta por escrito' && destinos('Pergunta por escrito').join() === 'Começa o prazo')
 env = JSON.parse(exprCom(porNome('Pergunta por escrito').parameters.jsonBody, {}, CTX))

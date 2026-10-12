@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -873,6 +873,50 @@ export type Database = {
           },
         ]
       }
+      equipe_automatico: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          cada_dias: number
+          pergunta: string
+          proximo_em: string | null
+          restaurante_id: number
+          ultimo_em: string | null
+          ultimo_erro: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cada_dias?: number
+          pergunta: string
+          proximo_em?: string | null
+          restaurante_id: number
+          ultimo_em?: string | null
+          ultimo_erro?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cada_dias?: number
+          pergunta?: string
+          proximo_em?: string | null
+          restaurante_id?: number
+          ultimo_em?: string | null
+          ultimo_erro?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_automatico_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: true
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipe_autorias: {
         Row: {
           criado_em: string
@@ -1036,6 +1080,7 @@ export type Database = {
       }
       equipe_envios: {
         Row: {
+          acao_id: number | null
           concluido_em: string | null
           criado_em: string
           criado_por: string
@@ -1043,8 +1088,10 @@ export type Database = {
           pergunta: string
           restaurante_id: number
           status: string
+          tipo: string
         }
         Insert: {
+          acao_id?: number | null
           concluido_em?: string | null
           criado_em?: string
           criado_por?: string
@@ -1052,8 +1099,10 @@ export type Database = {
           pergunta: string
           restaurante_id: number
           status?: string
+          tipo?: string
         }
         Update: {
+          acao_id?: number | null
           concluido_em?: string | null
           criado_em?: string
           criado_por?: string
@@ -1061,8 +1110,16 @@ export type Database = {
           pergunta?: string
           restaurante_id?: number
           status?: string
+          tipo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "equipe_envios_acao_id_fkey"
+            columns: ["acao_id"]
+            isOneToOne: false
+            referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "equipe_envios_restaurante_id_fkey"
             columns: ["restaurante_id"]

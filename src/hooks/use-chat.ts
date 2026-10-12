@@ -83,15 +83,18 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     return novo
   }, [])
 
+  // A conversa da equipe (páginas /equipe) é outra: não continua a dos clientes
+  // nem aparece no histórico dela, e vice-versa.
+  const guarda = contextoPagina === 'equipe' ? 'equipe:chat_sessao' : 'chat_sessao'
   const [sessaoId, setSessaoId] = useState(() => {
-    const saved = localStorage.getItem('chat_sessao_id')
-    const savedTime = localStorage.getItem('chat_sessao_time')
+    const saved = localStorage.getItem(`${guarda}_id`)
+    const savedTime = localStorage.getItem(`${guarda}_time`)
     if (saved && savedTime && Date.now() - parseInt(savedTime) < 24 * 60 * 60 * 1000) {
       return saved
     }
     const newId = crypto.randomUUID()
-    localStorage.setItem('chat_sessao_id', newId)
-    localStorage.setItem('chat_sessao_time', Date.now().toString())
+    localStorage.setItem(`${guarda}_id`, newId)
+    localStorage.setItem(`${guarda}_time`, Date.now().toString())
     return newId
   })
 
@@ -383,8 +386,8 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
 
   const novaConversa = () => {
     const newId = crypto.randomUUID()
-    localStorage.setItem('chat_sessao_id', newId)
-    localStorage.setItem('chat_sessao_time', Date.now().toString())
+    localStorage.setItem(`${guarda}_id`, newId)
+    localStorage.setItem(`${guarda}_time`, Date.now().toString())
     setSessaoId(newId)
     aplicar(() => [])
   }

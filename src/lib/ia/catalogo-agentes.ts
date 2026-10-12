@@ -1,6 +1,9 @@
 import {
-  SOBRE_O_SISTEMA, REGRAS_RESPOSTA, COMANDOS, REGRA_POS_BUSCA,
+  SOBRE_O_SISTEMA, SOBRE_A_EQUIPE, REGRAS_RESPOSTA, COMANDOS, REGRA_POS_BUSCA,
 } from '@/lib/prompts-sistema'
+// O treinamento da equipe mora junto das funções do servidor (é lá que roda).
+import { PROMPTS_EQUIPE } from '../../../supabase/functions/_shared/prompts-equipe.ts'
+import { PROMPT_AVISO } from '../../../supabase/functions/_shared/equipe.ts'
 
 /**
  * Catálogo dos agentes de IA — o que cada um faz, o que ACESSA, sua MEMÓRIA e o
@@ -88,6 +91,13 @@ export const CATALOGO_AGENTES: AgenteInfo[] = [
         explicacao: 'Explica à IA onde ela vive: o que é o produto, as páginas do painel e como ler os números.',
         conteudo: SOBRE_O_SISTEMA,
         chave: 'sobre_sistema',
+        editavel: true,
+      },
+      {
+        titulo: 'Sobre a equipe',
+        explicacao: 'Só entra quando a conversa é aberta nas páginas da Equipe: avisa que os dados são dos funcionários, troca as categorias e proíbe tentar descobrir quem falou.',
+        conteudo: SOBRE_A_EQUIPE,
+        chave: 'sobre_equipe',
         editavel: true,
       },
       {
@@ -861,7 +871,56 @@ satisfação como "X de 100"; recomendações executáveis nesta semana. Dados: 
 sem markdown/títulos/emojis, sem jargão. Nunca invente número. Termine com UMA recomendação
 concreta. Dados: {json}` }],
   },
+  {
+    id: 'aviso_equipe',
+    arquivo: 'supabase/functions/equipe/index.ts',
+    camada: 'servidor',
+    params: { temperature: 0.4, max_tokens: 300 },
+    desligavel: true,
+    nome: 'Rascunho do aviso para a equipe (edge function)',
+    papel:
+      'Quando uma ação do quadro da equipe é concluída, escreve o rascunho da mensagem que conta para todos os funcionários o que mudou. O dono revisa e decide se manda.',
+    memoria: 'SEM memória. Vê só a ação concluída.',
+    acessos: [
+      'O título, o plano e a categoria da ação concluída',
+      'O nome do restaurante',
+      'Não grava nada: devolve o rascunho para a tela',
+    ],
+    blocos: [{
+      titulo: 'Prompt',
+      explicacao:
+        'De 2 a 4 linhas, sem dizer quem comentou. Desligado (ou sem crédito), a tela usa um texto-modelo com o título da ação. A saudação e o lembrete do PARAR são fixos e não passam por aqui.',
+      dinamico: true,
+      editavel: true,
+      chave: 'ef_equipe_aviso',
+      conteudo: PROMPT_AVISO,
+    }],
+  },
 ]
+
+/**
+ * O treinamento da EQUIPE (feedback dos funcionários).
+ *
+ * Os agentes do motor são os mesmos para clientes e equipe (mesmo modelo, mesmos
+ * parâmetros); o que muda é o prompt. Cada bloco de cliente que tem um irmão da
+ * equipe ganha aqui, logo depois dele, o bloco da equipe, editável na chave
+ * `…_equipe` — que é a que as funções leem quando o feedback é de funcionário
+ * (`promptPara`, em supabase/functions/_shared/prompts-equipe.ts).
+ */
+for (const agente of CATALOGO_AGENTES) {
+  agente.blocos = agente.blocos.flatMap((bloco) => {
+    const daEquipe = bloco.chave ? PROMPTS_EQUIPE[bloco.chave] : undefined
+    if (!bloco.chave || !daEquipe) return [bloco]
+    return [bloco, {
+      titulo: `${bloco.titulo} da EQUIPE`,
+      explicacao: 'O mesmo trabalho, quando o feedback é de um funcionário (páginas da Equipe): regras e exemplos do mundo do trabalho, e nunca mostrar quem falou.',
+      dinamico: bloco.dinamico,
+      editavel: bloco.editavel,
+      chave: `${bloco.chave}_equipe`,
+      conteudo: daEquipe,
+    }]
+  })
+}
 
 /**
  * O despachante saiu da lista de agentes porque não é uma IA — não tem prompt

@@ -92,6 +92,12 @@ const SUGGESTIONS = [
   'Resumo das reclamações',
   'Elogios recentes à equipe',
 ]
+/** As mesmas sugestões rápidas, para a conversa aberta nas páginas da Equipe. */
+const SUGGESTIONS_EQUIPE = [
+  'O que mais incomoda a equipe?',
+  'O que a equipe elogia?',
+  'Por onde eu começo?',
+]
 
 // Os nomes e as fixações das conversas moraram no localStorage até a migration
 // `20260813000000_conversas_e_pastas_chat`. Agora vivem na tabela
@@ -191,9 +197,11 @@ export function ChatFab({
   // muda a quantidade de hooks entre renders e quebra o React.
   // Telas de chat em tela cheia: o botão flutuante cobria o próprio rodapé
   // delas (na WhatsApp, o "Enviar mensagem").
-  // Nas páginas da equipe também some: o assistente só conhece os feedbacks
-  // dos clientes, e responderia sobre eles numa tela que fala dos funcionários.
-  const ocultar = pathname === '/sugestoes' || pathname === '/whatsapp' || ehRotaDaEquipe(pathname)
+  const ocultar = pathname === '/sugestoes' || pathname === '/whatsapp'
+  // Nas páginas da equipe o assistente fala da EQUIPE: a conversa é outra (o
+  // Layout remonta este componente ao trocar de área), o contexto vem dos
+  // feedbacks dos funcionários e o prompt ganha as regras de lá.
+  const naEquipe = ehRotaDaEquipe(pathname)
   const { toast } = useToast()
   const {
     messages, loading, buscandoWeb, sessaoId, enviar, adicionarMensagemUsuario,
@@ -201,7 +209,7 @@ export function ChatFab({
     marcarPropostaAplicada, desmarcarPropostaPorRegistro, anexarRegistro, removerRegistro,
     carregarHistorico, novaConversa, mudarSessao,
     uso, creditoEsgotado,
-  } = useChat('global')
+  } = useChat(naEquipe ? 'equipe' : 'global')
 
   const [message, setMessage] = useState('')
   const [view, setView] = useState<'chat' | 'history'>('chat')
@@ -403,7 +411,7 @@ export function ChatFab({
       const [{ data }, metadados, listaPastas] = await Promise.all([
         supabase
           .from('mensagens_chat')
-          .select('sessao_id, created_at, mensagem, papel')
+          .select('sessao_id, created_at, mensagem, papel, contexto_pagina')
           .eq('usuario_id', user.id)
           .eq('papel', 'usuario')
           .order('created_at', { ascending: false }),
@@ -418,6 +426,8 @@ export function ChatFab({
       const dateMap = new Map<string, Date>()
 
       for (const msg of data) {
+        // Cada área lista só as conversas dela (equipe x clientes).
+        if ((msg.contexto_pagina === 'equipe') !== naEquipe) continue
         if (!dateMap.has(msg.sessao_id)) dateMap.set(msg.sessao_id, new Date(msg.created_at))
         previewMap.set(msg.sessao_id, msg.mensagem)
       }
@@ -789,7 +799,8 @@ export function ChatFab({
               .eq('restaurante_id', rId) // antes buscava de todos os restaurantes
               .neq('status', 'CONCLUIDO').limit(10)
           : vazio,
-        rId ? supabase.from('garcons').select('nome_garcon').eq('restaurante_id', rId).eq('ativo', true) : vazio,
+        // Garçons são do sistema dos clientes (QR Code e avaliações por garçom): na equipe não entram.
+        rId && !naEquipe ? supabase.from('garcons').select('nome_garcon').eq('restaurante_id', rId).eq('ativo', true) : vazio,
         rId
           ? supabase.from('restaurantes')
               .select('nome_restaurante, detalhes, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao')
@@ -816,6 +827,9 @@ export function ChatFab({
     const perfil = (cfg?.perfil_restaurante as any) || {}
 
     return {
+      // De quem são os dados abaixo. As consultas já vêm separadas pelo endereço
+      // da página (lib/publico-rota.ts); isto avisa o prompt.
+      publico: naEquipe ? 'equipe' : 'cliente',
       restaurante_id: rId,
       restaurante: cfg
         ? {
@@ -1020,7 +1034,9 @@ export function ChatFab({
 
   const messagesToRender =
     messages.length === 0
-      ? [{ uid: 'saudacao', role: 'assistant' as const, content: `Olá! Sou o ${mascoteNome}, seu assistente de inteligência. Como posso ajudar a melhorar seu restaurante hoje?`, anexos: undefined, fontes: undefined, registros: undefined, proposta: undefined, propostaRegistro: undefined, respondendoA: undefined }]
+      ? [{ uid: 'saudacao', role: 'assistant' as const, content: naEquipe
+          ? `Olá! Sou o ${mascoteNome}. Aqui a conversa é sobre a sua equipe: o que os funcionários falaram, os insights e as ações. Por onde começamos?`
+          : `Olá! Sou o ${mascoteNome}, seu assistente de inteligência. Como posso ajudar a melhorar seu restaurante hoje?`, anexos: undefined, fontes: undefined, registros: undefined, proposta: undefined, propostaRegistro: undefined, respondendoA: undefined }]
       : messages.map((m) => ({ uid: m.uid, role: m.role, content: m.text, anexos: m.anexos, fontes: m.fontes, registros: m.registros, proposta: m.proposta,
           propostaRegistro: m.propostaRegistro, respondendoA: m.respondendoA }))
 
@@ -1625,7 +1641,7 @@ export function ChatFab({
               <div className="p-4 border-t bg-white flex flex-col gap-3 shrink-0">
                 {/* Sugestões */}
                 <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  {SUGGESTIONS.map((s, i) => (
+                  {(naEquipe ? SUGGESTIONS_EQUIPE : SUGGESTIONS).map((s, i) => (
                     <button
                       key={i}
                       onClick={() => handleSend(s)}

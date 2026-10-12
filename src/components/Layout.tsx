@@ -6,6 +6,7 @@ import { HeaderExtraProvider } from '@/hooks/use-header-extra'
 import { AppSidebar } from './AppSidebar'
 import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
+import { ehRotaDaEquipe } from '@/lib/publico-rota'
 import { AvisoAssinatura } from './AvisoAssinatura'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -217,7 +218,9 @@ export default function Layout() {
               {mostrarBarraScroll && <BarraDeScroll containerRef={scrollRef} />}
             </div>
           </main>
-          <ChatFab open={chatAberto} onOpenChange={setChatAberto} />
+          {/* A `key` remonta o chat ao entrar ou sair das páginas da equipe: a
+              conversa de lá é outra, com outro histórico e outro contexto. */}
+          <ChatFab key={ehRotaDaEquipe(pathname) ? 'equipe' : 'clientes'} open={chatAberto} onOpenChange={setChatAberto} />
         </div>
       </HeaderExtraProvider>
     </SidebarProvider>

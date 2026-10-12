@@ -1,4 +1,5 @@
-// Feedback da equipe: o PEDIDO de feedback (página /equipe). Sem Deno nem
+// Feedback da equipe: o que o restaurante MANDA para a equipe (pedido de
+// feedback, manual ou automático, e o aviso de ação concluída). Sem Deno nem
 // banco: o index.ts liga as dependências, e o teste roda isto com tudo de
 // mentira. Regras em _shared/equipe.ts.
 //
@@ -10,12 +11,18 @@
 //   previa         → os pedaços fixos da mensagem do pedido
 //   criar_envio    → { pergunta, funcionario_ids? }: põe um convite na fila para cada funcionário
 //   cancelar_envio → { envio_id }: tira da fila o que ainda não saiu
+//   rascunho_aviso → { acao_id }: o texto que a IA sugere para contar à equipe que a ação foi concluída
+//   criar_aviso    → { acao_id, texto }: põe o aviso (já revisado) na fila, para a equipe toda
+//   auto_ler       → como está o pedido automático
+//   auto_salvar    → { ativo, cada_dias, pergunta }: liga, desliga ou muda o pedido automático
 // Só a rotina do banco (x-cron-secret), de minuto em minuto:
-//   tick → manda o próximo convite da fila
+//   tick → cria o pedido automático que venceu e manda a próxima mensagem da fila
 
 import {
-  aberturaDoConvite, digitandoConviteMs, FRASE_COMO_RESPONDER, FRASE_PARAR, intervaloEntreConvitesMs, janelaDeEnvio,
-  montarConvite, PERGUNTA_PADRAO, prazoIdentidadeHoras, TRAVADO_MS, validarPergunta,
+  aberturaDoAviso, aberturaDoConvite, digitandoConviteMs, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
+  frequenciaValida, intervaloEntreConvitesMs, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO,
+  prazoIdentidadeHoras, primeiroPedidoAutomatico, proximaManha, proximoPedido, rascunhoPadraoDoAviso, TRAVADO_MS,
+  validarAviso, validarPergunta,
 } from '../_shared/equipe.ts'
 import type { ResultadoEnvio } from '../_shared/uazapi.ts'
 
@@ -30,6 +37,12 @@ export interface Quem { restauranteId: number | null; nomeRestaurante: string; e
 export interface FuncionarioLinha { id: number; restaurante_id: number; nome: string; telefone: string; ativo: boolean; opt_out_em: string | null }
 export interface ConviteLinha { id: number; envio_id: number; restaurante_id: number; funcionario_id: number | null; telefone: string; texto: string }
 export interface EnvioLinha { id: number; restaurante_id: number; pergunta: string; status: string }
+/** Uma ação do quadro da EQUIPE. `sensivel`: nasceu de um relato grave (não é para anunciar sem pensar). */
+export interface AcaoLinha { id: number; restaurante_id: number; titulo: string; plano: string; categoria: string; sensivel: boolean }
+export interface AutomaticoLinha {
+  restaurante_id: number; ativo: boolean; cada_dias: number; pergunta: string
+  proximo_em: string | null; ultimo_em: string | null; ultimo_erro: string | null
+}
 
 export interface DepsEquipe {
   /** Quem chamou (pelo login); null = sem login. */
@@ -46,11 +59,15 @@ export interface DepsEquipe {
     conectado: (restauranteId: number) => Promise<boolean>
     enviar: (p: { restauranteId: number; numero: string; texto: string; digitandoMs: number }) => Promise<ResultadoEnvio>
   }
+  /** A IA que rascunha o aviso. null = desligada, sem crédito ou fora do ar (vale o texto-modelo). */
+  ia: {
+    rascunhoAviso: (p: { restauranteId: number; restaurante: string; titulo: string; plano: string; categoria: string }) => Promise<string | null>
+  }
   db: {
     funcionarios: (restauranteId: number) => Promise<FuncionarioLinha[]>
     funcionario: (id: number) => Promise<FuncionarioLinha | null>
     envioAberto: (restauranteId: number) => Promise<boolean>
-    criarEnvio: (linha: { restaurante_id: number; pergunta: string; criado_por: string }) => Promise<number>
+    criarEnvio: (linha: { restaurante_id: number; pergunta: string; criado_por: string; tipo?: 'pedido' | 'aviso'; acao_id?: number }) => Promise<number>
     criarConvites: (linhas: Record<string, unknown>[]) => Promise<void>
     envio: (id: number) => Promise<EnvioLinha | null>
     atualizarEnvio: (id: number, campos: Record<string, unknown>) => Promise<void>
@@ -67,6 +84,17 @@ export interface DepsEquipe {
     pegarConvite: () => Promise<ConviteLinha | null>
     /** O valor cru de EQUIPE_PRAZO_IDENTIDADE_HORAS (null = não configurado). */
     prazoIdentidade: () => Promise<unknown>
+    /** A ação, só se for do quadro da equipe (null = não existe ou é de cliente). */
+    acaoDaEquipe: (id: number) => Promise<AcaoLinha | null>
+    /** Quando a equipe já foi avisada desta ação (aviso não cancelado), ou null. */
+    avisoDaAcao: (acaoId: number) => Promise<string | null>
+    automatico: (restauranteId: number) => Promise<AutomaticoLinha | null>
+    salvarAutomatico: (restauranteId: number, campos: Record<string, unknown>) => Promise<void>
+    /** Os pedidos automáticos ligados cuja hora chegou. */
+    automaticosVencidos: (ate: string) => Promise<AutomaticoLinha[]>
+    /** Quando saiu o último PEDIDO de feedback do restaurante (null = nunca). */
+    ultimoPedidoEm: (restauranteId: number) => Promise<string | null>
+    nomeDoRestaurante: (restauranteId: number) => Promise<string>
     atualizarConvite: (id: number, campos: Record<string, unknown>) => Promise<void>
   }
 }
@@ -81,10 +109,14 @@ const RECUSAS = {
   pedido_invalido: [400, 'Pedido inválido.'],
   pergunta_invalida: [400, 'Escreva a pergunta (de 10 a 400 letras).'],
   sem_whatsapp: [409, 'O WhatsApp do restaurante não está conectado. Conecte em Configurações → WhatsApp.'],
-  envio_em_andamento: [409, 'Já tem um pedido de feedback sendo enviado. Espere terminar ou cancele.'],
+  envio_em_andamento: [409, 'Já tem mensagens saindo para a equipe. Espere terminar ou cancele em Pedidos de feedback.'],
   sem_funcionarios: [409, 'Nenhum funcionário ativo para receber. Cadastre a equipe primeiro.'],
   nao_encontrado: [404, 'Pedido não encontrado.'],
   ja_terminou: [409, 'Este pedido já terminou.'],
+  acao_nao_encontrada: [404, 'Ação não encontrada no quadro da equipe.'],
+  aviso_invalido: [400, 'Escreva o aviso (de 20 a 600 letras).'],
+  ja_avisou: [409, 'A equipe já foi avisada desta ação.'],
+  frequencia_invalida: [400, 'Escolha toda semana, a cada 15 dias ou todo mês.'],
   falhou: [500, 'Não foi possível agora. Tente de novo.'],
 } as const
 
@@ -139,12 +171,53 @@ async function mandarConvite(c: ConviteLinha, deps: DepsEquipe): Promise<string>
   return r.ok ? 'enviado' : 'falhou'
 }
 
-/** Uma rodada: no máximo um convite, só no horário e com o intervalo sorteado desde o último. */
+const podeReceber = (f: FuncionarioLinha) => f.ativo && !f.opt_out_em
+
+/**
+ * Pedido automático: cria o pedido de quem está com a data vencida. Roda dentro
+ * do horário de envio. Nada aqui manda mensagem: só põe os convites na fila.
+ */
+export async function criarPedidosAutomaticos(deps: DepsEquipe): Promise<number> {
+  const agora = deps.agora()
+  let criados = 0
+  for (const a of await deps.db.automaticosVencidos(iso(agora))) {
+    const rid = a.restaurante_id
+    // Outro envio saindo: espera a vez (tenta de novo no próximo minuto).
+    if (await deps.db.envioAberto(rid)) continue
+    // Sem WhatsApp: tenta de novo amanhã cedo, e a tela mostra por quê.
+    if (!(await deps.whatsapp.conectado(rid).catch(() => false))) {
+      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximaManha(agora)), ultimo_erro: 'O WhatsApp do restaurante estava desconectado.' })
+      continue
+    }
+    const podem = (await deps.db.funcionarios(rid)).filter(podeReceber)
+    if (!podem.length) {
+      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias)), ultimo_erro: 'Nenhum funcionário ativo para receber.' })
+      continue
+    }
+    const pergunta = validarPergunta(a.pergunta) ?? PERGUNTA_PADRAO
+    const restaurante = await deps.db.nomeDoRestaurante(rid)
+    const envioId = await deps.db.criarEnvio({ restaurante_id: rid, pergunta, criado_por: 'automatico', tipo: 'pedido' })
+    await deps.db.criarConvites(podem.map((f) => ({
+      envio_id: envioId,
+      restaurante_id: rid,
+      funcionario_id: f.id,
+      telefone: f.telefone,
+      texto: montarConvite({ nome: f.nome, restaurante, pergunta, sorteio: deps.sorteio }),
+    })))
+    await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias)), ultimo_em: iso(agora), ultimo_erro: null })
+    criados++
+  }
+  return criados
+}
+
+/** Uma rodada: no máximo uma mensagem, só no horário e com o intervalo sorteado desde a última. */
 export async function rodarTick(deps: DepsEquipe): Promise<{ convite: string | null }> {
   const agora = deps.agora()
   for (const envioId of await deps.db.destravar(iso(agora - TRAVADO_MS))) await fecharSeAcabou(envioId, deps)
 
   if (!janelaDeEnvio(agora)) return { convite: null }
+  // Falha aqui não pode travar a fila que já existe.
+  await criarPedidosAutomaticos(deps).catch(() => 0)
   const ultimo = await deps.db.ultimoConviteEm()
   if (ultimo && agora - new Date(ultimo).getTime() < intervaloEntreConvitesMs(deps.sorteio)) return { convite: null }
   const c = await deps.db.pegarConvite()
@@ -191,7 +264,7 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
       if (!pergunta) return recusa('pergunta_invalida')
       if (!(await deps.whatsapp.conectado(restauranteId))) return recusa('sem_whatsapp')
       if (await deps.db.envioAberto(restauranteId)) return recusa('envio_em_andamento')
-      const podem = (await deps.db.funcionarios(restauranteId)).filter((f) => f.ativo && !f.opt_out_em)
+      const podem = (await deps.db.funcionarios(restauranteId)).filter(podeReceber)
       const so = Array.isArray(corpo.funcionario_ids) ? new Set(corpo.funcionario_ids.map(Number)) : null
       const escolhidos = so ? podem.filter((f) => so.has(f.id)) : podem
       if (!escolhidos.length) return recusa('sem_funcionarios')
@@ -214,6 +287,93 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
       await deps.db.cancelarConvitesNaFila(envio.id)
       await fecharSeAcabou(envio.id, deps)
       return { status: 200, corpo: { ok: true } }
+    }
+
+    // ── Aviso para a equipe toda: a ação foi concluída ──
+    if (acao === 'rascunho_aviso' || acao === 'criar_aviso') {
+      const a = await deps.db.acaoDaEquipe(Number(corpo.acao_id))
+      if (!a || a.restaurante_id !== restauranteId) return recusa('acao_nao_encontrada')
+      const jaAvisouEm = await deps.db.avisoDaAcao(a.id)
+      const podem = (await deps.db.funcionarios(restauranteId)).filter(podeReceber)
+      const conectado = await deps.whatsapp.conectado(restauranteId).catch(() => false)
+
+      if (acao === 'rascunho_aviso') {
+        // Já avisou: não gasta IA para um texto que não vai sair.
+        const daIa = jaAvisouEm ? null : validarAviso(await deps.ia.rascunhoAviso({
+          restauranteId, restaurante: quem.nomeRestaurante, titulo: a.titulo, plano: a.plano, categoria: a.categoria,
+        }).catch(() => null))
+        return {
+          status: 200,
+          corpo: {
+            ok: true,
+            texto: daIa ?? rascunhoPadraoDoAviso(a.titulo),
+            da_ia: !!daIa,
+            sensivel: a.sensivel,
+            destinatarios: podem.length,
+            ja_avisou_em: jaAvisouEm,
+            abertura: aberturaDoAviso('Maria', quem.nomeRestaurante, 0),
+            fecho: [FRASE_RESPONDER_AVISO, FRASE_PARAR].join('\n\n'),
+            whatsapp_conectado: conectado,
+          },
+        }
+      }
+
+      const aviso = validarAviso(corpo.texto)
+      if (!aviso) return recusa('aviso_invalido')
+      if (jaAvisouEm) return recusa('ja_avisou')
+      if (!conectado) return recusa('sem_whatsapp')
+      if (await deps.db.envioAberto(restauranteId)) return recusa('envio_em_andamento')
+      if (!podem.length) return recusa('sem_funcionarios')
+
+      const envioId = await deps.db.criarEnvio({
+        restaurante_id: restauranteId, pergunta: aviso, criado_por: quem.email.toLowerCase(), tipo: 'aviso', acao_id: a.id,
+      })
+      await deps.db.criarConvites(podem.map((f) => ({
+        envio_id: envioId,
+        restaurante_id: restauranteId,
+        funcionario_id: f.id,
+        telefone: f.telefone,
+        texto: montarAviso({ nome: f.nome, restaurante: quem.nomeRestaurante, texto: aviso, sorteio: deps.sorteio }),
+      })))
+      return { status: 200, corpo: { ok: true, envio_id: envioId, convites: podem.length, no_horario: janelaDeEnvio(deps.agora()) } }
+    }
+
+    // ── Pedido automático ──
+    if (acao === 'auto_ler' || acao === 'auto_salvar') {
+      const atual = await deps.db.automatico(restauranteId)
+      if (acao === 'auto_salvar') {
+        const ativo = corpo.ativo === true
+        const cada = Number(corpo.cada_dias)
+        if (!frequenciaValida(cada)) return recusa('frequencia_invalida')
+        const pergunta = validarPergunta(corpo.pergunta)
+        if (!pergunta) return recusa('pergunta_invalida')
+        // Mexeu só na pergunta: a data combinada continua. Ligou agora ou mudou
+        // a frequência: recalcula, respeitando o último pedido que já saiu.
+        const manter = ativo && atual?.ativo === true && atual.cada_dias === cada && !!atual.proximo_em
+          && new Date(atual.proximo_em).getTime() > deps.agora()
+        const ultimo = await deps.db.ultimoPedidoEm(restauranteId)
+        const proximo = !ativo
+          ? null
+          : manter
+            ? atual!.proximo_em
+            : iso(primeiroPedidoAutomatico(deps.agora(), cada, ultimo ? new Date(ultimo).getTime() : null))
+        await deps.db.salvarAutomatico(restauranteId, {
+          ativo, cada_dias: cada, pergunta, proximo_em: proximo, ultimo_erro: null, atualizado_por: quem.email.toLowerCase(),
+        })
+        return { status: 200, corpo: { ok: true, ativo, cada_dias: cada, pergunta, proximo_em: proximo, ultimo_em: atual?.ultimo_em ?? null, ultimo_erro: null } }
+      }
+      return {
+        status: 200,
+        corpo: {
+          ok: true,
+          ativo: atual?.ativo === true,
+          cada_dias: atual?.cada_dias ?? 30,
+          pergunta: atual?.pergunta || PERGUNTA_PADRAO,
+          proximo_em: atual?.ativo ? atual.proximo_em : null,
+          ultimo_em: atual?.ultimo_em ?? null,
+          ultimo_erro: atual?.ultimo_erro ?? null,
+        },
+      }
     }
 
     return recusa('pedido_invalido')

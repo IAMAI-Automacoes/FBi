@@ -217,10 +217,11 @@ const App = () => (
                 }
               />
               {/* Equipe (feedback dos funcionários): só o admin por enquanto, ver
-                  AreaEquipe. Feedbacks, Insights e Ações são as MESMAS páginas
+                  AreaEquipe. Visão Geral, Feedbacks, Insights e Ações são as MESMAS páginas
                   dos clientes: o endereço /equipe é que faz o banco entregar só
                   o que a equipe falou (lib/publico-rota.ts). */}
-              <Route path="/equipe" element={<AreaEquipe><Equipe /></AreaEquipe>} />
+              <Route path="/equipe" element={<AreaEquipe><Index /></AreaEquipe>} />
+              <Route path="/equipe/funcionarios" element={<AreaEquipe><Equipe /></AreaEquipe>} />
               <Route path="/equipe/feedbacks" element={<AreaEquipe><Feedbacks /></AreaEquipe>} />
               <Route path="/equipe/insights" element={<AreaEquipe><Insights /></AreaEquipe>} />
               <Route path="/equipe/acoes" element={<AreaEquipe><Actions /></AreaEquipe>} />

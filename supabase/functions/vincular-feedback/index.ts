@@ -57,12 +57,13 @@
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { talvezAlertarDono } from '../_shared/alerta-urgente.ts'
 import { polaridade } from '../_shared/sentimento.ts'
-import { promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
+import { publicoDe, type Publico } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
@@ -282,12 +283,9 @@ Deno.serve(async (req: Request) => {
     // aviso de intoxicacao porque a funcao encerrou antes da hora e o tipo de
     // falha que nao aparece em log nenhum e custa o cliente.
     //
-    // Na equipe não há alerta: ele manda ao dono o telefone de quem escreveu e
-    // um atalho para a conversa, e quem escreveu ainda pode pedir anonimato. O
-    // relato grave aparece na página da equipe com o selo de sensível.
-    const alerta = publico === 'equipe'
-      ? { urgente: false, motivo: 'feedback da equipe: sem alerta com o número' }
-      : await talvezAlertarDono(db, fb, texto)
+    // Na equipe o aviso também sai, mas sem o nome nem o telefone de quem
+    // escreveu (a pessoa ainda pode pedir anonimato): ver alerta-urgente.ts.
+    const alerta = await talvezAlertarDono(db, fb, texto, publico)
     if (alerta.urgente) {
       console.log(`[urgente] feedback ${fb.id}: ${alerta.motivo} (enviado=${alerta.enviado ?? false})`)
     }
@@ -446,7 +444,7 @@ Deno.serve(async (req: Request) => {
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 400 })
     if (!params) return await reservaOuLivre('agente desativado')
 
-    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_vincular_feedback', PROMPT, {
+    const prompt = promptPara(prompts, 'ef_vincular_feedback', PROMPT, {
       texto,
       categoria: fb.categoria ?? '?',
       sentimento: fb.sentimento ?? '?',
@@ -464,7 +462,7 @@ Deno.serve(async (req: Request) => {
             .map((i: any) => `- id ${i.id}: ${i.titulo} — ${(i.descricao ?? '').slice(0, 160)}`)
             .join('\n')
         : '(nenhum)',
-    }), publico)
+    }, publico)
 
     let decisao: { destino?: string; id?: string; motivo?: string }
     try {
@@ -605,7 +603,7 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
     }
 
     const prompts = await carregarPrompts(db)
-    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_absorver_insight', PROMPT_ABSORCAO, {
+    const prompt = promptPara(prompts, 'ef_absorver_insight', PROMPT_ABSORCAO, {
       titulo: insight.titulo ?? '(sem titulo)',
       descricao: insight.descricao ?? '(sem descricao)',
       prioridade: insight.prioridade ?? 'OBSERVACAO',
@@ -613,7 +611,7 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
       pontos: pontos.length ? pontos.join('\n') : '(nenhum registrado)',
       texto,
       sentimento: fb.sentimento ?? '?',
-    }), publicoDe(fb.publico))
+    }, publicoDe(fb.publico))
 
     const { result } = await chamarIA(db, {
       messages: [{ role: 'user', content: prompt }],

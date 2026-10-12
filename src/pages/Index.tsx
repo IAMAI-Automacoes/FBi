@@ -21,9 +21,14 @@ import { MessageSquare, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { usePublico } from '@/lib/publico'
+import { ResumoPedidos } from '@/components/equipe/ResumoPedidos'
 
 export default function Index() {
-  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('visao-geral:periodo', '7d')
+  // A mesma página serve aos clientes (/) e à equipe (/equipe): os números
+  // quem separa é o banco, pelo endereço.
+  const { ehEquipe, chave, caminho } = usePublico()
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>(chave('visao-geral:periodo'), ehEquipe ? '30d' : '7d')
   const [data, setData] = useState<DashboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
@@ -74,6 +79,8 @@ export default function Index() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
+      {/* Só a equipe: quem está cadastrado e como foram os pedidos de feedback. */}
+      {ehEquipe && <ResumoPedidos />}
 
       {/* Filtro de período — no topo da página, não escondido dentro do
           card de tendência (que tem o próprio título pra disputar espaço).
@@ -123,19 +130,32 @@ export default function Index() {
             <MessageSquare className="h-10 w-10 text-[#1D4ED8]" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Você ainda não recebeu nenhum feedback
+            {ehEquipe ? 'A equipe ainda não mandou nenhum feedback' : 'Você ainda não recebeu nenhum feedback'}
           </h2>
           <p className="text-gray-500 max-w-md mb-8">
-            {whatsappConectado
-              ? 'Seu WhatsApp está conectado. Compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'
-              : 'Configure o WhatsApp nas configurações do restaurante e compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'}
+            {ehEquipe
+              ? (whatsappConectado
+                ? 'Cadastre quem trabalha no restaurante e peça feedback: cada pessoa recebe uma mensagem no WhatsApp e responde por lá.'
+                : 'Conecte o WhatsApp do restaurante em Configurações. Depois cadastre a equipe e peça feedback: cada pessoa responde pelo WhatsApp.')
+              : (whatsappConectado
+                ? 'Seu WhatsApp está conectado. Compartilhe o QR Code com seus clientes para começar a coletar feedbacks.'
+                : 'Configure o WhatsApp nas configurações do restaurante e compartilhe o QR Code com seus clientes para começar a coletar feedbacks.')}
           </p>
-          <Button asChild>
-            <Link to="/configuracoes">
-              <Settings className="mr-2 h-4 w-4" />
-              Ir para Configurações
-            </Link>
-          </Button>
+          {ehEquipe ? (
+            <Button asChild>
+              <Link to="/equipe/funcionarios">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Cadastrar a equipe e pedir feedback
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link to="/configuracoes">
+                <Settings className="mr-2 h-4 w-4" />
+                Ir para Configurações
+              </Link>
+            </Button>
+          )}
         </div>
       ) : data ? (
         <>
@@ -148,14 +168,15 @@ export default function Index() {
 
           {/* Como as avaliações se dividem — mesmo bloco (e mesma lógica) da
               aba Relatórios, só que sempre visível aqui na Visão Geral. */}
-          <DivisaoAvaliacoes kpis={data.kpis} />
+          <DivisaoAvaliacoes kpis={data.kpis} titulo={ehEquipe ? 'Como os feedbacks da equipe se dividem' : undefined} />
 
           <TrendChart data={data.chartData} categories={data.categories} />
           <TemasFeedback
             restauranteId={usuario?.restaurante_id ?? null}
             dias={getPeriodDates(period).days}
+            titulo={ehEquipe ? 'O que a equipe está comentando' : undefined}
           />
-          <RecentFeedbacks feedbacks={data.recentFeedbacks} />
+          <RecentFeedbacks feedbacks={data.recentFeedbacks} verTodosEm={caminho('/feedbacks')} />
         </>
       ) : null}
     </div>

@@ -72,6 +72,19 @@ async function destacarUm(db: Db, original_id: string): Promise<{ ok: boolean; m
     const quem = (original as any).publico === 'equipe'
       ? 'um funcionário de restaurante, contando como é trabalhar lá'
       : 'um cliente de restaurante'
+    // Dois exemplos do mundo do trabalho, para a IA não procurar "comida" e
+    // "atendimento" no que um funcionário escreveu.
+    // deno-lint-ignore no-explicit-any
+    const exemplosDaEquipe = (original as any).publico === 'equipe'
+      ? `
+Feedback: "olha, eu gosto daqui, o pessoal é unido, mas o salário atrasa todo mês e a escala sai em cima da hora"
+Resposta: olha, eu gosto daqui, o **pessoal é unido**, mas o **salário atrasa todo mês** e a **escala sai em cima da hora**
+
+Feedback: "trabalho aqui faz dois anos, sempre na cozinha"
+Resposta: trabalho aqui faz dois anos, sempre na cozinha
+(nada de opinião aqui — é só contexto, então devolve sem nenhum **)
+`
+      : ''
 
     const prompt = `Você recebe o feedback de ${quem} (às vezes transcrito de áudio, então pode ter erros, gírias e frases soltas). Sua tarefa é marcar em negrito, usando **dois asteriscos**, só os trechos que permitem alguém ENTENDER o feedback batendo o olho rapidamente, sem precisar ler a frase toda — como se fosse o resumo visual da mensagem pra quem só tem 2 segundos.
 
@@ -112,7 +125,7 @@ Resposta: a comida tava **mt boa** mas **demorou pra caramba** slc
 Feedback: "Eu sentei lá na janela porque minha família ia fazer um aniversário."
 Resposta: Eu sentei lá na janela porque minha família ia fazer um aniversário.
 (nada de opinião aqui — é só contexto, então devolve sem nenhum **)
-
+${exemplosDaEquipe}
 ## Feedback a processar
 "${texto}"
 

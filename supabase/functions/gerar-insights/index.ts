@@ -31,10 +31,11 @@
  *   4. gravar insight + vínculos
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
+import { carregarPrompts, type Prompts } from '../_shared/prompts.ts'
 import {
-  CATEGORIAS_EQUIPE, colunaDaUltimaAnalise, promptDoPublico, publicoDe, PUBLICOS, type Publico,
+  CATEGORIAS_EQUIPE, colunaDaUltimaAnalise, publicoDe, PUBLICOS, type Publico,
 } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, buscarMemorias, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
@@ -42,8 +43,10 @@ import {
   agruparEmAssuntos, chaveDoAssunto, selecionarParaAvaliar, type Assunto, type PontoBruto,
 } from '../_shared/assuntos.ts'
 import {
+  assuntoElegivelEquipe,
   assuntoElegivelPorNota,
   consolidarNota,
+  pessoasNecessariasEquipe,
   pessoasNecessariasPorNota,
   pontuarPorNota,
   type CamposAvaliacao,
@@ -408,7 +411,7 @@ async function avaliarImportancia(
   ctx: any,
   assunto: Assunto,
 ): Promise<{ nota: number; justificativa: string; notaIA: number; pisoAplicado: boolean }> {
-  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_avaliar_assunto', PROMPT_AVALIADOR, {
+  const prompt = promptPara(ctx.prompts, 'ef_avaliar_assunto', PROMPT_AVALIADOR, {
     tom: tomDoAssistente(ctx.config.mascote_config),
     perfil: blocoPerfil(ctx.config),
     memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
@@ -419,7 +422,7 @@ ${ctx.conhecimento}` : '',
     pessoas: String(assunto.pessoas),
     positivos: String(assunto.positivosDoTema ?? 0),
     pontos: listarPontosParaPrompt(assunto),
-  }), publicoDe(ctx.publico))
+  }, publicoDe(ctx.publico))
 
   let notaIA = -1
   let justificativa = ''
@@ -491,7 +494,7 @@ async function redigirInsight(
   const { assunto } = ctx
   const publico = publicoDe(ctx.publico)
 
-  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
+  const prompt = promptPara(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
     nome: nomeDoAssistente(ctx.config.mascote_config),
     tom: tomDoAssistente(ctx.config.mascote_config),
     perfil: blocoPerfil(ctx.config),
@@ -509,7 +512,7 @@ async function redigirInsight(
     mininimo: String(assunto.pessoasNecessarias),
     confianca: assunto.confianca,
     pontos: listarPontosParaPrompt(assunto),
-  }), publico)
+  }, publico)
 
   const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
     { role: 'user', content: prompt },
@@ -569,12 +572,12 @@ async function verificarLastro(
   },
   insight: { titulo?: string; descricao?: string; sugestao?: string },
 ) {
-  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_verificar_insight', PROMPT_VERIFICADOR, {
+  const prompt = promptPara(ctx.prompts, 'ef_verificar_insight', PROMPT_VERIFICADOR, {
     pontos: listarPontosParaPrompt(ctx.assunto),
     titulo: insight.titulo ?? '',
     descricao: insight.descricao ?? '',
     sugestao: insight.sugestao ?? '',
-  }), publicoDe(ctx.publico))
+  }, publicoDe(ctx.publico))
 
   const { result } = await chamarIA(db, {
     messages: [{ role: 'user', content: prompt }],
@@ -706,7 +709,12 @@ async function processarRestaurante(
   if (configErr || !config) return { insights_gerados: 0, status: 'sem_config' }
   if (config.excluida_em) return { insights_gerados: 0, status: 'conta_encerrada' }
 
-  const configInsights = (config.config_insights as Record<string, unknown>) || {}
+  // A equipe tem a própria configuração (config_insights.equipe): o volume e
+  // o ritmo dos feedbacks dela são outros.
+  const configGeral = (config.config_insights as Record<string, unknown>) || {}
+  const configInsights = publico === 'equipe'
+    ? ((configGeral.equipe as Record<string, unknown>) || {})
+    : configGeral
   const pedidoPorRodada = Number(configInsights.max_insights_por_rodada)
   const insightsPorRodada = Number.isFinite(pedidoPorRodada)
     ? Math.min(Math.max(Math.round(pedidoPorRodada), 1), INSIGHTS_POR_RODADA_MAX)
@@ -763,7 +771,10 @@ async function processarRestaurante(
   // que ESTARIAM livres, sem precisar libertá-los antes.
   {
     // ---- ESTÁGIO 0: assuntos ----
-    const expiracaoDias = Number(configInsights.expiracao_feedback_dias ?? 14)
+    // Cliente: 14 dias (o salão gira todo dia). Equipe: 90 — ela fala de tempos
+    // em tempos, e com 14 dias o que duas pessoas disseram em pedidos
+    // diferentes nunca se encontrava para virar padrão.
+    const expiracaoDias = Number(configInsights.expiracao_feedback_dias ?? (publico === 'equipe' ? 90 : 14))
 
     // Sem teto de quantidade: o dono pediu que TODOS os feedbacks disponíveis e
     // dentro da validade entrem na análise. O corte de custo acontece adiante,
@@ -792,7 +803,27 @@ async function processarRestaurante(
       (encerrados ?? []).map((i: { assunto_chave: string }) => i.assunto_chave),
     )
 
-    const todosOsAssuntos = agruparEmAssuntos(livres as PontoBruto[], { reincidentes })
+    // Equipe: quem conta como "pessoa" é o FUNCIONÁRIO, não a mensagem, e o
+    // limiar é proporcional ao tamanho da equipe. A autoria só serve para
+    // contar: fica em memória e nunca entra em prompt nem em resultado.
+    let funcionariosAtivos = 0
+    if (publico === 'equipe') {
+      const origens = [...new Set((livres as PontoBruto[]).map((p) => p.origem_id).filter(Boolean))]
+      const [{ data: autorias }, { count }] = await Promise.all([
+        origens.length
+          ? db.from('equipe_autorias').select('feedback_original_id, funcionario_id').in('feedback_original_id', origens)
+          : Promise.resolve({ data: [] }),
+        db.from('equipe_funcionarios').select('id', { count: 'exact', head: true }).eq('restaurante_id', restauranteId).eq('ativo', true),
+      ])
+      const quem = new Map<string, string>()
+      for (const a of (autorias ?? []) as { feedback_original_id: string; funcionario_id: number | null }[]) {
+        if (a.funcionario_id != null) quem.set(a.feedback_original_id, `f${a.funcionario_id}`)
+      }
+      for (const p of livres as PontoBruto[]) p.pessoa = (p.origem_id && quem.get(p.origem_id)) || p.origem_id
+      funcionariosAtivos = count ?? 0
+    }
+
+    const todosOsAssuntos = agruparEmAssuntos(livres as PontoBruto[], { reincidentes, publico, funcionariosAtivos })
 
     // Os insights não são mais substituídos a cada rodada (ver o estágio 4):
     // eles se acumulam, e cada aba guarda 8. Então um assunto que JÁ tem insight
@@ -891,8 +922,12 @@ async function processarRestaurante(
         notaIA: av.notaIA,
         justificativaNota: av.justificativa,
         pisoAplicado: av.pisoAplicado,
-        pessoasNecessarias: pessoasNecessariasPorNota(av.nota),
-        elegivel: assuntoElegivelPorNota(av.nota, assunto.pessoas),
+        pessoasNecessarias: publico === 'equipe'
+          ? pessoasNecessariasEquipe(av.nota, funcionariosAtivos)
+          : pessoasNecessariasPorNota(av.nota),
+        elegivel: publico === 'equipe'
+          ? assuntoElegivelEquipe(av.nota, assunto.pessoas, funcionariosAtivos)
+          : assuntoElegivelPorNota(av.nota, assunto.pessoas),
         score: pontuarPorNota({
           nota: av.nota,
           pessoas: assunto.pessoas,
@@ -1229,7 +1264,7 @@ async function religarCondicionais(
 
   const params = await paramsDoAgente(db, AGENTE_RELIGADOR, { max_tokens: 700 })
   if (params) {
-    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_religar_condicional', PROMPT_RELIGAR, {
+    const prompt = promptPara(prompts, 'ef_religar_condicional', PROMPT_RELIGAR, {
       insights: criados.map((c) => `- id ${c.id}: ${c.titulo} — ${c.descricao.slice(0, 200)}`).join('\n'),
       feedbacks: soltos
         // deno-lint-ignore no-explicit-any
@@ -1239,7 +1274,7 @@ async function religarCondicionais(
           return `- id ${p.id}: "${String(p.texto_original || p.resumo || '').slice(0, 280)}"${marca}`
         })
         .join('\n'),
-    }), publico)
+    }, publico)
     try {
       const { result } = await chamarIA(db, {
         messages: [{ role: 'user', content: prompt }],

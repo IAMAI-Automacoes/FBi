@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
-import type { ConviteAnonimo, Envio, Funcionario, StatusConvite, StatusEnvio } from '@/lib/equipe'
+import type { ConviteAnonimo, Envio, Frequencia, Funcionario, StatusConvite, StatusEnvio, TipoEnvio } from '@/lib/equipe'
 
 /* Feedback da equipe: o restaurante cadastra os funcionários e pede feedback
    pelo WhatsApp dele (o mesmo dos clientes). Os pedidos (envios e convites)
@@ -69,10 +69,13 @@ export async function buscarGarconsComNumero(restauranteId: number): Promise<{ n
 
 export async function buscarEnvios(restauranteId: number): Promise<Envio[]> {
   const { data, error } = await supabase.from('equipe_envios')
-    .select('id, restaurante_id, pergunta, status, criado_em, concluido_em')
+    .select('id, restaurante_id, pergunta, status, tipo, acao_id, criado_por, criado_em, concluido_em')
     .eq('restaurante_id', restauranteId).order('criado_em', { ascending: false }).limit(100)
   if (error) throw error
-  return (data ?? []).map((e) => ({ ...e, id: Number(e.id), restaurante_id: Number(e.restaurante_id), status: e.status as StatusEnvio }))
+  return (data ?? []).map((e) => ({
+    ...e, id: Number(e.id), restaurante_id: Number(e.restaurante_id), status: e.status as StatusEnvio,
+    tipo: (e.tipo === 'aviso' ? 'aviso' : 'pedido') as TipoEnvio, acao_id: e.acao_id == null ? null : Number(e.acao_id),
+  }))
 }
 
 /** Os convites sem dizer de quem são: só de qual envio, o status e se houve resposta. */
@@ -86,6 +89,29 @@ export async function buscarConvites(restauranteId: number): Promise<ConviteAnon
 
 /** Os pedaços fixos da mensagem do pedido, e se o WhatsApp do restaurante está conectado. */
 export interface PreviaConvite { abertura: string; como_responder: string; parar: string; pergunta_padrao: string; whatsapp_conectado: boolean; prazo_horas: number }
+/** O rascunho do aviso de ação concluída (ação "rascunho_aviso"). */
+export interface RascunhoAviso {
+  texto: string
+  /** A IA escreveu; false = texto-modelo (IA desligada, sem crédito ou fora do ar). */
+  da_ia: boolean
+  /** A ação nasceu de um relato sensível: avisar todos pode expor alguém. */
+  sensivel: boolean
+  destinatarios: number
+  /** Quando a equipe já foi avisada desta ação, ou null. */
+  ja_avisou_em: string | null
+  abertura: string
+  fecho: string
+  whatsapp_conectado: boolean
+}
+/** O pedido automático (ações "auto_ler" e "auto_salvar"). */
+export interface PedidoAutomaticoConfig {
+  ativo: boolean
+  cada_dias: Frequencia
+  pergunta: string
+  proximo_em: string | null
+  ultimo_em: string | null
+  ultimo_erro: string | null
+}
 export type RespostaEquipe<T = Record<string, unknown>> = { ok: boolean; motivo?: string; error?: string } & Partial<T>
 
 /** Chama a função equipe. Erro com corpo (4xx/5xx) vem com o motivo dela. */

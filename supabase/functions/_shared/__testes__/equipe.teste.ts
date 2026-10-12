@@ -4,10 +4,14 @@
  *   node --experimental-strip-types supabase/functions/_shared/__testes__/equipe.teste.ts
  */
 import {
-  aberturaDoConvite, digitandoConviteMs, doRestaurante, FRASE_COMO_RESPONDER, FRASE_PARAR, intervaloEntreConvitesMs, prazoIdentidadeHoras,
-  janelaDeEnvio, montarConvite, PERGUNTA_PADRAO, primeiroNome, validarPergunta,
+  aberturaDoAviso, aberturaDoConvite, digitandoConviteMs, doRestaurante, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
+  frequenciaValida, intervaloEntreConvitesMs, prazoIdentidadeHoras, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO,
+  primeiroNome, primeiroPedidoAutomatico, PROMPT_AVISO, proximaManha, proximoPedido, rascunhoPadraoDoAviso, validarAviso, validarPergunta,
 } from '../equipe.ts'
-import { rodarTick, tratarEquipe, type ConviteLinha, type DepsEquipe, type FuncionarioLinha } from '../../equipe/handler.ts'
+import {
+  criarPedidosAutomaticos, rodarTick, tratarEquipe,
+  type AcaoLinha, type AutomaticoLinha, type ConviteLinha, type DepsEquipe, type FuncionarioLinha,
+} from '../../equipe/handler.ts'
 
 let falhas = 0
 function ok(nome: string, cond: boolean, detalhe?: unknown) {
@@ -44,7 +48,7 @@ ok('intervalo entre convites: de 40 a 90 s', intervaloEntreConvitesMs(() => 0) =
 ok('digitando do convite: de 8 a 25 s', digitandoConviteMs('oi', () => 0) === 8_000 && digitandoConviteMs('x'.repeat(900), () => 1) === 25_000)
 
 // ── A função (banco e WhatsApp de mentira) ───────────────────────────────────
-interface Envio { id: number; restaurante_id: number; pergunta: string; status: string; criado_por: string; concluido_em?: string }
+interface Envio { id: number; restaurante_id: number; pergunta: string; status: string; criado_por: string; concluido_em?: string; tipo?: string; acao_id?: number; criado_em?: string }
 interface Convite extends ConviteLinha { status: string; erro?: string | null; tentou_em?: string | null; enviado_em?: string | null; message_id?: string | null }
 
 function cenario(p: {
@@ -53,6 +57,9 @@ function cenario(p: {
   enviar?: () => { ok: boolean; incerto: boolean; messageId: string | null; erro: string | null }
   /** O valor de EQUIPE_PRAZO_IDENTIDADE_HORAS na configuração. */
   prazo?: unknown
+  acoes?: AcaoLinha[]; automaticos?: AutomaticoLinha[]
+  /** O que a IA do aviso devolve; função que lança = IA fora do ar. */
+  rascunho?: string | null | (() => string | null)
 } = {}) {
   const funcionarios = p.funcionarios ?? [
     { id: 1, restaurante_id: 11, nome: 'Ana Paula', telefone: '5511987654321', ativo: true, opt_out_em: null },
@@ -65,6 +72,9 @@ function cenario(p: {
   const enviados: { restauranteId: number; numero: string; texto: string; digitandoMs: number }[] = []
   const segundoPlano: Promise<unknown>[] = []
   const agora = p.agora ?? AGORA
+  const acoes: AcaoLinha[] = p.acoes ?? []
+  const automaticos: AutomaticoLinha[] = p.automaticos ?? []
+  const pedidosDeRascunho = { n: 0 }
   const deps: DepsEquipe = {
     quemPede: async () => (p.login === false ? null : { restauranteId: 11, nomeRestaurante: 'Camelo', email: 'dono@camelo.com', ehAdmin: p.admin !== false }),
     ehCron: async () => p.cron === true,
@@ -78,13 +88,31 @@ function cenario(p: {
         return p.enviar ? p.enviar() : { ok: true, incerto: false, messageId: `M${enviados.length}`, erro: null }
       },
     },
+    ia: {
+      rascunhoAviso: async () => {
+        pedidosDeRascunho.n++
+        return typeof p.rascunho === 'function' ? p.rascunho() : (p.rascunho ?? null)
+      },
+    },
     db: {
       prazoIdentidade: async () => p.prazo ?? null,
+      acaoDaEquipe: async (id) => acoes.find((a) => a.id === id) ?? null,
+      avisoDaAcao: async (acaoId) => envios.find((e) => e.tipo === 'aviso' && e.acao_id === acaoId && e.status !== 'cancelado')?.criado_em ?? null,
+      automatico: async (rid) => automaticos.find((a) => a.restaurante_id === rid) ?? null,
+      salvarAutomatico: async (rid, campos) => {
+        const a = automaticos.find((x) => x.restaurante_id === rid)
+        if (a) Object.assign(a, campos)
+        else automaticos.push({ restaurante_id: rid, ativo: false, cada_dias: 30, pergunta: '', proximo_em: null, ultimo_em: null, ultimo_erro: null, ...campos } as AutomaticoLinha)
+      },
+      automaticosVencidos: async (ate) => automaticos.filter((a) => a.ativo && !!a.proximo_em && a.proximo_em <= ate),
+      ultimoPedidoEm: async (rid) => envios.filter((e) => e.restaurante_id === rid && (e.tipo ?? 'pedido') === 'pedido' && e.status !== 'cancelado')
+        .map((e) => e.criado_em ?? null).filter(Boolean).sort().pop() ?? null,
+      nomeDoRestaurante: async () => 'Camelo',
       funcionarios: async (rid) => funcionarios.filter((f) => f.restaurante_id === rid),
       funcionario: async (id) => funcionarios.find((f) => f.id === id) ?? null,
       envioAberto: async (rid) => envios.some((e) => e.restaurante_id === rid && ['na_fila', 'enviando'].includes(e.status)),
       criarEnvio: async (l) => {
-        envios.push({ id: 100 + envios.length, status: 'na_fila', ...l })
+        envios.push({ id: 100 + envios.length, status: 'na_fila', criado_em: new Date(agora).toISOString(), ...l })
         return envios[envios.length - 1].id
       },
       criarConvites: async (ls) => {
@@ -116,7 +144,7 @@ function cenario(p: {
       atualizarConvite: async (id, campos) => { Object.assign(convites.find((c) => c.id === id)!, campos) },
     },
   }
-  return { deps, envios, convites, enviados, segundoPlano, funcionarios }
+  return { deps, envios, convites, enviados, segundoPlano, funcionarios, automaticos, pedidosDeRascunho }
 }
 
 let c = cenario({ login: false })
@@ -215,6 +243,117 @@ r = await tratarEquipe({ acao: 'cancelar_envio', envio_id: 999 }, c.deps)
 ok('cancelar envio de outro restaurante ou que não existe: não encontra', r.status === 404)
 r = await tratarEquipe({ acao: 'gerar_resumo', envio_id: 100 }, c.deps)
 ok('ações do desenho antigo (resumo, número, simular) não existem mais', r.status === 400 && r.corpo.motivo === 'pedido_invalido')
+
+// ── Aviso para a equipe toda (ação concluída) ────────────────────────────────
+ok('aviso: texto de 20 a 600 letras, sem espaço sobrando', validarAviso('  curto ') === null && validarAviso('x'.repeat(601)) === null
+  && validarAviso('A  escala agora sai\n\n\n\ntoda quarta-feira.') === 'A escala agora sai\n\ntoda quarta-feira.')
+ok('aviso: sem a IA, o texto-modelo usa o título da ação', rascunhoPadraoDoAviso('Publicar a escala até quarta-feira.') === 'Vocês comentaram e a gestão cuidou disso:\nPublicar a escala até quarta-feira.'
+  && rascunhoPadraoDoAviso('') === 'A gestão concluiu uma ação que nasceu do que vocês comentaram.' && validarAviso(rascunhoPadraoDoAviso('')) !== null)
+const avisoMontado = montarAviso({ nome: 'ana paula', restaurante: 'Camelo', texto: 'A escala agora sai toda quarta-feira.', sorteio: () => 0 })
+ok('aviso: a Helena abre, conta a novidade, convida a comentar e lembra do PARAR', avisoMontado === ['Oi, Ana! Aqui é a Helena, do Camelo.\nPassando pra contar uma novidade.',
+  'A escala agora sai toda quarta-feira.', FRASE_RESPONDER_AVISO, FRASE_PARAR].join('\n\n'), avisoMontado)
+ok('aviso: três aberturas, e nenhuma pede opinião como o convite', new Set([0, 1, 2].map((q) => aberturaDoAviso('Ana', 'Camelo', q))).size === 3
+  && [0, 1, 2].every((q) => !/ouvi|ouvindo|saber como/.test(aberturaDoAviso('Ana', 'Camelo', q))))
+ok('prompt do aviso: curto, sem dizer quem comentou, e discreto em caso grave', ['{restaurante}', '{categoria}', '{titulo}', '{plano}'].every((v) => PROMPT_AVISO.includes(v))
+  && /NUNCA diga nem insinue quem comentou/.test(PROMPT_AVISO) && /NAO conte o caso/.test(PROMPT_AVISO))
+
+const ACAO: AcaoLinha = { id: 7, restaurante_id: 11, titulo: 'Publicar a escala até quarta-feira', plano: '1. Fechar na terça.', categoria: 'Escala e horários', sensivel: false }
+c = cenario({ acoes: [ACAO], rascunho: 'Vocês comentaram que a escala saía em cima da hora.\nAgora ela sai toda quarta.' })
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 7 }, c.deps)
+ok('rascunho do aviso: o texto da IA, quantos recebem e os pedaços fixos', r.status === 200 && r.corpo.da_ia === true && String(r.corpo.texto).startsWith('Vocês comentaram que a escala')
+  && r.corpo.destinatarios === 2 && r.corpo.sensivel === false && r.corpo.ja_avisou_em === null && String(r.corpo.abertura).includes('Helena, do Camelo')
+  && String(r.corpo.fecho).endsWith(FRASE_PARAR) && r.corpo.whatsapp_conectado === true && c.envios.length === 0, r.corpo)
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 7 }, cenario({ acoes: [ACAO], rascunho: () => { throw new Error('IA fora') } }).deps)
+ok('rascunho com a IA fora do ar (ou desligada): vale o texto-modelo', r.status === 200 && r.corpo.da_ia === false && r.corpo.texto === rascunhoPadraoDoAviso(ACAO.titulo))
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 7 }, cenario({ acoes: [ACAO], rascunho: 'ok' }).deps)
+ok('rascunho curto demais da IA: vale o texto-modelo', r.corpo.da_ia === false && r.corpo.texto === rascunhoPadraoDoAviso(ACAO.titulo))
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 7 }, cenario({ acoes: [{ ...ACAO, sensivel: true }] }).deps)
+ok('rascunho de ação que nasceu de relato grave: avisa a tela', r.corpo.sensivel === true)
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 99 }, cenario({ acoes: [ACAO] }).deps)
+ok('aviso de ação que não existe, é de cliente ou de outro restaurante: não encontra', r.status === 404 && r.corpo.motivo === 'acao_nao_encontrada'
+  && (await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'x'.repeat(40) }, cenario({ acoes: [{ ...ACAO, restaurante_id: 12 }] }).deps)).status === 404)
+
+c = cenario({ acoes: [ACAO] })
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: '  A escala agora sai toda quarta-feira.  ' }, c.deps)
+ok('criar aviso: um para cada pessoa que pode receber, marcado como aviso da ação', r.status === 200 && r.corpo.convites === 2 && c.envios[0].tipo === 'aviso' && c.envios[0].acao_id === 7
+  && c.envios[0].pergunta === 'A escala agora sai toda quarta-feira.' && c.convites.length === 2 && c.convites.map((x) => x.funcionario_id).join() === '1,2', c.envios)
+ok('criar aviso: a mensagem é a do aviso (não pede opinião nem promete botão)', c.convites[0].texto.includes('A escala agora sai toda quarta-feira.') && c.convites[0].texto.includes(FRASE_RESPONDER_AVISO)
+  && c.convites[0].texto.endsWith(FRASE_PARAR) && !c.convites[0].texto.includes(FRASE_COMO_RESPONDER) && c.convites[0].texto.startsWith('Oi, Ana!'))
+let t2 = await rodarTick(c.deps)
+ok('o aviso sai pela mesma fila dos pedidos (um por minuto, no horário)', t2.convite === 'enviado' && c.enviados.length === 1 && c.enviados[0].texto === c.convites[0].texto)
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'A escala agora sai toda quarta-feira.' }, c.deps)
+ok('a mesma ação não é avisada duas vezes', r.status === 409 && r.corpo.motivo === 'ja_avisou' && c.envios.length === 1)
+r = await tratarEquipe({ acao: 'rascunho_aviso', acao_id: 7 }, c.deps)
+ok('rascunho de ação já avisada: diz quando foi e não gasta IA', r.status === 200 && !!r.corpo.ja_avisou_em && c.pedidosDeRascunho.n === 0)
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'curto' }, cenario({ acoes: [ACAO] }).deps)
+ok('aviso curto demais: recusa', r.status === 400 && r.corpo.motivo === 'aviso_invalido')
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'A escala agora sai toda quarta-feira.' }, cenario({ acoes: [ACAO], conectado: false }).deps)
+ok('aviso com o WhatsApp desconectado: recusa', r.status === 409 && r.corpo.motivo === 'sem_whatsapp')
+c = comFila()
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'A escala agora sai toda quarta-feira.' }, { ...c.deps, db: { ...c.deps.db, acaoDaEquipe: async () => ACAO } })
+ok('aviso com um pedido ainda saindo: espera a vez', r.status === 409 && r.corpo.motivo === 'envio_em_andamento')
+r = await tratarEquipe({ acao: 'criar_aviso', acao_id: 7, texto: 'A escala agora sai toda quarta-feira.' }, cenario({ acoes: [ACAO], admin: false }).deps)
+ok('aviso: quem não é admin da plataforma não manda (por enquanto)', r.status === 403)
+
+// ── Pedido automático ────────────────────────────────────────────────────────
+// 12/10/2026 é segunda; 15h UTC = 12h de Brasília.
+const dia = (iso: string) => new Date(iso).toISOString()
+ok('frequências: toda semana, a cada 15 dias ou todo mês', [7, 14, 30].every(frequenciaValida) && ![0, 1, 10, 60, 'x', null].some(frequenciaValida) && frequenciaValida('14'))
+ok('próxima manhã: amanhã às 10h de Brasília', dia(new Date(proximaManha(AGORA)).toISOString()) === '2026-10-13T13:00:00.000Z')
+ok('próxima manhã: de sábado pula o domingo e cai na segunda', new Date(proximaManha(Date.parse('2026-10-17T15:00:00Z'))).toISOString() === '2026-10-19T13:00:00.000Z')
+ok('próxima manhã: tarde da noite em Brasília ainda é "amanhã" de lá, não de UTC', new Date(proximaManha(Date.parse('2026-10-13T01:30:00Z'))).toISOString() === '2026-10-13T13:00:00.000Z')
+ok('próximo pedido: conta os dias e vai para as 10h; domingo vira segunda', new Date(proximoPedido(AGORA, 7)).toISOString() === '2026-10-19T13:00:00.000Z'
+  && new Date(proximoPedido(AGORA, 30)).toISOString() === '2026-11-11T13:00:00.000Z' && new Date(proximoPedido(Date.parse('2026-10-11T15:00:00Z'), 7)).toISOString() === '2026-10-19T13:00:00.000Z')
+ok('ao ligar: sem pedido anterior, o primeiro sai amanhã cedo', primeiroPedidoAutomatico(AGORA, 30, null) === proximaManha(AGORA))
+ok('ao ligar: com pedido recente, espera a frequência a partir dele (não manda dois em seguida)', new Date(primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-10-10T15:00:00Z'))).toISOString() === '2026-10-17T13:00:00.000Z'
+  && primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-09-01T15:00:00Z')) === proximaManha(AGORA))
+
+c = cenario()
+r = await tratarEquipe({ acao: 'auto_ler' }, c.deps)
+ok('automático nunca configurado: desligado, todo mês, com a pergunta padrão', r.status === 200 && r.corpo.ativo === false && r.corpo.cada_dias === 30 && r.corpo.pergunta === PERGUNTA_PADRAO && r.corpo.proximo_em === null)
+r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 14, pergunta: 'O que mais atrapalha o seu dia de trabalho?' }, c.deps)
+ok('ligar o automático: guarda a frequência e a pergunta, e marca o primeiro para amanhã cedo', r.status === 200 && r.corpo.ativo === true && r.corpo.proximo_em === '2026-10-13T13:00:00.000Z'
+  && c.automaticos[0].cada_dias === 14 && c.automaticos[0].pergunta === 'O que mais atrapalha o seu dia de trabalho?' && c.envios.length === 0, r.corpo)
+r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 14, pergunta: 'Tem alguma coisa que poderia melhorar por aqui?' }, c.deps)
+ok('mudar só a pergunta: a data combinada continua', r.corpo.proximo_em === '2026-10-13T13:00:00.000Z' && c.automaticos[0].pergunta.startsWith('Tem alguma coisa'))
+r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, c.deps)
+ok('mudar a frequência: recalcula', r.corpo.cada_dias === 7 && r.corpo.proximo_em === '2026-10-13T13:00:00.000Z')
+r = await tratarEquipe({ acao: 'auto_salvar', ativo: false, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, c.deps)
+ok('desligar: sem próxima data', r.corpo.ativo === false && r.corpo.proximo_em === null && c.automaticos[0].proximo_em === null)
+ok('frequência ou pergunta inválida: recusa', (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 10, pergunta: PERGUNTA_PADRAO }, c.deps)).corpo.motivo === 'frequencia_invalida'
+  && (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: 'oi' }, c.deps)).corpo.motivo === 'pergunta_invalida')
+ok('automático: quem não é admin da plataforma não mexe', (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, cenario({ admin: false }).deps)).status === 403)
+
+const AUTO = (extra: Partial<AutomaticoLinha> = {}): AutomaticoLinha => ({
+  restaurante_id: 11, ativo: true, cada_dias: 7, pergunta: 'O que mais atrapalha o seu dia de trabalho?', proximo_em: new Date(AGORA - 60_000).toISOString(), ultimo_em: null, ultimo_erro: null, ...extra,
+})
+c = cenario({ automaticos: [AUTO()] })
+let criados = await criarPedidosAutomaticos(c.deps)
+ok('data vencida: cria o pedido para quem pode receber e marca o próximo', criados === 1 && c.envios.length === 1 && c.envios[0].criado_por === 'automatico' && c.envios[0].tipo === 'pedido'
+  && c.convites.length === 2 && c.convites[0].texto.includes('O que mais atrapalha o seu dia de trabalho?') && c.convites[0].texto.includes(FRASE_COMO_RESPONDER)
+  && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && c.automaticos[0].ultimo_em === new Date(AGORA).toISOString() && c.automaticos[0].ultimo_erro === null, c.automaticos)
+criados = await criarPedidosAutomaticos(c.deps)
+ok('não cria de novo no minuto seguinte', criados === 0 && c.envios.length === 1)
+c = cenario({ automaticos: [AUTO({ proximo_em: new Date(AGORA + 3_600_000).toISOString() })] })
+ok('data ainda não chegou: nada', (await criarPedidosAutomaticos(c.deps)) === 0 && c.envios.length === 0)
+c = cenario({ automaticos: [AUTO({ ativo: false })] })
+ok('automático desligado: nada', (await criarPedidosAutomaticos(c.deps)) === 0 && c.envios.length === 0)
+c = cenario({ automaticos: [AUTO()], conectado: false })
+await criarPedidosAutomaticos(c.deps)
+ok('WhatsApp desconectado: não cria, tenta amanhã cedo e diz por quê', c.envios.length === 0 && c.automaticos[0].proximo_em === '2026-10-13T13:00:00.000Z' && /desconectado/.test(String(c.automaticos[0].ultimo_erro)))
+c = cenario({ automaticos: [AUTO()], funcionarios: [] })
+await criarPedidosAutomaticos(c.deps)
+ok('sem ninguém para receber: pula para a próxima data e diz por quê', c.envios.length === 0 && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && /Nenhum funcionário/.test(String(c.automaticos[0].ultimo_erro)))
+c = comFila()
+c.automaticos.push(AUTO())
+await criarPedidosAutomaticos(c.deps)
+ok('com outro envio saindo: espera a vez, sem perder a data', c.envios.length === 1 && c.automaticos[0].proximo_em === new Date(AGORA - 60_000).toISOString())
+c = cenario({ automaticos: [AUTO()] })
+t2 = await rodarTick(c.deps)
+ok('a rotina do minuto cria o pedido automático e já manda a primeira mensagem', c.envios.length === 1 && t2.convite === 'enviado' && c.enviados.length === 1)
+c = cenario({ automaticos: [AUTO()], agora: Date.parse('2026-10-11T15:00:00Z') })
+await rodarTick(c.deps)
+ok('fora do horário (domingo): o automático espera', c.envios.length === 0)
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\npedido de feedback da equipe: tudo certo')
 process.exit(falhas ? 1 : 0)

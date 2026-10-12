@@ -40,6 +40,13 @@ const FEEDBACKS_PADRAO = 6
 const INSIGHTS_RODADA_MIN = 1
 const INSIGHTS_RODADA_MAX = 8
 const INSIGHTS_RODADA_PADRAO = 2
+/**
+ * A equipe fala bem menos que o salão: o gatilho dela começa em 3 e pode
+ * descer até 1. Fica em `config_insights.equipe`, separado do dos clientes
+ * (o banco lê de lá: `deve_gerar_insights`, migration 20261015000000).
+ */
+const FEEDBACKS_MIN_EQUIPE = 1
+const FEEDBACKS_PADRAO_EQUIPE = 3
 
 /**
  * A qual aba um insight pertence.
@@ -73,6 +80,8 @@ export default function Insights() {
   // (/equipe/insights): os dados quem separa é o banco, e cada uma guarda os
   // seus filtros.
   const { publico, ehEquipe, chave } = usePublico()
+  const feedbacksMin = ehEquipe ? FEEDBACKS_MIN_EQUIPE : FEEDBACKS_MIN
+  const feedbacksPadrao = ehEquipe ? FEEDBACKS_PADRAO_EQUIPE : FEEDBACKS_PADRAO
   const [prioridadeSalva, setFilterPriority] = useFiltroPersistente<string>(chave('insights:prioridade'), 'URGENTE')
   const filterPriority = prioridadeSalva === 'Todos' ? 'URGENTE' : prioridadeSalva
   const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>(chave('insights:categorias'), [])
@@ -146,25 +155,27 @@ export default function Insights() {
 
   // Sincroniza o valor da engrenagem com a fonte única de config (contexto)
   useEffect(() => {
-    const atual = Number((configInsights as any)?.feedbacks_por_analise)
+    // Cada público tem a sua configuração; a da equipe fica em `.equipe`.
+    const daPagina = ehEquipe ? (configInsights as any)?.equipe : configInsights
+    const atual = Number(daPagina?.feedbacks_por_analise)
     const valor = Number.isFinite(atual)
-      ? Math.min(Math.max(Math.round(atual), FEEDBACKS_MIN), FEEDBACKS_MAX)
-      : FEEDBACKS_PADRAO
+      ? Math.min(Math.max(Math.round(atual), feedbacksMin), FEEDBACKS_MAX)
+      : feedbacksPadrao
     setFeedbacksPorAnalise(valor)
     setSavedFeedbacksPorAnalise(valor)
 
-    const pedidos = Number((configInsights as any)?.max_insights_por_rodada)
+    const pedidos = Number(daPagina?.max_insights_por_rodada)
     const porRodada = Number.isFinite(pedidos)
       ? Math.min(Math.max(Math.round(pedidos), INSIGHTS_RODADA_MIN), INSIGHTS_RODADA_MAX)
       : INSIGHTS_RODADA_PADRAO
     setInsightsPorRodada(porRodada)
     setSavedInsightsPorRodada(porRodada)
-  }, [configInsights])
+  }, [configInsights, ehEquipe, feedbacksMin, feedbacksPadrao])
 
   const handleSalvarConfig = async () => {
     if (!usuario?.restaurante_id) return
     // Defesa: garante valor dentro da faixa aceita pelo slider
-    const valor = Math.min(Math.max(Math.round(feedbacksPorAnalise), FEEDBACKS_MIN), FEEDBACKS_MAX)
+    const valor = Math.min(Math.max(Math.round(feedbacksPorAnalise), feedbacksMin), FEEDBACKS_MAX)
     const porRodada = Math.min(Math.max(Math.round(insightsPorRodada), INSIGHTS_RODADA_MIN), INSIGHTS_RODADA_MAX)
     setSavingConfig(true)
     try {
@@ -175,11 +186,11 @@ export default function Insights() {
         .eq('id', usuario.restaurante_id)
         .single()
 
-      const merged = {
-        ...((cfg?.config_insights as any) || {}),
-        feedbacks_por_analise: valor,
-        max_insights_por_rodada: porRodada,
-      }
+      const anterior = (cfg?.config_insights as any) || {}
+      const novos = { feedbacks_por_analise: valor, max_insights_por_rodada: porRodada }
+      const merged = ehEquipe
+        ? { ...anterior, equipe: { ...(anterior.equipe || {}), ...novos } }
+        : { ...anterior, ...novos }
 
       const { error } = await supabase
         .from('restaurantes')
@@ -615,7 +626,7 @@ export default function Insights() {
                   <div className="flex flex-col items-center gap-1">
                     <p className="text-[13px] font-medium text-gray-700">Analisar a cada</p>
                     <RoletaNumerica
-                      min={FEEDBACKS_MIN}
+                      min={feedbacksMin}
                       max={FEEDBACKS_MAX}
                       value={feedbacksPorAnalise}
                       onChange={setFeedbacksPorAnalise}
@@ -758,8 +769,7 @@ export default function Insights() {
                 insight={insight}
                 criandoAcao={criandoAcaoId === insight.id}
                 onCreateTask={() => handleCriarAcao(insight)}
-                // O assistente só conhece os feedbacks dos clientes.
-                onAiChat={ehEquipe ? undefined : () => handleAiChat(insight)}
+                onAiChat={() => handleAiChat(insight)}
                 onDelete={() => handleDeleteInsight(insight.id)}
                 onPin={(fixado) => handleTogglePin(insight.id, fixado)}
               />

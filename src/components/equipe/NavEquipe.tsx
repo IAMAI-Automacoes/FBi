@@ -1,15 +1,17 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Lightbulb, MessageSquare, Users, Zap, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Lightbulb, MessageSquare, Users, Zap, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/* As subpáginas da Equipe, no cabeçalho. Feedbacks, Insights e Ações são as
-   MESMAS telas dos clientes, mostrando só o que os funcionários falaram. */
+/* As subpáginas da Equipe, no cabeçalho. Visão Geral, Feedbacks, Insights e
+   Ações são as MESMAS telas dos clientes, mostrando só o que os funcionários
+   falaram. Funcionários é o cadastro e os pedidos de feedback. */
 
 const SUBPAGINAS: { nome: string; href: string; icone: LucideIcon }[] = [
-  { nome: 'Funcionários', href: '/equipe', icone: Users },
+  { nome: 'Visão Geral', href: '/equipe', icone: LayoutDashboard },
   { nome: 'Feedbacks', href: '/equipe/feedbacks', icone: MessageSquare },
   { nome: 'Insights', href: '/equipe/insights', icone: Lightbulb },
   { nome: 'Ações', href: '/equipe/acoes', icone: Zap },
+  { nome: 'Funcionários', href: '/equipe/funcionarios', icone: Users },
 ]
 
 /** A subpágina aberta: "/equipe/acoes/arquivadas" ainda é Ações. */

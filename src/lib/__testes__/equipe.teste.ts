@@ -3,8 +3,10 @@
  *   node --experimental-strip-types src/lib/__testes__/equipe.teste.ts
  */
 import {
-  contasDoEnvio, formatarAteQuando, fraseDeRespostas, fraseDoPrazo, lerListaColada, podeReceber, situacaoDoFuncionario, type ConviteAnonimo,
+  AVISO_MAX, AVISO_MIN, contasDoEnvio, formatarAteQuando, fraseDeRespostas, fraseDoPrazo, FREQUENCIAS, lerListaColada, PERGUNTA_MAX, PERGUNTA_MIN,
+  podeReceber, resumoDosPedidos, ROTULO_FREQUENCIA, situacaoDoFuncionario, type ConviteAnonimo,
 } from '../equipe.ts'
+import * as servidor from '../../../supabase/functions/_shared/equipe.ts'
 import { caminhoDoPublico, ehRotaDaEquipe, levaOPublico, TABELAS_COM_PUBLICO } from '../publico-rota.ts'
 
 let falhas = 0
@@ -43,6 +45,24 @@ ok('frase sem ninguém ter recebido ainda', fraseDeRespostas(contasDoEnvio([conv
 c = contasDoEnvio([])
 ok('contas de envio vazio não divide por zero', c.taxa === 0 && c.total === 0)
 
+// A tela e a função equipe usam os mesmos limites
+ok('pergunta, aviso e frequências: os mesmos números da função equipe', PERGUNTA_MIN === servidor.PERGUNTA_MIN && PERGUNTA_MAX === servidor.PERGUNTA_MAX
+  && AVISO_MIN === servidor.AVISO_MIN && AVISO_MAX === servidor.AVISO_MAX && FREQUENCIAS.join() === servidor.FREQUENCIAS_AUTOMATICAS.join())
+ok('frequência por extenso', ROTULO_FREQUENCIA[7] === 'Toda semana' && ROTULO_FREQUENCIA[14] === 'A cada 15 dias' && ROTULO_FREQUENCIA[30] === 'Todo mês')
+
+// Visão Geral da equipe: os números dos pedidos de feedback
+const envio = (id: number, tipo: 'pedido' | 'aviso', criado_em: string, status = 'concluido') => ({ id, tipo, status: status as 'concluido', criado_em })
+const cv = (envio_id: number, respondeu: boolean, status: ConviteAnonimo['status'] = 'enviado'): ConviteAnonimo => ({ envio_id, status, respondeu })
+let rp = resumoDosPedidos(
+  [envio(1, 'pedido', '2026-10-01T12:00:00Z'), envio(2, 'pedido', '2026-10-10T12:00:00Z'), envio(3, 'aviso', '2026-10-11T12:00:00Z'), envio(4, 'pedido', '2026-10-12T12:00:00Z', 'cancelado')],
+  [cv(1, true), cv(1, false), cv(2, true), cv(2, true), cv(2, false), cv(2, false, 'falhou'), cv(3, false), cv(3, false), cv(4, true)],
+)
+ok('resumo dos pedidos: o último é o pedido mais recente (aviso e cancelado não contam)', rp.pedidos === 2 && rp.ultimo?.criado_em === '2026-10-10T12:00:00Z'
+  && rp.ultimo.contas.enviados === 3 && rp.ultimo.contas.responderam === 2 && Math.round(rp.ultimo.contas.taxa * 100) === 67, rp)
+ok('resumo dos pedidos: a taxa geral soma só os pedidos', rp.geral.enviados === 5 && rp.geral.responderam === 3 && rp.geral.falharam === 1)
+rp = resumoDosPedidos([envio(3, 'aviso', '2026-10-11T12:00:00Z')], [cv(3, false)])
+ok('resumo dos pedidos: só aviso (ou nada) é "nenhum pedido ainda"', rp.pedidos === 0 && rp.ultimo === null && rp.geral.enviados === 0 && resumoDosPedidos([], []).ultimo === null)
+
 // Até quando a pessoa pode escolher ficar anônima (hora de Brasília)
 ok('prazo da escolha: dia e hora de Brasília', formatarAteQuando('2026-10-13T18:05:00Z') === '13/10 às 15:05', formatarAteQuando('2026-10-13T18:05:00Z'))
 ok('prazo da escolha: vira o dia em Brasília, não em UTC', formatarAteQuando('2026-10-14T02:30:00Z') === '13/10 às 23:30', formatarAteQuando('2026-10-14T02:30:00Z'))
@@ -52,7 +72,7 @@ ok('prazo por extenso: horas, 1 hora e dias inteiros', fraseDoPrazo(24) === '24 
 ok('prazo por extenso: sem valor, vale o padrão de 24 horas', fraseDoPrazo(undefined) === '24 horas' && fraseDoPrazo(null) === '24 horas' && fraseDoPrazo(0) === '24 horas' && fraseDoPrazo(NaN) === '24 horas')
 
 // De que público é a página (é isso que separa os dados no banco)
-ok('rota da equipe: /equipe e tudo que fica dentro', ['/equipe', '/equipe/', '/equipe/feedbacks', '/equipe/insights', '/equipe/acoes', '/equipe/acoes/arquivadas'].every(ehRotaDaEquipe))
+ok('rota da equipe: /equipe e tudo que fica dentro', ['/equipe', '/equipe/', '/equipe/feedbacks', '/equipe/insights', '/equipe/acoes', '/equipe/acoes/arquivadas', '/equipe/funcionarios'].every(ehRotaDaEquipe))
 ok('rota da equipe: as páginas dos clientes não são', ['/', '/feedbacks', '/insights', '/acoes', '/acoes/arquivadas', '/whatsapp', '/admin', '/garcons'].every((c) => !ehRotaDaEquipe(c)))
 ok('rota da equipe: nome parecido não engana', !ehRotaDaEquipe('/equipes') && !ehRotaDaEquipe('/minha-equipe') && !ehRotaDaEquipe('/equipefeedbacks'))
 ok('rota da equipe: funciona com o site numa subpasta', ehRotaDaEquipe('/app/equipe/feedbacks') && !ehRotaDaEquipe('/app/feedbacks'))

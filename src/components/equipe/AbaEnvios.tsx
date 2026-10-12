@@ -10,6 +10,7 @@ import { contasDoEnvio, fraseDeRespostas, ROTULO_ENVIO, type ConviteAnonimo, typ
 import { acaoEquipe } from '@/lib/queries/equipe'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { Cartao } from './pecas'
+import { PedidoAutomatico } from './PedidoAutomatico'
 
 const COR: Record<StatusEnvio, string> = {
   na_fila: 'bg-gray-100 text-gray-600',
@@ -19,7 +20,9 @@ const COR: Record<StatusEnvio, string> = {
 }
 const quando = (iso: string) => format(parseISO(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
-/* Cada pedido de feedback feito à equipe: para quantos saiu e quantos responderam. */
+/* O que o restaurante mandou para a equipe: cada pedido de feedback (para
+   quantos saiu e quantos responderam) e cada aviso de ação concluída. Em cima,
+   o pedido automático. */
 export function AbaEnvios({ envios, convites, onPedir, onMudou }: {
   envios: Envio[]
   convites: ConviteAnonimo[]
@@ -30,30 +33,34 @@ export function AbaEnvios({ envios, convites, onPedir, onMudou }: {
   const [cancelando, setCancelando] = useState<number | null>(null)
 
   const cancelar = async (e: Envio) => {
-    if (!(await confirmar({ titulo: 'Cancelar este pedido?', descricao: 'Quem já recebeu a mensagem pode responder normalmente. O resto não recebe.', confirmar: 'Cancelar pedido', destrutivo: true }))) return
+    if (!(await confirmar({ titulo: e.tipo === 'aviso' ? 'Cancelar este aviso?' : 'Cancelar este pedido?', descricao: 'Quem já recebeu a mensagem pode responder normalmente. O resto não recebe.', confirmar: 'Cancelar envio', destrutivo: true }))) return
     setCancelando(e.id)
     const r = await acaoEquipe('cancelar_envio', { envio_id: e.id })
     setCancelando(null)
     if (!r.ok) return toast.error(r.error || 'Não foi possível cancelar.')
-    toast.success('Pedido cancelado.')
+    toast.success('Envio cancelado.')
     onMudou()
   }
 
   if (!envios.length) {
     return (
-      <Cartao className="flex flex-col items-center gap-3 py-10 text-center">
-        <p className="text-sm font-medium text-gray-700">Nenhum pedido de feedback ainda.</p>
-        <Button onClick={onPedir} className="bg-[#1D4ED8] hover:bg-[#1E40AF]"><Send className="mr-1.5 h-4 w-4" /> Pedir feedback</Button>
-      </Cartao>
+      <div className="space-y-4">
+        <PedidoAutomatico onMudou={onMudou} />
+        <Cartao className="flex flex-col items-center gap-3 py-10 text-center">
+          <p className="text-sm font-medium text-gray-700">Nenhum pedido de feedback ainda.</p>
+          <Button onClick={onPedir} className="bg-[#1D4ED8] hover:bg-[#1E40AF]"><Send className="mr-1.5 h-4 w-4" /> Pedir feedback</Button>
+        </Cartao>
+      </div>
     )
   }
 
   return (
     <div className="space-y-3">
       {dialogo}
+      <PedidoAutomatico onMudou={onMudou} />
       <p className="text-xs text-gray-500">As mensagens saem aos poucos, cerca de uma por minuto, de segunda a sábado, das 9h às 20h.</p>
       <CrudTable>
-        <thead><tr><Th>Quando</Th><Th>Pergunta</Th><Th>Mensagens</Th><Th>Respostas</Th><Th>Situação</Th><Th className="text-right">Ação</Th></tr></thead>
+        <thead><tr><Th>Quando</Th><Th>Mensagem</Th><Th>Enviadas</Th><Th>Respostas</Th><Th>Situação</Th><Th className="text-right">Ação</Th></tr></thead>
         <tbody>
           {envios.map((e) => {
             const c = contasDoEnvio(convites.filter((x) => x.envio_id === e.id))
@@ -61,12 +68,17 @@ export function AbaEnvios({ envios, convites, onPedir, onMudou }: {
             return (
               <tr key={e.id} className="border-b border-gray-100 align-top last:border-0">
                 <Td className="whitespace-nowrap text-gray-600">{quando(e.criado_em)}</Td>
-                <Td className="max-w-xs text-gray-800"><span className="line-clamp-2">{e.pergunta}</span></Td>
+                <Td className="max-w-xs text-gray-800">
+                  {/* Aviso de ação concluída não pede resposta; pedido automático é o que o sistema criou sozinho. */}
+                  {e.tipo === 'aviso' && <span className="mb-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">Aviso de ação concluída</span>}
+                  {e.tipo === 'pedido' && e.criado_por === 'automatico' && <span className="mb-1 inline-flex rounded-full bg-[#EFF6FF] px-2 py-0.5 text-[11px] font-medium text-[#1D4ED8]">Pedido automático</span>}
+                  <span className="line-clamp-2">{e.pergunta}</span>
+                </Td>
                 <Td className="whitespace-nowrap tabular-nums text-gray-600">
                   {c.enviados} de {c.total} {c.total === 1 ? 'enviada' : 'enviadas'}
                   {c.falharam > 0 && <span className="block text-xs text-rose-600">{c.falharam} {c.falharam === 1 ? 'não saiu' : 'não saíram'}</span>}
                 </Td>
-                <Td className="whitespace-nowrap text-gray-600">{c.enviados ? fraseDeRespostas(c) : <span className="text-gray-300">—</span>}</Td>
+                <Td className="whitespace-nowrap text-gray-600">{e.tipo === 'pedido' && c.enviados ? fraseDeRespostas(c) : <span className="text-gray-300">—</span>}</Td>
                 <Td><span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', COR[e.status])}>{ROTULO_ENVIO[e.status]}</span></Td>
                 <Td className="text-right">
                   {aberto && (

@@ -25,7 +25,7 @@
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
+import { carregarPrompts, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import {
@@ -39,7 +39,8 @@ import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti
 import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 import { polaridade } from '../_shared/sentimento.ts'
-import { CATEGORIAS_EQUIPE, promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
+import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'sugeridor_acoes'
 const AGENTE_VERIFICADOR = 'verificador_acoes'
@@ -278,7 +279,7 @@ async function redigirAcao(
   const publico = publicoDe(insight.publico)
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
+    const prompt = promptPara(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
       nome: nomeDoAssistente(ctx.config?.mascote_config),
       tom: tomDoAssistente(ctx.config?.mascote_config),
       perfil: blocoPerfil(ctx.config),
@@ -290,7 +291,7 @@ async function redigirAcao(
       descricao: insight.descricao ?? '',
       sugestao: insight.sugestao ?? '',
       pontos: listarParaPrompt(pontos),
-    }), publico)
+    }, publico)
 
     const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: prompt },
@@ -342,13 +343,13 @@ async function redigirAcao(
       continue
     }
 
-    const promptVerif = promptDoPublico(montarPrompt(ctx.prompts, 'ef_verificar_acao', PROMPT_VERIFICADOR, {
+    const promptVerif = promptPara(ctx.prompts, 'ef_verificar_acao', PROMPT_VERIFICADOR, {
       pontos: listarParaPrompt(pontos),
       titulo: insight.titulo ?? '',
       descricao: insight.descricao ?? '',
       titulo_acao: rascunho.titulo_acao,
       plano: rascunho.plano_detalhado ?? '',
-    }), publico)
+    }, publico)
 
     const { result: veredito } = await chamarIA(db, {
       messages: [{ role: 'user', content: promptVerif }],

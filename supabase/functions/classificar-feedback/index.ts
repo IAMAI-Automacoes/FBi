@@ -25,11 +25,12 @@
 // aguenta.
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
+import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { ehNegativo, ehPositivo, ehSugestao } from '../_shared/sentimento.ts'
-import { promptDoPublico, publicoDe } from '../_shared/publico.ts'
+import { publicoDe } from '../_shared/publico.ts'
+import { promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'classificador_feedback'
 
@@ -171,12 +172,12 @@ Deno.serve(async (req: Request) => {
       : '(nenhum tema ainda)'
 
     const prompts = await carregarPrompts(db)
-    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
+    const prompt = promptPara(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
       temas: lista,
       texto,
       categoria: fb.categoria ?? '—',
       sentimento: fb.sentimento ?? '—',
-    }), publico)
+    }, publico)
 
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 300 })
     // Agente desligado no painel: o feedback fica sem tema em vez de a função
