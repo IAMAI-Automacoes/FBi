@@ -2093,6 +2093,7 @@ export type Database = {
           enviada_em: string
           grupo: boolean
           id: number
+          interativo: Json | null
           message_id: string
           midia_caminho: string | null
           midia_id: string | null
@@ -2121,6 +2122,7 @@ export type Database = {
           enviada_em: string
           grupo?: boolean
           id?: never
+          interativo?: Json | null
           message_id: string
           midia_caminho?: string | null
           midia_id?: string | null
@@ -2149,6 +2151,7 @@ export type Database = {
           enviada_em?: string
           grupo?: boolean
           id?: never
+          interativo?: Json | null
           message_id?: string
           midia_caminho?: string | null
           midia_id?: string | null
@@ -4317,6 +4320,7 @@ export type Database = {
       influencers_sem_acento: { Args: { p: string }; Returns: string }
       influencers_tipo: { Args: { p_sentimento: string }; Returns: string }
       janela_demo_atual: { Args: never; Returns: number }
+      jsonb_de_texto: { Args: { p_texto: string }; Returns: Json }
       limpar_contas_abandonadas: { Args: never; Returns: number }
       limpar_payload_eventos_stripe: { Args: never; Returns: number }
       meu_acesso: {
@@ -4444,6 +4448,11 @@ export type Database = {
           resultado: string
           sessao_demo_id: string
         }[]
+      }
+      whatsapp_interativo: { Args: { p_payload: Json }; Returns: Json }
+      whatsapp_texto_do_interativo: {
+        Args: { p_interativo: Json }
+        Returns: string
       }
     }
     Enums: {

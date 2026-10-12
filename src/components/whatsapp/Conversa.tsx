@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
 import {
-  agregarReacoes, formatarTelefone, mesmoDia, rotuloDia, type MensagemWa,
+  agregarReacoes, escolhasPorMensagem, formatarTelefone, interativoDe, mesmoDia, rotuloDia, type MensagemWa,
 } from '@/lib/whatsapp/formatacao'
 import { buscarMensagens, buscarPorIds, fotosDeParticipantes, marcarLidas, urlsAssinadas } from '@/lib/queries/whatsapp'
 import { Avatar, SeparadorDia, WA } from './pecas'
@@ -19,6 +19,7 @@ export function deLinhaRealtime(r: Record<string, any>): MensagemWa {
     reacao: r.reacao, responde_message_id: r.responde_message_id, midia_caminho: r.midia_caminho, midia_mime: r.midia_mime,
     midia_nome: r.midia_nome, status: r.status, editada_em: r.editada_em, enviada_em: r.enviada_em,
     remetente: r.payload?.message?.senderName ?? null,
+    interativo: interativoDe(r.interativo),
   }
 }
 
@@ -191,6 +192,8 @@ export function Conversa({
     return () => { ativo = false }
   }, [telefonesDoGrupo, somenteLeitura, restauranteId])
   const reacoes = useMemo(() => agregarReacoes(mensagens), [mensagens])
+  // Mensagem com botões: qual opção foi tocada (a resposta chega como outra mensagem).
+  const escolhas = useMemo(() => escolhasPorMensagem(mensagens), [mensagens])
 
   // ── Posição da rolagem ──
   useLayoutEffect(() => {
@@ -415,6 +418,7 @@ export function Conversa({
                       url={m.midia_caminho ? urls[m.midia_caminho] ?? '' : ''}
                       citada={citada}
                       reacoes={reacoes.get(m.message_id) ?? []}
+                      escolhida={escolhas.get(m.message_id)}
                       piscando={piscando === m.message_id}
                       realcado={realcadas?.has(m.message_id) ?? false}
                       destaque={marcada?.messageId === m.message_id ? marcada.termo : undefined}

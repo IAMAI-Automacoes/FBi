@@ -10,6 +10,32 @@ export type TipoMensagem =
   | 'text' | 'image' | 'video' | 'gif' | 'audio' | 'document'
   | 'sticker' | 'reaction' | 'location' | 'contact' | 'outro'
 
+/** Um botão de uma mensagem com botões. */
+export interface BotaoWa {
+  id?: string
+  texto: string
+  /** resposta = volta como mensagem de quem tocou; os outros agem no aparelho. */
+  tipo: 'resposta' | 'link' | 'ligar' | 'copiar' | 'outro'
+  /** O link, o telefone ou o código a copiar. */
+  valor?: string
+}
+/** O que a pessoa tocou: um botão ou um item de lista. */
+export interface EscolhaWa { id?: string; texto: string }
+/**
+ * Botões, menu de lista ou a resposta a eles (coluna `interativo`). Quem monta
+ * é o banco, a partir do evento da uazapi (`whatsapp_interativo`, migration
+ * 20261016000000): a tela recebe pronto, igual para todos os formatos.
+ */
+export type InterativoWa =
+  | { tipo: 'botoes'; titulo?: string; corpo?: string; rodape?: string; botoes: BotaoWa[] }
+  | {
+      tipo: 'lista'; titulo?: string; corpo?: string; rodape?: string
+      /** O rótulo do botão que abre a lista. */
+      botao_lista?: string
+      secoes: { titulo?: string; itens: { id?: string; titulo: string; descricao?: string }[] }[]
+    }
+  | { tipo: 'escolha'; escolha: EscolhaWa }
+
 /** Uma linha de mensagens_whatsapp, como a tela lê (sem o payload inteiro). */
 export interface MensagemWa {
   id: number
@@ -33,6 +59,8 @@ export interface MensagemWa {
   enviada_em: string
   /** Nome de quem mandou, em grupo (payload->message->>senderName). */
   remetente: string | null
+  /** Mensagem com botões, com lista, ou a resposta a uma delas. */
+  interativo?: InterativoWa | null
 }
 
 /** Uma linha da RPC conversas_whatsapp. */
@@ -67,6 +95,67 @@ export const TIPOS_COM_MIDIA = ['image', 'video', 'gif', 'audio', 'document', 's
  * function enviar-push tem uma cópia desta regra (`previaWhatsapp`) — mudou
  * aqui, muda lá.
  */
+// ── Botões, listas e respostas ──────────────────────────────────────────────
+
+/** O que veio do banco (ou do tempo real) é mesmo um `interativo`? Qualquer outra coisa vira null. */
+export function interativoDe(valor: unknown): InterativoWa | null {
+  if (!valor || typeof valor !== 'object') return null
+  const v = valor as Record<string, unknown>
+  if (v.tipo === 'botoes') return Array.isArray(v.botoes) ? (v as unknown as InterativoWa) : ({ ...v, botoes: [] } as unknown as InterativoWa)
+  if (v.tipo === 'lista') return Array.isArray(v.secoes) ? (v as unknown as InterativoWa) : ({ ...v, secoes: [] } as unknown as InterativoWa)
+  if (v.tipo === 'escolha') {
+    const e = v.escolha as Record<string, unknown> | undefined
+    return e && typeof e.texto === 'string' && e.texto.trim() ? (v as unknown as InterativoWa) : null
+  }
+  return null
+}
+
+/** A mensagem tem botões ou lista para desenhar? (a resposta é um balão de texto comum) */
+export const temBotoes = (m: Pick<MensagemWa, 'interativo' | 'status'>): boolean =>
+  m.status !== 'DELETED' && !!m.interativo && m.interativo.tipo !== 'escolha'
+
+/** O que foi tocado nesta resposta, ou null se a mensagem não é resposta de botão/lista. */
+export const escolhaDe = (m: Pick<MensagemWa, 'interativo'>): EscolhaWa | null =>
+  m.interativo?.tipo === 'escolha' ? m.interativo.escolha : null
+
+/**
+ * Para cada mensagem com botões, a resposta que chegou a ela (a mais recente).
+ * A resposta aponta para a mensagem dos botões em `responde_message_id`.
+ */
+export function escolhasPorMensagem(mensagens: Pick<MensagemWa, 'interativo' | 'responde_message_id' | 'status' | 'enviada_em'>[]): Map<string, EscolhaWa> {
+  const mapa = new Map<string, EscolhaWa>()
+  const quando = new Map<string, string>()
+  for (const m of mensagens) {
+    const e = escolhaDe(m)
+    if (!e || !m.responde_message_id || m.status === 'DELETED') continue
+    const anterior = quando.get(m.responde_message_id)
+    if (anterior && anterior > m.enviada_em) continue
+    mapa.set(m.responde_message_id, e)
+    quando.set(m.responde_message_id, m.enviada_em)
+  }
+  return mapa
+}
+
+/** Esta opção é a que foi escolhida? Confere pelo id; sem id, pelo texto. */
+export function foiEscolhido(opcao: { id?: string; texto: string }, escolha?: EscolhaWa | null): boolean {
+  if (!escolha) return false
+  if (opcao.id && escolha.id) return opcao.id === escolha.id
+  return opcao.texto.trim().toLowerCase() === escolha.texto.trim().toLowerCase()
+}
+
+/** O link de um botão, só se for http(s): nada de `javascript:` vindo de fora. */
+export function linkSeguro(valor: string | null | undefined): string | null {
+  const v = String(valor ?? '').trim()
+  return /^https?:\/\/[^\s]+$/i.test(v) ? v : null
+}
+
+/** O telefone de um botão de ligar, só com dígitos e o + da frente. */
+export function telefoneParaLigar(valor: string | null | undefined): string | null {
+  const v = String(valor ?? '').trim()
+  const digitos = v.replace(/\D/g, '')
+  return digitos.length >= 8 ? (v.startsWith('+') ? '+' : '') + digitos : null
+}
+
 export function previaMensagem(m: {
   tipo: string
   texto: string | null

@@ -1,17 +1,18 @@
 import { memo } from 'react'
-import { Ban, Bot, ChevronDown, Copy, Download } from 'lucide-react'
+import { Ban, Bot, ChevronDown, Copy, Download, MousePointerClick } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  corRemetente, formatarTelefone, horaCurta, linksDoTexto, previaMensagem, soEmoji,
-  type MensagemWa, type ReacaoVisivel,
+  corRemetente, escolhaDe, formatarTelefone, horaCurta, linksDoTexto, previaMensagem, soEmoji, temBotoes,
+  type EscolhaWa, type MensagemWa, type ReacaoVisivel,
 } from '@/lib/whatsapp/formatacao'
 import { urlParaBaixar } from '@/lib/queries/whatsapp'
 import { TextoWhatsapp, Tiques, WA } from './pecas'
 import { PlayerAudio, Transcricao } from './midia/PlayerAudio'
 import { PreviaLinkCartao } from './midia/PreviaLink'
+import { MensagemInterativa } from './midia/Interativa'
 import {
   CartaoConteudo, CartaoDocumento, Figurinha, MidiaGif, MidiaImagem, MidiaIndisponivel, MidiaVideo, NaoSuportada,
 } from './midia/Midias'
@@ -30,6 +31,8 @@ export interface PropsBalao {
   /** undefined = não é resposta; null = a mensagem citada não está no histórico. */
   citada: MensagemWa | null | undefined
   reacoes: ReacaoVisivel[]
+  /** Mensagem com botões ou lista: a opção que a pessoa tocou, se a resposta já chegou. */
+  escolhida?: EscolhaWa | null
   destaque?: string
   piscando?: boolean
   /** Uma das mensagens do feedback aberto pelo card: a linha fica destacada. */
@@ -144,12 +147,12 @@ function MenuMensagem({ m }: { m: MensagemWa }) {
 }
 
 function BalaoBase({
-  m, primeiroDoGrupo, nomeContato, fotoContato, fotoRemetente, url, citada, reacoes, destaque, piscando, realcado, autoTocar,
+  m, primeiroDoGrupo, nomeContato, fotoContato, fotoRemetente, url, citada, reacoes, escolhida, destaque, piscando, realcado, autoTocar,
   aoAbrirMidia, aoAbrirPdf, aoIrParaCitada, aoTerminarAudio, aoAbrirPessoa,
 }: PropsBalao) {
   const deMim = m.de_mim
   const apagada = m.status === 'DELETED'
-  const emojis = !apagada && m.tipo === 'text' && !citada ? soEmoji(m.texto) : 0
+  const emojis = !apagada && m.tipo === 'text' && !citada && !m.interativo ? soEmoji(m.texto) : 0
   const semBalao = !apagada && (m.tipo === 'sticker' || emojis > 0)
   const ehMidiaVisual = !apagada && ['image', 'video', 'gif'].includes(m.tipo)
   const legenda = ehMidiaVisual ? m.texto : null
@@ -157,7 +160,11 @@ function BalaoBase({
   const corNome = corRemetente(m.remetente ?? m.telefone)
   // Texto com link: o balão tem pelo menos a largura da prévia, e a prévia
   // ocupa o balão inteiro (antes ela ficava fixa e o texto passava dela).
-  const temPrevia = !apagada && m.tipo === 'text' && linksDoTexto(m.texto).length > 0
+  // Botões ou menu de lista: o próprio bloco desenha o texto, o horário e os botões.
+  const interativa = temBotoes(m) ? m.interativo! : null
+  // A resposta a um botão ou a uma lista é um balão de texto, com um aviso do que foi.
+  const escolha = apagada ? null : escolhaDe(m)
+  const temPrevia = !apagada && !interativa && m.tipo === 'text' && linksDoTexto(m.texto).length > 0
   // Grupo, mensagem recebida: coluna da foto à esquerda (todas alinhadas; a
   // foto só na primeira da sequência e só se a pessoa mostra a foto).
   const colunaFoto = m.grupo && !deMim
@@ -170,6 +177,18 @@ function BalaoBase({
         <Ban className="h-4 w-4 shrink-0" />
         {deMim ? 'Você apagou esta mensagem' : 'Esta mensagem foi apagada'}
       </p>
+    )
+  } else if (interativa && interativa.tipo !== 'escolha') {
+    corpo = <MensagemInterativa i={interativa} escolhida={escolhida} destaque={destaque} meta={<Meta m={m} />} />
+  } else if (escolha) {
+    corpo = (
+      <>
+        <p className="mb-0.5 flex items-center gap-1 text-[11px] text-gray-500">
+          <MousePointerClick className="h-3.5 w-3.5 shrink-0" />
+          {citada?.interativo?.tipo === 'lista' ? 'Escolheu na lista' : 'Tocou no botão'}
+        </p>
+        <TextoWhatsapp texto={m.texto || escolha.texto} destaque={destaque} className="text-[14.2px] leading-[19px] text-[#111b21]" />
+      </>
     )
   } else if (emojis > 0) {
     corpo = <p className="leading-tight" style={{ fontSize: emojis === 1 ? 52 : emojis === 2 ? 42 : 34 }}>{m.texto}</p>
@@ -228,7 +247,7 @@ function BalaoBase({
   // Onde fica o horário: por cima da foto (sem legenda), logo abaixo da mídia,
   // ou flutuando no fim do texto (o espaçador reserva o lugar dele).
   const metaSobreMidia = ehMidiaVisual && !legenda && !!url
-  const metaNoTexto = !semBalao && !ehMidiaVisual && (m.tipo === 'text' || apagada || !['audio', 'document', 'location', 'contact'].includes(m.tipo))
+  const metaNoTexto = !semBalao && !ehMidiaVisual && !interativa && (m.tipo === 'text' || apagada || !!escolha || !['audio', 'document', 'location', 'contact'].includes(m.tipo))
 
   return (
     <div
@@ -331,7 +350,7 @@ function BalaoBase({
           </div>
         )}
 
-        {!semBalao && !metaNoTexto && !metaSobreMidia && !legenda && (
+        {!semBalao && !metaNoTexto && !metaSobreMidia && !legenda && !interativa && (
           <div className="flex justify-end px-1 pt-0.5"><Meta m={m} /></div>
         )}
 

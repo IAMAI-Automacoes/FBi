@@ -19,6 +19,14 @@ import {
   trechoComTermo,
   destaqueParaTexto,
   mensagensDoFeedback,
+  interativoDe,
+  temBotoes,
+  escolhaDe,
+  escolhasPorMensagem,
+  foiEscolhido,
+  linkSeguro,
+  telefoneParaLigar,
+  type InterativoWa,
 } from '../whatsapp/formatacao.ts'
 
 let falhas = 0
@@ -225,6 +233,59 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
     ['a1'],
   ))
   ok('feedback sem texto e nada recebido: vazio', igual(mensagensDoFeedback(null, []), []))
+}
+
+// ── Botões, listas e respostas (formatos reais do banco, 08 a 12/10/2026) ───
+{
+  // O que o banco entrega para o botão do anonimato que o EasyFeed manda.
+  const botoes: InterativoWa = {
+    tipo: 'botoes', titulo: 'Anotado, obrigada!', corpo: 'Quer que essa resposta fique anônima?', rodape: 'Sem resposta em 24 horas, aparece com o seu nome.',
+    botoes: [{ id: 'equipe_anonimo', texto: 'Ficar anônimo', tipo: 'resposta' }, { id: 'equipe_mostrar', texto: 'Mostrar meu nome', tipo: 'resposta' }],
+  }
+  const lista: InterativoWa = { tipo: 'lista', titulo: 'Opções de suporte', botao_lista: 'Ver opções', secoes: [{ itens: [{ id: 'Outras dúvidas', titulo: 'Outras dúvidas' }] }] }
+  const escolha: InterativoWa = { tipo: 'escolha', escolha: { id: 'equipe_anonimo', texto: 'Ficar anônimo' } }
+
+  ok('interativo: aceita botões, lista e escolha', interativoDe(botoes) === botoes && interativoDe(lista) === lista && interativoDe(escolha) === escolha)
+  ok('interativo: mensagem comum (nulo, texto, tipo estranho) não é', interativoDe(null) === null && interativoDe('x') === null && interativoDe({ tipo: 'enquete' }) === null && interativoDe({}) === null)
+  ok('interativo: botões ou lista sem a lista de itens não quebram a tela', igual(interativoDe({ tipo: 'botoes', corpo: 'oi' }), { tipo: 'botoes', corpo: 'oi', botoes: [] })
+    && igual(interativoDe({ tipo: 'lista' }), { tipo: 'lista', secoes: [] }))
+  ok('interativo: escolha sem texto não serve', interativoDe({ tipo: 'escolha', escolha: { id: 'x', texto: ' ' } }) === null && interativoDe({ tipo: 'escolha' }) === null)
+
+  ok('tem botões: mensagem com botões ou lista; a resposta e a mensagem comum não', temBotoes({ interativo: botoes, status: 'SENT' }) && temBotoes({ interativo: lista, status: null })
+    && !temBotoes({ interativo: escolha, status: null }) && !temBotoes({ interativo: null, status: null }) && !temBotoes({ status: null }))
+  ok('tem botões: mensagem apagada não desenha os botões', !temBotoes({ interativo: botoes, status: 'DELETED' }))
+  ok('escolha da resposta', igual(escolhaDe({ interativo: escolha }), { id: 'equipe_anonimo', texto: 'Ficar anônimo' }) && escolhaDe({ interativo: botoes }) === null && escolhaDe({}) === null)
+
+  // A conversa real: botão enviado, a pessoa tocou em "Mostrar meu nome"; outro botão, tocou em "Ficar anônimo".
+  const msg = (interativo: InterativoWa | null, responde: string | null, enviada_em: string, status: string | null = null) => ({ interativo, responde_message_id: responde, enviada_em, status })
+  let mapa = escolhasPorMensagem([
+    msg(botoes, null, '2026-10-12T19:23:42Z'),
+    msg({ tipo: 'escolha', escolha: { id: 'equipe_mostrar', texto: 'Mostrar meu nome' } }, 'B1', '2026-10-12T19:24:11Z'),
+    msg(botoes, null, '2026-10-12T19:25:34Z'),
+    msg(escolha, 'B2', '2026-10-12T19:25:48Z'),
+    msg(null, 'B2', '2026-10-12T19:26:00Z'),
+  ])
+  ok('cada mensagem de botões ganha a resposta que chegou a ela', mapa.size === 2 && mapa.get('B1')?.id === 'equipe_mostrar' && mapa.get('B2')?.id === 'equipe_anonimo')
+  mapa = escolhasPorMensagem([
+    msg({ tipo: 'escolha', escolha: { id: 'equipe_anonimo', texto: 'Ficar anônimo' } }, 'B1', '2026-10-12T19:30:00Z'),
+    msg({ tipo: 'escolha', escolha: { id: 'equipe_mostrar', texto: 'Mostrar meu nome' } }, 'B1', '2026-10-12T19:24:00Z'),
+  ])
+  ok('tocou duas vezes no mesmo botão (mudou de ideia): vale a última, em qualquer ordem da lista', mapa.get('B1')?.id === 'equipe_anonimo')
+  ok('resposta apagada ou sem a mensagem de origem não marca nada', escolhasPorMensagem([msg(escolha, 'B1', '2026-10-12T19:00:00Z', 'DELETED'), msg(escolha, null, '2026-10-12T19:00:00Z')]).size === 0)
+
+  ok('opção escolhida: confere pelo id', foiEscolhido({ id: 'equipe_anonimo', texto: 'Ficar anônimo' }, { id: 'equipe_anonimo', texto: 'outro texto' })
+    && !foiEscolhido({ id: 'equipe_mostrar', texto: 'Ficar anônimo' }, { id: 'equipe_anonimo', texto: 'Ficar anônimo' }))
+  ok('opção escolhida: sem id de um dos lados, confere pelo texto (sem ligar para maiúscula)', foiEscolhido({ texto: 'Sim' }, { texto: ' sim ' }) && foiEscolhido({ id: 'x', texto: 'Sim' }, { texto: 'Sim' })
+    && !foiEscolhido({ texto: 'Sim' }, { texto: 'Não' }))
+  ok('opção escolhida: sem resposta, nada marcado', !foiEscolhido({ id: 'a', texto: 'A' }, null) && !foiEscolhido({ id: 'a', texto: 'A' }, undefined))
+
+  ok('link de botão: só http e https', linkSeguro('https://w.meta.me/s/abc') === 'https://w.meta.me/s/abc' && linkSeguro(' http://x.com/a ') === 'http://x.com/a'
+    && linkSeguro('javascript:alert(1)') === null && linkSeguro('data:text/html,x') === null && linkSeguro('') === null && linkSeguro(undefined) === null && linkSeguro('https://a b') === null)
+  ok('botão de ligar: só dígitos, com o + da frente', telefoneParaLigar('+55 (11) 98765-4321') === '+5511987654321' && telefoneParaLigar('1132104000') === '1132104000'
+    && telefoneParaLigar('123') === null && telefoneParaLigar('abc') === null && telefoneParaLigar(null) === null)
+
+  ok('prévia: a resposta mostra o que foi tocado, e a mensagem de botões o texto dela', previaMensagem({ tipo: 'text', texto: 'Ficar anônimo' }) === 'Ficar anônimo'
+    && previaMensagem({ tipo: 'outro', texto: 'Outras dúvidas' }) === 'Outras dúvidas' && previaMensagem({ tipo: 'outro', texto: null }) === 'Mensagem não suportada')
 }
 
 if (falhas > 0) {

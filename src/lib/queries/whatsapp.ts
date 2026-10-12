@@ -11,7 +11,7 @@ import { mensagensDoFeedback, type ConversaWa, type MensagemWa } from '@/lib/wha
 // base64, dados do chat…). Só o nome de quem mandou, que a tela usa em grupo.
 const COLUNAS =
   'id, message_id, chat_id, telefone, nome_exibicao, de_mim, por_api, grupo, tipo, texto, transcricao, reacao, ' +
-  'responde_message_id, midia_caminho, midia_mime, midia_nome, status, editada_em, enviada_em, ' +
+  'responde_message_id, midia_caminho, midia_mime, midia_nome, status, editada_em, enviada_em, interativo, ' +
   'remetente:payload->message->>senderName'
 
 export const TAMANHO_PAGINA = 60

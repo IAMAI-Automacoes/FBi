@@ -198,6 +198,26 @@ natural é (restaurante_id, message_id), que é única.
   payload              o evento cru da uazapi, como chegou. Útil para casos
                        raros (nome do remetente em grupo, localização, texto
                        antes da edição). Não exibir inteiro na tela
+  interativo           mensagem com BOTÕES, com MENU DE LISTA, ou a RESPOSTA
+                       a uma delas, já no formato da tela. Nulo nas mensagens
+                       comuns. Quem preenche é o BANCO (gatilho na gravação),
+                       a partir do payload: o n8n não manda este campo.
+                       Três formas (função whatsapp_interativo, migration
+                       20261016000000):
+                         { tipo: "botoes", titulo, corpo, rodape,
+                           botoes: [{ id, texto, tipo, valor }] }
+                              tipo do botão: resposta, link, ligar, copiar
+                         { tipo: "lista", titulo, corpo, rodape, botao_lista,
+                           secoes: [{ titulo, itens: [{ id, titulo, descricao }] }] }
+                         { tipo: "escolha", escolha: { id, texto } }
+                              o toque no botão ou no item; a mensagem dos
+                              botões está em responde_message_id
+                       Nessas mensagens o `tipo` continua o que o n8n grava
+                       ("text" ou "outro"): quem manda no desenho é este campo.
+                       Quando o evento vem sem texto (o toque no botão, o
+                       botão clássico), o banco preenche `texto` com o que foi
+                       tocado ou com o título e o corpo: é o que aparece na
+                       lista de conversas e o que a busca encontra
   criado_em            quando a linha foi gravada
   atualizado_em        última mudança (status, edição)
 
@@ -366,6 +386,28 @@ Localização / contato / outro
   Não testados. Mostre "Localização", "Contato" ou "Mensagem não suportada".
   Os dados ficam em payload->message->content.
 
+Botões, menu de lista e as respostas (interativo preenchido)
+  Conferido com eventos reais de 08 a 12/10/2026, enviados e recebidos:
+    NativeFlowMessage            botões que o EasyFeed manda (/send/menu,
+                                 type "button"), ex.: a pergunta do anonimato
+    ButtonsMessage               botões clássicos que alguém manda
+    TemplateMessage              modelo de empresa (banco, operadora), nos
+                                 dois formatos (hydratedTemplate e
+                                 Format.InteractiveMessageTemplate)
+    ListMessage                  menu de lista
+    TemplateButtonReplyMessage,  o toque num botão; o id vem em
+    ButtonsResponseMessage       message.buttonOrListid
+    ListResponseMessage          a escolha de um item da lista
+  Botões e lista: balão com o título em negrito, o texto, o rodapé em cinza
+  e, embaixo, um botão por linha (a lista tem um botão só, que abre as
+  opções). A tela só MOSTRA: botão de resposta e item de lista não dá para
+  tocar daqui. Botão de link, de ligar e de copiar funciona. Quando a
+  resposta já chegou, a opção tocada fica marcada.
+  Resposta: balão de texto citando a mensagem dos botões, com o aviso
+  "Tocou no botão" ou "Escolheu na lista" e o texto da opção.
+  Código: src/components/whatsapp/midia/Interativa.tsx e as regras em
+  src/lib/whatsapp/formatacao.ts (testadas em whatsapp.teste.ts).
+
 Grupos (grupo = true)
   Ficam JUNTO com as outras conversas, na mesma lista, ordenados pela última
   mensagem (decisão do Raver). Mídia de grupo é baixada e guardada como
@@ -439,6 +481,9 @@ isso o áudio delas está sem transcrição; mensagens novas já vêm com ela.
   - Mensagem de visualização única, enquete, chamada de voz/vídeo, status
     (stories), "digitando...", "online": não são registrados (enquete e
     visualização única entram como tipo "outro", sem conteúdo útil).
+  - A imagem do cabeçalho de um modelo de empresa: o texto e os botões
+    aparecem, a imagem de cima não (o arquivo não é baixado).
+  - Tocar num botão de resposta pela tela: só dá pelo WhatsApp.
   - Foto de perfil permanente (ver item 6).
   - Arquivos acima de 40 MB (linha existe, sem arquivo).
   - Tiques de leitura de mensagens recebidas (o WhatsApp só informa leitura
