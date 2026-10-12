@@ -155,26 +155,6 @@ export async function perguntarSobreVideo(
   return texto
 }
 
-/**
- * Transcreve um áudio curto (mensagem de voz do WhatsApp), mandado embutido
- * em base64. Devolve o texto falado; vazio quando não há fala.
- */
-export async function transcreverAudio(
-  cfg: ConfigGemini, base64: string, mime = 'audio/mpeg', esperar: Esperar = esperarDeVerdade,
-): Promise<string> {
-  const texto = await gerar(cfg, {
-    contents: [{
-      role: 'user',
-      parts: [
-        { inline_data: { mime_type: mime, data: base64 } },
-        { text: 'Transcreva este áudio em português do Brasil, exatamente como foi falado, sem comentar nem resumir. Se não houver fala, responda com uma linha vazia.' },
-      ],
-    }],
-    generationConfig: { temperature: 0 },
-  }, esperar)
-  return texto.trim()
-}
-
 /** Apaga o arquivo do Gemini (de qualquer jeito ele some sozinho em 48 h). */
 export async function apagarDoGemini(cfg: ConfigGemini, arquivo: ArquivoGemini): Promise<void> {
   await fetch(`${BASE}/v1beta/${arquivo.name}`, { method: 'DELETE', headers: cabecalho(cfg) }).catch(() => undefined)

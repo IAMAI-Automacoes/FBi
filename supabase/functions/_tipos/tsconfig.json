@@ -46,6 +46,9 @@
     "../acesso-influencer/*.ts",
     "../videos-missao/*.ts",
     "../equipe/*.ts",
-    "../equipe-webhook/*.ts"
+    "../classificar-feedback/*.ts",
+    "../gerar-plano-acao/*.ts",
+    "../destacar-feedback/*.ts",
+    "../atualizar-banner/*.ts"
   ]
 }

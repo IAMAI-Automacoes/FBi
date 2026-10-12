@@ -57,7 +57,7 @@ async function destacarUm(db: Db, original_id: string): Promise<{ ok: boolean; m
   {
     const { data: original } = await db
       .from('feedbacks_originais')
-      .select('id, texto_original, texto_destacado')
+      .select('id, texto_original, texto_destacado, publico')
       .eq('id', original_id)
       .single()
     if (!original) return { ok: false, motivo: 'feedback não encontrado' }
@@ -67,7 +67,13 @@ async function destacarUm(db: Db, original_id: string): Promise<{ ok: boolean; m
     // Texto curto demais não tem o que destacar (ex.: avaliação só por nota, sem comentário).
     if (texto.length < 12) return { ok: false, motivo: 'texto curto demais' }
 
-    const prompt = `Você recebe o feedback de um cliente de restaurante (às vezes transcrito de áudio, então pode ter erros, gírias e frases soltas). Sua tarefa é marcar em negrito, usando **dois asteriscos**, só os trechos que permitem alguém ENTENDER o feedback batendo o olho rapidamente, sem precisar ler a frase toda — como se fosse o resumo visual da mensagem pra quem só tem 2 segundos.
+    // O mesmo destaque vale para a equipe; só muda quem escreveu.
+    // deno-lint-ignore no-explicit-any
+    const quem = (original as any).publico === 'equipe'
+      ? 'um funcionário de restaurante, contando como é trabalhar lá'
+      : 'um cliente de restaurante'
+
+    const prompt = `Você recebe o feedback de ${quem} (às vezes transcrito de áudio, então pode ter erros, gírias e frases soltas). Sua tarefa é marcar em negrito, usando **dois asteriscos**, só os trechos que permitem alguém ENTENDER o feedback batendo o olho rapidamente, sem precisar ler a frase toda — como se fosse o resumo visual da mensagem pra quem só tem 2 segundos.
 
 ## Como decidir o que destacar
 - Destaque o TRECHO que carrega a informação central de cada ponto (o que foi elogiado ou reclamado), não a frase toda em volta dele e não uma palavra solta demais.

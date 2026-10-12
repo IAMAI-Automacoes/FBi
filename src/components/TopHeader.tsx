@@ -13,6 +13,8 @@ import { getIniciais } from '@/lib/iniciais'
 import { easyFeedLogoInterna } from '@/assets/brand'
 import { PilulaDemo } from '@/components/demo/ControleDemo'
 import { encerrarDemo } from '@/lib/queries/demo'
+import { NavEquipe } from '@/components/equipe/NavEquipe'
+import { ehRotaDaEquipe } from '@/lib/publico-rota'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +54,8 @@ export function TopHeader() {
   const navigate = useNavigate()
   const { usuario, logout, sessaoDemo } = useAuth()
   const { profile } = useUserProfile()
-  const title = routeTitles[location.pathname] || 'Dashboard'
+  const naEquipe = ehRotaDaEquipe(location.pathname)
+  const title = naEquipe ? 'Equipe' : routeTitles[location.pathname] || 'Dashboard'
 
   const { extra } = useHeaderExtra()
   const { isAdmin } = usePlatformAdmin()
@@ -216,6 +219,14 @@ export function TopHeader() {
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Equipe: Funcionários, Feedbacks, Insights e Ações. Só o admin chega
+            nessas rotas (AreaEquipe), então o menu não precisa conferir de novo. */}
+        {naEquipe && (
+          <div className={extra ? 'px-4 sm:px-6' : 'px-4 pb-3 sm:px-6'}>
+            <NavEquipe />
+          </div>
+        )}
 
         {extra && <div className="px-4 pt-2 pb-3 sm:px-6">{extra}</div>}
       </header>

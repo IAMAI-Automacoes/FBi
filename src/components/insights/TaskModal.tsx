@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/sheet'
 import { useToast } from '@/hooks/use-toast'
 import { PlanoAcao } from '@/components/actions/PlanoAcao'
-import { CATEGORIAS_FEEDBACK, estiloCategoria } from '@/lib/categorias-feedback'
+import { estiloCategoria } from '@/lib/categorias-feedback'
+import { usePublico } from '@/lib/publico'
 import { estiloPrioridade } from '@/lib/prioridade'
 import { cn } from '@/lib/utils'
 import { useAlturaAutomatica } from '@/hooks/use-altura-automatica'
@@ -108,6 +109,8 @@ export function TaskModal({
   somenteLeitura = false,
 }: TaskModalProps) {
   const { toast } = useToast()
+  // As 14 dos clientes, ou as da equipe nas páginas /equipe.
+  const { categorias: CATEGORIAS_FEEDBACK } = usePublico()
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<string>('')
   const [responsavel, setResponsavel] = useState('')

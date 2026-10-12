@@ -1,8 +1,8 @@
 /**
- * Cliente da uazapiGO para as funções do Supabase: o que o n8n faz com nós
- * HTTP (enviar texto com "digitando…", marcar como lida, baixar áudio) e o que
- * a whatsapp-instancia faz com a instância (criar, conectar, status, apagar).
- * Usado pela função equipe (o número só do EasyFeed). Só usa fetch.
+ * Cliente da uazapiGO para as funções do Supabase: enviar texto com
+ * "digitando…", do jeito que o n8n faz com o nó HTTP. Usado pela função
+ * `equipe` (o pedido de feedback sai pelo WhatsApp do restaurante). Só usa
+ * fetch.
  *
  * Sem retry no envio: a uazapi avisa que um timeout deixa o resultado incerto
  * (a mensagem pode ter saído) e repetir duplicaria.
@@ -29,37 +29,10 @@ export async function configUazapi(db: Db): Promise<ConfigUazapi | null> {
   return base && adminToken ? { base, adminToken } : null
 }
 
-// ── Leitura das respostas (os formatos mudam entre status, connect e create) ─
-export function extrairConectado(d: Json): boolean {
-  if (d?.status && typeof d.status === 'object') return d.status.connected === true || d.status.loggedIn === true
-  return d?.connected === true || d?.loggedIn === true
-}
-export function extrairQr(d: Json): string | null {
-  for (const v of [d?.instance?.qrcode, d?.qrcode, d?.instance?.qrCode, d?.qrCode]) if (typeof v === 'string' && v.length > 20) return v
-  return null
-}
-const soDigitos = (s: string) => { const d = s.replace(/\D/g, ''); return d.length >= 8 ? d : null }
-function jidParaNumero(j: Json): string | null {
-  if (!j) return null
-  if (typeof j === 'string') return soDigitos(j.split('@')[0].split(':')[0])
-  const u = j.user ?? j.number ?? null
-  return typeof u === 'string' ? soDigitos(u.split(':')[0]) : null
-}
-export function extrairNumero(d: Json): string | null {
-  return jidParaNumero(d?.jid) ?? jidParaNumero(d?.status?.jid) ?? jidParaNumero(d?.instance?.owner) ?? jidParaNumero(d?.owner) ?? null
-}
-export function extrairToken(d: Json): string | null {
-  const t = d?.token ?? d?.instance?.token ?? d?.hash ?? null
-  return typeof t === 'string' && t ? t : null
-}
 export function extrairIdDaMensagem(d: Json): string | null {
   for (const v of [d?.messageid, d?.messageId, d?.id, d?.message?.messageid, d?.message?.id, d?.key?.id]) if (typeof v === 'string' && v) return v
   return null
 }
-
-const cabecalho = (token: string) => ({ 'Content-Type': 'application/json', token })
-
-// ── Mensagens ────────────────────────────────────────────────────────────────
 
 export interface ResultadoEnvio {
   ok: boolean
@@ -82,7 +55,7 @@ export async function enviarTexto(
   try {
     const r = await fetch(`${base}/send/text`, {
       method: 'POST',
-      headers: cabecalho(token),
+      headers: { 'Content-Type': 'application/json', token },
       body: JSON.stringify({
         number: p.numero, text: p.texto, delay: digitando, readchat: true, readmessages: true, replyid: p.replyId || undefined,
       }),
@@ -94,70 +67,4 @@ export async function enviarTexto(
   } catch (e) {
     return { ok: false, incerto: true, messageId: null, erro: String((e as Error)?.message ?? e).slice(0, 200) }
   }
-}
-
-/** Os dois tiques azuis. Falhar aqui não atrapalha nada. */
-export async function marcarLidas(base: string, token: string, ids: string[]): Promise<void> {
-  if (!ids.length) return
-  await fetch(`${base}/message/markread`, {
-    method: 'POST', headers: cabecalho(token), body: JSON.stringify({ id: ids }), signal: AbortSignal.timeout(20_000),
-  }).catch(() => undefined)
-}
-
-/** O áudio de uma mensagem, em MP3 (base64). null = não deu para baixar. */
-export async function baixarAudio(base: string, token: string, messageId: string): Promise<{ base64: string; mime: string } | null> {
-  try {
-    const r = await fetch(`${base}/message/download`, {
-      method: 'POST',
-      headers: cabecalho(token),
-      body: JSON.stringify({ id: messageId, return_base64: true, generate_mp3: true }),
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!r.ok) return null
-    const d = await r.json().catch(() => null)
-    const base64 = typeof d?.base64Data === 'string' ? d.base64Data : ''
-    // generate_mp3 devolve MP3 mesmo quando o áudio chegou em OGG.
-    return base64 ? { base64, mime: 'audio/mpeg' } : null
-  } catch {
-    return null
-  }
-}
-
-// ── A instância ──────────────────────────────────────────────────────────────
-
-/** Cria a instância. `campo1` vira o adminField01 (o que identifica de quem ela é). */
-export async function criarInstancia(cfg: ConfigUazapi, p: { nome: string; campo1: string; campo2?: string }): Promise<string | 'limite'> {
-  const r = await fetch(`${cfg.base}/instance/create`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', admintoken: cfg.adminToken },
-    body: JSON.stringify({ name: p.nome, systemName: 'iamai-ia', adminField01: p.campo1, adminField02: p.campo2 ?? '' }),
-  })
-  if (r.status === 429) return 'limite'
-  const token = extrairToken(await r.json().catch(() => ({})))
-  if (!token) throw new Error('A uazapi não devolveu o token da instância.')
-  return token
-}
-
-/** `status` (GET), `connect` e `reset` (POST) da instância. */
-export async function chamarInstancia(base: string, token: string, caminho: 'status' | 'connect' | 'reset'): Promise<{ status: number; data: Json }> {
-  const r = await fetch(`${base}/instance/${caminho}`, {
-    method: caminho === 'status' ? 'GET' : 'POST', headers: cabecalho(token), signal: AbortSignal.timeout(20_000),
-  })
-  return { status: r.status, data: await r.json().catch(() => ({})) }
-}
-
-/** Encerra a sessão e remove a instância (libera a vaga). */
-export async function apagarInstancia(base: string, token: string): Promise<void> {
-  await fetch(`${base}/instance`, { method: 'DELETE', headers: cabecalho(token) }).catch(() => undefined)
-}
-
-/** Garante o webhook de instância (não o global). Não repete o que já existe. */
-export async function garantirWebhook(base: string, token: string, destino: { url: string; events: string[]; excludeMessages: string[] }): Promise<void> {
-  const atuais = await fetch(`${base}/webhook`, { headers: { token } }).then((r) => r.json()).catch(() => null)
-  if (Array.isArray(atuais) && atuais.some((w: Json) => w?.url === destino.url)) return
-  await fetch(`${base}/webhook`, {
-    method: 'POST',
-    headers: cabecalho(token),
-    body: JSON.stringify({ action: 'add', enabled: true, addUrlEvents: false, addUrlTypesMessages: false, ...destino }),
-  })
 }

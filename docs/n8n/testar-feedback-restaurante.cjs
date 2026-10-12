@@ -42,8 +42,8 @@ const wh = porNome('Recebe mensagem')
 ok('webhook continua em /easyfeed (POST)', wh.parameters.path === 'easyfeed' && wh.parameters.httpMethod === 'POST')
 ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && porNome('Espera 20 segundos').parameters.unit === 'seconds')
 ok('restaurante é achado pelo token', JSON.stringify(porNome('Acha o restaurante').parameters).includes('whatsapp_token'))
-ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já respondeu hoje?,Limpa o buffer')
-ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a mensagem,Já respondeu hoje?,Tem resposta?')
+ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já respondeu hoje?,Limpa o buffer,Quem escreveu?')
+ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a equipe,Analisa a mensagem,Começa o prazo,Já respondeu hoje?,Tem resposta?,Vai perguntar?')
 ok('modelo: só temperatura e formato JSON', JSON.stringify(porNome('Modelo de análise').parameters.options) === '{"temperature":0.1,"responseFormat":"json_object"}')
 const jaFalou = JSON.stringify(porNome('Já respondeu hoje?').parameters)
 ok('apresentação: procura resposta do número para esse telefone desde o início do dia (horário de Brasília)',
@@ -245,7 +245,10 @@ ok('sem id da origem: erro visível', !!erro)
 // ── 3. PARAR (as atualizações das ações) ─────────────────────────────────────
 const destinos = (de, saida = 0, tipo = 'main') => (wf.connections[de]?.[tipo]?.[saida] ?? []).map((c) => c.node)
 for (const nome of ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'Modelo do parar', 'É para parar?', 'Marca para não receber']) ok(`PARAR: nó existe: ${nome}`, !!porNome(nome))
-ok('PARAR: sai da mensagem juntada, junto com a resposta normal', destinos('Sou a última mensagem?').includes('Pediu para parar?') && destinos('Sou a última mensagem?').includes('Limpa o buffer'))
+// Depois do buffer vem "Quem escreveu?" (cliente ou equipe); é do "Junta quem escreveu" que os ramos saem.
+const SAIDA_DO_BUFFER = 'Junta quem escreveu'
+ok('depois do buffer: pergunta quem escreveu e só então abre os ramos', destinos('Sou a última mensagem?').join() === 'Quem escreveu?' && destinos('Quem escreveu?').join() === SAIDA_DO_BUFFER)
+ok('PARAR: sai da mensagem juntada, junto com a resposta normal', destinos(SAIDA_DO_BUFFER).includes('Pediu para parar?') && destinos(SAIDA_DO_BUFFER).includes('Limpa o buffer'))
 ok('PARAR: roda antes da resposta normal (fica acima no canvas, executionOrder v1)', wf.settings.executionOrder === 'v1'
   && porNome('Pediu para parar?').position[1] < porNome('Limpa o buffer').position[1] && porNome('Pediu para parar?').position[1] < porNome('Limpa buffer antigo').position[1])
 const caminho = ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'É para parar?', 'Marca para não receber']
@@ -254,10 +257,13 @@ ok('PARAR: o caminho só marca, não manda nada (a confirmação sai junto das o
 ok('PARAR: a IA do parar usa o próprio modelo (temperatura 0, JSON)', destinos('Modelo do parar', 0, 'ai_languageModel').join() === 'Decide se é para parar'
   && JSON.stringify(porNome('Modelo do parar').parameters.options) === '{"temperature":0,"responseFormat":"json_object"}')
 ok('PARAR: nenhum nó que chama fora trava o fluxo (falhou, segue)', ['Conversa recente', 'Decide se é para parar', 'Marca para não receber'].every((n) => porNome(n).onError === 'continueRegularOutput'))
-for (const [nome, fn] of [['Conversa recente', 'contato_contexto_parar'], ['Marca para não receber', 'contato_parar_atualizacoes']]) {
+// O endereço é uma expressão: função do cliente, ou a da equipe quando quem escreveu é funcionário.
+const urlDe = (nome, json) => new Function('$json', 'return (' + porNome(nome).parameters.url.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(json)
+for (const [nome, fn, fnEquipe] of [['Conversa recente', 'contato_contexto_parar', 'equipe_contexto_parar'], ['Marca para não receber', 'contato_parar_atualizacoes', 'equipe_parar']]) {
   const n = porNome(nome)
-  ok(`PARAR: "${nome}" chama a função ${fn} com a credencial do Supabase`, n.parameters.method === 'POST' && n.parameters.url.endsWith('/rest/v1/rpc/' + fn)
+  ok(`PARAR: "${nome}" chama a função ${fn} com a credencial do Supabase`, n.parameters.method === 'POST' && urlDe(nome, {}).endsWith('/rest/v1/rpc/' + fn) && urlDe(nome, { daEquipe: false }).endsWith('/rest/v1/rpc/' + fn)
     && n.parameters.authentication === 'predefinedCredentialType' && n.parameters.nodeCredentialType === 'supabaseApi' && !!n.credentials?.supabaseApi)
+  ok(`PARAR: "${nome}" de funcionário chama ${fnEquipe}`, urlDe(nome, { daEquipe: true }) === 'https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/' + fnEquipe)
 }
 const corpoDe = (nome, json) => JSON.parse(new Function('$json', 'return (' + porNome(nome).parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(json))
 ok('PARAR: busca a conversa pelo restaurante e telefone', JSON.stringify(corpoDe('Conversa recente', { restauranteId: 11, telefone: '5511932903005' })) === '{"p_restaurante_id":11,"p_telefone":"5511932903005"}')
@@ -273,7 +279,7 @@ for (const txt of ['Fui lá para comemorar meu aniversário', 'O garçom não pa
   ok(`PARAR: filtro barra "${txt}"`, !passa(txt))
 }
 r = roda('Pediu para parar?', juntadaParar('PARAR'))[0].json
-ok('PARAR: o filtro leva só o necessário', JSON.stringify(Object.keys(r).sort()) === '["baseUrl","mensagemId","ordem","restauranteId","telefone","textoCompleto","token"]')
+ok('PARAR: o filtro leva só o necessário', JSON.stringify(Object.keys(r).sort()) === '["baseUrl","daEquipe","mensagemId","ordem","restauranteId","telefone","textoCompleto","token"]' && r.daEquipe === false)
 r = roda('Pediu para parar?', { ...juntadaParar('A comida tava ótima\nPARAR'), mensagens: [{ id: 'm1', texto: 'A comida tava ótima' }, { id: 'm2', texto: 'PARAR' }] })
 ok('PARAR: acha QUAL mensagem pediu para parar (é ela que a confirmação cita)', r.length === 1 && r[0].json.ordem === 2 && r[0].json.mensagemId === 'm2')
 r = roda('Pediu para parar?', { ...juntadaParar(''), mensagens: [{ id: 'm1', texto: 'Para!' }, { id: 'm2', texto: 'fui lá para comemorar' }] })
@@ -386,10 +392,224 @@ ok('envio sem mensagem para citar: vai sem replyid', !('replyid' in env))
 
 // Lida
 const lida = porNome('Marca como lida')
-ok('lida: sai da mensagem juntada e roda antes de tudo (mais acima no canvas)', destinos('Sou a última mensagem?').includes('Marca como lida')
-  && destinos('Sou a última mensagem?').every((n) => n === 'Marca como lida' || porNome(n).position[1] > lida.position[1]))
+ok('lida: sai da mensagem juntada e roda antes de tudo (mais acima no canvas)', destinos(SAIDA_DO_BUFFER).includes('Marca como lida')
+  && destinos(SAIDA_DO_BUFFER).every((n) => n === 'Marca como lida' || porNome(n).position[1] > lida.position[1]))
 ok('lida: marca todas as mensagens juntadas (/message/markread) e não trava o fluxo', lida.parameters.url.endsWith('/message/markread') && lida.onError === 'continueRegularOutput'
   && new Function('$json', 'return (' + lida.parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')({ ids: ['a', 'b'] }) === '{"id":["a","b"]}')
+
+// ── 5. Equipe: o funcionário escreve para o mesmo número ─────────────────────
+const NOS_EQUIPE = ['É clique no botão?', 'Quem escreveu?', 'Junta quem escreveu', 'É da equipe?', 'Respondeu a pergunta?', 'Analisa a equipe', 'Modelo da equipe',
+  'Monta a resposta da equipe', 'É feedback da equipe?', 'Grava o feedback da equipe', 'Respostas da equipe', 'Uma de cada vez (equipe)', 'Envia à equipe',
+  'Vai perguntar?', 'Manda o botão', 'Pergunta por escrito', 'Começa o prazo', 'Prepara a escolha', 'Registra a escolha', 'Confirma a escolha', 'Envia a confirmação']
+for (const nome of NOS_EQUIPE) ok(`equipe: nó existe: ${nome}`, !!porNome(nome))
+const condicaoDe = (nome) => porNome(nome).parameters.conditions.conditions[0].leftValue.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '')
+const seVale = (nome, json, outros = {}) => new Function('$json', '$', 'return (' + condicaoDe(nome) + ')')(json, (n) => ({ first: () => ({ json: outros[n] ?? {} }) }))
+
+// O cliente não passa pelo ramo da equipe
+ok('cliente: o caminho de sempre continua inteiro, só com um desvio antes da análise', destinos('Já respondeu hoje?').join() === 'É da equipe?'
+  && destinos('É da equipe?', 1).join() === 'Analisa a mensagem' && destinos('Analisa a mensagem').join() === 'Monta a resposta' && destinos('Monta a resposta').join() === 'É feedback?')
+ok('cliente (equipe nula) segue para a análise de sempre; funcionário vai para o ramo da equipe', seVale('É da equipe?', {}, { 'Junta quem escreveu': { equipe: null } }) === false
+  && seVale('É da equipe?', {}, { 'Junta quem escreveu': { equipe: { funcionarioId: 3 } } }) === true && destinos('É da equipe?', 0).join() === 'Respondeu a pergunta?')
+ok('a consulta de quem escreveu nunca trava o fluxo do cliente (falhou, segue; vazio, segue)', porNome('Quem escreveu?').onError === 'continueRegularOutput' && porNome('Quem escreveu?').alwaysOutputData === true
+  && porNome('Quem escreveu?').parameters.url.endsWith('/rest/v1/rpc/equipe_quem_e') && JSON.stringify(corpoDe('Quem escreveu?', { restauranteId: 11, telefone: '5511932903005' })) === '{"p_restaurante_id":11,"p_telefone":"5511932903005"}')
+
+// Junta quem escreveu
+const junta = (q, b = juntada) => roda('Junta quem escreveu', q, { 'Sou a última mensagem?': b })[0].json
+o = junta({ ok: true, funcionario_id: null })
+ok('cliente: mesmos campos da mensagem juntada, mais equipe e escolha nulas', o.equipe === null && o.escolha === null && o.textoCompleto === juntada.textoCompleto && o.ateId === juntada.ateId && o.remoteId === juntada.remoteId
+  && JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...Object.keys(juntada), 'equipe', 'escolha'].sort()))
+ok('consulta falhou (erro do banco): trata como cliente', junta({ error: { message: 'timeout' } }).equipe === null && junta({}).equipe === null)
+const FUNC = { ok: true, funcionario_id: 3, nome: 'Ana Paula', pode_escolher: false, aguardando_escolha: false }
+o = junta(FUNC)
+ok('funcionário: leva o id e o nome; sem pergunta feita, nada é lido como escolha', o.equipe.funcionarioId === 3 && o.equipe.nome === 'Ana Paula' && o.escolha === null)
+const diz = (txt, extra = {}) => junta({ ...FUNC, pode_escolher: true, ...extra }, { ...juntada, textoCompleto: txt }).escolha
+for (const txt of ['Anônimo', 'anonimo', 'ANÔNIMO', 'Ficar anônimo', 'quero ficar anônimo', 'prefiro anônimo por favor', 'anônima', 'sem meu nome', 'não quero mostrar meu nome', 'Não mostrar']) {
+  ok(`escolha por escrito: "${txt}" = anônimo`, diz(txt) === 'anonimo')
+}
+for (const txt of ['Mostrar', 'MOSTRAR', 'Mostrar meu nome', 'pode mostrar', 'Pode mostrar meu nome', 'pode mostrar sim, obrigada', 'com meu nome', 'não precisa ser anônimo', 'pode colocar meu nome']) {
+  ok(`escolha por escrito: "${txt}" = com o nome`, diz(txt) === 'identificado')
+}
+for (const txt of ['O salário atrasa todo mês', 'Queria que o gerente não mostrasse a escala só na sexta', 'anônimo? como assim', 'Oi', 'A equipe é ótima, pode mostrar pro dono', 'sim', 'não']) {
+  ok(`não é escolha: "${txt}"`, diz(txt) === null)
+}
+ok('"sim" e "não" soltos só valem com a pergunta no ar', diz('Sim', { aguardando_escolha: true }) === 'anonimo' && diz('não', { aguardando_escolha: true }) === 'identificado' && diz('Não precisa', { aguardando_escolha: true }) === 'identificado')
+ok('cliente escrevendo "anônimo" nunca vira escolha', junta({ ok: true, funcionario_id: null }, { ...juntada, textoCompleto: 'Anônimo' }).escolha === null)
+ok('quem nunca recebeu a pergunta: "anônimo" segue como mensagem comum', junta(FUNC, { ...juntada, textoCompleto: 'Anônimo' }).escolha === null)
+ok('escolha por escrito vai para o registro; o resto, para a análise da equipe', destinos('Respondeu a pergunta?', 0).join() === 'Prepara a escolha' && destinos('Respondeu a pergunta?', 1).join() === 'Analisa a equipe'
+  && seVale('Respondeu a pergunta?', {}, { 'Junta quem escreveu': { escolha: 'anonimo' } }) === true && seVale('Respondeu a pergunta?', {}, { 'Junta quem escreveu': { escolha: null } }) === false)
+
+// O clique no botão
+r = lê({ messageType: 'TemplateButtonReplyMessage', text: 'Ficar anônimo', buttonOrListid: 'equipe_anonimo' })
+ok('clique em "Ficar anônimo": entra como botão, com a escolha', r.length === 1 && r[0].json.tipo === 'botao' && r[0].json.escolha === 'anonimo' && r[0].json.telefone === '5511932903005' && r[0].json.texto === '')
+ok('clique em "Mostrar meu nome"', lê({ messageType: 'ButtonsResponseMessage', text: 'Mostrar meu nome', buttonOrListid: 'equipe_mostrar' })[0]?.json.escolha === 'identificado')
+ok('o clique vale com qualquer tipo de mensagem (o que identifica é o id do botão)', lê({ messageType: 'InteractiveResponseMessage', buttonOrListid: 'equipe_anonimo' })[0]?.json.escolha === 'anonimo'
+  && lê({ messageType: 'Conversation', text: 'equipe_mostrar', buttonOrListid: '' })[0]?.json.escolha === 'identificado')
+ok('botão de outra coisa (id desconhecido) não vira escolha', lê({ messageType: 'ButtonsResponseMessage', text: '', buttonOrListid: 'outro_botao' }).length === 0
+  && lê({ messageType: 'Conversation', text: 'Ficar anônimo', buttonOrListid: '' })[0]?.json.tipo === 'texto')
+ok('clique do próprio número ou em grupo: não entra', lê({ buttonOrListid: 'equipe_anonimo', fromMe: true }).length === 0 && lê({ buttonOrListid: 'equipe_anonimo', isGroup: true, chatid: '1203@g.us' }).length === 0)
+ok('o clique vai direto para o registro, sem esperar o buffer; o resto segue igual', destinos('Restaurante ativo?').join() === 'É clique no botão?' && destinos('É clique no botão?', 0).join() === 'Prepara a escolha'
+  && destinos('É clique no botão?', 1).join() === 'É áudio?' && seVale('É clique no botão?', { tipo: 'botao' }) === true && seVale('É clique no botão?', { tipo: 'texto' }) === false && seVale('É clique no botão?', { tipo: 'audio' }) === false)
+
+// Prepara / Registra / Confirma a escolha
+const clique = { ...ativo, tipo: 'botao', texto: '', escolha: 'anonimo' }
+const semRodar = () => { throw new Error('nó não rodou') }
+const rodaCom = (nome, entrada, outros) => {
+  const itens = (Array.isArray(entrada) ? entrada : [entrada]).map((j) => ({ json: j }))
+  const $ = (n) => {
+    if (!(n in outros)) throw new Error(`Node '${n}' hasn't been executed`)
+    return { first: () => ({ json: outros[n] }), all: () => [{ json: outros[n] }] }
+  }
+  return new Function('$input', '$', codigoDe(nome))({ first: () => itens[0], all: () => itens }, $)
+}
+r = rodaCom('Prepara a escolha', {}, { 'Restaurante ativo?': clique })
+ok('clique: o buffer não rodou, e a escolha sai da entrada', r.length === 1 && r[0].json.escolha === 'anonimo' && r[0].json.restauranteId === 11 && r[0].json.telefone === '5511932903005' && r[0].json.token === 'tok-123'
+  && JSON.stringify(Object.keys(r[0].json).sort()) === '["baseUrl","escolha","restauranteId","telefone","token"]')
+r = rodaCom('Prepara a escolha', {}, { 'Restaurante ativo?': ativo, 'Junta quem escreveu': { ...juntada, equipe: { funcionarioId: 3 }, escolha: 'identificado' } })
+ok('por escrito: a escolha sai da mensagem juntada', r.length === 1 && r[0].json.escolha === 'identificado' && r[0].json.telefone === '5511932903005')
+ok('sem escolha válida: para', rodaCom('Prepara a escolha', {}, { 'Restaurante ativo?': ativo }).length === 0 && rodaCom('Prepara a escolha', {}, { 'Restaurante ativo?': { ...clique, escolha: 'talvez' } }).length === 0)
+ok('registro: chama equipe_escolher_identidade com o restaurante, o telefone e a escolha', porNome('Registra a escolha').parameters.url.endsWith('/rest/v1/rpc/equipe_escolher_identidade')
+  && JSON.stringify(corpoDe('Registra a escolha', { restauranteId: 11, telefone: '5511932903005', escolha: 'anonimo' })) === '{"p_restaurante_id":11,"p_telefone":"5511932903005","p_escolha":"anonimo"}'
+  && destinos('Prepara a escolha').join() === 'Registra a escolha' && destinos('Registra a escolha').join() === 'Confirma a escolha' && destinos('Confirma a escolha').join() === 'Envia a confirmação')
+const confirma = (escolha, resultado) => roda('Confirma a escolha', resultado, { 'Prepara a escolha': { restauranteId: 11, telefone: '5511932903005', baseUrl: 'https://iamai-ia.uazapi.com', token: 'tok-123', escolha } })
+r = confirma('anonimo', { ok: true, escolha: 'anonimo', mudou: 1 })
+ok('anônimo: confirma que fica sem o nome, sem prometer mais que o sistema faz', r.length === 1 && /sem o seu nome/.test(r[0].json.texto) && /sistema/.test(r[0].json.texto) && r[0].json.digitandoMs >= 2500 && r[0].json.token === 'tok-123')
+ok('com o nome: confirma e agradece', /com o seu nome/.test(confirma('identificado', { ok: true, mudou: 2 })[0].json.texto))
+ok('clique repetido (nada mudou), quem não é da equipe ou falha no banco: silêncio', confirma('anonimo', { ok: true, mudou: 0 }).length === 0
+  && confirma('anonimo', { ok: false, motivo: 'nao_e_da_equipe' }).length === 0 && confirma('anonimo', { error: 'falhou' }).length === 0)
+const corpoSolto = (nome, json) => JSON.parse(new Function('$json', 'return (' + porNome(nome).parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(json))
+env = corpoSolto('Envia a confirmação', r[0].json)
+ok('confirmação: texto com "digitando..." e mensagens lidas, sem retry', env.number === '5511932903005' && env.text === r[0].json.texto && env.delay === r[0].json.digitandoMs && env.readchat === true
+  && porNome('Envia a confirmação').parameters.url === '={{ $json.baseUrl }}/send/text' && !porNome('Envia a confirmação').retryOnFail)
+
+// A análise da equipe
+const promptEquipe = porNome('Analisa a equipe').parameters.messages.messageValues[0].message
+const CATS_EQUIPE = ['Liderança e gestão', 'Salário e benefícios', 'Escala e horários', 'Carga de trabalho', 'Clima e colegas', 'Estrutura e equipamentos',
+  'Treinamento e crescimento', 'Reconhecimento', 'Comunicação', 'Segurança e saúde', 'Clientes', 'Outros']
+ok('prompt da equipe: mesma estrutura do cliente (tipo, pontos, cenários, agrupamento) com as categorias da equipe', ['PARTE 1', 'PARTE 2', 'CENÁRIO A', 'CENÁRIO B', 'CENÁRIO C', 'REGRA DE AGRUPAMENTO', 'NEUTRO NÃO É SUGESTÃO', 'FORMATO DE SAÍDA']
+  .every((p) => promptEquipe.includes(p)) && CATS_EQUIPE.every((c) => promptEquipe.includes(`"${c}"`)) && !/"Comida"|"Tempo de Espera"/.test(promptEquipe))
+ok('prompt da equipe: relato grave, PARAR e a resposta do anonimato como "outro"', promptEquipe.includes('"sensivel"') && promptEquipe.includes('[1] PARAR\n→ {"tipo": "outro"') && promptEquipe.includes('[1] Anônimo\n→ {"tipo": "outro"'))
+ok('a IA da equipe recebe as mensagens numeradas e tem o próprio modelo', porNome('Analisa a equipe').parameters.text === porNome('Analisa a mensagem').parameters.text
+  && destinos('Modelo da equipe', 0, 'ai_languageModel').join() === 'Analisa a equipe' && destinos('Modelo de análise', 0, 'ai_languageModel').join() === 'Analisa a mensagem')
+
+// Monta a resposta da equipe
+const juntadaEq = ultima([linha(7, 'O salário atrasa todo mês', 'e1')])[0].json
+const PE = (s, c = 'Salário e benefícios', t = 'O salário atrasa') => ({ feedback_original: t, categoria: c, sentimento: s, resumo: 'Salário atrasado' })
+const montaEq = (obj, b = juntadaEq, falou = JA_FALOU, extra = {}) =>
+  roda('Monta a resposta da equipe', { text: typeof obj === 'string' ? obj : JSON.stringify(obj) }, { 'Sou a última mensagem?': b, 'Já respondeu hoje?': falou, ...extra })[0].json
+o = montaEq({ tipo: 'feedback', pontos: [PE('Negativo')], sensivel: false })
+ok('equipe: feedback vira ponto com a categoria da equipe e agradece', o.ehFeedback && o.sentimentoGeral === 'Negativo' && o.pontos[0].categoria === 'Salário e benefícios' && o.respostas.length === 1 && o.respostas[0].tipo === 'feedback' && o.respostas[0].replyid === 'e1')
+ok('equipe: saída com o que a gravação precisa (e nada de telefone dentro dos pontos)', JSON.stringify(Object.keys(o).sort()) === JSON.stringify(['baseUrl', 'ehFeedback', 'pontos', 'resposta', 'respostas', 'restauranteId', 'sensivel', 'sentimentoGeral', 'telefone', 'textoCompleto', 'token'])
+  && JSON.stringify(Object.keys(o.pontos[0]).sort()) === '["categoria","resumo","sentimento","texto_original"]')
+ok('equipe: categoria de cliente (ou inventada) vira Outros; sem acento acha a certa', montaEq({ tipo: 'feedback', pontos: [PE('Negativo', 'Comida')] }).pontos[0].categoria === 'Outros'
+  && montaEq({ tipo: 'feedback', pontos: [PE('Positivo', 'clima e colegas')] }).pontos[0].categoria === 'Clima e colegas')
+ok('equipe: positivo e negativo juntos', montaEq({ tipo: 'feedback', pontos: [PE('Positivo', 'Clima e colegas'), PE('Negativo')] }).sentimentoGeral === 'Positivo e Negativo')
+o = montaEq({ tipo: 'feedback', pontos: [PE('Negativo', 'Liderança e gestão', 'O gerente me humilha')], sensivel: true })
+ok('equipe: relato grave marca sensível e a resposta indica onde pedir ajuda', o.sensivel === true && /Ligue 180/.test(o.resposta) && /Disque 100/.test(o.resposta))
+ok('equipe: "sensivel" só vale com feedback e quando a IA disse true', montaEq({ tipo: 'outro', pontos: [], sensivel: true }).sensivel === false && montaEq({ tipo: 'feedback', pontos: [PE('Negativo')], sensivel: 'true' }).sensivel === false)
+const amostrasEq = (obj, falou = JA_FALOU, n = 120) => Array.from({ length: n }, () => montaEq(obj, juntadaEq, falou).resposta)
+const todasEq = [
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Positivo', 'Clima e colegas')] }, {}),
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }),
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Positivo', 'Clima e colegas'), PE('Negativo')] }),
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Neutro', 'Outros')] }),
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Sugestão', 'Estrutura e equipamentos')] }, {}),
+  ...amostrasEq({ tipo: 'feedback', pontos: [PE('Positivo', 'Clima e colegas'), PE('Sugestão', 'Estrutura e equipamentos')] }),
+  ...amostrasEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 1, pontos: [] }),
+  ...amostrasEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'outro', mensagem_pergunta: 1, pontos: [] }, {}),
+]
+ok('equipe: nenhuma {variável} sobra e nada com cara de IA', todasEq.every((x) => !/[{}]|undefined|null/.test(x) && !CARA_DE_IA.test(x)), todasEq.find((x) => /[{}]|undefined|null/.test(x) || CARA_DE_IA.test(x)))
+ok('equipe: o agradecimento NÃO promete anonimato (a pessoa ainda vai escolher) nem chama de cliente', todasEq.filter((x) => !/Você que escolhe/.test(x)).every((x) => !/an[oô]nim|sem o seu nome|cliente/i.test(x)), todasEq.find((x) => !/Você que escolhe/.test(x) && /an[oô]nim|sem o seu nome|cliente/i.test(x)))
+ok('equipe: o sorteio varia', new Set(todasEq).size > 25)
+ok('equipe: primeira resposta do dia se apresenta como a Helena do restaurante; nas outras, não', amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }, {}).every((x) => /^(Oi|Olá)[^\n]*Helena, do Camelo\.\n\n\S/.test(x))
+  && amostrasEq({ tipo: 'feedback', pontos: [PE('Negativo')] }).every((x) => !/Helena/.test(x)))
+o = montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 1, pontos: [] })
+ok('equipe: "isso é anônimo?" explica que a pessoa escolhe depois, sem gravar nada', !o.ehFeedback && /Você que escolhe/.test(o.resposta) && /sem o seu nome/.test(o.resposta))
+o = montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'quem_e', mensagem_pergunta: 1, pontos: [] }, juntadaEq, {})
+ok('equipe: "quem é você?" não repete a apresentação', (o.resposta.match(/Helena/g) || []).length === 1 && o.resposta.startsWith('Sou a Helena'))
+ok('equipe: pedido do dia a dia (folga, pagamento) manda falar com a gerência', /ger[êe]ncia/.test(montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'outro', mensagem_pergunta: 1, pontos: [] }).resposta))
+ok('equipe: saudação, "ok" ou a resposta do anonimato que sobrou: silêncio', montaEq({ tipo: 'outro', pontos: [] }).respostas.length === 0 && !montaEq({ tipo: 'outro', pontos: [] }).ehFeedback)
+const duasEq = ultima([linha(6, 'O clima é ótimo', 'e1'), linha(7, 'Isso é anônimo?', 'e2')])[0].json
+o = montaEq({ tipo: 'feedback', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 2, pontos: [{ ...PE('Positivo', 'Clima e colegas'), mensagem: 1 }] }, duasEq)
+ok('equipe: feedback + pergunta saem em duas mensagens, cada uma citando a sua', o.respostas.length === 2 && o.respostas[0].replyid === 'e1' && o.respostas[1].replyid === 'e2' && o.respostas[1].tipo === 'pergunta')
+const pararEq = ultima([linha(7, 'PARAR', 'p')])[0].json
+o = montaEq({ tipo: 'outro', pontos: [] }, pararEq, {}, marcou(1))
+ok('equipe: PARAR marcado agora confirma em uma frase só, sem apresentação', o.respostas.length === 1 && o.respostas[0].texto === 'Pronto, não vou mais te mandar essas mensagens.' && o.respostas[0].replyid === 'p')
+ok('equipe: PARAR que não marcou (já tinha parado): silêncio', montaEq({ tipo: 'outro', pontos: [] }, pararEq, JA_FALOU, marcou(1, { marcou: false })).respostas.length === 0)
+erro = null
+try { montaEq('não entendi') } catch (e) { erro = e.message }
+ok('equipe: resposta da IA sem JSON vira erro visível', !!erro && erro.includes('fora do formato'))
+
+// PARAR do funcionário
+r = roda('Pediu para parar?', { ...juntadaParar('PARAR'), equipe: { funcionarioId: 3 } })[0].json
+ok('PARAR: quem é da equipe segue marcado como equipe', r.daEquipe === true)
+const ctxEq = roda('Monta o contexto', {
+  contato_id: 3, ja_parou: false, aviso_parar_em: '2026-10-08T15:00:00Z', ultima_atualizacao: { texto: 'Como está sendo trabalhar aqui?', enviada_em: '2026-10-08T15:00:00Z' },
+  conversa: [{ quem: 'restaurante', texto: 'Como está sendo trabalhar aqui?', enviada_em: '2026-10-08T15:00:00Z' }, { quem: 'cliente', texto: 'PARAR', enviada_em: '2026-10-08T15:10:00Z' }],
+}, { 'Pediu para parar?': r })[0].json
+ok('PARAR da equipe: o contexto avisa a IA que é funcionário e que pedido sobre o trabalho não conta', ctxEq.contexto.includes('FUNCIONÁRIO do restaurante') && ctxEq.contexto.includes('FUNCIONÁRIO: PARAR')
+  && ctxEq.contexto.includes('ÚLTIMO PEDIDO DE OPINIÃO') && ctxEq.contexto.includes('parar de trabalhar no domingo') && !ctxEq.contexto.includes('CLIENTE'))
+ok('PARAR do cliente: o contexto não muda', !contexto.includes('FUNCIONÁRIO') && contexto.startsWith('MENSAGEM NOVA DO CLIENTE'))
+r = roda('É para parar?', { text: '{"parar": true, "certeza": "alta"}' }, { 'Monta o contexto': ctxEq })
+ok('PARAR da equipe: a marcação sabe que é da equipe (vai para equipe_parar)', r.length === 1 && r[0].json.daEquipe === true && urlDe('Marca para não receber', r[0].json).endsWith('/rpc/equipe_parar'))
+ok('PARAR do cliente: a marcação continua em contato_parar_atualizacoes', roda('É para parar?', { text: '{"parar": true, "certeza": "alta"}' }, { 'Monta o contexto': montado2 })[0].json.daEquipe === false)
+
+// Gravar
+const montadoEq = montaEq({ tipo: 'feedback', pontos: [PE('Negativo'), PE('Positivo', 'Clima e colegas', 'A equipe é unida')], sensivel: false })
+ok('equipe: só grava quando é feedback', destinos('É feedback da equipe?', 0).join() === 'Grava o feedback da equipe' && destinos('É feedback da equipe?', 1).join() === 'Respostas da equipe'
+  && seVale('É feedback da equipe?', montadoEq) === true && seVale('É feedback da equipe?', { ehFeedback: false }) === false)
+const gravar = porNome('Grava o feedback da equipe')
+env = corpoDe('Grava o feedback da equipe', montadoEq)
+ok('equipe: grava pela função equipe_registrar_feedback (texto inteiro, sentimento, pontos e relato grave)', gravar.parameters.url.endsWith('/rest/v1/rpc/equipe_registrar_feedback') && !!gravar.credentials?.supabaseApi
+  && env.p_restaurante_id === 11 && env.p_telefone === '5511932903005' && env.p_texto === 'O salário atrasa todo mês' && env.p_sentimento === 'Positivo e Negativo' && env.p_pontos.length === 2 && env.p_sensivel === false)
+ok('equipe: o feedback da equipe NÃO passa pelos nós que gravam o telefone do cliente', !['Salva a mensagem', 'Separa os pontos', 'Salva os pontos'].some((n) => [...destinos('É feedback da equipe?', 0), ...destinos('É feedback da equipe?', 1), ...destinos('Grava o feedback da equipe')].includes(n)))
+
+// Respostas da equipe e a pergunta do anonimato
+const GRAVOU = { ok: true, original_id: 'u1', autoria_id: 'a1', identidade: 'pendente', perguntar_identidade: true, sensivel: false, prazo_horas: 24 }
+const respostasEq = (m, gravado) => rodaCom('Respostas da equipe', {}, gravado === undefined ? { 'Monta a resposta da equipe': m } : { 'Monta a resposta da equipe': m, 'Grava o feedback da equipe': gravado })
+r = respostasEq(montadoEq, GRAVOU)
+ok('equipe: uma resposta por item, levando a pergunta do anonimato', r.length === 1 && r[0].json.texto === montadoEq.respostas[0].texto && r[0].json.perguntar === true && !!r[0].json.pergunta)
+const pg = r[0].json.pergunta
+ok('pergunta: dois botões de resposta com os ids que o "Lê a mensagem" reconhece', JSON.stringify(pg.botoes) === '["Ficar anônimo|equipe_anonimo","Mostrar meu nome|equipe_mostrar"]'
+  && pg.botoes.every((b) => lê({ messageType: 'ButtonsResponseMessage', buttonOrListid: b.split('|')[1] }).length === 1))
+ok('pergunta: rótulo do botão cabe no WhatsApp (até 20 letras) e o rodapé também (até 60)', pg.botoes.every((b) => b.split('|')[0].length <= 20) && pg.rodape.length <= 60)
+ok('pergunta: diz o que acontece sem resposta (aparece o nome em 24 horas) e como responder sem botão', pg.rodape === 'Sem resposta em 24 horas, aparece com o seu nome.' && /ANÔNIMO ou MOSTRAR/.test(pg.texto) && /fique anônima\?/.test(pg.texto))
+ok('pergunta por escrito (reserva): mesma explicação, as duas palavras e o prazo', /ANÔNIMO ou MOSTRAR/.test(pg.textoSemBotao) && pg.textoSemBotao.endsWith(pg.rodape)
+  && diz('ANÔNIMO') === 'anonimo' && diz('MOSTRAR') === 'identificado')
+ok('prazo configurado em dias aparece em dias', respostasEq(montadoEq, { ...GRAVOU, prazo_horas: 72 })[0].json.pergunta.rodape === 'Sem resposta em 3 dias, aparece com o seu nome.')
+ok('relato grave: sem resposta fica ANÔNIMO (nunca promete mostrar o nome)', respostasEq(montadoEq, { ...GRAVOU, sensivel: true })[0].json.pergunta.rodape === 'Sem resposta, fica anônima.')
+r = respostasEq(montadoEq, { ...GRAVOU, perguntar_identidade: false })
+ok('já perguntou nesta leva: agradece e não pergunta de novo', r.length === 1 && r[0].json.perguntar === false && r[0].json.pergunta === null)
+ok('feedback que o banco não gravou (saiu do cadastro): não agradece nem pergunta', respostasEq(montadoEq, { ok: false, motivo: 'nao_e_da_equipe' }).length === 0)
+r = respostasEq(montaEq({ tipo: 'pergunta', tem_pergunta: true, pergunta_sobre: 'anonimato', mensagem_pergunta: 1, pontos: [] }))
+ok('só pergunta (nada gravado): responde e não manda o botão', r.length === 1 && r[0].json.perguntar === false)
+ok('nada a responder: o ramo para', respostasEq(montaEq({ tipo: 'outro', pontos: [] })).length === 0)
+
+// O envio da equipe
+ok('equipe: respostas uma de cada vez; a pergunta só depois de todas', destinos('Respostas da equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 1).join() === 'Envia à equipe'
+  && destinos('Envia à equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 0).join() === 'Vai perguntar?' && porNome('Uma de cada vez (equipe)').parameters.batchSize === 1)
+const exprCom = (expr, $json, outros) => new Function('$', '$json', 'return (' + expr.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')((n) => ({ first: () => ({ json: outros[n] ?? {} }) }), $json)
+const item = respostasEq(montadoEq, GRAVOU)[0].json
+const CTX = { 'Monta a resposta da equipe': montadoEq, 'Respostas da equipe': item }
+env = JSON.parse(exprCom(porNome('Envia à equipe').parameters.jsonBody, item, CTX))
+ok('equipe: o agradecimento cita a mensagem, com "digitando..." e sem retry', env.number === '5511932903005' && env.text === item.texto && env.replyid === 'e1' && env.delay === item.digitandoMs && !porNome('Envia à equipe').retryOnFail)
+ok('"Vai perguntar?": só quando o banco mandou perguntar', exprCom(condicaoDe('Vai perguntar?'), {}, CTX) === true && exprCom(condicaoDe('Vai perguntar?'), {}, { ...CTX, 'Respostas da equipe': { perguntar: false } }) === false
+  && destinos('Vai perguntar?', 0).join() === 'Manda o botão' && destinos('Vai perguntar?', 1).length === 0)
+const botao = porNome('Manda o botão')
+env = JSON.parse(exprCom(botao.parameters.jsonBody, {}, CTX))
+ok('botão: /send/menu da uazapi, type "button", com os dois botões, o rodapé e o "digitando..."', exprCom(botao.parameters.url.replace('/send/menu', ''), {}, CTX) + '/send/menu' === 'https://iamai-ia.uazapi.com/send/menu' && botao.parameters.url.endsWith('}}/send/menu')
+  && env.number === '5511932903005' && env.type === 'button' && env.text === pg.texto && JSON.stringify(env.choices) === JSON.stringify(pg.botoes) && env.footerText === pg.rodape && env.delay >= 2500 && env.readchat === true)
+ok('botão: só botões de resposta (misturar com link ou ligação quebra no WhatsApp Web)', env.choices.every((c) => !/https?:|call:|copy:|url:/.test(c)))
+ok('botão falhou (recurso fora do ar): a pergunta vai por escrito, e o prazo começa do mesmo jeito', botao.onError === 'continueErrorOutput' && !botao.retryOnFail && destinos('Manda o botão', 0).join() === 'Começa o prazo'
+  && destinos('Manda o botão', 1).join() === 'Pergunta por escrito' && destinos('Pergunta por escrito').join() === 'Começa o prazo')
+env = JSON.parse(exprCom(porNome('Pergunta por escrito').parameters.jsonBody, {}, CTX))
+ok('pergunta por escrito: /send/text com o texto de reserva', porNome('Pergunta por escrito').parameters.url.endsWith('}}/send/text') && env.text === pg.textoSemBotao && env.number === '5511932903005')
+const prazo = porNome('Começa o prazo')
+ok('prazo: começa quando a pergunta saiu (equipe_identidade_perguntada), uma vez só', prazo.parameters.url.endsWith('/rest/v1/rpc/equipe_identidade_perguntada') && prazo.executeOnce === true
+  && exprCom(prazo.parameters.jsonBody, {}, CTX) === '{"p_restaurante_id":11,"p_telefone":"5511932903005"}' && !wf.connections['Começa o prazo'])
+ok('equipe: o ramo fica abaixo do caminho do cliente no canvas (não muda a ordem dos ramos de cima)', ['Analisa a equipe', 'Monta a resposta da equipe', 'Prepara a escolha'].every((n) => porNome(n).position[1] > porNome('Limpa buffer antigo').position[1])
+  && porNome('Quem escreveu?').position[1] === porNome('Sou a última mensagem?').position[1])
+const posicoes = nos.map((n) => n.position.join())
+ok('nenhum nó em cima de outro no canvas', new Set(posicoes).size === posicoes.length, posicoes.filter((p, i) => posicoes.indexOf(p) !== i))
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nworkflow: tudo certo')
 process.exit(falhas ? 1 : 0)

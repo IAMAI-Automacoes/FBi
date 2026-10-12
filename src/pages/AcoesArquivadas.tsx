@@ -9,7 +9,7 @@ import {
   type PeriodoPreset,
   type IntervaloDatas,
 } from '@/components/FiltroPeriodo'
-import { CATEGORIAS_FEEDBACK } from '@/lib/categorias-feedback'
+import { usePublico } from '@/lib/publico'
 import { isWithinInterval, startOfDay, endOfDay, subDays } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,6 +36,8 @@ const DIAS_DO_PRESET: Record<Exclude<PeriodoPreset, 'all'>, number> = {
 export default function AcoesArquivadas() {
   const { usuario } = useAuth()
   const { toast } = useToast()
+  // A mesma página serve a /acoes/arquivadas e a /equipe/acoes/arquivadas.
+  const { categorias: CATEGORIAS_FEEDBACK, caminho, chave } = usePublico()
   // Linhas de `acoes_operacionais`; o TaskCard aceita o formato do quadro.
   const [acoes, setAcoes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,14 +47,14 @@ export default function AcoesArquivadas() {
   // Mesmos três filtros de /feedbacks. A lista de arquivadas só cresce — é o
   // único lugar do app onde nada sai —, então em poucos meses ela é a maior
   // do sistema e rolar deixa de ser uma forma de achar coisa.
-  const [busca, setBusca] = useFiltroPersistente('arquivadas:busca', '')
-  const [categorias, setCategorias] = useFiltroPersistente<string[]>('arquivadas:categorias', [])
+  const [busca, setBusca] = useFiltroPersistente(chave('arquivadas:busca'), '')
+  const [categorias, setCategorias] = useFiltroPersistente<string[]>(chave('arquivadas:categorias'), [])
   // `periodo` é o atalho (7/30/90/tudo) e `datas` é o intervalo do calendário;
   // o intervalo tem precedência, igual a /feedbacks. Aqui o padrão é 'all' e
   // não '7d': o arquivo existe justamente para consultar coisa antiga, e abrir
   // filtrado em uma semana esconderia quase tudo que está lá.
-  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoPreset>('arquivadas:periodo', 'all')
-  const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>('arquivadas:datas', undefined)
+  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoPreset>(chave('arquivadas:periodo'), 'all')
+  const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>(chave('arquivadas:datas'), undefined)
 
   // Contagem por categoria SOBRE o que os outros filtros já deixaram passar,
   // e não sobre a lista inteira: o número ao lado de cada categoria tem que
@@ -84,7 +86,7 @@ export default function AcoesArquivadas() {
       }
     }
     return c
-  }, [baseParaContagem])
+  }, [baseParaContagem, CATEGORIAS_FEEDBACK])
 
   const acoesFiltradas = useMemo(
     () => baseParaContagem.filter(
@@ -155,7 +157,7 @@ export default function AcoesArquivadas() {
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="shrink-0">
-          <Link to="/acoes">
+          <Link to={caminho('/acoes')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar para Ações
           </Link>

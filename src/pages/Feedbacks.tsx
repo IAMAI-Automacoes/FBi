@@ -28,6 +28,8 @@ import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { supabase } from '@/lib/supabase/client'
 import { SELECT_PILULA_FILTRO } from '@/lib/estilos-botao'
+import { usePublico } from '@/lib/publico'
+import type { Autoria } from '@/lib/equipe'
 
 const LIMIT = 10
 
@@ -37,6 +39,10 @@ const CHAVE_FILTROS = 'feedbacks:filtros'
 export default function Feedbacks() {
   const { toast } = useToast()
   const { usuario } = useAuth()
+  // A mesma página serve aos clientes (/feedbacks) e à equipe
+  // (/equipe/feedbacks): os dados quem separa é o banco.
+  const { ehEquipe, chave, deQuem } = usePublico()
+  const chaveFiltros = chave(CHAVE_FILTROS)
   const { setExtra } = useHeaderExtra()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -65,10 +71,10 @@ export default function Feedbacks() {
   if (!jaSemeou.current) {
     jaSemeou.current = true
     const veioDaUrl = ['periodo', 'categoria', 'sentimento'].some((p) => searchParams.get(p))
-    if (veioDaUrl) esquecerFiltro(CHAVE_FILTROS)
+    if (veioDaUrl) esquecerFiltro(chaveFiltros)
   }
 
-  const [filtros, setFiltros] = useFiltroPersistente<FiltrosFeedback>(CHAVE_FILTROS, (() => {
+  const [filtros, setFiltros] = useFiltroPersistente<FiltrosFeedback>(chaveFiltros, (() => {
     const periodoParam = searchParams.get('periodo')
     const periodosValidos: FiltrosFeedback['periodo'][] = ['7d', '30d', '90d', 'all']
     const categoriaParam = searchParams.get('categoria')
@@ -330,7 +336,9 @@ export default function Feedbacks() {
             <Folder className="h-12 w-12 text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900">Nenhum feedback encontrado</h3>
             <p className="text-sm mt-1">
-              Ajuste os filtros ou aguarde novas avaliações de clientes.
+              {ehEquipe
+                ? 'Ajuste os filtros, ou peça feedback para a equipe em Funcionários.'
+                : `Ajuste os filtros ou aguarde novas avaliações ${deQuem}.`}
             </p>
           </div>
         ) : (
@@ -348,8 +356,11 @@ export default function Feedbacks() {
                 sentimento={fb.sentimento}
                 categorias={fb.categorias ?? []}
                 quando={formatarDataFeedback(fb.created_at)}
-                telefoneConversa={podeVerWhatsapp ? fb.telefone_cliente : null}
+                // Feedback da equipe não guarda telefone: mostra quem falou
+                // (ou que a pessoa ainda pode ficar anônima).
+                telefoneConversa={podeVerWhatsapp && !ehEquipe ? fb.telefone_cliente : null}
                 feedbackId={fb.id}
+                autoria={ehEquipe ? (fb.autoria as Autoria | null) : null}
               />
             </div>
           ))

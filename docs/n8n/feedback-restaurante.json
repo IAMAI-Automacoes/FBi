@@ -3,17 +3,17 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Feedback Restaurante\nRecebe as mensagens que os clientes mandam para o WhatsApp de feedback do restaurante (webhook **easyfeed** da instância na uazapi).\n\n1. **Filtra**: só TEXTO ou ÁUDIO, de cliente, em conversa individual.\n2. **Acha o restaurante pelo token da instância** e confere onboarding, assinatura ativa e conta não excluída.\n3. **Junta as mensagens em sequência** (buffer de 20 s por restaurante + cliente).\n4. **A IA classifica**: feedback / pergunta sobre o restaurante / outro, e separa o feedback em pontos (Positivo, Negativo, Neutro, Sugestão).\n5. **Feedback** → grava e a **Helena** agradece com uma mensagem pronta sorteada conforme o sentimento, (a IA só completa pedaços como \"a pizza fria\"); as mensagens do cliente ficam lidas assim que são juntadas, e antes de cada resposta aparece \"digitando...\" por um tempo sorteado. Ela se apresenta só na primeira resposta do dia para cada pessoa. **Pergunta completa sobre o restaurante** → indica o número de contato das Configurações (só o número, sem link). **Pergunta incompleta** (\"tenho uma dúvida\") → não responde. **Duas coisas ou mais juntas** (feedback + pergunta, feedback + PARAR…) → **uma mensagem para cada coisa**, cada uma respondendo (citando) no WhatsApp a mensagem do cliente de que fala, na ordem em que ele escreveu. **Qualquer outra coisa** → não responde.\n\nNeutro aparece no painel mas não gera insight; Sugestão gera insight como ponto a melhorar.\n\n6. **PARAR**: mensagem com cara de \"parar de receber\" passa por uma IA que lê a conversa recente. Se for mesmo o pedido, o cliente para de receber **só as atualizações das ações** (o resto continua igual) e recebe só \"Pronto, não vou mais te mandar essas novidades.\".",
-        "height": 360,
+        "content": "## Feedback Restaurante\nRecebe as mensagens que os clientes mandam para o WhatsApp de feedback do restaurante (webhook **easyfeed** da instância na uazapi).\n\n1. **Filtra**: só TEXTO ou ÁUDIO, de cliente, em conversa individual.\n2. **Acha o restaurante pelo token da instância** e confere onboarding, assinatura ativa e conta não excluída.\n3. **Junta as mensagens em sequência** (buffer de 20 s por restaurante + cliente).\n4. **A IA classifica**: feedback / pergunta sobre o restaurante / outro, e separa o feedback em pontos (Positivo, Negativo, Neutro, Sugestão).\n5. **Feedback** → grava e a **Helena** agradece com uma mensagem pronta sorteada conforme o sentimento, (a IA só completa pedaços como \"a pizza fria\"); as mensagens do cliente ficam lidas assim que são juntadas, e antes de cada resposta aparece \"digitando...\" por um tempo sorteado. Ela se apresenta só na primeira resposta do dia para cada pessoa. **Pergunta completa sobre o restaurante** → indica o número de contato das Configurações (só o número, sem link). **Pergunta incompleta** (\"tenho uma dúvida\") → não responde. **Duas coisas ou mais juntas** (feedback + pergunta, feedback + PARAR…) → **uma mensagem para cada coisa**, cada uma respondendo (citando) no WhatsApp a mensagem do cliente de que fala, na ordem em que ele escreveu. **Qualquer outra coisa** → não responde.\n\nNeutro aparece no painel mas não gera insight; Sugestão gera insight como ponto a melhorar.\n\n6. **PARAR**: mensagem com cara de \"parar de receber\" passa por uma IA que lê a conversa recente. Se for mesmo o pedido, o cliente para de receber **só as atualizações das ações** (o resto continua igual) e recebe só \"Pronto, não vou mais te mandar essas novidades.\".\n\n7. **Equipe**: se quem escreveu é um **funcionário** cadastrado na página Equipe, a mensagem segue o ramo de baixo (análise da equipe, sem telefone gravado e com a pergunta do anonimato por botão). O cliente não passa por ele.",
+        "height": 420,
         "width": 1360
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -60,
-        -620
+        -680
       ],
-      "id": "6d83cd79-4f8d-4642-805c-9f56df49c38f",
+      "id": "b9c18163-d095-4c2b-b09d-c30f46b26ac2",
       "name": "Nota - Visão geral"
     },
     {
@@ -29,7 +29,7 @@
         -60,
         -220
       ],
-      "id": "30197643-fc16-4d38-9029-3b2c1c75eb12",
+      "id": "c37108ce-ce49-4149-acab-c4e27aadb7b4",
       "name": "Nota - Entrada"
     },
     {
@@ -42,26 +42,26 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        900,
+        1120,
         -440
       ],
-      "id": "5801e6fb-3a57-416d-9426-5e675ea4409e",
+      "id": "47c34d34-4673-40ae-a972-1f01e6134044",
       "name": "Nota - Áudio"
     },
     {
       "parameters": {
         "content": "## 3. Buffer de mensagens\nCada mensagem espera 20 s. Só a ÚLTIMA da conversa segue e junta todas; as anteriores param. Apaga só o que juntou (uma mensagem que chegue no meio não se perde). Repetidas da uazapi contam uma vez. Sobras com mais de 10 min são limpas.",
         "height": 560,
-        "width": 1100,
+        "width": 1540,
         "color": 3
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1940,
+        2160,
         -220
       ],
-      "id": "076844e5-1f1a-4593-9e69-619f1e681477",
+      "id": "446e0a08-1762-4468-a2fd-4e73ad6adc08",
       "name": "Nota - Buffer"
     },
     {
@@ -74,10 +74,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3060,
+        3720,
         -220
       ],
-      "id": "c8ee5260-d4b1-4a10-aa3a-6da308444ac1",
+      "id": "117fc9b9-d77a-4cce-b783-b00ba6402f6f",
       "name": "Nota - IA"
     },
     {
@@ -90,10 +90,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3000,
+        3660,
         440
       ],
-      "id": "39c2f918-9c15-4653-82bb-36fb1e6567de",
+      "id": "a7cf5708-e766-485e-a085-251da1e43225",
       "name": "Nota - Apresentação"
     },
     {
@@ -106,10 +106,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3780,
+        4660,
         -440
       ],
-      "id": "a16a84c3-a8ad-4255-919d-084654a9dc81",
+      "id": "ba88a533-acfa-48a0-bc98-13c1d6b402ad",
       "name": "Nota - Grava e responde"
     },
     {
@@ -122,10 +122,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2780,
+        3440,
         -1200
       ],
-      "id": "8c16afdc-823d-45c4-9764-1344b8d7637b",
+      "id": "9938cf7c-9f45-4390-907e-e99c655be9a6",
       "name": "Nota - PARAR"
     },
     {
@@ -140,13 +140,13 @@
         0,
         0
       ],
-      "id": "a943bbe6-c909-406e-acf6-35be6564e05f",
+      "id": "4c8d097c-5bde-4006-b49a-63b20b93b4bf",
       "name": "Recebe mensagem",
       "webhookId": "97408caf-b261-4434-9601-0c1a99650276"
     },
     {
       "parameters": {
-        "jsCode": "// Lê o evento da uazapi e decide se ele entra no fluxo de feedback.\n// Entra só mensagem de TEXTO ou ÁUDIO, de cliente, em conversa individual.\n// Devolve UM item com o que importa, ou nenhum item (o fluxo para aqui).\nconst body = $input.first().json.body || {};\nconst m = body.message || {};\nconst parar = [];\n\nif (body.EventType !== 'messages') return parar;\n// Grupo e mensagem do próprio número (o dono no celular ou a resposta automática).\nif (m.isGroup === true || m.fromMe === true) return parar;\n// Edição de uma mensagem já enviada não é mensagem nova.\nif (typeof m.edited === 'string' && m.edited.trim() !== '') return parar;\n\nconst token = String(body.token || '').trim();\nconst baseUrl = String(body.BaseUrl || '').trim().replace(/\\/+$/, '');\nconst messageId = String(m.messageid || '').trim();\nif (!token || !/^https:\\/\\//i.test(baseUrl) || !messageId) return parar;\n\n// Telefone do cliente: a conversa individual (...@s.whatsapp.net). Na conversa\n// no formato novo do WhatsApp (...@lid), o telefone real vem em sender_pn.\nconst jid = [m.chatid, m.sender_pn]\n  .map((v) => String(v || ''))\n  .find((v) => v.endsWith('@s.whatsapp.net'));\nif (!jid) return parar;\nconst telefone = jid.split('@')[0].replace(/\\D/g, '');\nif (telefone.length < 10 || telefone.length > 15) return parar;\n\n// Só texto e áudio. Foto, vídeo, figurinha, reação, documento etc. não entram.\nlet tipo = null;\nlet texto = '';\nif (m.messageType === 'AudioMessage') {\n  tipo = 'audio';\n} else if (m.messageType === 'Conversation' || m.messageType === 'ExtendedTextMessage') {\n  tipo = 'texto';\n  texto = (typeof m.text === 'string' ? m.text : '').trim();\n  if (!texto) return parar;\n} else {\n  return parar;\n}\n\nreturn [{ json: { token, baseUrl, messageId, telefone, tipo, texto: texto.slice(0, 4000) } }];"
+        "jsCode": "// Lê o evento da uazapi e decide se ele entra no fluxo de feedback.\n// Entra só mensagem de TEXTO ou ÁUDIO, de cliente, em conversa individual.\n// Devolve UM item com o que importa, ou nenhum item (o fluxo para aqui).\nconst body = $input.first().json.body || {};\nconst m = body.message || {};\nconst parar = [];\n\nif (body.EventType !== 'messages') return parar;\n// Grupo e mensagem do próprio número (o dono no celular ou a resposta automática).\nif (m.isGroup === true || m.fromMe === true) return parar;\n// Edição de uma mensagem já enviada não é mensagem nova.\nif (typeof m.edited === 'string' && m.edited.trim() !== '') return parar;\n\nconst token = String(body.token || '').trim();\nconst baseUrl = String(body.BaseUrl || '').trim().replace(/\\/+$/, '');\nconst messageId = String(m.messageid || '').trim();\nif (!token || !/^https:\\/\\//i.test(baseUrl) || !messageId) return parar;\n\n// Telefone do cliente: a conversa individual (...@s.whatsapp.net). Na conversa\n// no formato novo do WhatsApp (...@lid), o telefone real vem em sender_pn.\nconst jid = [m.chatid, m.sender_pn]\n  .map((v) => String(v || ''))\n  .find((v) => v.endsWith('@s.whatsapp.net'));\nif (!jid) return parar;\nconst telefone = jid.split('@')[0].replace(/\\D/g, '');\nif (telefone.length < 10 || telefone.length > 15) return parar;\n\n// Clique no botão do anonimato (ramo da equipe). A uazapi manda o id do botão\n// em buttonOrListid; se o id vier como texto, vale igual. Qualquer tipo de\n// mensagem serve: o que identifica o clique é o id.\nconst ESCOLHAS = { equipe_anonimo: 'anonimo', equipe_mostrar: 'identificado' };\nconst botao = [m.buttonOrListid, m.text].map((v) => String(v || '').trim()).find((v) => ESCOLHAS[v]);\nif (botao) {\n  return [{ json: { token, baseUrl, messageId, telefone, tipo: 'botao', texto: '', escolha: ESCOLHAS[botao] } }];\n}\n\n// Só texto e áudio. Foto, vídeo, figurinha, reação, documento etc. não entram.\nlet tipo = null;\nlet texto = '';\nif (m.messageType === 'AudioMessage') {\n  tipo = 'audio';\n} else if (m.messageType === 'Conversation' || m.messageType === 'ExtendedTextMessage') {\n  tipo = 'texto';\n  texto = (typeof m.text === 'string' ? m.text : '').trim();\n  if (!texto) return parar;\n} else {\n  return parar;\n}\n\nreturn [{ json: { token, baseUrl, messageId, telefone, tipo, texto: texto.slice(0, 4000) } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -154,7 +154,7 @@
         220,
         0
       ],
-      "id": "59450fd6-6223-424c-bc2d-1a32f0f24841",
+      "id": "7666c5b0-5253-424a-aa09-36be93503a2e",
       "name": "Lê a mensagem"
     },
     {
@@ -178,7 +178,7 @@
         440,
         0
       ],
-      "id": "7a561f33-654c-4b0b-b341-24cb7cbd4591",
+      "id": "cbc2f6d9-a637-43fa-8889-18fe84d81082",
       "name": "Acha o restaurante",
       "credentials": {
         "supabaseApi": {
@@ -200,7 +200,7 @@
         660,
         0
       ],
-      "id": "80ff0c86-979d-4471-96b7-48c0301bc142",
+      "id": "85f329ee-60bd-4819-b6df-4337471068f8",
       "name": "Restaurante ativo?"
     },
     {
@@ -214,7 +214,7 @@
           },
           "conditions": [
             {
-              "id": "3f8b793f-b00d-4ff6-bf94-5bfbc30b06bb",
+              "id": "c9263056-a3d4-4217-874c-ca4362e36ff3",
               "leftValue": "={{ $json.tipo === 'audio' }}",
               "rightValue": "",
               "operator": {
@@ -231,10 +231,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        880,
+        1100,
         0
       ],
-      "id": "605f9257-0723-4c77-a77e-2b3a88251adc",
+      "id": "8fb66e6b-5583-436e-9e43-8564b6f7aa98",
       "name": "É áudio?"
     },
     {
@@ -260,10 +260,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
+        1320,
         -200
       ],
-      "id": "42b02dae-b71d-4c8a-8207-d7e664444b53",
+      "id": "ce93076c-e3de-4dfb-ac86-235ea0960882",
       "name": "Baixa o áudio",
       "retryOnFail": true,
       "maxTries": 2,
@@ -282,10 +282,10 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [
-        1320,
+        1540,
         -200
       ],
-      "id": "c096ca60-63e6-4749-90e7-8f91b95f5753",
+      "id": "944e6a25-608e-4fd6-854d-9a0d469e5300",
       "name": "Converte o áudio",
       "onError": "continueRegularOutput"
     },
@@ -300,10 +300,10 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1540,
+        1760,
         -200
       ],
-      "id": "6bb18641-2571-47ab-b4f7-fc9bdb6685b5",
+      "id": "52f25b66-dfd3-40a7-9231-ab798500f993",
       "name": "Transcreve o áudio",
       "credentials": {
         "openAiApi": {
@@ -323,10 +323,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
+        1980,
         -200
       ],
-      "id": "0e47acb3-dd78-4590-9596-5e1f7013717c",
+      "id": "78482290-5312-4916-b8b5-ed543cca12a2",
       "name": "Texto do áudio"
     },
     {
@@ -352,10 +352,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        1980,
+        2200,
         0
       ],
-      "id": "8573038a-6e3a-4d0c-afb7-c6ef5df1a120",
+      "id": "76ecd9d3-4ba1-4d5d-b620-754713f848a0",
       "name": "Guarda no buffer",
       "credentials": {
         "supabaseApi": {
@@ -375,12 +375,12 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        2200,
+        2420,
         0
       ],
-      "id": "450df203-5119-4b9c-82fd-14ad7b335bb5",
+      "id": "431d921c-3dc3-406e-876d-8dc4ef422400",
       "name": "Espera 20 segundos",
-      "webhookId": "6b5fe3dc-644d-4381-a778-134ae90f3589"
+      "webhookId": "a6d2d12f-4840-47e4-aadb-572d5553d473"
     },
     {
       "parameters": {
@@ -400,10 +400,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2420,
+        2640,
         0
       ],
-      "id": "ee583351-2322-411f-8603-da24fb01d8ff",
+      "id": "58e7a231-6058-4bbe-b31f-7f30b97f16b1",
       "name": "Lê o buffer",
       "credentials": {
         "supabaseApi": {
@@ -422,10 +422,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2640,
+        2860,
         0
       ],
-      "id": "5effc1b2-b20e-460c-b346-c518a0463cb5",
+      "id": "419e89d3-72ab-4ce7-b2b3-5f7918b8c7af",
       "name": "Sou a última mensagem?"
     },
     {
@@ -451,10 +451,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2860,
+        3520,
         0
       ],
-      "id": "3180da30-e906-4914-9cbe-2ab5cf801ee0",
+      "id": "8fc78949-8b10-450e-adbb-84251871f3bc",
       "name": "Limpa o buffer",
       "credentials": {
         "supabaseApi": {
@@ -486,10 +486,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2860,
+        3520,
         220
       ],
-      "id": "54c60cb2-fe09-4378-8728-bf220272563a",
+      "id": "0f242549-ba94-44f7-968c-d9dc6ba0e697",
       "name": "Limpa buffer antigo",
       "credentials": {
         "supabaseApi": {
@@ -532,10 +532,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        3000,
+        3660,
         220
       ],
-      "id": "46fd792f-25fd-47a5-9be0-805a5e77d61e",
+      "id": "281e3624-00ee-4b98-9342-680fef178f43",
       "name": "Já respondeu hoje?",
       "credentials": {
         "supabaseApi": {
@@ -565,10 +565,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        3200,
+        4080,
         0
       ],
-      "id": "94e82e8a-7542-4365-8bfb-5e901818c038",
+      "id": "d69cecfb-41ca-4661-bc75-d22334dc24c1",
       "name": "Analisa a mensagem",
       "executeOnce": true,
       "retryOnFail": true,
@@ -591,10 +591,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        3200,
+        4080,
         220
       ],
-      "id": "a73ca06f-73e8-45af-886e-d5f89fba633f",
+      "id": "22546bdd-a6b0-4548-8655-f0269b05e7d4",
       "name": "Modelo de análise",
       "credentials": {
         "openAiApi": {
@@ -610,10 +610,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3440,
+        4320,
         0
       ],
-      "id": "2773387a-8f2f-47a4-9858-bdc65fe6ba54",
+      "id": "93a74854-eb5f-4eec-878d-0a204d5f13c8",
       "name": "Monta a resposta"
     },
     {
@@ -627,7 +627,7 @@
           },
           "conditions": [
             {
-              "id": "e734866d-550f-4242-bd14-46d26a2c14d1",
+              "id": "d8695f17-b454-42c0-8317-db3a3269849b",
               "leftValue": "={{ $json.ehFeedback === true }}",
               "rightValue": "",
               "operator": {
@@ -644,10 +644,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3640,
+        4520,
         0
       ],
-      "id": "3286f974-3611-4be8-8440-f5d4d2f4ef3a",
+      "id": "79b38751-3615-4706-83e6-cac863f36f3a",
       "name": "É feedback?"
     },
     {
@@ -677,10 +677,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        3840,
+        4720,
         -180
       ],
-      "id": "49d6cb4b-fcb8-426c-a73b-0c88b772fc54",
+      "id": "fc7c0665-28d6-48b6-a1b1-a8370c8081fa",
       "name": "Salva a mensagem",
       "credentials": {
         "supabaseApi": {
@@ -699,10 +699,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4060,
+        4940,
         -180
       ],
-      "id": "848c514f-2e6d-43c9-b7b6-1fc58c835bba",
+      "id": "046ddfb8-d631-4c9b-a7e0-737b7c14aa9d",
       "name": "Separa os pontos"
     },
     {
@@ -744,10 +744,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        4280,
+        5160,
         -180
       ],
-      "id": "7eb1adc2-7263-463a-9566-4e548d516a58",
+      "id": "bed5b059-7235-43d4-bd01-fa5488fe851d",
       "name": "Salva os pontos",
       "credentials": {
         "supabaseApi": {
@@ -770,7 +770,7 @@
           },
           "conditions": [
             {
-              "id": "e6566571-5e9f-4b5b-a9d2-0d09a4652601",
+              "id": "3f58445c-278a-43b7-a09c-64fda2c94c4b",
               "leftValue": "={{ $('Monta a resposta').first().json.respostas.length > 0 }}",
               "rightValue": "",
               "operator": {
@@ -787,10 +787,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4520,
+        5400,
         0
       ],
-      "id": "df31a6b8-0be4-41b2-88dc-6468606d52a4",
+      "id": "6a73049a-24fe-470f-8edc-487bb79fa897",
       "name": "Tem resposta?",
       "executeOnce": true
     },
@@ -801,10 +801,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4740,
+        5620,
         0
       ],
-      "id": "d02555c3-d1c9-4a3c-b117-ffe458f6db64",
+      "id": "b7ce42b4-e4aa-43b6-b60c-09411f472fa4",
       "name": "Uma resposta por mensagem"
     },
     {
@@ -815,10 +815,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        4960,
+        5840,
         0
       ],
-      "id": "7d1b06b3-0e0d-4233-b977-6a3311e995ae",
+      "id": "3113553c-540d-427a-bea2-fc1d945ecf92",
       "name": "Uma de cada vez"
     },
     {
@@ -844,10 +844,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        5180,
+        6060,
         -20
       ],
-      "id": "22843bac-aa73-43f7-87e0-19eec87610cb",
+      "id": "ada71c18-3204-4cd7-a140-6b8a9833d66e",
       "name": "Envia a resposta"
     },
     {
@@ -860,10 +860,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2780,
+        3440,
         -1580
       ],
-      "id": "3acadacd-8aef-49d0-a233-a567581e0949",
+      "id": "7837e6b8-951f-4ba9-9ebc-01162070ef82",
       "name": "Nota - Lida"
     },
     {
@@ -889,10 +889,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2860,
+        3520,
         -1400
       ],
-      "id": "8d56c7e9-48b1-456e-9a66-8a3422561231",
+      "id": "51bc3e32-0f3a-464e-880a-d001c57085a1",
       "name": "Marca como lida",
       "retryOnFail": true,
       "maxTries": 2,
@@ -901,21 +901,21 @@
     },
     {
       "parameters": {
-        "jsCode": "// Mensagem com cara de \"parar de receber\"? Só um filtro barato: quem decide\n// de verdade é a IA do \"Decide se é para parar\", olhando a conversa.\n// \"para\" no meio da frase (fui lá para comemorar) não passa; \"Para!\" sozinho\n// numa linha passa. Olha cada mensagem juntada: a última com cara de \"parar\"\n// é a que a confirmação vai responder (citar).\nconst base = $input.first().json;\nconst normal = (s) => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n\nconst PADROES = [\n  /\\bparar\\b/,\n  /\\bpare(m)?\\b/,\n  /\\bpara(m)? de (me )?(mandar|enviar|mand|envi)/,\n  /\\bnao (quero|queria|desejo|preciso) (mais )?(receber|essas|esses|mensage|recado|novidade|atualiza)/,\n  /\\bnao (me )?(mande|mandem|envie|enviem|manda|envia)\\b/,\n  /\\bnao receber (mais|essas|esses|as |os |mensage|recado|novidade|atualiza)/,\n  /\\bnao (precisa|precisam) (mais )?(me )?(avisar|mandar|enviar)/,\n  /\\bchega de (mensage|recado|novidade|atualiza)/,\n  /\\b(descadastr|desinscrev)/,\n  /\\bsair da lista\\b/,\n  /\\b(me )?(tira|tirem|remove|removam|retira) (o meu numero|meu numero|da lista)/,\n  /\\b(cancelar|cancela|cancele) (o |os |as |essas |esses )?(meu numero|minha inscricao|mensage|aviso|atualiza|novidade|recado)/,\n  /^\\s*(stop|sair|cancelar|descadastrar|parar|pare|para)\\s*[.!]*\\s*$/m,\n];\nconst pede = (t) => PADROES.some((p) => p.test(normal(t)));\n\nconst mensagens = Array.isArray(base.mensagens) && base.mensagens.length\n  ? base.mensagens\n  : [{ id: '', texto: base.textoCompleto }];\nlet ordem = 0;\nmensagens.forEach((m, i) => { if (pede(m.texto)) ordem = i + 1; });\nif (!ordem) return [];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    textoCompleto: base.textoCompleto,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    ordem,\n    mensagemId: String(mensagens[ordem - 1].id || ''),\n  },\n}];"
+        "jsCode": "// Mensagem com cara de \"parar de receber\"? Só um filtro barato: quem decide\n// de verdade é a IA do \"Decide se é para parar\", olhando a conversa.\n// \"para\" no meio da frase (fui lá para comemorar) não passa; \"Para!\" sozinho\n// numa linha passa. Olha cada mensagem juntada: a última com cara de \"parar\"\n// é a que a confirmação vai responder (citar).\nconst base = $input.first().json;\nconst normal = (s) => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n\nconst PADROES = [\n  /\\bparar\\b/,\n  /\\bpare(m)?\\b/,\n  /\\bpara(m)? de (me )?(mandar|enviar|mand|envi)/,\n  /\\bnao (quero|queria|desejo|preciso) (mais )?(receber|essas|esses|mensage|recado|novidade|atualiza)/,\n  /\\bnao (me )?(mande|mandem|envie|enviem|manda|envia)\\b/,\n  /\\bnao receber (mais|essas|esses|as |os |mensage|recado|novidade|atualiza)/,\n  /\\bnao (precisa|precisam) (mais )?(me )?(avisar|mandar|enviar)/,\n  /\\bchega de (mensage|recado|novidade|atualiza)/,\n  /\\b(descadastr|desinscrev)/,\n  /\\bsair da lista\\b/,\n  /\\b(me )?(tira|tirem|remove|removam|retira) (o meu numero|meu numero|da lista)/,\n  /\\b(cancelar|cancela|cancele) (o |os |as |essas |esses )?(meu numero|minha inscricao|mensage|aviso|atualiza|novidade|recado)/,\n  /^\\s*(stop|sair|cancelar|descadastrar|parar|pare|para)\\s*[.!]*\\s*$/m,\n];\nconst pede = (t) => PADROES.some((p) => p.test(normal(t)));\n\nconst mensagens = Array.isArray(base.mensagens) && base.mensagens.length\n  ? base.mensagens\n  : [{ id: '', texto: base.textoCompleto }];\nlet ordem = 0;\nmensagens.forEach((m, i) => { if (pede(m.texto)) ordem = i + 1; });\nif (!ordem) return [];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    textoCompleto: base.textoCompleto,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    ordem,\n    mensagemId: String(mensagens[ordem - 1].id || ''),\n    // Funcionário cadastrado na Equipe: o PARAR dele é dos pedidos de opinião.\n    daEquipe: !!(base.equipe && base.equipe.funcionarioId),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2860,
+        3520,
         -860
       ],
-      "id": "925429f7-0e30-4a06-acc9-44c9514afea7",
+      "id": "f0a463fe-b56c-4e67-a6de-6aaefe1d842c",
       "name": "Pediu para parar?"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/contato_contexto_parar",
+        "url": "={{ 'https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/' + ($json.daEquipe ? 'equipe_contexto_parar' : 'contato_contexto_parar') }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
@@ -928,10 +928,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3080,
+        3740,
         -860
       ],
-      "id": "faaf623a-e620-4846-baf6-3ed1612a3d2b",
+      "id": "b059f9eb-6a3e-4473-bbe0-18d0c1ee1b6a",
       "name": "Conversa recente",
       "credentials": {
         "supabaseApi": {
@@ -946,15 +946,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// O que a IA precisa para decidir: a mensagem nova, a conversa recente com o\n// restaurante e a última atualização mandada. Quem já parou ou não é contato\n// das atualizações (nunca entrou na lista) não tem o que marcar.\nconst base = $('Pediu para parar?').first().json;\nconst ctx = $input.first().json || {};\nif (!ctx.contato_id || ctx.ja_parou === true) return [];\n\nconst hora = (d) => d\n  ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })\n  : '';\nconst limpo = (s, n) => String(s || '').replace(/\\s+/g, ' ').trim().slice(0, n);\n\nconst conversa = (Array.isArray(ctx.conversa) ? ctx.conversa : [])\n  .map((m) => `[${hora(m.enviada_em)}] ${m.quem === 'restaurante' ? 'RESTAURANTE' : 'CLIENTE'}: ${limpo(m.texto, 300)}`);\nconst ult = ctx.ultima_atualizacao && ctx.ultima_atualizacao.texto ? ctx.ultima_atualizacao : null;\n\nconst linhas = [\n  'MENSAGEM NOVA DO CLIENTE (é sobre ela que você decide):',\n  limpo(base.textoCompleto, 1500),\n  '',\n  'CONVERSA RECENTE (da mais antiga para a mais nova; a mensagem nova pode já aparecer no fim):',\n  conversa.length ? conversa.join('\\n') : '(nenhuma mensagem anterior registrada)',\n  '',\n  ult\n    ? `ÚLTIMA ATUALIZAÇÃO QUE O RESTAURANTE MANDOU (${hora(ult.enviada_em)}): ${limpo(ult.texto, 600)}`\n    : 'O restaurante ainda não mandou nenhuma atualização para esse cliente.',\n  ctx.aviso_parar_em\n    ? `O restaurante já avisou esse cliente (em ${hora(ctx.aviso_parar_em)}) que ele pode responder PARAR para não receber mais as atualizações.`\n    : 'O cliente ainda não recebeu o aviso de que pode responder PARAR.',\n];\n\nreturn [{ json: { ...base, contexto: linhas.join('\\n') } }];"
+        "jsCode": "// O que a IA precisa para decidir: a mensagem nova, a conversa recente com o\n// restaurante e a última atualização mandada. Quem já parou ou não é contato\n// das atualizações (nunca entrou na lista) não tem o que marcar.\nconst base = $('Pediu para parar?').first().json;\nconst ctx = $input.first().json || {};\nif (!ctx.contato_id || ctx.ja_parou === true) return [];\n\nconst hora = (d) => d\n  ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })\n  : '';\nconst limpo = (s, n) => String(s || '').replace(/\\s+/g, ' ').trim().slice(0, n);\n\n// Funcionário (ramo da equipe): as \"atualizações\" são os pedidos de opinião.\nconst daEquipe = base.daEquipe === true;\nconst QUEM = daEquipe ? 'FUNCIONÁRIO' : 'CLIENTE';\n\nconst conversa = (Array.isArray(ctx.conversa) ? ctx.conversa : [])\n  .map((m) => `[${hora(m.enviada_em)}] ${m.quem === 'restaurante' ? 'RESTAURANTE' : QUEM}: ${limpo(m.texto, 300)}`);\nconst ult = ctx.ultima_atualizacao && ctx.ultima_atualizacao.texto ? ctx.ultima_atualizacao : null;\n\nconst linhas = daEquipe ? [\n  'ATENÇÃO: quem escreve aqui é um FUNCIONÁRIO do restaurante, não um cliente. As \"atualizações\" deste caso são os pedidos de opinião que o restaurante manda para a equipe; todo pedido termina avisando que ele pode responder PARAR. Pedido sobre o TRABALHO (\"quero parar de trabalhar no domingo\", \"parem de me escalar à noite\", \"para de me cobrar\") NÃO é pedido para parar as mensagens.',\n  '',\n  'MENSAGEM NOVA DO FUNCIONÁRIO (é sobre ela que você decide):',\n  limpo(base.textoCompleto, 1500),\n  '',\n  'CONVERSA RECENTE (da mais antiga para a mais nova; a mensagem nova pode já aparecer no fim):',\n  conversa.length ? conversa.join('\\n') : '(nenhuma mensagem anterior registrada)',\n  '',\n  ult\n    ? `ÚLTIMO PEDIDO DE OPINIÃO QUE O RESTAURANTE MANDOU (${hora(ult.enviada_em)}): ${limpo(ult.texto, 600)}`\n    : 'O restaurante ainda não mandou nenhum pedido de opinião para esse funcionário.',\n] : [\n  'MENSAGEM NOVA DO CLIENTE (é sobre ela que você decide):',\n  limpo(base.textoCompleto, 1500),\n  '',\n  'CONVERSA RECENTE (da mais antiga para a mais nova; a mensagem nova pode já aparecer no fim):',\n  conversa.length ? conversa.join('\\n') : '(nenhuma mensagem anterior registrada)',\n  '',\n  ult\n    ? `ÚLTIMA ATUALIZAÇÃO QUE O RESTAURANTE MANDOU (${hora(ult.enviada_em)}): ${limpo(ult.texto, 600)}`\n    : 'O restaurante ainda não mandou nenhuma atualização para esse cliente.',\n  ctx.aviso_parar_em\n    ? `O restaurante já avisou esse cliente (em ${hora(ctx.aviso_parar_em)}) que ele pode responder PARAR para não receber mais as atualizações.`\n    : 'O cliente ainda não recebeu o aviso de que pode responder PARAR.',\n];\n\nreturn [{ json: { ...base, contexto: linhas.join('\\n') } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3300,
+        4180,
         -860
       ],
-      "id": "98847fa5-94b0-43cb-80f1-ec8b07c5fbde",
+      "id": "7b37cdad-b3cd-4e48-ba5b-e28d0a205ef4",
       "name": "Monta o contexto"
     },
     {
@@ -972,10 +972,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        3520,
+        4400,
         -860
       ],
-      "id": "f86c8074-619b-490c-8f8a-22b49a73bf80",
+      "id": "87794949-8310-4429-8077-8eaa0007133b",
       "name": "Decide se é para parar",
       "retryOnFail": true,
       "maxTries": 2,
@@ -998,10 +998,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        3520,
+        4400,
         -660
       ],
-      "id": "e7275845-800e-447f-9de2-91cafece2d48",
+      "id": "f986b671-4a7c-4446-8e9e-a68331b1ad89",
       "name": "Modelo do parar",
       "credentials": {
         "openAiApi": {
@@ -1012,21 +1012,21 @@
     },
     {
       "parameters": {
-        "jsCode": "// Só marca quando a IA disse que é pedido para parar, com certeza alta.\n// Resposta fora do formato, dúvida ou \"não\": não marca nada.\nconst base = $('Monta o contexto').first().json;\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry { r = JSON.parse(bruto); } catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) { try { r = JSON.parse(achado[0]); } catch (e2) { r = null; } }\n}\nif (!r || r.parar !== true || String(r.certeza || '').toLowerCase() !== 'alta') return [];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    motivo: String(base.textoCompleto || '').replace(/\\s+/g, ' ').trim().slice(0, 300),\n  },\n}];"
+        "jsCode": "// Só marca quando a IA disse que é pedido para parar, com certeza alta.\n// Resposta fora do formato, dúvida ou \"não\": não marca nada.\nconst base = $('Monta o contexto').first().json;\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry { r = JSON.parse(bruto); } catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) { try { r = JSON.parse(achado[0]); } catch (e2) { r = null; } }\n}\nif (!r || r.parar !== true || String(r.certeza || '').toLowerCase() !== 'alta') return [];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    motivo: String(base.textoCompleto || '').replace(/\\s+/g, ' ').trim().slice(0, 300),\n    daEquipe: base.daEquipe === true,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3760,
+        4640,
         -860
       ],
-      "id": "1ee610c7-0bf4-441b-b784-7fee696c4354",
+      "id": "94676b25-fd5d-4630-aa26-e03344622133",
       "name": "É para parar?"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/contato_parar_atualizacoes",
+        "url": "={{ 'https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/' + ($json.daEquipe ? 'equipe_parar' : 'contato_parar_atualizacoes') }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
@@ -1039,10 +1039,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3980,
+        4860,
         -860
       ],
-      "id": "2d9de4b1-416e-4475-993c-9b9c5c9acdb9",
+      "id": "2b8054c2-cd8f-4ccc-ab13-3c894d1baf55",
       "name": "Marca para não receber",
       "credentials": {
         "supabaseApi": {
@@ -1054,6 +1054,585 @@
       "maxTries": 3,
       "waitBetweenTries": 2000,
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2d6b97cd-2d7a-4691-9c9a-b4ff316424d3",
+              "leftValue": "={{ $json.tipo === 'botao' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "85f40a5d-69a3-437d-9755-9724c7b072ae",
+      "name": "É clique no botão?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/equipe_quem_e",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_restaurante_id: $json.restauranteId, p_telefone: $json.telefone }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        0
+      ],
+      "id": "1b5acb22-17f9-4884-b74c-dd19d4a61834",
+      "name": "Quem escreveu?",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quem escreveu é da equipe do restaurante? (função equipe_quem_e)\n// Para o cliente nada muda: este nó só acrescenta `equipe` (nulo) e `escolha`\n// (nula) ao que o \"Sou a última mensagem?\" montou. Se a consulta falhar, trata\n// como cliente: o fluxo de sempre não pode parar por causa da equipe.\nconst base = $('Sou a última mensagem?').first().json;\nconst q = $input.first().json || {};\nconst equipe = q.ok === true && q.funcionario_id\n  ? {\n      funcionarioId: q.funcionario_id,\n      nome: String(q.nome || ''),\n      podeEscolher: q.pode_escolher === true,\n      aguardandoEscolha: q.aguardando_escolha === true,\n    }\n  : null;\n\n// A pessoa respondeu POR ESCRITO à pergunta do anonimato? (o botão pode não\n// aparecer em todo celular). Só vale quando a mensagem inteira é a resposta.\nlet escolha = null;\nif (equipe && (equipe.podeEscolher || equipe.aguardandoEscolha)) {\n  const t = String(base.textoCompleto || '')\n    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\b(por favor|pfv|pf|obrigad[oa]|valeu|vlw|ok|ta bom|blz|beleza)\\b/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\n  const MOSTRAR = [\n    /^(pode |podem |quero |sim )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?( sim)?$/,\n    /^com (o )?(meu )?nome$/,\n    /^nao (precisa|quero) (ser |ficar )?(anonim[oa]|anonimato)$/,\n    /^pode (falar|dizer|colocar|por|botar) (o )?(meu )?nome$/,\n  ];\n  const ANONIMO = [\n    /^(eu )?(quero |prefiro |pode |deixa |sim )?(ficar |ser |fica |deixa |como |em |no )*(anonim[oa]|anonimato|anonimamente)( mesmo| sim)?$/,\n    /^sem (o )?(meu )?nome$/,\n    /^nao (quero |pode |precisa )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?$/,\n  ];\n  if (t && t.split(' ').length <= 8) {\n    if (MOSTRAR.some((p) => p.test(t))) escolha = 'identificado';\n    else if (ANONIMO.some((p) => p.test(t))) escolha = 'anonimo';\n    // \"Quer que sua resposta fique anônima?\" → \"sim\" / \"não\" soltos só valem\n    // enquanto a pergunta está no ar.\n    else if (equipe.aguardandoEscolha && /^(sim|s|quero|quero sim|sim quero|isso|claro)$/.test(t)) escolha = 'anonimo';\n    else if (equipe.aguardandoEscolha && /^(nao|n|nao precisa|nao quero)$/.test(t)) escolha = 'identificado';\n  }\n}\n\nreturn [{ json: { ...base, equipe, escolha } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        0
+      ],
+      "id": "666bc4d6-2daf-4c5d-a327-2ff2842cd68c",
+      "name": "Junta quem escreveu"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c554389c-431f-4e5e-a629-f83c47eec7b5",
+              "leftValue": "={{ !!$('Junta quem escreveu').first().json.equipe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3860,
+        0
+      ],
+      "id": "9f9721c6-7369-43e6-a7db-328e61a54b5f",
+      "name": "É da equipe?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4024b7fd-aa69-4b76-bbba-f8f63b1e8ee3",
+              "leftValue": "={{ !!$('Junta quem escreveu').first().json.escolha }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4080,
+        1000
+      ],
+      "id": "10db50bc-f05a-47ca-90b8-4e4545a585bb",
+      "name": "Respondeu a pergunta?"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Sou a última mensagem?').first().json.textoParaIA }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Você analisa mensagens que FUNCIONÁRIOS de um restaurante mandaram para o WhatsApp do próprio restaurante, contando como é trabalhar lá. O restaurante pediu essa opinião para melhorar o dia a dia da equipe. Mensagens que a mesma pessoa mandou em sequência chegam juntas, cada uma começando com o número dela entre colchetes ([1], [2], ...); uma mensagem pode ter mais de uma linha. O número não faz parte do que a pessoa escreveu: nunca copie ele para os campos de texto. Sua tarefa tem três partes: (1) dizer o que a mensagem é, (2) se houver feedback, dividi-lo em \"pontos\" classificados e (3) dizer se há relato grave. Você NÃO escreve a resposta ao funcionário.\n\nPARTE 1 — O QUE É A MENSAGEM (campo \"tipo\")\n- \"feedback\": a pessoa conta como é trabalhar no restaurante ou dá opinião sobre o trabalho — elogio, crítica, comentário morno ou sugestão de melhoria. Basta UM trecho de feedback para o tipo ser \"feedback\", mesmo que o resto seja saudação ou pergunta.\n- \"pergunta\": não há feedback, mas a pessoa faz uma pergunta ou pedido COMPLETO para este canal — dá para saber exatamente o que ela quer: se a resposta é anônima, quem vai ler, quem está falando, ou um pedido do dia a dia (trocar a folga, holerite, quando sai o pagamento, atestado, falar com o gerente).\n- \"outro\": todo o resto, quando não há feedback nem pergunta completa: saudação sozinha (\"oi\", \"bom dia\", \"posso falar uma coisa?\" sem dizer qual), agradecimento ou confirmação (\"obrigado\", \"ok\", \"beleza\", \"👍\"), emojis, mensagem sem sentido, assunto sem relação com o trabalho, ou pergunta INCOMPLETA (\"tenho uma dúvida\", \"queria saber uma coisa\"). Pedido para parar de receber mensagens (\"PARAR\", \"não quero mais receber\") também é \"outro\", mesmo em forma de pergunta: outra parte do sistema cuida disso. Resposta solta à pergunta do anonimato (\"anônimo\", \"pode mostrar meu nome\", \"sim\", \"não\") também é \"outro\".\n\nCampo \"tem_pergunta\": true quando, além do feedback, a pessoa TAMBÉM faz uma pergunta ou pedido COMPLETO (ex.: \"O clima aqui é ótimo! Isso é anônimo?\"). Se o tipo for \"pergunta\", é true. Pergunta incompleta é false. Nos outros casos, false.\nCampo \"pergunta_sobre\": quando tem_pergunta for true, um destes valores: \"anonimato\" (quer saber se é anônimo, quem vai ver, se o chefe vai saber quem falou), \"quem_e\" (quer saber quem está falando ou o que é esta conversa) ou \"outro\" (qualquer outro pedido ou pergunta). Nos outros casos, \"\".\nCampo \"mensagem_pergunta\": quando tem_pergunta for true, o número da mensagem ([1], [2]...) em que está a pergunta. Nos outros casos, 0.\n\nAtenção:\n- Reclamação em forma de pergunta (\"como pode atrasar o salário todo mês?\") NÃO é pergunta: é parte do feedback.\n- Crítica com pedido junto (\"a escala sai em cima da hora, dá pra me trocar no sábado?\") tem feedback (escala em cima da hora) E pergunta (trocar no sábado, \"outro\").\n\nPARTE 2 — OS PONTOS (só quando há feedback; senão \"pontos\": [])\nUm ponto é uma unidade de feedback que merece ser registrada separadamente. Existem 3 cenários:\n\nCENÁRIO A — Assunto único: 1 item.\nEntrada: [1] Oi, o salário atrasa todo mês\nPontos: [{\"feedback_original\": \"O salário atrasa todo mês\", \"categoria\": \"Salário e benefícios\", \"sentimento\": \"Negativo\", \"resumo\": \"Salário atrasado\", \"mensagem\": 1}]\n\nCENÁRIO B — Assuntos diferentes: 1 item por assunto.\nEntrada: [1] A equipe é muito unida, mas a escala sai em cima da hora\nPontos: [{\"feedback_original\": \"A equipe é muito unida\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Equipe unida\", \"mensagem\": 1}, {\"feedback_original\": \"A escala sai em cima da hora\", \"categoria\": \"Escala e horários\", \"sentimento\": \"Negativo\", \"resumo\": \"Escala em cima da hora\", \"mensagem\": 1}]\n\nCENÁRIO C — Mesmo assunto, observações distintas: 1 item por observação, com a MESMA categoria.\nEntrada: [1] A fritadeira vive quebrada e falta uniforme\nPontos: [{\"feedback_original\": \"A fritadeira vive quebrada\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Negativo\", \"resumo\": \"Fritadeira quebrada\", \"mensagem\": 1}, {\"feedback_original\": \"Falta uniforme\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Negativo\", \"resumo\": \"Falta de uniforme\", \"mensagem\": 1}]\n\nREGRA DE AGRUPAMENTO: antes de gerar os itens, releia o texto inteiro e junte tudo que é do mesmo ponto, mesmo que a pessoa tenha falado dele em partes ou mensagens separadas. Nunca crie dois itens sobre o mesmo ponto só porque ele apareceu duas vezes.\nEntrada:\n[1] O pessoal da cozinha é muito parceiro.\n[2] O gerente fala alto com a gente na frente dos clientes.\n[3] Mas a equipe mesmo é ótima, um ajuda o outro.\nPontos: [{\"feedback_original\": \"O pessoal da cozinha é muito parceiro, a equipe é ótima e um ajuda o outro\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Equipe parceira\", \"mensagem\": 1}, {\"feedback_original\": \"O gerente fala alto com a gente na frente dos clientes\", \"categoria\": \"Liderança e gestão\", \"sentimento\": \"Negativo\", \"resumo\": \"Gerente fala alto\", \"mensagem\": 2}]\n\nDESAMBIGUAÇÃO DE CATEGORIA:\n- \"O gerente grita\", \"a chefia não escuta\", \"cobram sem explicar\" → \"Liderança e gestão\".\n- \"O salário atrasa\", \"o vale não cobre a passagem\", \"não pagam hora extra\" → \"Salário e benefícios\".\n- \"A escala sai em cima da hora\", \"fecho e abro no dia seguinte\", \"nunca folgo no domingo\" → \"Escala e horários\".\n- \"Somos poucos para o movimento\", \"faço o trabalho de dois\" → \"Carga de trabalho\".\n- \"A equipe é unida\", \"tem panelinha\", \"muita fofoca\" → \"Clima e colegas\".\n- \"O forno vive quebrado\", \"o vestiário não tem armário\", \"falta uniforme\" → \"Estrutura e equipamentos\".\n- \"Ninguém me ensinou a função\", \"queria crescer aqui dentro\" → \"Treinamento e crescimento\".\n- \"Ninguém agradece\", \"o chefe elogiou a equipe na reunião\" → \"Reconhecimento\".\n- \"Ninguém avisa das mudanças\", \"fico sabendo pelos outros\" → \"Comunicação\".\n- \"O chão da cozinha é liso\", \"não tem luva\", \"trabalho com dor nas costas\" → \"Segurança e saúde\".\n- \"Cliente grosseiro\", \"o cliente desconta na gente quando a casa lota\" → \"Clientes\".\n- Regra geral: reclamou de quem MANDA → \"Liderança e gestão\"; dos COLEGAS → \"Clima e colegas\"; de DINHEIRO → \"Salário e benefícios\"; de HORÁRIO ou FOLGA → \"Escala e horários\"; de QUANTIDADE de trabalho → \"Carga de trabalho\".\n\nSENTIMENTO DE CADA PONTO — use SOMENTE um destes 4 valores, escritos exatamente assim:\n- \"Positivo\": elogio, algo que dá certo (mesmo dito sem entusiasmo).\n- \"Negativo\": crítica, problema, algo que dá errado. FATO RELATADO COM CALMA TAMBÉM É NEGATIVO: \"a gente almoça em pé\", \"o ponto fecha antes de eu terminar\". Pergunte-se: \"se isso fosse resolvido, a pessoa trabalharia melhor?\" Se sim, é Negativo.\n- \"Neutro\": avaliação morna, sem pender para elogio nem crítica (\"é um trabalho normal\", \"o salário é ok\", \"tranquilo\").\n- \"Sugestão\": proposta de melhoria ou de algo novo, SEM relatar uma falha (\"podiam ter uma sala de descanso\", \"seria bom ter treinamento de vinhos\", \"sugiro reunião no começo do turno\"). Se a pessoa relata um problema e sugere a solução óbvia (\"a escala sai tarde, deviam mandar antes\"), o ponto é \"Negativo\" — o problema é o que importa.\n\nNEUTRO NÃO É SUGESTÃO — a diferença é se a pessoa PROPÕE alguma coisa:\n- \"O salário é ok\" → Neutro.\n- \"Podiam pagar adicional de domingo\" → Sugestão.\n- \"O ambiente é tranquilo, seria legal ter um armário pra cada um\" → DOIS pontos: \"O ambiente é tranquilo\" (Neutro) e \"Seria legal ter um armário pra cada um\" (Sugestão).\n\nNÃO VIRA PONTO (descarte):\n- Informação incidental, que não avalia nada (\"trabalho aí há dois anos\", \"sou do turno da noite\", \"entrei em março\").\n- Saudações, agradecimentos e as perguntas/pedidos da Parte 1.\nSe sobrar só isso, \"pontos\" fica [].\n\nCAMPOS DE CADA PONTO:\n- \"feedback_original\": uma frase COMPLETA e compreensível sozinha, reescrevendo só o trecho daquele ponto. Nunca um fragmento cortado (\"mas atrasa\" está errado; o certo é \"O salário atrasa\"). Se o mesmo ponto apareceu em partes separadas, una numa frase só. É PROIBIDO inventar fatos, opiniões ou detalhes; mantenha o vocabulário da pessoa. Se não der para separar os pontos com clareza, use o texto original completo.\n- \"categoria\": SOMENTE uma destas, escrita exatamente assim: \"Liderança e gestão\", \"Salário e benefícios\", \"Escala e horários\", \"Carga de trabalho\", \"Clima e colegas\", \"Estrutura e equipamentos\", \"Treinamento e crescimento\", \"Reconhecimento\", \"Comunicação\", \"Segurança e saúde\", \"Clientes\", \"Outros\". Nunca invente outra.\n- \"sentimento\": \"Positivo\", \"Negativo\", \"Neutro\" ou \"Sugestão\".\n- \"resumo\": etiqueta curta de 3 a 5 palavras, estilo rótulo (\"Salário atrasado\", \"Equipe unida\", \"Sala de descanso\"). Nunca \"Funcionário reclamou de...\". Sem nome de pessoa.\n- \"mensagem\": o número da mensagem ([1], [2]...) em que esse ponto aparece. Se aparece em mais de uma, o número da primeira.\n\nPARTE 3 — RELATO GRAVE (campo \"sensivel\")\ntrue quando a pessoa relata assédio (moral ou sexual), discriminação, humilhação, ameaça, agressão, risco sério à segurança ou à saúde, ou algo ilegal (trabalho sem registro, desconto indevido, obrigar a trabalhar doente). Nos outros casos, false. Sem feedback, false.\n\nMAIS EXEMPLOS (mensagens do funcionário → resultado completo):\n[1] O salário atrasa mas o pessoal é gente boa. Podiam ter armário pra guardar as coisas\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"O salário atrasa\", \"categoria\": \"Salário e benefícios\", \"sentimento\": \"Negativo\", \"resumo\": \"Salário atrasado\", \"mensagem\": 1}, {\"feedback_original\": \"O pessoal é gente boa\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Colegas gente boa\", \"mensagem\": 1}, {\"feedback_original\": \"Podiam ter armário pra guardar as coisas\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Sugestão\", \"resumo\": \"Armário para a equipe\", \"mensagem\": 1}], \"sensivel\": false}\n[1] Oi\n[2] Gosto muito de trabalhar aí\n[3] Mas isso aqui é anônimo?\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": true, \"pergunta_sobre\": \"anonimato\", \"mensagem_pergunta\": 3, \"pontos\": [{\"feedback_original\": \"Gosto muito de trabalhar aí\", \"categoria\": \"Outros\", \"sentimento\": \"Positivo\", \"resumo\": \"Gosta do trabalho\", \"mensagem\": 2}], \"sensivel\": false}\n[1] O gerente fica me chamando de burra na frente de todo mundo\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"O gerente fica me chamando de burra na frente de todo mundo\", \"categoria\": \"Liderança e gestão\", \"sentimento\": \"Negativo\", \"resumo\": \"Gerente humilha a equipe\", \"mensagem\": 1}], \"sensivel\": true}\n[1] Bom dia\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Obrigado!\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] PARAR\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Anônimo\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Tenho uma dúvida\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Quem é você?\n→ {\"tipo\": \"pergunta\", \"tem_pergunta\": true, \"pergunta_sobre\": \"quem_e\", \"mensagem_pergunta\": 1, \"pontos\": [], \"sensivel\": false}\n[1] Quando sai o pagamento?\n→ {\"tipo\": \"pergunta\", \"tem_pergunta\": true, \"pergunta_sobre\": \"outro\", \"mensagem_pergunta\": 1, \"pontos\": [], \"sensivel\": false}\n[1] É um trabalho normal\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"É um trabalho normal\", \"categoria\": \"Outros\", \"sentimento\": \"Neutro\", \"resumo\": \"Trabalho normal\", \"mensagem\": 1}], \"sensivel\": false}\n\nFORMATO DE SAÍDA (obrigatório): responda SOMENTE com um objeto JSON válido, sem markdown, sem crases e sem texto antes ou depois, exatamente com estas chaves:\n{\"tipo\": \"feedback | pergunta | outro\", \"tem_pergunta\": true ou false, \"pergunta_sobre\": \"anonimato | quem_e | outro, ou vazio\", \"mensagem_pergunta\": número, \"pontos\": [{\"feedback_original\": \"...\", \"categoria\": \"...\", \"sentimento\": \"...\", \"resumo\": \"...\", \"mensagem\": número}], \"sensivel\": true ou false}"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        4320,
+        1000
+      ],
+      "id": "5cb4030a-9688-4a6e-a265-b92f9420e5cb",
+      "name": "Analisa a equipe",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.1,
+          "responseFormat": "json_object"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        4320,
+        1220
+      ],
+      "id": "bda2bb67-e14f-43d9-8ae9-401662535518",
+      "name": "Modelo da equipe",
+      "credentials": {
+        "openAiApi": {
+          "id": "dsjoB8htGVIa9D5e",
+          "name": "OpenAi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida o que a IA devolveu sobre a mensagem de um FUNCIONÁRIO e decide o que\n// gravar e o que responder. Mesma lógica do \"Monta a resposta\" dos clientes:\n//   - Feedback (há pelo menos um ponto)  -> grava (sem telefone) e agradece.\n//   - Pergunta para este canal            -> responde com texto pronto.\n//   - PARAR marcado pelo caminho do PARAR -> \"Pronto, não vou mais te mandar\n//     essas mensagens.\" (só isso).\n//   - Qualquer outra coisa                -> não responde.\n// A pergunta do anonimato (o botão) sai depois, no \"Respostas da equipe\".\nconst base = $('Sou a última mensagem?').first().json;\nconst mensagens = Array.isArray(base.mensagens) ? base.mensagens : [];\nconst numero = (v) => {\n  const n = Number(v);\n  return Number.isInteger(n) && n >= 1 && n <= mensagens.length ? n : 0;\n};\n\nconst CATEGORIAS = ['Liderança e gestão', 'Salário e benefícios', 'Escala e horários', 'Carga de trabalho', 'Clima e colegas', 'Estrutura e equipamentos', 'Treinamento e crescimento', 'Reconhecimento', 'Comunicação', 'Segurança e saúde', 'Clientes', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA vira objeto.\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry {\n  r = JSON.parse(bruto);\n} catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) {\n    try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n  }\n}\nif (!r || typeof r !== 'object' || Array.isArray(r)) {\n  throw new Error('A IA devolveu algo fora do formato: ' + bruto.slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista da equipe e um dos 4 sentimentos.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst semNumero = (s) => String(s || '').replace(/^\\s*\\[\\d+\\]\\s*/, '').trim();\nconst pontos = [];\nlet msgFeedback = 0;\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = semNumero(p.feedback_original);\n  const resumo = semNumero(p.resumo);\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n  const n = numero(p.mensagem);\n  if (n && (!msgFeedback || n < msgFeedback)) msgFeedback = n;\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem dos clientes).\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\n// Relato grave (assédio, discriminação, ameaça, risco): fica anônimo se a\n// pessoa não responder a pergunta, e a resposta indica onde pedir ajuda.\nconst sensivel = ehFeedback && r.sensivel === true;\nconst sobreBruto = semAcento(r.pergunta_sobre);\nconst sobre = sobreBruto === 'anonimato' ? 'anonimato' : sobreBruto === 'quem_e' ? 'quem_e' : 'outro';\nconst temPergunta = semAcento(r.tipo) === 'pergunta' || r.tem_pergunta === true;\n\n// 4. Os textos: mensagens prontas, do jeito da Helena.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst restaurante = String(base.nomeRestaurante || '').trim();\nconst FEMININOS = ['pizzaria', 'cantina', 'churrascaria', 'padaria', 'lanchonete', 'casa', 'hamburgueria',\n  'sorveteria', 'cafeteria', 'confeitaria', 'trattoria', 'osteria', 'esfiharia', 'pastelaria', 'tapiocaria',\n  'creperia', 'doceria', 'adega', 'choperia', 'chopperia', 'cervejaria', 'peixaria', 'petiscaria', 'galeteria',\n  'marmitaria', 'cozinha', 'tasca', 'taberna', 'bodega', 'panificadora', 'sanduicheria', 'temakeria',\n  'pamonharia', 'brasa', 'vila', 'toca', 'esquina', 'fazenda', 'quinta', 'barraca', 'tenda', 'cabana'];\nconst primeiraPalavra = semAcento(restaurante.split(/\\s+/)[0] || '');\nconst doRestaurante = restaurante\n  ? (FEMININOS.includes(primeiraPalavra) ? 'da ' : 'do ') + restaurante\n  : 'do restaurante';\n\n// Ela se apresenta só na primeira resposta do dia (o pedido de feedback que\n// saiu hoje já conta: o \"Já respondeu hoje?\" acha ele).\nconst apresentar = !$('Já respondeu hoje?').first().json.id;\nconst APRESENTACAO = [\n  'Oi! Aqui é a Helena, ' + doRestaurante + '.',\n  'Oi, tudo bem? Aqui é a Helena, ' + doRestaurante + '.',\n  'Olá! Sou a Helena, ' + doRestaurante + '.',\n];\n\nconst MENSAGENS = {\n  positivo: [\n    'Que bom saber disso!\\nObrigada por contar, vou passar pra gestão.',\n    'Fico feliz de ler isso!\\nObrigada por dividir, já deixei anotado.',\n    'Ahh, que bom!\\nObrigada por contar, ajuda a gente a manter o que tá dando certo.',\n    'Obrigada por contar!\\nBom demais saber que isso tá funcionando.',\n  ],\n  negativo: [\n    'Obrigada por confiar e contar.\\nIsso é importante, já deixei anotado pra gestão olhar.',\n    'Poxa, sinto muito por isso.\\nObrigada por falar, vou levar pra gestão.',\n    'Entendi, obrigada pela sinceridade.\\nJá anotei aqui pra quem cuida disso ver.',\n    'Que chato, sinto muito.\\nObrigada por avisar, isso vai pra gestão.',\n  ],\n  misto: [\n    'Obrigada por contar o que vai bem e o que incomoda.\\nJá anotei tudo pra gestão.',\n    'Valeu pela sinceridade!\\nAnotei o que tá bom e o que precisa melhorar.',\n    'Obrigada por contar tudo.\\nVou passar os dois lados pra gestão.',\n  ],\n  neutro: [\n    'Obrigada por responder!\\nJá anotei aqui.',\n    'Valeu por contar!\\nVou passar pra gestão.',\n    'Obrigada!\\nFica anotado.',\n  ],\n  sugestao: [\n    'Boa ideia, obrigada!\\nJá anotei pra gestão ver.',\n    'Obrigada pela sugestão!\\nVou levar pra quem decide.',\n    'Gostei da ideia!\\nFica anotada, obrigada.',\n  ],\n};\nconst TAMBEM_SUGESTAO = [\n  'Ah, e anotei sua sugestão também!',\n  'Sua sugestão também ficou anotada, viu?',\n];\nconst RELATO_GRAVE = 'Obrigada por confiar em contar isso.\\nÉ um assunto sério e já está registrado.\\n\\nSe precisar de ajuda agora, o Ligue 180 e o Disque 100 atendem de graça, 24 horas.';\nconst RESPONDE_PERGUNTA = {\n  anonimato: 'Você que escolhe!\\nDepois que você mandar sua opinião, eu pergunto se quer que ela fique anônima. Se ficar, no sistema do restaurante aparece o que você disse, sem o seu nome.',\n  quem_e: 'Sou a Helena, do atendimento ' + doRestaurante + '.\\nPor aqui eu recebo o que a equipe quiser contar sobre o trabalho.',\n  outro: 'Por aqui eu só recebo a opinião da equipe sobre o trabalho, então com isso eu não consigo te ajudar.\\nO melhor é falar direto com a gerência.',\n};\nconst CENARIO = {\n  'Positivo e Negativo': 'misto',\n  Negativo: 'negativo',\n  Positivo: 'positivo',\n  'Sugestão': 'sugestao',\n  Neutro: 'neutro',\n};\n\n// 5. O que sai: uma mensagem para cada coisa, na ordem em que a pessoa escreveu.\n// O caminho do PARAR roda antes (fica acima no canvas). Marcou agora?\nlet parar = null;\ntry {\n  const marcado = $('Marca para não receber').first().json;\n  if (marcado && marcado.marcou === true) parar = { n: numero($('Pediu para parar?').first().json.ordem) };\n} catch (e) {\n  parar = null;\n}\n\nconst saidas = [];\nif (ehFeedback) {\n  let corpo;\n  if (sensivel) {\n    corpo = RELATO_GRAVE;\n  } else {\n    const cenario = CENARIO[sentimentoGeral];\n    corpo = sortear(MENSAGENS[cenario]);\n    if (cenario !== 'sugestao' && tem('Sugestão')) corpo += '\\n' + sortear(TAMBEM_SUGESTAO);\n  }\n  saidas.push({ tipo: 'feedback', n: msgFeedback, texto: corpo });\n}\n// Pergunta sobre \"como parar\" já é o próprio PARAR: não ganha outra resposta.\nif (temPergunta && !parar) {\n  saidas.push({ tipo: 'pergunta', n: numero(r.mensagem_pergunta), texto: RESPONDE_PERGUNTA[sobre], sobre });\n}\nif (parar) saidas.push({ tipo: 'parar', n: parar.n, texto: 'Pronto, não vou mais te mandar essas mensagens.' });\n\nconst POSICAO = { feedback: 0, pergunta: 1, parar: 2 };\nconst chave = (s) => s.n || (s.tipo === 'feedback' ? 0 : mensagens.length + 1);\nsaidas.sort((a, b) => chave(a) - chave(b) || POSICAO[a.tipo] - POSICAO[b.tipo]);\n\n// A confirmação do PARAR nunca leva a apresentação; \"Sou a Helena\" depois de\n// \"Aqui é a Helena\" ficaria repetido.\nif (apresentar && saidas.length && saidas[0].tipo !== 'parar' && !(saidas[0].tipo === 'pergunta' && saidas[0].sobre === 'quem_e')) {\n  saidas[0].texto = sortear(APRESENTACAO) + '\\n\\n' + saidas[0].texto;\n}\n\nconst citada = (n) => {\n  const m = mensagens[(n || (mensagens.length === 1 ? 1 : 0)) - 1];\n  return m && m.id ? String(m.id) : '';\n};\nconst digitando = (t) => Math.min(12000, Math.max(3000,\n  Math.round(t.length * (35 + Math.random() * 25)) + 1000 + Math.floor(Math.random() * 2000)));\nconst respostas = saidas.map((s) => ({ tipo: s.tipo, texto: s.texto, replyid: citada(s.n), digitandoMs: digitando(s.texto) }));\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    textoCompleto: base.textoCompleto,\n    ehFeedback,\n    sentimentoGeral,\n    pontos,\n    sensivel,\n    respostas,\n    resposta: respostas.map((x) => x.texto).join('\\n\\n'),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        1000
+      ],
+      "id": "0ddacc74-63f7-42ef-bec6-1e06a9792e92",
+      "name": "Monta a resposta da equipe"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7baab8fd-a035-40d5-93a1-244eec1562c3",
+              "leftValue": "={{ $json.ehFeedback === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4780,
+        1000
+      ],
+      "id": "99f8d448-6947-425d-90b0-b286a12682cc",
+      "name": "É feedback da equipe?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/equipe_registrar_feedback",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_restaurante_id: $json.restauranteId, p_telefone: $json.telefone, p_texto: $json.textoCompleto, p_sentimento: $json.sentimentoGeral, p_pontos: $json.pontos, p_sensivel: $json.sensivel === true }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5000,
+        880
+      ],
+      "id": "f0507655-d20b-40c9-9aab-e35b9371dfad",
+      "name": "Grava o feedback da equipe",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Um item por mensagem que sai para o funcionário, já na ordem, e a pergunta\n// do anonimato (o botão), que vai depois de todas.\nconst m = $('Monta a resposta da equipe').first().json;\nlet gravado = null;\ntry { gravado = $('Grava o feedback da equipe').first().json; } catch (e) { gravado = null; }\nconst gravou = !!(gravado && gravado.ok === true);\n\n// Era feedback e não foi gravado (a pessoa saiu do cadastro no meio do\n// caminho): não agradece o que não guardou.\nlet respostas = Array.isArray(m.respostas) ? m.respostas : [];\nif (m.ehFeedback && !gravou) respostas = respostas.filter((x) => x.tipo !== 'feedback');\nif (!respostas.length) return [];\n\n// A pergunta sai uma vez por leva de mensagens (o banco diz quando perguntar).\nconst perguntar = gravou && gravado.perguntar_identidade === true;\nlet pergunta = null;\nif (perguntar) {\n  const horas = Number(gravado.prazo_horas) > 0 ? Number(gravado.prazo_horas) : 24;\n  const prazo = horas % 24 === 0 && horas > 24 ? (horas / 24) + ' dias' : horas + ' horas';\n  // Relato grave nunca ganha o nome sozinho: sem resposta, fica anônimo.\n  const rodape = gravado.sensivel === true\n    ? 'Sem resposta, fica anônima.'\n    : 'Sem resposta em ' + prazo + ', aparece com o seu nome.';\n  const explica = 'Quer que sua resposta fique anônima?\\nSe ficar, no sistema do restaurante aparece o que você disse, mas não o seu nome.';\n  pergunta = {\n    texto: explica + '\\n\\nSe os botões não aparecerem, é só responder ANÔNIMO ou MOSTRAR.',\n    botoes: ['Ficar anônimo|equipe_anonimo', 'Mostrar meu nome|equipe_mostrar'],\n    rodape,\n    // Se o envio com botão falhar, a mesma pergunta vai como texto.\n    textoSemBotao: explica + '\\n\\nResponda ANÔNIMO ou MOSTRAR.\\n' + rodape,\n    digitandoMs: 2500 + Math.floor(Math.random() * 2500),\n  };\n}\n\nreturn respostas.map((x) => ({\n  json: { texto: x.texto, replyid: x.replyid, digitandoMs: x.digitandoMs, perguntar, pergunta },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5240,
+        1000
+      ],
+      "id": "bd28ee41-6c2b-42d9-922b-63f2413c5171",
+      "name": "Respostas da equipe"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        5460,
+        1000
+      ],
+      "id": "e7e0d111-fd10-4b0a-9ab8-98f6cc46dd44",
+      "name": "Uma de cada vez (equipe)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Monta a resposta da equipe').first().json.baseUrl }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Monta a resposta da equipe').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Monta a resposta da equipe').first().json.telefone, text: $json.texto, delay: $json.digitandoMs, readchat: true, readmessages: true, replyid: $json.replyid || undefined }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5680,
+        1020
+      ],
+      "id": "3774eabb-7eb9-4d73-9e61-e48871fb1a13",
+      "name": "Envia à equipe"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d2844b94-bee2-48d2-850a-bbc26c44591e",
+              "leftValue": "={{ $('Respostas da equipe').first().json.perguntar === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5900,
+        860
+      ],
+      "id": "39b8d8ac-6827-4d2c-85c4-13716864ece1",
+      "name": "Vai perguntar?",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Monta a resposta da equipe').first().json.baseUrl }}/send/menu",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Monta a resposta da equipe').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Monta a resposta da equipe').first().json.telefone, type: 'button', text: $('Respostas da equipe').first().json.pergunta.texto, choices: $('Respostas da equipe').first().json.pergunta.botoes, footerText: $('Respostas da equipe').first().json.pergunta.rodape, delay: $('Respostas da equipe').first().json.pergunta.digitandoMs, readchat: true, readmessages: true }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6120,
+        860
+      ],
+      "id": "f0e892f6-0b54-496f-b3aa-55df121650ff",
+      "name": "Manda o botão",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Monta a resposta da equipe').first().json.baseUrl }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Monta a resposta da equipe').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Monta a resposta da equipe').first().json.telefone, text: $('Respostas da equipe').first().json.pergunta.textoSemBotao, delay: $('Respostas da equipe').first().json.pergunta.digitandoMs, readchat: true, readmessages: true }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6340,
+        1040
+      ],
+      "id": "6b8040e3-4055-4eae-be6e-fb2f1e3a0cf3",
+      "name": "Pergunta por escrito"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/equipe_identidade_perguntada",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_restaurante_id: $('Monta a resposta da equipe').first().json.restauranteId, p_telefone: $('Monta a resposta da equipe').first().json.telefone }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6560,
+        860
+      ],
+      "id": "d01465f0-2b3f-44d7-a792-10abbf9a44c3",
+      "name": "Começa o prazo",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// A escolha da identidade chega por dois caminhos: o clique no botão (direto\n// da entrada, sem esperar o buffer) e a resposta por escrito (\"anônimo\",\n// \"pode mostrar\"), depois do buffer. Aqui os dois ficam com a mesma cara.\nlet base = null;\ntry { base = $('Junta quem escreveu').first().json; } catch (e) { base = null; }\nif (!base || !base.escolha) base = $('Restaurante ativo?').first().json;\nif (!base || !['anonimo', 'identificado'].includes(base.escolha)) return [];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    escolha: base.escolha,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        1640
+      ],
+      "id": "89bb886d-0cbb-447b-a755-574bbf38c56a",
+      "name": "Prepara a escolha"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lixrcruilisncfhfhndo.supabase.co/rest/v1/rpc/equipe_escolher_identidade",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_restaurante_id: $json.restauranteId, p_telefone: $json.telefone, p_escolha: $json.escolha }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4540,
+        1640
+      ],
+      "id": "80ca17a4-19d2-413f-8889-5fc714a46274",
+      "name": "Registra a escolha",
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Confirma a escolha para a pessoa. Só quando mudou alguma coisa: clique\n// repetido, o mesmo evento entregue duas vezes ou quem não tem nada a escolher\n// ficam em silêncio.\nconst p = $('Prepara a escolha').first().json;\nconst r = $input.first().json || {};\nif (r.ok !== true || !(Number(r.mudou) > 0)) return [];\n\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst ANONIMO = [\n  'Combinado!\\nNo sistema do restaurante sua resposta aparece sem o seu nome.',\n  'Pronto, ficou anônimo.\\nNo sistema aparece o que você disse, sem o seu nome.',\n  'Tá certo!\\nSua resposta fica sem o seu nome no sistema do restaurante.',\n];\nconst MOSTRAR = [\n  'Combinado, vai com o seu nome.\\nObrigada por confiar!',\n  'Pronto, sua resposta aparece com o seu nome.\\nObrigada!',\n  'Tá certo, obrigada!\\nVai com o seu nome.',\n];\nconst texto = sortear(p.escolha === 'anonimo' ? ANONIMO : MOSTRAR);\n\nreturn [{\n  json: {\n    telefone: p.telefone,\n    baseUrl: p.baseUrl,\n    token: p.token,\n    texto,\n    digitandoMs: 2500 + Math.floor(Math.random() * 3000),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4760,
+        1640
+      ],
+      "id": "89ebec94-e947-4053-b8e0-a8f67441730d",
+      "name": "Confirma a escolha"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.telefone, text: $json.texto, delay: $json.digitandoMs, readchat: true, readmessages: true }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4980,
+        1640
+      ],
+      "id": "0a1f0571-3ae8-401f-bc99-702a486c6230",
+      "name": "Envia a confirmação"
+    },
+    {
+      "parameters": {
+        "content": "## 7. Equipe (feedback dos funcionários)\nQuem escreve pode ser **cliente** ou **funcionário** (cadastrado na página **Equipe** do sistema). O nó **Quem escreveu?** pergunta ao banco (`equipe_quem_e`); se a consulta falhar, segue como cliente.\n**Funcionário** vem por aqui, com a mesma lógica dos clientes: a IA separa em pontos (categorias da equipe) e diz se há **relato grave**; **Grava o feedback da equipe** salva pela função `equipe_registrar_feedback` (sem telefone, marcado como `equipe`); a Helena agradece.\n**Anonimato:** depois do agradecimento sai a pergunta com dois **botões** (**Manda o botão**, `/send/menu`). Se o botão falhar, a mesma pergunta vai **por escrito**. **Começa o prazo** marca a hora: sem resposta no prazo, o nome aparece (relato grave fica anônimo). Enquanto isso, e para sempre se a pessoa pedir anonimato, a conversa não aparece na tela WhatsApp do sistema.\nO **PARAR** do funcionário usa o mesmo caminho de cima (funções `equipe_contexto_parar` e `equipe_parar`): ele deixa de receber os pedidos de opinião.",
+        "height": 660,
+        "width": 2780,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4020,
+        740
+      ],
+      "id": "bd6769be-c8c7-4492-9ddb-9aa42c62c940",
+      "name": "Nota - Equipe"
+    },
+    {
+      "parameters": {
+        "content": "## 8. A escolha: anônimo ou com o nome\nChega pelo **clique no botão** (direto da entrada, sem esperar o buffer) ou **por escrito** (\"anônimo\", \"mostrar\", e \"sim\"/\"não\" enquanto a pergunta está no ar). **Registra a escolha** grava (`equipe_escolher_identidade`) e a Helena confirma. Clique repetido fica em silêncio.",
+        "height": 380,
+        "width": 1000,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4260,
+        1440
+      ],
+      "id": "4e6194ba-281b-4d73-9f02-da4f57d242fc",
+      "name": "Nota - Escolha"
     }
   ],
   "connections": {
@@ -1092,6 +1671,24 @@
     },
     "Restaurante ativo?": {
       "main": [
+        [
+          {
+            "node": "É clique no botão?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É clique no botão?": {
+      "main": [
+        [
+          {
+            "node": "Prepara a escolha",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "É áudio?",
@@ -1200,6 +1797,28 @@
       "main": [
         [
           {
+            "node": "Quem escreveu?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quem escreveu?": {
+      "main": [
+        [
+          {
+            "node": "Junta quem escreveu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Junta quem escreveu": {
+      "main": [
+        [
+          {
             "node": "Limpa o buffer",
             "type": "main",
             "index": 0
@@ -1235,6 +1854,24 @@
     },
     "Já respondeu hoje?": {
       "main": [
+        [
+          {
+            "node": "É da equipe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É da equipe?": {
+      "main": [
+        [
+          {
+            "node": "Respondeu a pergunta?",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Analisa a mensagem",
@@ -1433,6 +2070,199 @@
         [
           {
             "node": "Marca para não receber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respondeu a pergunta?": {
+      "main": [
+        [
+          {
+            "node": "Prepara a escolha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analisa a equipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo da equipe": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analisa a equipe",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisa a equipe": {
+      "main": [
+        [
+          {
+            "node": "Monta a resposta da equipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta a resposta da equipe": {
+      "main": [
+        [
+          {
+            "node": "É feedback da equipe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É feedback da equipe?": {
+      "main": [
+        [
+          {
+            "node": "Grava o feedback da equipe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respostas da equipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava o feedback da equipe": {
+      "main": [
+        [
+          {
+            "node": "Respostas da equipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respostas da equipe": {
+      "main": [
+        [
+          {
+            "node": "Uma de cada vez (equipe)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uma de cada vez (equipe)": {
+      "main": [
+        [
+          {
+            "node": "Vai perguntar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Envia à equipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia à equipe": {
+      "main": [
+        [
+          {
+            "node": "Uma de cada vez (equipe)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vai perguntar?": {
+      "main": [
+        [
+          {
+            "node": "Manda o botão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manda o botão": {
+      "main": [
+        [
+          {
+            "node": "Começa o prazo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pergunta por escrito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pergunta por escrito": {
+      "main": [
+        [
+          {
+            "node": "Começa o prazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara a escolha": {
+      "main": [
+        [
+          {
+            "node": "Registra a escolha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registra a escolha": {
+      "main": [
+        [
+          {
+            "node": "Confirma a escolha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirma a escolha": {
+      "main": [
+        [
+          {
+            "node": "Envia a confirmação",
             "type": "main",
             "index": 0
           }

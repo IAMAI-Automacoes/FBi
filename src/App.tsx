@@ -45,6 +45,7 @@ import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
 import { SoAdminPlataforma } from './components/SoAdminPlataforma'
+import { AreaEquipe } from './components/equipe/AreaEquipe'
 import { BarraAcessoAdmin } from './components/BarraAcessoAdmin'
 import { AvisosDoPainel } from './components/whatsapp/Notificacoes'
 import { PedirNotificacoes } from './components/PedirNotificacoes'
@@ -215,17 +216,15 @@ const App = () => (
                   </RotaPermitida>
                 }
               />
-              <Route
-                path="/equipe"
-                element={
-                  // Só o admin por enquanto (ver SO_ADMIN em equipe).
-                  <RotaPermitida modulo="visao_geral">
-                    <SoAdminPlataforma>
-                      <Equipe />
-                    </SoAdminPlataforma>
-                  </RotaPermitida>
-                }
-              />
+              {/* Equipe (feedback dos funcionários): só o admin por enquanto, ver
+                  AreaEquipe. Feedbacks, Insights e Ações são as MESMAS páginas
+                  dos clientes: o endereço /equipe é que faz o banco entregar só
+                  o que a equipe falou (lib/publico-rota.ts). */}
+              <Route path="/equipe" element={<AreaEquipe><Equipe /></AreaEquipe>} />
+              <Route path="/equipe/feedbacks" element={<AreaEquipe><Feedbacks /></AreaEquipe>} />
+              <Route path="/equipe/insights" element={<AreaEquipe><Insights /></AreaEquipe>} />
+              <Route path="/equipe/acoes" element={<AreaEquipe><Actions /></AreaEquipe>} />
+              <Route path="/equipe/acoes/arquivadas" element={<AreaEquipe><AcoesArquivadas /></AreaEquipe>} />
               <Route
                 path="/qrcode"
                 element={

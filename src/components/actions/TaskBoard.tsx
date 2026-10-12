@@ -84,6 +84,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { estiloStatus } from '@/lib/status-acao'
+import { usePublico } from '@/lib/publico'
 import { cn } from '@/lib/utils'
 
 /**
@@ -252,6 +253,7 @@ interface TaskBoardProps {
 export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
   const { toast } = useToast()
   const { usuario } = useAuth()
+  const { ehEquipe, caminho } = usePublico()
   const [tasks, setTasks] = useState<ExtendedActionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTask, setActiveTask] = useState<ExtendedActionTask | null>(null)
@@ -815,7 +817,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
             const n = res.feedbacks_vinculados
             toast({
               title: `${n} feedback${n > 1 ? 's' : ''} ligado${n > 1 ? 's' : ''}`,
-              description: 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
+              // O retorno pelo WhatsApp é só dos clientes: a equipe não recebe aviso.
+              description: ehEquipe ? undefined : 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
             })
           })
           .catch(() => {
@@ -980,7 +983,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
                       className={ICONE_CABECALHO_COLUNA}
                       title="Ver ações arquivadas"
                     >
-                      <Link to="/acoes/arquivadas">
+                      <Link to={caminho('/acoes/arquivadas')}>
                         <Archive className="w-3.5 h-3.5" />
                       </Link>
                     </Button>

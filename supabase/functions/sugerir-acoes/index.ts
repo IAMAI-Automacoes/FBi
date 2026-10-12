@@ -39,6 +39,7 @@ import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti
 import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 import { polaridade } from '../_shared/sentimento.ts'
+import { CATEGORIAS_EQUIPE, promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
 
 const AGENTE = 'sugeridor_acoes'
 const AGENTE_VERIFICADOR = 'verificador_acoes'
@@ -118,16 +119,19 @@ NAO reprove por:
 
 Chame registrar_verificacao.`
 
-const SCHEMA_ACAO = {
+/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
+const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
+
+const schemaAcao = (publico: Publico) => ({
   type: 'object',
   properties: {
     titulo_acao: { type: 'string', description: 'O que precisa ser feito, curto e claro.' },
     plano_detalhado: { type: 'string', description: 'Passos praticos, com responsavel e criterio de conclusao.' },
     prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
-    categoria: { type: 'string', enum: CATEGORIAS },
+    categoria: { type: 'string', enum: categoriasDe(publico) },
   },
   required: ['titulo_acao', 'plano_detalhado'],
-}
+})
 
 const SCHEMA_VERIFICACAO = {
   type: 'object',
@@ -198,6 +202,7 @@ async function pontosNovosDoAssunto(
   assuntoChave: string | null,
   expiracaoDias: number,
   jaLigados: Set<number>,
+  publico: Publico,
 ): Promise<PontoDoAssunto[]> {
   if (!assuntoChave?.startsWith('tema:')) return []
 
@@ -209,6 +214,7 @@ async function pontosNovosDoAssunto(
     .from('feedbacks_livres')
     .select('id, texto_original, resumo, categoria, sentimento, origem_id, created_at')
     .eq('restaurante_id', restauranteId)
+    .eq('publico', publico)
     .eq('tema_id', temaParte)
     .gte('created_at', limite)
 
@@ -268,9 +274,11 @@ async function redigirAcao(
   )
 
   let reparo: { anterior: unknown; critica: string } | undefined
+  // O insight diz de quem são os feedbacks: a ação fala com o mesmo público.
+  const publico = publicoDe(insight.publico)
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const prompt = montarPrompt(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
+    const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
       nome: nomeDoAssistente(ctx.config?.mascote_config),
       tom: tomDoAssistente(ctx.config?.mascote_config),
       perfil: blocoPerfil(ctx.config),
@@ -282,7 +290,7 @@ async function redigirAcao(
       descricao: insight.descricao ?? '',
       sugestao: insight.sugestao ?? '',
       pontos: listarParaPrompt(pontos),
-    })
+    }), publico)
 
     const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: prompt },
@@ -312,7 +320,7 @@ async function redigirAcao(
       saida: {
         nome: 'registrar_acao',
         descricao: 'Registra a acao operacional que resolve este insight.',
-        schema: SCHEMA_ACAO,
+        schema: schemaAcao(publico),
       },
     })
 
@@ -334,13 +342,13 @@ async function redigirAcao(
       continue
     }
 
-    const promptVerif = montarPrompt(ctx.prompts, 'ef_verificar_acao', PROMPT_VERIFICADOR, {
+    const promptVerif = promptDoPublico(montarPrompt(ctx.prompts, 'ef_verificar_acao', PROMPT_VERIFICADOR, {
       pontos: listarParaPrompt(pontos),
       titulo: insight.titulo ?? '',
       descricao: insight.descricao ?? '',
       titulo_acao: rascunho.titulo_acao,
       plano: rascunho.plano_detalhado ?? '',
-    })
+    }), publico)
 
     const { result: veredito } = await chamarIA(db, {
       messages: [{ role: 'user', content: promptVerif }],
@@ -378,6 +386,7 @@ async function redigirAcao(
 /** Converte UM insight em ação, do começo ao fim. */
 // deno-lint-ignore no-explicit-any
 async function converterInsight(db: Db, ctx: any, insight: any) {
+  const publico = publicoDe(insight.publico)
   const ligados = await pontosDoInsight(db, insight.id)
 
   // Re-varredura: o que chegou depois do insight nascer entra também.
@@ -387,6 +396,7 @@ async function converterInsight(db: Db, ctx: any, insight: any) {
     insight.assunto_chave,
     ctx.expiracaoDias,
     new Set(ligados.map((p) => p.id)),
+    publico,
   )
 
   const pontos = [...ligados, ...novos]
@@ -403,7 +413,7 @@ async function converterInsight(db: Db, ctx: any, insight: any) {
   const doInsight = insight.prioridade ?? 'IMPORTANTE'
   const daIA = rascunho.prioridade
   const prioridade = daIA && (peso[daIA] ?? 0) > (peso[doInsight] ?? 0) ? daIA : doInsight
-  const categoria = CATEGORIAS.includes(rascunho.categoria)
+  const categoria = categoriasDe(publico).includes(rascunho.categoria)
     ? rascunho.categoria
     : (insight.categoria ?? 'Outros')
 
@@ -419,6 +429,7 @@ async function converterInsight(db: Db, ctx: any, insight: any) {
       categoria,
       status: 'PENDENTE',
       restaurante_id: ctx.restauranteId,
+      publico,
       insight_id: insight.id,
       texto: 'Gerada a partir de um insight, com os feedbacks de origem vinculados.',
     })

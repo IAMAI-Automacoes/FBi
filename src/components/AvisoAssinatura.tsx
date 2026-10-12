@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { WifiOff, Clock, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
+import { CABECALHO_PUBLICO } from '@/lib/publico-rota'
 
 /**
  * Faixa de aviso no topo do app (só clientes; admin não é cliente). Cobre:
@@ -29,6 +30,9 @@ export function AvisoAssinatura() {
       .from('feedbacks_originais')
       .select('id', { count: 'exact', head: true })
       .eq('restaurante_id', restauranteId)
+      // A faixa fica acima de qualquer página: nas da equipe ela continua
+      // falando dos feedbacks dos clientes.
+      .setHeader(CABECALHO_PUBLICO, 'cliente')
       .then(({ count, error }) => {
         if (vivo) setJaRecebeuFeedback(error ? false : (count ?? 0) > 0)
       })

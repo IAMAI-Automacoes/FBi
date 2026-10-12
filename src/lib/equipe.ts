@@ -1,12 +1,12 @@
 /**
  * Feedback da equipe: regras puras da tela (sem Supabase), testadas em
- * __testes__/equipe.teste.ts. As regras do servidor (convite, análise, PARAR)
- * ficam em supabase/functions/_shared/equipe.ts.
+ * __testes__/equipe.teste.ts. As regras do pedido de feedback ficam em
+ * supabase/functions/_shared/equipe.ts; o que a equipe responde entra pelo n8n
+ * e aparece nas páginas /equipe/feedbacks, /equipe/insights e /equipe/acoes
+ * (as mesmas dos clientes, com `publico = 'equipe'`).
  */
 import { chaveWhatsapp, paraCanonico, paraDigitosNacionais, telefoneNacionalValido } from './telefone.ts'
 
-/** Com menos gente que isto num envio, dá para adivinhar quem falou (igual ao servidor). */
-export const MINIMO_ANONIMO = 4
 export const PERGUNTA_MIN = 10
 export const PERGUNTA_MAX = 400
 
@@ -23,23 +23,12 @@ export interface Funcionario {
   criado_em: string
 }
 
-export interface ResumoEquipe {
-  clima: string
-  vai_bem: string[]
-  incomoda: string[]
-  sugestoes: string[]
-  por_onde_comecar: string
-  /** Quantas respostas existiam quando o resumo foi gerado. */
-  respostas?: number
-}
 export type StatusEnvio = 'na_fila' | 'enviando' | 'concluido' | 'cancelado'
 export interface Envio {
   id: number
   restaurante_id: number
   pergunta: string
   status: StatusEnvio
-  resumo: ResumoEquipe | null
-  resumo_em: string | null
   criado_em: string
   concluido_em: string | null
 }
@@ -47,23 +36,19 @@ export type StatusConvite = 'na_fila' | 'enviando' | 'enviado' | 'falhou' | 'can
 /** O convite como a página do restaurante vê: sem dizer de quem é. */
 export interface ConviteAnonimo { envio_id: number; status: StatusConvite; respondeu: boolean }
 
-/** Sem funcionário e sem hora: é o que a página pode mostrar. */
-export interface RespostaAnonima {
-  id: string
-  envio_id: number | null
-  texto_original: string
-  sentimento: string | null
-  sensivel: boolean
-  /** 'AAAA-MM-DD' (Brasília). */
-  dia: string
-}
-export interface PontoEquipe {
-  id: number
-  resposta_id: string
-  texto_original: string
-  resumo: string
-  categoria: string
-  sentimento: string
+/**
+ * Quem deu um feedback da equipe, como o banco deixa a tela saber
+ * (`equipe_autoria_visivel`): o nome só vem quando a pessoa deixou mostrar ou
+ * não respondeu a pergunta do anonimato no prazo.
+ */
+export interface Autoria {
+  situacao: 'identificado' | 'pendente' | 'anonimo'
+  nome?: string
+  funcao?: string | null
+  /** Até quando a pessoa pode escolher (só em 'pendente'). */
+  ate?: string | null
+  /** Relato de assédio, discriminação, ameaça, risco ou algo ilegal. */
+  sensivel?: boolean
 }
 
 export const ROTULO_ENVIO: Record<StatusEnvio, string> = {
@@ -124,7 +109,7 @@ export function lerListaColada(texto: string, jaCadastrados: string[] = []): Lin
   })
 }
 
-// ── Envios e respostas ───────────────────────────────────────────────────────
+// ── Pedidos de feedback ──────────────────────────────────────────────────────
 
 export interface ContasDoEnvio {
   /** Convites que valem (os cancelados não contam). */
@@ -150,36 +135,22 @@ export function contasDoEnvio(convites: ConviteAnonimo[]): ContasDoEnvio {
   }
 }
 
-const semAcento = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-export type ChaveSentimento = 'positivo' | 'negativo' | 'neutro' | 'sugestao'
-/** O sentimento de um PONTO (nunca é misto: os dois viram dois pontos). */
-export function chaveDoSentimento(valor: string | null | undefined): ChaveSentimento {
-  const v = semAcento(valor)
-  if (v.includes('negativ')) return 'negativo'
-  if (v.includes('positiv')) return 'positivo'
-  if (v.includes('sugest')) return 'sugestao'
-  return 'neutro'
+/** "12/10 às 14:30" (horário de Brasília): até quando a pessoa pode escolher ficar anônima. */
+/** "24 horas", "1 hora", "3 dias": o prazo da pergunta do anonimato, por extenso. */
+export function fraseDoPrazo(horas: number | null | undefined): string {
+  const h = Number.isFinite(horas) && Number(horas) >= 1 ? Math.round(Number(horas)) : 24
+  if (h >= 48 && h % 24 === 0) return `${h / 24} dias`
+  return h === 1 ? '1 hora' : `${h} horas`
 }
 
-export interface Clima { positivo: number; negativo: number; neutro: number; sugestao: number; total: number }
-/** Quantos pontos de cada sentimento. */
-export function climaDosPontos(pontos: Pick<PontoEquipe, 'sentimento'>[]): Clima {
-  const c: Clima = { positivo: 0, negativo: 0, neutro: 0, sugestao: 0, total: pontos.length }
-  for (const p of pontos) c[chaveDoSentimento(p.sentimento)]++
-  return c
+export function formatarAteQuando(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const partes = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d)
+  const v = (t: string) => partes.find((x) => x.type === t)?.value ?? ''
+  return `${v('day')}/${v('month')} às ${v('hour')}:${v('minute')}`
 }
-
-export interface Tema extends Clima { categoria: string }
-/** Os assuntos mais falados, do mais citado para o menos (empate: o que tem mais crítica). */
-export function temasDosPontos(pontos: Pick<PontoEquipe, 'categoria' | 'sentimento'>[]): Tema[] {
-  const por = new Map<string, Pick<PontoEquipe, 'sentimento'>[]>()
-  for (const p of pontos) por.set(p.categoria, [...(por.get(p.categoria) ?? []), p])
-  return [...por.entries()].map(([categoria, lista]) => ({ categoria, ...climaDosPontos(lista) }))
-    .sort((a, b) => b.total - a.total || b.negativo - a.negativo || a.categoria.localeCompare(b.categoria))
-}
-
-/** '2026-10-12' → '12/10/2026'. */
-export const formatarDia = (dia: string) => (/^\d{4}-\d{2}-\d{2}/.test(dia) ? `${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}` : dia)
 
 /** "8 de 12 responderam (67%)". */
 export function fraseDeRespostas(c: ContasDoEnvio): string {

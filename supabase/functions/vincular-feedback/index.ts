@@ -62,6 +62,7 @@ import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { talvezAlertarDono } from '../_shared/alerta-urgente.ts'
 import { polaridade } from '../_shared/sentimento.ts'
+import { promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
@@ -207,14 +208,14 @@ async function concluirTriagem(db: Db, feedbackId: number | string) {
  * Dispara e nao espera: a geracao leva dezenas de segundos e nao pode segurar o
  * trigger de insert. Se falhar, o cron horario pega na proxima passada.
  */
-async function talvezGerarInsights(db: Db, restauranteId: number) {
+async function talvezGerarInsights(db: Db, restauranteId: number, publico: Publico) {
   try {
-    const { data } = await db.rpc('deve_gerar_insights', { p_restaurante_id: restauranteId })
+    const { data } = await db.rpc('deve_gerar_insights', { p_restaurante_id: restauranteId, p_publico: publico })
     const g = Array.isArray(data) ? data[0] : data
     if (!g?.deve) return
 
     console.log(
-      `[r${restauranteId}] ${g.livres_novos} feedbacks livres acumulados ` +
+      `[r${restauranteId}/${publico}] ${g.livres_novos} feedbacks livres acumulados ` +
         `(limite ${g.necessarios}) — disparando a analise`,
     )
 
@@ -226,7 +227,7 @@ async function talvezGerarInsights(db: Db, restauranteId: number) {
         Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
         'x-cron-secret': Deno.env.get('CRON_SECRET') ?? '',
       },
-      body: JSON.stringify({ restaurante_id: restauranteId, force: false }),
+      body: JSON.stringify({ restaurante_id: restauranteId, force: false, publico }),
     }).catch((e) => console.error('falha ao disparar gerar-insights:', e))
   } catch (e) {
     console.error('falha ao checar o gatilho de insights:', e)
@@ -245,11 +246,14 @@ Deno.serve(async (req: Request) => {
 
     const { data: fb } = await db
       .from('feedbacks_restaurante')
-      .select('id, texto_original, resumo, categoria, sentimento, tema_id, origem_id, restaurante_id, usado_em')
+      .select('id, texto_original, resumo, categoria, sentimento, tema_id, origem_id, restaurante_id, usado_em, publico')
       .eq('id', feedbackId)
       .maybeSingle()
 
     if (!fb) return json({ status: 'feedback_nao_encontrado' })
+    // Feedback da equipe só se liga a insight e ação da equipe (e o de cliente,
+    // só aos de cliente): tudo abaixo busca dentro do mesmo público.
+    const publico = publicoDe(fb.publico)
     // Já consumido por outra rota (backfill, geração concorrente): não mexe.
     if (fb.usado_em) {
       await concluirTriagem(db, fb.id)
@@ -277,7 +281,13 @@ Deno.serve(async (req: Request) => {
     // jeito. E e AGUARDADA, ao contrario do disparo de insights: perder um
     // aviso de intoxicacao porque a funcao encerrou antes da hora e o tipo de
     // falha que nao aparece em log nenhum e custa o cliente.
-    const alerta = await talvezAlertarDono(db, fb, texto)
+    //
+    // Na equipe não há alerta: ele manda ao dono o telefone de quem escreveu e
+    // um atalho para a conversa, e quem escreveu ainda pode pedir anonimato. O
+    // relato grave aparece na página da equipe com o selo de sensível.
+    const alerta = publico === 'equipe'
+      ? { urgente: false, motivo: 'feedback da equipe: sem alerta com o número' }
+      : await talvezAlertarDono(db, fb, texto)
     if (alerta.urgente) {
       console.log(`[urgente] feedback ${fb.id}: ${alerta.motivo} (enviado=${alerta.enviado ?? false})`)
     }
@@ -287,11 +297,13 @@ Deno.serve(async (req: Request) => {
       db.from('acoes_operacionais')
         .select('id, titulo_acao, plano_detalhado, categoria')
         .eq('restaurante_id', fb.restaurante_id)
+        .eq('publico', publico)
         .in('status', ['PENDENTE', 'EM_ANDAMENTO'])
         .is('arquivada_em', null),
       db.from('insights')
         .select('id, titulo, descricao, categoria, assunto_chave')
         .eq('restaurante_id', fb.restaurante_id)
+        .eq('publico', publico)
         .eq('ativo', true)
         .is('deletado_em', null),
     ])
@@ -327,6 +339,7 @@ Deno.serve(async (req: Request) => {
         .from('insights')
         .select('id, acao_id, ativo, deletado_em')
         .eq('restaurante_id', fb.restaurante_id)
+        .eq('publico', publico)
         .eq('assunto_chave', chaveEsperada)
 
       // 1a. Existe AÇÃO ABERTA sobre este assunto?
@@ -343,6 +356,7 @@ Deno.serve(async (req: Request) => {
           .from('acoes_operacionais')
           .select('id')
           .eq('restaurante_id', fb.restaurante_id)
+          .eq('publico', publico)
           .in('status', ['PENDENTE', 'EM_ANDAMENTO'])
           .is('arquivada_em', null)
           .or(filtros.join(','))
@@ -416,14 +430,14 @@ Deno.serve(async (req: Request) => {
         return json({ status: 'ligado', destino: 'insight', id: vivoDoTema.id, via: 'tema-reserva', motivo, absorcao: abs, alerta })
       }
       await concluirTriagem(db, fb.id)
-      await talvezGerarInsights(db, fb.restaurante_id)
+      await talvezGerarInsights(db, fb.restaurante_id, publico)
       return json({ status: 'livre', motivo, alerta })
     }
 
     // ---- 3. Sem candidato nenhum: fica livre, sem gastar IA ----
     if (acoesCat.length === 0 && insightsCat.length === 0) {
       await concluirTriagem(db, fb.id)
-      await talvezGerarInsights(db, fb.restaurante_id)
+      await talvezGerarInsights(db, fb.restaurante_id, publico)
       return json({ status: 'livre', motivo: 'nenhum candidato na categoria', alerta })
     }
 
@@ -432,7 +446,7 @@ Deno.serve(async (req: Request) => {
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 400 })
     if (!params) return await reservaOuLivre('agente desativado')
 
-    const prompt = montarPrompt(prompts, 'ef_vincular_feedback', PROMPT, {
+    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_vincular_feedback', PROMPT, {
       texto,
       categoria: fb.categoria ?? '?',
       sentimento: fb.sentimento ?? '?',
@@ -450,7 +464,7 @@ Deno.serve(async (req: Request) => {
             .map((i: any) => `- id ${i.id}: ${i.titulo} — ${(i.descricao ?? '').slice(0, 160)}`)
             .join('\n')
         : '(nenhum)',
-    })
+    }), publico)
 
     let decisao: { destino?: string; id?: string; motivo?: string }
     try {
@@ -591,7 +605,7 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
     }
 
     const prompts = await carregarPrompts(db)
-    const prompt = montarPrompt(prompts, 'ef_absorver_insight', PROMPT_ABSORCAO, {
+    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_absorver_insight', PROMPT_ABSORCAO, {
       titulo: insight.titulo ?? '(sem titulo)',
       descricao: insight.descricao ?? '(sem descricao)',
       prioridade: insight.prioridade ?? 'OBSERVACAO',
@@ -599,7 +613,7 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
       pontos: pontos.length ? pontos.join('\n') : '(nenhum registrado)',
       texto,
       sentimento: fb.sentimento ?? '?',
-    })
+    }), publicoDe(fb.publico))
 
     const { result } = await chamarIA(db, {
       messages: [{ role: 'user', content: prompt }],

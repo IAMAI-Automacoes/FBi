@@ -1,6 +1,6 @@
 # Workflows do n8n
 
-- **Feedback Restaurante**: `feedback-restaurante.json`, teste `testar-feedback-restaurante.cjs`. Recebe as mensagens dos clientes (este arquivo explica ele).
+- **Feedback Restaurante**: `feedback-restaurante.json`, teste `testar-feedback-restaurante.cjs`. Recebe as mensagens dos clientes e, no mesmo número, as da equipe (este arquivo explica ele; a equipe está em [Equipe](#equipe-feedback-dos-funcionários)).
 - **Status Ações**: `status-acoes.json`, teste `testar-status-acoes.cjs`. Manda as atualizações das ações e o aviso do PARAR (ver [PARAR](#parar-as-atualizações-das-ações)).
 - **Recuperação de senha**: `recuperar-senha.json`, ver `recuperar-senha.md`.
 
@@ -76,11 +76,31 @@ O n8n roda os ramos de cima para baixo (`executionOrder: v1`), então o PARAR ro
 
 Com `opt_out_em` preenchido, o cliente sai da busca do "Status Ações" ("Pegar Clientes") e das filas do motor (`promover_transicoes_pendentes`, `avisar_vinculo_tardio`). **Para voltar a mandar** para alguém, apague `opt_out_em` dessa linha de `contatos` no Supabase.
 
+## Equipe (feedback dos funcionários)
+
+O funcionário fala com o **mesmo WhatsApp** do restaurante. Quem é da equipe é quem está cadastrado e ativo na página **Equipe** do sistema (`equipe_funcionarios`). O pedido de feedback sai pela função `equipe` do Supabase (um por minuto, de segunda a sábado, das 9h às 20h); o que a pessoa responde entra por este workflow.
+
+**Para o cliente nada muda.** Depois do buffer, o nó **Quem escreveu?** pergunta ao banco se aquele telefone é da equipe (`equipe_quem_e`). Não é, ou a consulta falhou: segue o caminho de sempre. É: segue o ramo de baixo.
+
+O ramo da equipe:
+
+1. **Analisa a equipe**: mesmo prompt dos clientes, com as 12 categorias da equipe (Liderança e gestão, Salário e benefícios, Escala e horários…) e o campo `sensivel` (relato de assédio, discriminação, ameaça, risco ou algo ilegal).
+2. **Grava o feedback da equipe**: função `equipe_registrar_feedback`. Grava em `feedbacks_originais` e `feedbacks_restaurante` com `publico = 'equipe'` e **sem telefone**; quem falou fica em `equipe_autorias`. Dali em diante é o mesmo motor dos clientes (temas, insights, ações), separado pela coluna `publico`.
+3. A Helena agradece (mensagens prontas da equipe; relato grave ganha o Ligue 180 e o Disque 100).
+4. **A pergunta do anonimato**: depois do agradecimento, **Manda o botão** (`POST /send/menu`, `type: "button"`) com "Quer que sua resposta fique anônima?" e dois botões de resposta: `Ficar anônimo|equipe_anonimo` e `Mostrar meu nome|equipe_mostrar`. Se o envio com botão falhar, **Pergunta por escrito** manda o mesmo texto pedindo ANÔNIMO ou MOSTRAR. **Começa o prazo** (`equipe_identidade_perguntada`) marca a hora. Uma pergunta por leva de mensagens.
+5. **A escolha**: o clique chega no webhook com o id do botão em `message.buttonOrListid` (contrato da uazapi) e é reconhecido no **Lê a mensagem**, com qualquer `messageType`. Vai direto para **Registra a escolha** (`equipe_escolher_identidade`), sem esperar o buffer, e a Helena confirma. Quem responder por escrito ("anônimo", "pode mostrar", e "sim"/"não" enquanto a pergunta está no ar) cai no mesmo registro. Clique repetido fica em silêncio. A pessoa pode mudar de ideia depois.
+6. **Sem resposta**: a rotina do banco `equipe-identidades` (a cada 2 min) mostra o nome quando o prazo vence. O prazo é de 24 horas e fica em `integracao_config`, chave `EQUIPE_PRAZO_IDENTIDADE_HORAS`. Relato grave sem resposta fica anônimo.
+7. **PARAR**: o mesmo caminho de cima, chamando `equipe_contexto_parar` e `equipe_parar`. O funcionário deixa de receber os pedidos de opinião (`equipe_funcionarios.opt_out_em`) e recebe "Pronto, não vou mais te mandar essas mensagens.".
+
+**Tela WhatsApp do sistema.** A conversa com quem é da equipe nasce escondida (`mensagens_whatsapp.oculta`, gatilho do banco; o workflow "Simulação Whatsapp" não muda). Volta a aparecer quando a pessoa deixa mostrar ou quando o prazo vence; se pedir anonimato, fica escondida. **Limite:** isso vale para o sistema. No celular (ou WhatsApp Web) onde o número do restaurante está aberto a conversa continua lá.
+
+Os botões são um recurso que a uazapi avisa que pode sair do ar sem aviso; por isso a pergunta leva a instrução para responder por escrito.
+
 ## Como substituir no n8n
 
 1. Abra o workflow "Feedback Restaurante" e **desative**.
 2. Selecione tudo (Ctrl+A), apague, e importe `feedback-restaurante.json` (menu ⋯ → Import from File). O webhook continua em `/webhook/easyfeed`.
-3. Confira as credenciais: **Feedback Restaurante** (Supabase, chave de serviço) nos nós do banco e em "Conversa recente" e "Marca para não receber"; **OpenAi** em "Transcreve o áudio", "Modelo de análise" e "Modelo do parar".
+3. Confira as credenciais: **Feedback Restaurante** (Supabase, chave de serviço) nos nós do banco e nos que chamam funções ("Conversa recente", "Marca para não receber", "Quem escreveu?", "Grava o feedback da equipe", "Começa o prazo", "Registra a escolha"); **OpenAi** em "Transcreve o áudio", "Modelo de análise", "Modelo do parar" e "Modelo da equipe".
 4. Salve e **ative**.
 
 ## Teste depois de ativar (mande do seu celular para o número de um restaurante)
@@ -93,5 +113,16 @@ Com `opt_out_em` preenchido, o cliente sai da busca do "Status Ações" ("Pegar 
 6. Um áudio com uma opinião → transcrito e tratado como texto.
 7. De um número que já recebeu atualização de ação: "PARAR" → só "Pronto, não vou mais te mandar essas novidades.", citando o seu PARAR; em `contatos`, `opt_out_em` preenchido. "Fui lá para comemorar" → resposta normal, nada marcado. Depois do teste, apague `opt_out_em` do seu número para voltar a receber.
 8. "A comida estava ótima!" e, em até 20 s, "Vocês fazem reserva?" → duas mensagens: o agradecimento citando a primeira e o encaminhamento citando a segunda. As suas duas mensagens ficam com os tiques azuis.
+
+Equipe (cadastre o seu número em Equipe → Funcionários e mande do seu celular):
+
+9. Em Equipe → Funcionários, **Pedir feedback** → em até um minuto chega o pedido da Helena no seu WhatsApp.
+10. Responda "O salário atrasa mas a equipe é unida" → agradecimento e, em seguida, a pergunta com os dois botões. Em Equipe → Feedbacks aparece a mensagem com 2 pontos e "aguardando escolha".
+11. Toque em **Ficar anônimo** → "Combinado…"; na tela aparece "Anônimo" e a conversa não aparece na tela WhatsApp. Toque em **Mostrar meu nome** → o nome aparece e a conversa volta.
+12. Sem tocar em nada: depois de 24 horas o nome aparece sozinho.
+13. "PARAR" → "Pronto, não vou mais te mandar essas mensagens."; o funcionário fica como "não recebe mais".
+14. De um número que **não** está cadastrado: tudo igual a antes (itens 1 a 8).
+
+**No primeiro teste, confira o clique:** em Executions, abra a execução do toque no botão e veja em "Recebe mensagem" se `body.message.buttonOrListid` veio com `equipe_anonimo` ou `equipe_mostrar`. Se vier em outro campo, é só ajustar o começo do "Lê a mensagem".
 
 Execução com erro aparece em Executions no n8n (ex.: a IA devolveu algo fora do formato).

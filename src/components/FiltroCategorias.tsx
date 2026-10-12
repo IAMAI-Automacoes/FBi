@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Check, Tags, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CATEGORIAS_FEEDBACK, estiloCategoria } from '@/lib/categorias-feedback'
+import { estiloCategoria } from '@/lib/categorias-feedback'
+import { usePublico } from '@/lib/publico'
 import { cn } from '@/lib/utils'
 
 interface FiltroCategoriasProps {
@@ -38,6 +39,8 @@ export function FiltroCategorias({
   className,
 }: FiltroCategoriasProps) {
   const [aberto, setAberto] = useState(false)
+  // As 14 dos clientes, ou as da equipe nas páginas /equipe.
+  const { categorias: CATEGORIAS_FEEDBACK } = usePublico()
 
   const toggle = (cat: string) => {
     onChange(

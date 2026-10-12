@@ -39,6 +39,7 @@ import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, nomeDoAssistente } from '../_shared/perfil.ts'
 import { avaliarGravidade, normalizar, type NivelGravidade } from '../_shared/gravidade.ts'
 import { prioridadeAcaoManual } from '../_shared/limiar.ts'
+import { CATEGORIAS_EQUIPE, promptDoPublico, publicoDe, type Publico } from '../_shared/publico.ts'
 
 const AGENTE = 'categorizador_acao'
 
@@ -115,14 +116,17 @@ Regras:
 
 Chame registrar_vinculos.`
 
-const SCHEMA_CATEGORIA = {
+/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
+const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
+
+const schemaCategoria = (publico: Publico) => ({
   type: 'object',
   properties: {
-    categoria: { type: 'string', enum: CATEGORIAS },
+    categoria: { type: 'string', enum: categoriasDe(publico) },
     justificativa: { type: 'string', description: 'Uma frase curta.' },
   },
   required: ['categoria'],
-}
+})
 
 const SCHEMA_VINCULOS = {
   type: 'object',
@@ -162,11 +166,13 @@ Deno.serve(async (req: Request) => {
 
     const { data: acao, error: erroAcao } = await db
       .from('acoes_operacionais')
-      .select('id, titulo_acao, plano_detalhado, categoria, prioridade, restaurante_id, insight_id, status, arquivada_em')
+      .select('id, titulo_acao, plano_detalhado, categoria, prioridade, restaurante_id, insight_id, status, arquivada_em, publico')
       .eq('id', acaoId)
       .single()
 
     if (erroAcao || !acao) return json({ error: 'Ação não encontrada' }, 404)
+    // Ação criada na página da equipe só enxerga feedback da equipe.
+    const publico = publicoDe(acao.publico)
 
     const precisaCategoria = !apenasVinculo && !acao.categoria
     const precisaPrioridade = !apenasVinculo && !acao.prioridade
@@ -186,12 +192,12 @@ Deno.serve(async (req: Request) => {
 
     if (precisaCategoria) {
       try {
-        const prompt = montarPrompt(prompts, 'ef_categorizar_acao', PROMPT_CATEGORIA, {
+        const prompt = promptDoPublico(montarPrompt(prompts, 'ef_categorizar_acao', PROMPT_CATEGORIA, {
           nome: nomeDoAssistente(config?.mascote_config),
           perfil: blocoPerfil(config),
           titulo: acao.titulo_acao ?? '',
           plano: planoParaPrompt(acao.plano_detalhado),
-        })
+        }), publico)
         const { result } = await chamarIA(db, {
           messages: [{ role: 'user', content: prompt }],
           params,
@@ -202,10 +208,10 @@ Deno.serve(async (req: Request) => {
           saida: {
             nome: 'registrar_categoria',
             descricao: 'Registra a categoria escolhida.',
-            schema: SCHEMA_CATEGORIA,
+            schema: schemaCategoria(publico),
           },
         })
-        categoriaFinal = CATEGORIAS.includes(result?.categoria) ? result.categoria : 'Outros'
+        categoriaFinal = categoriasDe(publico).includes(result?.categoria) ? result.categoria : 'Outros'
       } catch (err) {
         if (err instanceof ErroCota) throw err
         console.error('Falha ao categorizar, usando Outros:', err)
@@ -241,6 +247,7 @@ Deno.serve(async (req: Request) => {
       vinculados = await vincularFeedbacks(db, {
         acaoId,
         restauranteId: acao.restaurante_id,
+        publico,
         titulo: acao.titulo_acao ?? '',
         plano: planoParaPrompt(acao.plano_detalhado),
         categoria: categoriaFinal,
@@ -282,6 +289,7 @@ Deno.serve(async (req: Request) => {
           .from('feedbacks_restaurante')
           .select('texto_original, resumo, sentimento, origem_id')
           .eq('restaurante_id', acao.restaurante_id)
+          .eq('publico', publico)
           .eq('categoria', categoriaFinal)
           .gte('created_at', desde)
         base = daCategoria ?? []
@@ -303,6 +311,7 @@ Deno.serve(async (req: Request) => {
         .from('feedbacks_restaurante')
         .select('id', { count: 'exact', head: true })
         .eq('restaurante_id', acao.restaurante_id)
+        .eq('publico', publico)
         .eq('categoria', categoriaFinal)
         .ilike('sentimento', '%positiv%')
         .gte('created_at', desde)
@@ -380,6 +389,7 @@ async function vincularFeedbacks(
   ctx: {
     acaoId: number
     restauranteId: number
+    publico: Publico
     titulo: string
     plano: string
     categoria: string
@@ -405,6 +415,7 @@ async function vincularFeedbacks(
     .from('feedbacks_livres')
     .select('id, texto_original, resumo, sentimento, origem_id, categoria, tema_id')
     .eq('restaurante_id', ctx.restauranteId)
+    .eq('publico', ctx.publico)
     .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
     .gte('created_at', limite)
     .not('tema_id', 'is', null)
@@ -453,12 +464,12 @@ async function vincularFeedbacks(
     })
     .join('\n\n')
 
-  const prompt = montarPrompt(ctx.prompts, 'ef_vincular_acao', PROMPT_VINCULO, {
+  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_vincular_acao', PROMPT_VINCULO, {
     titulo: ctx.titulo,
     categoria: ctx.categoria,
     plano: ctx.plano,
     candidatos: lista,
-  })
+  }), ctx.publico)
 
   let escolhidos: number[] = []
   try {

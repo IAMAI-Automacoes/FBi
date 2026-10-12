@@ -32,6 +32,9 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { carregarPrompts, montarPrompt, type Prompts } from '../_shared/prompts.ts'
+import {
+  CATEGORIAS_EQUIPE, colunaDaUltimaAnalise, promptDoPublico, publicoDe, PUBLICOS, type Publico,
+} from '../_shared/publico.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, buscarMemorias, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
@@ -298,7 +301,10 @@ const SCHEMA_AVALIACAO = {
   required: ['nota'],
 }
 
-const SCHEMA_INSIGHT = {
+/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
+const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
+
+const schemaInsight = (publico: Publico) => ({
   type: 'object',
   properties: {
     gerar: {
@@ -306,13 +312,13 @@ const SCHEMA_INSIGHT = {
       description: 'false quando o assunto nao justifica um insight. Prefira false a encher a lista.',
     },
     prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
-    categoria: { type: 'string', enum: CATEGORIAS },
+    categoria: { type: 'string', enum: categoriasDe(publico) },
     titulo: { type: 'string', description: 'Curto e claro, sem ponto final.' },
     descricao: { type: 'string', description: 'O padrao que os feedbacks mostram.' },
     sugestao: { type: 'string', description: 'Acao pratica e especifica para a equipe.' },
   },
   required: ['gerar'],
-}
+})
 
 const SCHEMA_VERIFICACAO = {
   type: 'object',
@@ -402,7 +408,7 @@ async function avaliarImportancia(
   ctx: any,
   assunto: Assunto,
 ): Promise<{ nota: number; justificativa: string; notaIA: number; pisoAplicado: boolean }> {
-  const prompt = montarPrompt(ctx.prompts, 'ef_avaliar_assunto', PROMPT_AVALIADOR, {
+  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_avaliar_assunto', PROMPT_AVALIADOR, {
     tom: tomDoAssistente(ctx.config.mascote_config),
     perfil: blocoPerfil(ctx.config),
     memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
@@ -413,7 +419,7 @@ ${ctx.conhecimento}` : '',
     pessoas: String(assunto.pessoas),
     positivos: String(assunto.positivosDoTema ?? 0),
     pontos: listarPontosParaPrompt(assunto),
-  })
+  }), publicoDe(ctx.publico))
 
   let notaIA = -1
   let justificativa = ''
@@ -478,12 +484,14 @@ async function redigirInsight(
     conhecimento: string
     // deno-lint-ignore no-explicit-any
     params: any
+    publico?: Publico
   },
   reparo?: { rascunhoAnterior: unknown; critica: string },
 ) {
   const { assunto } = ctx
+  const publico = publicoDe(ctx.publico)
 
-  const prompt = montarPrompt(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
+  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
     nome: nomeDoAssistente(ctx.config.mascote_config),
     tom: tomDoAssistente(ctx.config.mascote_config),
     perfil: blocoPerfil(ctx.config),
@@ -501,7 +509,7 @@ async function redigirInsight(
     mininimo: String(assunto.pessoasNecessarias),
     confianca: assunto.confianca,
     pontos: listarPontosParaPrompt(assunto),
-  })
+  }), publico)
 
   const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
     { role: 'user', content: prompt },
@@ -529,12 +537,12 @@ async function redigirInsight(
     checarCotaAntes: false,
     ferramentas: [
       ferramentaLerOriginal(db, assunto.pontos),
-      ferramentaHistoricoDoAssunto(db, ctx.restauranteId, assunto.categoria),
+      ferramentaHistoricoDoAssunto(db, ctx.restauranteId, assunto.categoria, publico),
     ],
     saida: {
       nome: 'registrar_insight',
       descricao: 'Registra o insight deste assunto, ou informa que ele nao justifica um insight.',
-      schema: SCHEMA_INSIGHT,
+      schema: schemaInsight(publico),
     },
   })
 
@@ -557,15 +565,16 @@ async function verificarLastro(
     prompts: Prompts
     // deno-lint-ignore no-explicit-any
     paramsVerificador: any
+    publico?: Publico
   },
   insight: { titulo?: string; descricao?: string; sugestao?: string },
 ) {
-  const prompt = montarPrompt(ctx.prompts, 'ef_verificar_insight', PROMPT_VERIFICADOR, {
+  const prompt = promptDoPublico(montarPrompt(ctx.prompts, 'ef_verificar_insight', PROMPT_VERIFICADOR, {
     pontos: listarPontosParaPrompt(ctx.assunto),
     titulo: insight.titulo ?? '',
     descricao: insight.descricao ?? '',
     sugestao: insight.sugestao ?? '',
-  })
+  }), publicoDe(ctx.publico))
 
   const { result } = await chamarIA(db, {
     messages: [{ role: 'user', content: prompt }],
@@ -677,7 +686,17 @@ async function buscarTextosIrmaos(db: Db, assunto: Assunto): Promise<string[]> {
     .filter(Boolean)
 }
 
-async function processarRestaurante(db: Db, restauranteId: number, force: boolean, prompts: Prompts) {
+/**
+ * Uma rodada de insights de UM público. Cliente e equipe rodam separados: cada
+ * um com a sua contagem de feedbacks livres, o seu marco e os seus insights.
+ */
+async function processarRestaurante(
+  db: Db,
+  restauranteId: number,
+  force: boolean,
+  prompts: Prompts,
+  publico: Publico = 'cliente',
+) {
   const { data: config, error: configErr } = await db
     .from('restaurantes')
     .select('*')
@@ -705,6 +724,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
   if (!force) {
     const { data: gatilho } = await db.rpc('deve_gerar_insights', {
       p_restaurante_id: restauranteId,
+      p_publico: publico,
     })
     const g = Array.isArray(gatilho) ? gatilho[0] : gatilho
     if (!g?.deve) {
@@ -730,7 +750,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
   // duas rodadas simultaneas do mesmo restaurante.
   await db
     .from('restaurantes')
-    .update({ ultima_analise_insights: new Date().toISOString() })
+    .update({ [colunaDaUltimaAnalise(publico)]: new Date().toISOString() })
     .eq('id', restauranteId)
 
   // NADA é alterado até haver insight pronto para gravar.
@@ -751,6 +771,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
     const { data: livres, error: erroLivres } = await db.rpc('feedbacks_para_geracao', {
       p_restaurante_id: restauranteId,
       p_dias: expiracaoDias,
+      p_publico: publico,
     })
 
     if (erroLivres) {
@@ -764,6 +785,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       .from('insights')
       .select('assunto_chave')
       .eq('restaurante_id', restauranteId)
+      .eq('publico', publico)
       .not('assunto_chave', 'is', null)
       .gte('desativado_em', new Date(Date.now() - 30 * 86_400_000).toISOString())
     const reincidentes = new Set<string>(
@@ -780,6 +802,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       .from('insights')
       .select('id, assunto_chave')
       .eq('restaurante_id', restauranteId)
+      .eq('publico', publico)
       .eq('ativo', true)
       .is('deletado_em', null)
       .not('assunto_chave', 'is', null)
@@ -845,6 +868,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
 
     const ctx = {
       restauranteId,
+      publico,
       prompts,
       config,
       conhecimento,
@@ -986,7 +1010,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
       }
       let categoria = assunto.categoria ?? 'Outros'
       let maisVotos = 0
-      for (const nome of CATEGORIAS) {
+      for (const nome of categoriasDe(publico)) {
         const v = votos.get(nome) ?? 0
         if (v > maisVotos) {
           maisVotos = v
@@ -998,6 +1022,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
         .from('insights')
         .insert({
           restaurante_id: restauranteId,
+          publico,
           prioridade,
           categoria,
           titulo: insight.titulo,
@@ -1046,7 +1071,7 @@ async function processarRestaurante(db: Db, restauranteId: number, force: boolea
     // ---- ESTÁGIO 5: os feedbacks em liberdade condicional ----
     // Só DEPOIS de os insights desta rodada estarem gravados e escritos com os
     // feedbacks livres: o texto nunca se baseia nos condicionais.
-    const religados = await religarCondicionais(db, ctx.prompts, restauranteId, criados)
+    const religados = await religarCondicionais(db, ctx.prompts, restauranteId, criados, publico)
 
     // Fecha a rodada reconstruindo o cache de uso a partir dos vínculos.
     //
@@ -1152,6 +1177,7 @@ async function religarCondicionais(
   prompts: Prompts,
   restauranteId: number,
   criados: InsightCriado[],
+  publico: Publico = 'cliente',
 ): Promise<number> {
   if (criados.length === 0) return 0
 
@@ -1159,6 +1185,7 @@ async function religarCondicionais(
     .from('feedbacks_restaurante')
     .select('id, origem_id, tema_id, categoria, sentimento, texto_original, resumo')
     .eq('restaurante_id', restauranteId)
+    .eq('publico', publico)
     .not('invalidado_em', 'is', null)
     .is('usado_por_acao_id', null)
     .order('created_at', { ascending: false })
@@ -1202,7 +1229,7 @@ async function religarCondicionais(
 
   const params = await paramsDoAgente(db, AGENTE_RELIGADOR, { max_tokens: 700 })
   if (params) {
-    const prompt = montarPrompt(prompts, 'ef_religar_condicional', PROMPT_RELIGAR, {
+    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_religar_condicional', PROMPT_RELIGAR, {
       insights: criados.map((c) => `- id ${c.id}: ${c.titulo} — ${c.descricao.slice(0, 200)}`).join('\n'),
       feedbacks: soltos
         // deno-lint-ignore no-explicit-any
@@ -1212,7 +1239,7 @@ async function religarCondicionais(
           return `- id ${p.id}: "${String(p.texto_original || p.resumo || '').slice(0, 280)}"${marca}`
         })
         .join('\n'),
-    })
+    }), publico)
     try {
       const { result } = await chamarIA(db, {
         messages: [{ role: 'user', content: prompt }],
@@ -1309,14 +1336,33 @@ Deno.serve(async (req: Request) => {
       const { data: restaurantes, error: restErr } = await consulta
       if (restErr) throw restErr
 
+      // Que públicos rodar. O disparo em cadeia (`vincular-feedback`) diz qual;
+      // a rodada da hora cheia roda os clientes de todos e a equipe só de quem
+      // tem feedback da equipe (hoje, quase ninguém: não vale carregar a
+      // configuração de cada restaurante duas vezes).
+      const pedido: Publico[] = body?.publico ? [publicoDe(body.publico)] : PUBLICOS
+      let comEquipe = new Set<number>()
+      if (pedido.includes('equipe')) {
+        const { data: daEquipe } = await db
+          .from('feedbacks_originais')
+          .select('restaurante_id')
+          .eq('publico', 'equipe')
+          .gte('created_at', new Date(Date.now() - 60 * 86_400_000).toISOString())
+          .limit(5000)
+        comEquipe = new Set((daEquipe ?? []).map((l: { restaurante_id: number }) => Number(l.restaurante_id)))
+      }
+
       let total = 0
       let processados = 0
       for (const r of restaurantes ?? []) {
-        // Respeita o `force` do corpo. O cron de verdade manda false, entao
-        // para ele nada muda; e o que permite forcar uma rodada de teste sem
-        // esperar o intervalo.
-        const res = await processarRestaurante(db, r.id, force, prompts)
-        total += res.insights_gerados ?? 0
+        for (const publico of pedido) {
+          if (publico === 'equipe' && !comEquipe.has(Number(r.id))) continue
+          // Respeita o `force` do corpo. O cron de verdade manda false, entao
+          // para ele nada muda; e o que permite forcar uma rodada de teste sem
+          // esperar o intervalo.
+          const res = await processarRestaurante(db, r.id, force, prompts, publico)
+          total += res.insights_gerados ?? 0
+        }
         processados += 1
       }
       return new Response(
@@ -1351,7 +1397,23 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const result = await processarRestaurante(db, rest.id, force, prompts)
+    // O botão "Gerar insights" da página da equipe manda `publico: 'equipe'`.
+    // Por enquanto só o admin da plataforma vê a equipe (como no banco:
+    // `equipe_liberada()`).
+    const publico = publicoDe(body?.publico)
+    if (publico === 'equipe') {
+      const { data: admins } = await db.from('platform_admins').select('email')
+      const email = String(user.email ?? '').toLowerCase()
+      const ehAdmin = (admins ?? []).some((a: { email: string }) => String(a.email).toLowerCase() === email)
+      if (!email || !ehAdmin) {
+        return new Response(JSON.stringify({ error: 'Disponivel so para o admin por enquanto.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
+    const result = await processarRestaurante(db, rest.id, force, prompts, publico)
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

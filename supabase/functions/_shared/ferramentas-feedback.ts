@@ -135,6 +135,8 @@ export function ferramentaHistoricoDoAssunto(
   db: Db,
   restauranteId: number,
   categoria: string | null,
+  // Cliente e equipe têm históricos separados (a coluna `publico`).
+  publico: 'cliente' | 'equipe' = 'cliente',
 ): Ferramenta {
   return {
     maxChamadas: 2,
@@ -156,6 +158,7 @@ export function ferramentaHistoricoDoAssunto(
         db.from('insights')
           .select('titulo, created_at, motivo_encerramento, ativo')
           .eq('restaurante_id', restauranteId)
+          .eq('publico', publico)
           .eq('categoria', categoria)
           .gte('created_at', desde)
           .order('created_at', { ascending: false })
@@ -163,6 +166,7 @@ export function ferramentaHistoricoDoAssunto(
         db.from('acoes_operacionais')
           .select('titulo_acao, status, created_at, arquivada_em')
           .eq('restaurante_id', restauranteId)
+          .eq('publico', publico)
           .eq('categoria', categoria)
           .gte('created_at', desde)
           .order('created_at', { ascending: false })

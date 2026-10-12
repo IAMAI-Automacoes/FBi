@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Send, TriangleAlert } from 'lucide-react'
+import { Loader2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { MINIMO_ANONIMO, PERGUNTA_MAX, PERGUNTA_MIN, podeReceber, type Funcionario } from '@/lib/equipe'
+import { fraseDoPrazo, PERGUNTA_MAX, PERGUNTA_MIN, podeReceber, type Funcionario } from '@/lib/equipe'
 import { acaoEquipe, type PreviaConvite } from '@/lib/queries/equipe'
 
 /* Pedir feedback: escreve a pergunta, escolhe quem recebe e vê a mensagem
@@ -42,7 +42,6 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
   const quantos = modo === 'todos' ? podem.length : podem.filter((f) => escolhidos.has(f.id)).length
   const limpa = pergunta.trim()
   const perguntaOk = limpa.length >= PERGUNTA_MIN && limpa.length <= PERGUNTA_MAX
-  const minimo = previa?.minimo_anonimo ?? MINIMO_ANONIMO
 
   const alternar = (id: number) => setEscolhidos((atual) => {
     const novo = new Set(atual)
@@ -73,7 +72,7 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Pedir feedback para a equipe</DialogTitle>
-          <DialogDescription>Cada pessoa recebe uma mensagem no WhatsApp, de um número do EasyFeed, e responde por lá. A resposta chega aqui sem o nome dela.</DialogDescription>
+          <DialogDescription>Cada pessoa recebe uma mensagem do WhatsApp do restaurante e responde por lá, em texto ou áudio. A resposta aparece em Feedbacks, aqui na Equipe.</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -110,13 +109,12 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
                   ))}
                 </ul>
               )}
-              {podem.length === 0 && <p className="mt-2 text-sm text-rose-600">Ninguém pode receber. Cadastre a equipe na aba Funcionários.</p>}
+              {podem.length === 0 && <p className="mt-2 text-sm text-rose-600">Ninguém pode receber. Cadastre a equipe primeiro.</p>}
             </div>
 
-            {quantos > 0 && quantos < minimo && (
-              <p className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>Com menos de {minimo} pessoas dá para adivinhar quem falou. O anonimato funciona melhor com mais gente.</span>
+            {previa && !previa.whatsapp_conectado && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                O WhatsApp do restaurante não está conectado. Conecte em Configurações para o pedido sair.
               </p>
             )}
           </div>
@@ -126,13 +124,16 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
             <div className="rounded-xl bg-[#EFEAE2] p-3">
               {previa ? (
                 <div className="ml-auto max-w-[95%] whitespace-pre-line rounded-lg rounded-tr-none bg-white px-3 py-2 text-[13px] leading-relaxed text-gray-900 shadow-sm">
-                  {[previa.abertura, limpa || '…', previa.anonimato, previa.parar].join('\n\n')}
+                  {[previa.abertura, limpa || '…', previa.como_responder, previa.parar].join('\n\n')}
                 </div>
               ) : (
                 <div className="flex h-40 items-center justify-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
               )}
             </div>
             <p className="mt-2 text-xs text-gray-500">O nome muda para o de cada pessoa. As mensagens saem aos poucos, cerca de uma por minuto, de segunda a sábado, das 9h às 20h.</p>
+            <p className="mt-2 text-xs text-gray-500">
+              Depois de responder, a pessoa recebe dois botões para escolher se quer <strong className="font-semibold text-gray-700">ficar anônima</strong>. Sem resposta em {fraseDoPrazo(previa?.prazo_horas)}, o nome dela aparece junto do feedback.
+            </p>
           </div>
         </div>
 

@@ -40,6 +40,7 @@ import {
   ShieldCheck,
   MoreHorizontal,
 } from 'lucide-react'
+import { estiloCategoriaEquipe } from '@/lib/categorias-equipe'
 
 export interface EstiloCategoria {
   icon: LucideIcon
@@ -162,5 +163,8 @@ export function estiloCategoria(nome: string | null | undefined): EstiloCategori
   if (!nome) return ESTILO_PADRAO
   const alvo = nome.trim().toLowerCase()
   const cat = CATEGORIAS_FEEDBACK.find((c) => c.toLowerCase() === alvo)
-  return cat ? ESTILOS[cat] : ESTILO_PADRAO
+  if (cat) return ESTILOS[cat]
+  // Não é uma das 14 dos clientes: pode ser do feedback da equipe (páginas
+  // /equipe), que tem a paleta dela em `categorias-equipe.ts`.
+  return estiloCategoriaEquipe(nome) ?? ESTILO_PADRAO
 }

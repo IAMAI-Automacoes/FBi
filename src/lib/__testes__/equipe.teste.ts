@@ -3,9 +3,9 @@
  *   node --experimental-strip-types src/lib/__testes__/equipe.teste.ts
  */
 import {
-  chaveDoSentimento, climaDosPontos, contasDoEnvio, formatarDia, fraseDeRespostas, lerListaColada, podeReceber, situacaoDoFuncionario,
-  temasDosPontos, type ConviteAnonimo,
+  contasDoEnvio, formatarAteQuando, fraseDeRespostas, fraseDoPrazo, lerListaColada, podeReceber, situacaoDoFuncionario, type ConviteAnonimo,
 } from '../equipe.ts'
+import { caminhoDoPublico, ehRotaDaEquipe, levaOPublico, TABELAS_COM_PUBLICO } from '../publico-rota.ts'
 
 let falhas = 0
 function ok(nome: string, cond: boolean, detalhe?: unknown) {
@@ -43,16 +43,25 @@ ok('frase sem ninguém ter recebido ainda', fraseDeRespostas(contasDoEnvio([conv
 c = contasDoEnvio([])
 ok('contas de envio vazio não divide por zero', c.taxa === 0 && c.total === 0)
 
-// Clima e temas
-const p = (categoria: string, sentimento: string) => ({ categoria, sentimento })
-ok('sentimento do ponto, com ou sem acento', chaveDoSentimento('Sugestão') === 'sugestao' && chaveDoSentimento('negativo') === 'negativo' && chaveDoSentimento('Positivo') === 'positivo' && chaveDoSentimento(null) === 'neutro')
-const pontos = [p('Escala e horários', 'Negativo'), p('Escala e horários', 'Sugestão'), p('Clima e colegas', 'Positivo'), p('Salário e benefícios', 'Negativo'), p('Clima e colegas', 'Negativo'), p('Outros', 'Neutro')]
-const clima = climaDosPontos(pontos)
-ok('clima: quantos pontos de cada sentimento', clima.total === 6 && clima.negativo === 3 && clima.positivo === 1 && clima.sugestao === 1 && clima.neutro === 1)
-const temas = temasDosPontos(pontos)
-ok('temas: do mais citado para o menos; no empate, o que tem mais crítica', temas.map((t) => `${t.categoria}:${t.total}`).join() === 'Clima e colegas:2,Escala e horários:2,Salário e benefícios:1,Outros:1'
-  && temas[0].negativo === 1 && temas[0].positivo === 1, temas.map((t) => `${t.categoria}:${t.total}`))
-ok('dia legível', formatarDia('2026-10-12') === '12/10/2026')
+// Até quando a pessoa pode escolher ficar anônima (hora de Brasília)
+ok('prazo da escolha: dia e hora de Brasília', formatarAteQuando('2026-10-13T18:05:00Z') === '13/10 às 15:05', formatarAteQuando('2026-10-13T18:05:00Z'))
+ok('prazo da escolha: vira o dia em Brasília, não em UTC', formatarAteQuando('2026-10-14T02:30:00Z') === '13/10 às 23:30', formatarAteQuando('2026-10-14T02:30:00Z'))
+ok('prazo da escolha: data inválida não quebra', formatarAteQuando('') === '' && formatarAteQuando('ontem') === '')
+
+ok('prazo por extenso: horas, 1 hora e dias inteiros', fraseDoPrazo(24) === '24 horas' && fraseDoPrazo(1) === '1 hora' && fraseDoPrazo(48) === '2 dias' && fraseDoPrazo(72) === '3 dias' && fraseDoPrazo(36) === '36 horas')
+ok('prazo por extenso: sem valor, vale o padrão de 24 horas', fraseDoPrazo(undefined) === '24 horas' && fraseDoPrazo(null) === '24 horas' && fraseDoPrazo(0) === '24 horas' && fraseDoPrazo(NaN) === '24 horas')
+
+// De que público é a página (é isso que separa os dados no banco)
+ok('rota da equipe: /equipe e tudo que fica dentro', ['/equipe', '/equipe/', '/equipe/feedbacks', '/equipe/insights', '/equipe/acoes', '/equipe/acoes/arquivadas'].every(ehRotaDaEquipe))
+ok('rota da equipe: as páginas dos clientes não são', ['/', '/feedbacks', '/insights', '/acoes', '/acoes/arquivadas', '/whatsapp', '/admin', '/garcons'].every((c) => !ehRotaDaEquipe(c)))
+ok('rota da equipe: nome parecido não engana', !ehRotaDaEquipe('/equipes') && !ehRotaDaEquipe('/minha-equipe') && !ehRotaDaEquipe('/equipefeedbacks'))
+ok('rota da equipe: funciona com o site numa subpasta', ehRotaDaEquipe('/app/equipe/feedbacks') && !ehRotaDaEquipe('/app/feedbacks'))
+ok('link entre as páginas acompanha o público', caminhoDoPublico('equipe', '/acoes') === '/equipe/acoes' && caminhoDoPublico('cliente', '/acoes') === '/acoes'
+  && caminhoDoPublico('equipe', '/feedbacks') === '/equipe/feedbacks')
+ok('o público só vai nas chamadas ao banco', levaOPublico('https://x.supabase.co/rest/v1/insights?select=*')
+  && !levaOPublico('https://x.supabase.co/functions/v1/gerar-insights') && !levaOPublico('https://x.supabase.co/auth/v1/token') && !levaOPublico('https://x.supabase.co/storage/v1/object/a'))
+ok('as cinco tabelas do motor têm público (e as duas de ligação acompanham)', ['feedbacks_originais', 'feedbacks_restaurante', 'feedback_temas', 'insights', 'acoes_operacionais', 'insight_feedback', 'feedback_acao']
+  .every((x) => TABELAS_COM_PUBLICO.has(x)) && !TABELAS_COM_PUBLICO.has('equipe_funcionarios') && !TABELAS_COM_PUBLICO.has('mensagens_whatsapp'))
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nequipe (tela): tudo certo')
 process.exit(falhas ? 1 : 0)

@@ -49,6 +49,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
+import { ehRotaDaEquipe } from '@/lib/publico-rota'
 import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { FormattedMessage, parseInline, LINK_ESCURO } from '@/lib/chat-utils'
@@ -190,7 +191,9 @@ export function ChatFab({
   // muda a quantidade de hooks entre renders e quebra o React.
   // Telas de chat em tela cheia: o botão flutuante cobria o próprio rodapé
   // delas (na WhatsApp, o "Enviar mensagem").
-  const ocultar = pathname === '/sugestoes' || pathname === '/whatsapp'
+  // Nas páginas da equipe também some: o assistente só conhece os feedbacks
+  // dos clientes, e responderia sobre eles numa tela que fala dos funcionários.
+  const ocultar = pathname === '/sugestoes' || pathname === '/whatsapp' || ehRotaDaEquipe(pathname)
   const { toast } = useToast()
   const {
     messages, loading, buscandoWeb, sessaoId, enviar, adicionarMensagemUsuario,

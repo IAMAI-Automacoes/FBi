@@ -22,7 +22,8 @@ import { FeedbacksRelacionadosPopover } from './FeedbacksRelacionadosPopover'
 interface InsightCardProps {
   insight: Insight
   onCreateTask: () => void
-  onAiChat: () => void
+  /** Sem ele o botão "Conversar com a IA" não aparece (páginas da equipe). */
+  onAiChat?: () => void
   onDelete: () => void
   /** Alterna o insight fixado no topo da lista (por cima da ordenação por data). */
   onPin: (fixado: boolean) => void
@@ -189,14 +190,16 @@ export function InsightCard({
               {criandoAcao ? 'Gerando...' : 'Criar Ação'}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onAiChat}
-            className={cn(BOTAO_PILULA_AZUL_VAZADO, 'w-full sm:w-auto')}
-          >
-            Conversar com a IA
-          </Button>
+          {onAiChat && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onAiChat}
+              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'w-full sm:w-auto')}
+            >
+              Conversar com a IA
+            </Button>
+          )}
         </div>
       </CardFooter>
     </Card>

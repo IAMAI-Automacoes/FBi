@@ -4,6 +4,8 @@ import { WhatsappIcon } from '@/components/WhatsappIcon'
 import { cn } from '@/lib/utils'
 import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
 import { estiloCategoria } from '@/lib/categorias-feedback'
+import { SeloAutoria } from '@/components/equipe/SeloAutoria'
+import type { Autoria } from '@/lib/equipe'
 
 /** Troca **trechos** (marcados pela IA em `texto_destacado`) por <strong>. Texto
  *  sem nenhum marcador (feedback ainda não processado, ou "apenas avaliação")
@@ -46,6 +48,8 @@ interface FeedbackOriginalCardProps {
   telefoneConversa?: string | null
   /** Id do feedback: a conversa abre já rolada até as mensagens dele, destacadas. */
   feedbackId?: string | null
+  /** Feedback da equipe: quem falou (nome, "aguardando escolha" ou anônimo). */
+  autoria?: Autoria | null
 }
 
 /**
@@ -65,6 +69,7 @@ export function FeedbackOriginalCard({
   truncar = false,
   telefoneConversa,
   feedbackId,
+  autoria,
 }: FeedbackOriginalCardProps) {
   const cor = coresSentimento(sentimento)
   // Só existe pra cortar em 2 linhas — clicar alterna pra mostrar inteiro. Se
@@ -107,8 +112,9 @@ export function FeedbackOriginalCard({
             {quando}
           </span>
         </div>
-        {(categorias.length > 0 || telefoneConversa) && (
+        {(categorias.length > 0 || telefoneConversa || autoria) && (
           <div className="flex flex-wrap items-center gap-1.5">
+            <SeloAutoria autoria={autoria} />
             {categorias.map((cat) => {
               const estilo = estiloCategoria(cat)
               const Icon = estilo.icon

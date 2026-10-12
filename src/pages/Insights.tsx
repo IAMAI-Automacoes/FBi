@@ -28,6 +28,7 @@ import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { useToast } from '@/hooks/use-toast'
+import { usePublico } from '@/lib/publico'
 
 // Faixa aceita pro gatilho da geração automática (slider — qualquer valor no
 // meio, não só 3 opções fixas).
@@ -68,19 +69,23 @@ export default function Insights() {
    * Quem já tinha "Todos" guardado do filtro antigo cai em URGENTE — é a
    * primeira aba, e é o que alguém que abre a tela precisa ver primeiro.
    */
-  const [prioridadeSalva, setFilterPriority] = useFiltroPersistente<string>('insights:prioridade', 'URGENTE')
+  // A mesma página serve aos clientes (/insights) e à equipe
+  // (/equipe/insights): os dados quem separa é o banco, e cada uma guarda os
+  // seus filtros.
+  const { publico, ehEquipe, chave } = usePublico()
+  const [prioridadeSalva, setFilterPriority] = useFiltroPersistente<string>(chave('insights:prioridade'), 'URGENTE')
   const filterPriority = prioridadeSalva === 'Todos' ? 'URGENTE' : prioridadeSalva
-  const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>('insights:categorias', [])
+  const [filterCategories, setFilterCategories] = useFiltroPersistente<string[]>(chave('insights:categorias'), [])
   /**
    * "Fixados" é de CADA aba: ligar em Urgente não liga em Importante. As três
    * abas são páginas independentes, e um filtro que atravessasse todas faria a
    * aba seguinte abrir vazia sem motivo visível.
    */
-  const [fixadosPorAba, setFixadosPorAba] = useFiltroPersistente<Record<string, boolean>>('insights:fixados-por-aba', {})
+  const [fixadosPorAba, setFixadosPorAba] = useFiltroPersistente<Record<string, boolean>>(chave('insights:fixados-por-aba'), {})
   const showOnlyPinned = !!fixadosPorAba[filterPriority]
   const setShowOnlyPinned = (muda: (atual: boolean) => boolean) =>
     setFixadosPorAba((prev) => ({ ...prev, [filterPriority]: muda(!!prev[filterPriority]) }))
-  const [busca, setBusca] = useFiltroPersistente('insights:busca', '')
+  const [busca, setBusca] = useFiltroPersistente(chave('insights:busca'), '')
 
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
@@ -243,8 +248,9 @@ export default function Insights() {
       //
       // Agora `gerar-insights` desativa e libera os pontos como primeiro passo
       // da própria invocação.
+      // As funções não recebem o cabeçalho da página: o público vai no corpo.
       const { data, error } = await supabase.functions.invoke('gerar-insights', {
-        body: { force: true },
+        body: { force: true, publico },
       })
 
       if (error) throw error
@@ -752,7 +758,8 @@ export default function Insights() {
                 insight={insight}
                 criandoAcao={criandoAcaoId === insight.id}
                 onCreateTask={() => handleCriarAcao(insight)}
-                onAiChat={() => handleAiChat(insight)}
+                // O assistente só conhece os feedbacks dos clientes.
+                onAiChat={ehEquipe ? undefined : () => handleAiChat(insight)}
                 onDelete={() => handleDeleteInsight(insight.id)}
                 onPin={(fixado) => handleTogglePin(insight.id, fixado)}
               />

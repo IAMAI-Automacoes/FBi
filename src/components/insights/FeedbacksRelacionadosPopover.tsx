@@ -6,6 +6,7 @@ import { estiloCategoria } from '@/lib/categorias-feedback'
 import { coresSentimento, rotuloSentimento } from '@/lib/sentimento'
 import { formatarDataFeedback } from '@/lib/formatar-tempo'
 import { supabase } from '@/lib/supabase/client'
+import { usePublico } from '@/lib/publico'
 import { cn } from '@/lib/utils'
 
 /**
@@ -65,6 +66,7 @@ export function FeedbacksRelacionadosPopover({
   rotulo,
   className,
 }: FeedbacksRelacionadosPopoverProps) {
+  const { um, varios, caminho } = usePublico()
   const [open, setOpen] = useState(false)
   const [carregado, setCarregado] = useState(false)
   const [carregando, setCarregando] = useState(false)
@@ -173,7 +175,7 @@ export function FeedbacksRelacionadosPopover({
                 {clientesDistintos > 0 && (
                   <span className="font-medium normal-case tracking-normal">
                     {' '}
-                    · {clientesDistintos} {clientesDistintos === 1 ? 'cliente' : 'clientes'}
+                    · {clientesDistintos} {clientesDistintos === 1 ? um : varios}
                   </span>
                 )}
               </h4>
@@ -265,7 +267,7 @@ export function FeedbacksRelacionadosPopover({
               onde mandar — a acao criada a mao cai nesse caso. */}
           {origem.tipo === 'insight' && (
             <Link
-              to={`/feedbacks?insight_id=${origem.id}`}
+              to={`${caminho('/feedbacks')}?insight_id=${origem.id}`}
               className="block pt-1 text-center text-xs font-medium text-blue-600 hover:underline"
             >
               Ver na página de feedbacks →

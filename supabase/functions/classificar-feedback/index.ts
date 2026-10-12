@@ -29,6 +29,7 @@ import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { ehNegativo, ehPositivo, ehSugestao } from '../_shared/sentimento.ts'
+import { promptDoPublico, publicoDe } from '../_shared/publico.ts'
 
 const AGENTE = 'classificador_feedback'
 
@@ -124,10 +125,12 @@ Deno.serve(async (req: Request) => {
 
     const { data: fb } = await db
       .from('feedbacks_restaurante')
-      .select('id, restaurante_id, texto_original, resumo, categoria, sentimento, tema_id')
+      .select('id, restaurante_id, texto_original, resumo, categoria, sentimento, tema_id, publico')
       .eq('id', feedback_id)
       .single()
     if (!fb || !fb.restaurante_id) return json({ error: 'feedback não encontrado' }, 404)
+    // Cliente e equipe têm temas separados: o mesmo rótulo pode existir nos dois.
+    const publico = publicoDe(fb.publico)
     if (fb.tema_id) {
       await vincular(fb.id)
       return json({ ok: true, ja_classificado: true })
@@ -155,6 +158,7 @@ Deno.serve(async (req: Request) => {
       .from('feedback_temas')
       .select('id, rotulo, tipo')
       .eq('restaurante_id', fb.restaurante_id)
+      .eq('publico', publico)
     if (tipoDoPonto) consultaTemas = consultaTemas.eq('tipo', tipoDoPonto)
     const { data: temas } = await consultaTemas
       .order('quantidade', { ascending: false })
@@ -167,12 +171,12 @@ Deno.serve(async (req: Request) => {
       : '(nenhum tema ainda)'
 
     const prompts = await carregarPrompts(db)
-    const prompt = montarPrompt(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
+    const prompt = promptDoPublico(montarPrompt(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
       temas: lista,
       texto,
       categoria: fb.categoria ?? '—',
       sentimento: fb.sentimento ?? '—',
-    })
+    }), publico)
 
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 300 })
     // Agente desligado no painel: o feedback fica sem tema em vez de a função
@@ -220,6 +224,7 @@ Deno.serve(async (req: Request) => {
           .from('feedback_temas')
           .select('id')
           .eq('restaurante_id', fb.restaurante_id)
+          .eq('publico', publico)
           .ilike('rotulo', rotulo)
           .maybeSingle()
         return data?.id ?? null
@@ -229,7 +234,7 @@ Deno.serve(async (req: Request) => {
       if (!temaId) {
         const { data: novo, error: errNovo } = await db
           .from('feedback_temas')
-          .insert({ restaurante_id: fb.restaurante_id, rotulo, tipo, quantidade: 0 })
+          .insert({ restaurante_id: fb.restaurante_id, rotulo, tipo, quantidade: 0, publico })
           .select('id')
           .single()
         if (errNovo) {

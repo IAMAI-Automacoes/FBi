@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { CABECALHO_PUBLICO } from '@/lib/publico-rota'
 import { subDays, startOfDay, addDays } from 'date-fns'
 
 export interface FiltrosFeedback {
@@ -203,6 +204,9 @@ export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<nu
     .eq('restaurante_id', restauranteId)
     .gt('created_at', desde)
     .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
+    // É o numerozinho do menu "Feedbacks" (dos clientes): não muda quando a
+    // página aberta é da equipe.
+    .setHeader(CABECALHO_PUBLICO, 'cliente')
 
   if (error) return 0
   return count ?? 0

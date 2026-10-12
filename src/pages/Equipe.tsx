@@ -7,48 +7,43 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AbaEnvios } from '@/components/equipe/AbaEnvios'
 import { AbaFuncionarios } from '@/components/equipe/AbaFuncionarios'
-import { AbaRespostas } from '@/components/equipe/AbaRespostas'
-import { AbaResumo } from '@/components/equipe/AbaResumo'
 import { PedirFeedback } from '@/components/equipe/PedirFeedback'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
-import type { ConviteAnonimo, Envio, Funcionario, PontoEquipe, RespostaAnonima } from '@/lib/equipe'
-import { acaoEquipe, buscarConvites, buscarEnvios, buscarFuncionarios, buscarPontos, buscarRespostas, type EstadoNumero } from '@/lib/queries/equipe'
+import type { ConviteAnonimo, Envio, Funcionario } from '@/lib/equipe'
+import { acaoEquipe, buscarConvites, buscarEnvios, buscarFuncionarios, type PreviaConvite } from '@/lib/queries/equipe'
 
-/* Equipe: o restaurante cadastra os funcionários, pede feedback pelo WhatsApp
-   (de um número só do EasyFeed, que o dono não lê) e vê aqui o que a equipe
-   respondeu, analisado e sem nome. É separado do feedback dos clientes: outras
-   tabelas, outras categorias, e nada daqui entra em Feedbacks, Insights ou
-   Ações. Por enquanto só o admin da plataforma vê (menu, rota e a função
-   equipe com SO_ADMIN). */
+/* Equipe → Funcionários: o restaurante cadastra quem trabalha lá e pede
+   feedback pelo WhatsApp dele (o mesmo que fala com os clientes).
 
-type Aba = 'resumo' | 'respostas' | 'funcionarios' | 'envios'
+   O que a equipe responde aparece nas outras subpáginas (menu no topo):
+   Feedbacks, Insights e Ações. São as MESMAS telas dos clientes, com a mesma
+   IA; o banco separa os dois públicos (ver `lib/publico-rota.ts`).
+
+   Por enquanto só o admin da plataforma vê (menu, rotas, a função `equipe` com
+   SO_ADMIN e `equipe_liberada()` no banco). */
+
+type Aba = 'funcionarios' | 'envios'
 
 export default function Equipe() {
   const { usuario } = useAuth()
   const restauranteId = usuario?.restaurante_id ?? null
   const [carregando, setCarregando] = useState(true)
-  const [aba, setAba] = useState<Aba>('resumo')
+  const [aba, setAba] = useState<Aba>('funcionarios')
   const [pedindo, setPedindo] = useState(false)
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([])
   const [envios, setEnvios] = useState<Envio[]>([])
   const [convites, setConvites] = useState<ConviteAnonimo[]>([])
-  const [respostas, setRespostas] = useState<RespostaAnonima[]>([])
-  const [pontos, setPontos] = useState<PontoEquipe[]>([])
   // null = ainda conferindo.
-  const [numeroConectado, setNumeroConectado] = useState<boolean | null>(null)
+  const [whatsappConectado, setWhatsappConectado] = useState<boolean | null>(null)
 
   const carregar = useCallback(async () => {
     if (!restauranteId) return
     try {
-      const [f, e, c, r, p] = await Promise.all([
-        buscarFuncionarios(restauranteId), buscarEnvios(restauranteId), buscarConvites(restauranteId), buscarRespostas(restauranteId), buscarPontos(restauranteId),
-      ])
+      const [f, e, c] = await Promise.all([buscarFuncionarios(restauranteId), buscarEnvios(restauranteId), buscarConvites(restauranteId)])
       setFuncionarios(f)
       setEnvios(e)
       setConvites(c)
-      setRespostas(r)
-      setPontos(p)
     } catch {
       toast.error('Não foi possível carregar a equipe.')
     } finally {
@@ -57,9 +52,9 @@ export default function Equipe() {
   }, [restauranteId])
 
   useEffect(() => { carregar() }, [carregar])
-  useRealtimeReload(['equipe_funcionarios', 'equipe_envios', 'equipe_convites', 'equipe_respostas'], restauranteId, carregar)
+  useRealtimeReload(['equipe_funcionarios', 'equipe_envios', 'equipe_convites'], restauranteId, carregar)
   useEffect(() => {
-    acaoEquipe<EstadoNumero>('numero_status').then((r) => setNumeroConectado(r.ok ? r.conectado === true : null))
+    acaoEquipe<PreviaConvite>('previa').then((r) => setWhatsappConectado(r.ok ? r.whatsapp_conectado === true : null))
   }, [])
 
   if (carregando) {
@@ -77,41 +72,35 @@ export default function Equipe() {
     <div className="mx-auto max-w-5xl space-y-5 py-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900">Equipe</h1>
-          <p className="mt-1 text-sm text-gray-500">Peça feedback para quem trabalha no restaurante. As respostas chegam aqui analisadas, sem nome e sem número.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Funcionários</h1>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            Cadastre quem trabalha no restaurante e peça feedback pelo WhatsApp. O que a equipe responder aparece em{' '}
+            <Link to="/equipe/feedbacks" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Feedbacks</Link>, e a IA monta os{' '}
+            <Link to="/equipe/insights" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Insights</Link> e as{' '}
+            <Link to="/equipe/acoes" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Ações</Link>.
+          </p>
         </div>
         <Button onClick={() => setPedindo(true)} className="shrink-0 bg-[#1D4ED8] hover:bg-[#1E40AF]">
           <Send className="mr-1.5 h-4 w-4" /> Pedir feedback
         </Button>
       </div>
 
-      {numeroConectado === false && (
+      {whatsappConectado === false && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            O número do EasyFeed que fala com a equipe não está conectado. Dá para cadastrar os funcionários, mas os pedidos só saem depois de conectar em{' '}
-            <Link to="/admin?aba=equipe" className="font-medium underline underline-offset-2">Admin → Equipe</Link>.
+            O WhatsApp do restaurante não está conectado. Dá para cadastrar os funcionários, mas os pedidos só saem depois de conectar em{' '}
+            <Link to="/configuracoes" className="font-medium underline underline-offset-2">Configurações</Link>.
           </span>
         </p>
       )}
 
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
         <TabsList className="mb-4 max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="resumo">Resumo</TabsTrigger>
-          <TabsTrigger value="respostas">Respostas{respostas.length ? ` (${respostas.length})` : ''}</TabsTrigger>
-          <TabsTrigger value="funcionarios">Funcionários{funcionarios.length ? ` (${funcionarios.length})` : ''}</TabsTrigger>
-          <TabsTrigger value="envios">Pedidos{envios.length ? ` (${envios.length})` : ''}</TabsTrigger>
+          <TabsTrigger value="funcionarios">Cadastro{funcionarios.length ? ` (${funcionarios.length})` : ''}</TabsTrigger>
+          <TabsTrigger value="envios">Pedidos de feedback{envios.length ? ` (${envios.length})` : ''}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="resumo">
-          <AbaResumo
-            funcionarios={funcionarios} envios={envios} convites={convites} respostas={respostas} pontos={pontos}
-            onMudou={carregar} onPedir={() => setPedindo(true)} onCadastrar={() => setAba('funcionarios')}
-          />
-        </TabsContent>
-        <TabsContent value="respostas">
-          <AbaRespostas envios={envios} respostas={respostas} pontos={pontos} onMudou={carregar} />
-        </TabsContent>
         <TabsContent value="funcionarios">
           <AbaFuncionarios restauranteId={restauranteId} funcionarios={funcionarios} onMudou={carregar} />
         </TabsContent>

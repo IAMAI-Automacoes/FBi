@@ -27,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { FeedbacksRelacionadosPopover } from '@/components/insights/FeedbacksRelacionadosPopover'
 import { vincularFeedbacksDaAcao } from '@/lib/queries/acoes'
 import { useToast } from '@/hooks/use-toast'
+import { usePublico } from '@/lib/publico'
 
 interface DetalhesAcaoPanelProps {
   // Mesma linha de `acoes_operacionais` que o TaskCard recebe.
@@ -81,6 +82,7 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
    */
   const [buscando, setBuscando] = useState(false)
   const { toast } = useToast()
+  const { ehEquipe } = usePublico()
 
   const buscarFeedbacks = async () => {
     setBuscando(true)
@@ -91,7 +93,8 @@ export function DetalhesAcaoPanel({ task, onClose, onEditar, onExcluir }: Detalh
         n > 0
           ? {
               title: `${n} feedback${n > 1 ? 's' : ''} ligado${n > 1 ? 's' : ''}`,
-              description: 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
+              // O retorno pelo WhatsApp é só dos clientes: a equipe não recebe aviso.
+              description: ehEquipe ? undefined : 'Quem escreveu vai ser avisado quando esta ação avançar de status.',
             }
           : {
               title: 'Nenhum feedback novo',

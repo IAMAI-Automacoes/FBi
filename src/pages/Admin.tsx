@@ -24,7 +24,6 @@ import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
-import { PainelEquipeAdmin } from '@/pages/admin/PainelEquipeAdmin'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
@@ -1175,12 +1174,11 @@ export default function Admin() {
     (paramApp === 'mensagens' || appLembrado === 'mensagens')
   // ?restaurante=<id>: aba WhatsApp com aquele restaurante (recarregar mantém).
   // ?aba=contas: volta da conta de um cliente ("Voltar para minha conta").
-  // ?aba=equipe: vem do aviso da página Equipe (conectar o número do EasyFeed).
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const q = new URLSearchParams(location.search)
     if (q.has('restaurante')) return 'whatsapp'
     const aba = q.get('aba')
-    return aba === 'contas' || aba === 'equipe' ? aba : 'suporte'
+    return aba === 'contas' ? aba : 'suporte'
   })
   const trocarAba = (tab: Tab) => {
     // Saindo da aba WhatsApp: os parâmetros dela (?restaurante=, ?chat=…) saem da URL.
@@ -2211,7 +2209,6 @@ export default function Admin() {
 
         {activeTab === 'influenciadores' && <PainelInfluenciadores />}
         {activeTab === 'videos' && <PainelVideosAdmin />}
-        {activeTab === 'equipe' && <PainelEquipeAdmin />}
         {activeTab === 'agentes' && <PainelAgentes />}
 
         {/* ── MOTOR DE RESPOSTA ── */}

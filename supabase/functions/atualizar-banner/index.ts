@@ -97,10 +97,13 @@ Deno.serve(async (req: Request) => {
         // O filtro por restaurante_id faltava aqui: dentro do laço por
         // restaurante, cada banner era gerado com os feedbacks de TODOS os
         // restaurantes da plataforma.
+        //
+        // O banner fala dos CLIENTES: o que a equipe contou fica de fora.
         let { data: feedbacks } = await db
           .from('feedbacks_restaurante')
           .select('texto_original, sentimento, categoria')
           .eq('restaurante_id', rest.id)
+          .eq('publico', 'cliente')
           .gte('created_at', desde(24))
 
         if (!feedbacks?.length) {
@@ -108,6 +111,7 @@ Deno.serve(async (req: Request) => {
             .from('feedbacks_restaurante')
             .select('texto_original, sentimento, categoria')
             .eq('restaurante_id', rest.id)
+            .eq('publico', 'cliente')
             .gte('created_at', desde(48))
           feedbacks = feedbacks48h || []
         }
