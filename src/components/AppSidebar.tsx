@@ -10,7 +10,7 @@ import {
   Users,
   HelpCircle,
   Star,
-  Clapperboard,
+  BadgePercent,
   HeartHandshake,
 } from 'lucide-react'
 import {
@@ -46,10 +46,11 @@ const navigation = [
   { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },
-  // Missões de vídeo: só o admin da plataforma por enquanto. Para liberar aos
-  // clientes: apague `soAdmin`, o SoAdminPlataforma da rota (App.tsx) e o
-  // SO_ADMIN da função videos-missao.
-  { name: 'Missões', href: '/missoes', icon: Clapperboard, modulo: 'visao_geral', soAdmin: true },
+  // Descontos (vídeos e indicações): só o admin da plataforma por enquanto.
+  // Para liberar aos clientes: apague `soAdmin`, o SoAdminPlataforma das rotas
+  // (App.tsx), o SO_ADMIN da função videos-missao e mude indicacao_liberada()
+  // no banco.
+  { name: 'Descontos', href: '/descontos', icon: BadgePercent, modulo: 'visao_geral', soAdmin: true },
   // Feedback da equipe (funcionários): só o admin da plataforma por enquanto.
   // Para liberar aos donos: apague `soAdmin`, o SoAdminPlataforma da rota
   // (App.tsx) e o SO_ADMIN da função equipe, e dê a eles a RLS das tabelas equipe_*.
@@ -205,7 +206,7 @@ export function AppSidebar() {
           {navigation
             .filter((item) => podeVer(item.modulo) && (!('soAdmin' in item) || ehAdminPlataforma))
             .map((item) => {
-              // A subpágina (/acoes/arquivadas, /missoes/historico) marca o item de cima.
+              // A subpágina (/acoes/arquivadas, /descontos/indicacoes) marca o item de cima.
               const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}/`))
               return (
                 <SidebarMenuItem key={item.name}>

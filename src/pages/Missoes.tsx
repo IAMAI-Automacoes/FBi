@@ -14,11 +14,13 @@ import {
   podeMandar, problemaDoArquivo, proximaMissao, rotuloDuracao, situacaoDaMissao, type EnvioVideo, type Missao,
 } from '@/lib/missoes'
 import { acaoVideos, buscarEnvios, buscarMaxPorAno, buscarMissoes, subirVideo } from '@/lib/queries/missoes'
+import { ROTA_DESCONTOS_HISTORICO } from '@/lib/descontos'
 
 /* Missões de vídeo: o restaurante grava um vídeo falando do EasyFeed, do jeito
    que quiser, e a IA confere se cumpriu os requisitos da missão. As missões são
    uma fila: ele só vê a da vez (proximaMissao), com os requisitos e o botão de
-   subir; cumpriu, aparece a seguinte. O histórico fica em /missoes/historico.
+   subir; cumpriu, aparece a seguinte. O histórico fica em /descontos/historico.
+   É a subpágina Vídeos da área Descontos (a outra é Indicações).
    Por enquanto só o admin da plataforma vê (menu, rota e a função
    videos-missao com SO_ADMIN). */
 
@@ -182,7 +184,7 @@ function ProximoVideo({ missao, envios, limite, onEnviado }: {
         {situacao === 'analisando' && (
           <p className="flex items-start gap-2 text-sm text-blue-800">
             <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Seu vídeo está em análise. Leva alguns minutos, e o resultado aparece no <Link to="/missoes/historico" className="font-medium underline underline-offset-2">histórico</Link>.</span>
+            <span>Seu vídeo está em análise. Leva alguns minutos, e o resultado aparece no <Link to={ROTA_DESCONTOS_HISTORICO} className="font-medium underline underline-offset-2">histórico</Link>.</span>
           </p>
         )}
         {podeMandar(situacao) && limite && <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">{limite}</p>}
@@ -259,7 +261,7 @@ export default function Missoes() {
           <p className="mt-1 text-sm text-gray-500">Grave um vídeo falando do EasyFeed, do seu jeito. Uma IA assiste e, se cumprir os requisitos, libera o próximo.</p>
         </div>
         <Button asChild variant="outline" size="sm" className="shrink-0">
-          <Link to="/missoes/historico">
+          <Link to={ROTA_DESCONTOS_HISTORICO}>
             <History className="mr-1.5 h-4 w-4" /> Histórico
             {emAnaliseAgora > 0 && <span className="ml-1.5 rounded-full bg-blue-50 px-1.5 text-[11px] font-semibold text-blue-700">{emAnaliseAgora} em análise</span>}
           </Link>

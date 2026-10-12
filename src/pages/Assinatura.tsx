@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
@@ -7,6 +7,8 @@ import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { usePrecos } from '@/hooks/use-precos'
 import { criarCheckout, ErroStripe, guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/queries/stripe'
+import { registrarIndicacao } from '@/lib/queries/indicacoes'
+import { RECUSA_QUE_TRAVA } from '@/lib/indicacoes'
 import { Check, Loader2, LogOut } from 'lucide-react'
 
 /* Destino de toda conta sem plano ativo. Cobre três situações com uma tela só:
@@ -21,6 +23,14 @@ export default function Assinatura() {
   const [erroCheckout, setErroCheckout] = useState<string | null>(null)
   const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
 
+  // Entrou por um link de indicação (`?ref=`, guardado no navegador): a conta
+  // já fica marcada como indicada, mesmo que só assine outro dia. O banco
+  // ignora quem já pagou alguma vez e o próprio código.
+  useEffect(() => {
+    const guardado = lerCodigoIndicacao()
+    if (guardado) void registrarIndicacao(guardado)
+  }, [])
+
   // Usuário logado: a função lê o JWT, grava o restaurante na metadata e o
   // webhook vincula sozinho. Volta em /checkout/sucesso.
   const assinar = async (ciclo: Ciclo) => {
@@ -29,6 +39,18 @@ export default function Assinatura() {
     setErroCheckout(null)
     try {
       guardarCodigoIndicacao(codigo)
+      // O código digitado agora é o que vale. Só o próprio código trava a
+      // compra; qualquer outra recusa (ou erro) segue para o checkout, que
+      // confere o código de novo.
+      if (codigo.trim()) {
+        const indicacao = await registrarIndicacao(codigo)
+        const trava = indicacao.motivo ? RECUSA_QUE_TRAVA[indicacao.motivo] : undefined
+        if (trava) {
+          setErroCheckout(trava)
+          setAbrindo(null)
+          return
+        }
+      }
       const url = await criarCheckout(ciclo, { codigoAfiliado: codigo || undefined })
       window.location.assign(url)
     } catch (e) {

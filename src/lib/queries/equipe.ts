@@ -107,6 +107,8 @@ export interface RascunhoAviso {
 export interface PedidoAutomaticoConfig {
   ativo: boolean
   cada_dias: Frequencia
+  /** Só vale no mensal: o dia do mês em que sai (1 = começo do mês). */
+  dia_do_mes: number
   pergunta: string
   proximo_em: string | null
   ultimo_em: string | null

@@ -28,6 +28,7 @@ const Reports = lazy(() => import('./pages/Reports'))
 const Google = lazy(() => import('./pages/Google'))
 const Missoes = lazy(() => import('./pages/Missoes'))
 const MissoesHistorico = lazy(() => import('./pages/MissoesHistorico'))
+const Indicacoes = lazy(() => import('./pages/Indicacoes'))
 const Equipe = lazy(() => import('./pages/Equipe'))
 const Privacidade = lazy(() => import('./pages/Privacidade'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
@@ -53,8 +54,15 @@ import { ManifestPorRota } from './components/ManifestPorRota'
 import { ControleDemo } from './components/demo/ControleDemo'
 import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
 import { MODO_DEMO, PREFIXO_DEMO } from './lib/demo'
+import { ROTA_DESCONTOS, ROTA_DESCONTOS_HISTORICO, ROTA_INDICACOES } from './lib/descontos'
+import { lerCodigoIndicacao } from './lib/queries/stripe'
 import DemoLogin from './pages/demo/DemoLogin'
 import DemoEncerrada from './pages/demo/DemoEncerrada'
+
+// Link de indicação (`?ref=CODIGO`): guarda o código em qualquer página de
+// entrada (vendas, cadastro, login), antes de a navegação tirar o `?ref=` do
+// endereço. Quem usa depois é a tela de assinatura.
+lerCodigoIndicacao()
 
 const App = () => (
   <AuthProvider>
@@ -195,10 +203,11 @@ const App = () => (
                   </RotaPermitida>
                 }
               />
+              {/* Descontos (antes "Missões"): Vídeos e Indicações. Só o admin por
+                  enquanto (ver SO_ADMIN em videos-missao e indicacao_liberada no banco). */}
               <Route
-                path="/missoes"
+                path={ROTA_DESCONTOS}
                 element={
-                  // Só o admin por enquanto (ver SO_ADMIN em videos-missao).
                   <RotaPermitida modulo="visao_geral">
                     <SoAdminPlataforma>
                       <Missoes />
@@ -207,7 +216,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/missoes/historico"
+                path={ROTA_DESCONTOS_HISTORICO}
                 element={
                   <RotaPermitida modulo="visao_geral">
                     <SoAdminPlataforma>
@@ -216,6 +225,19 @@ const App = () => (
                   </RotaPermitida>
                 }
               />
+              <Route
+                path={ROTA_INDICACOES}
+                element={
+                  <RotaPermitida modulo="visao_geral">
+                    <SoAdminPlataforma>
+                      <Indicacoes />
+                    </SoAdminPlataforma>
+                  </RotaPermitida>
+                }
+              />
+              {/* Endereços antigos, de quando a página se chamava Missões. */}
+              <Route path="/missoes" element={<Navigate to={ROTA_DESCONTOS} replace />} />
+              <Route path="/missoes/historico" element={<Navigate to={ROTA_DESCONTOS_HISTORICO} replace />} />
               {/* Equipe (feedback dos funcionários): só o admin por enquanto, ver
                   AreaEquipe. Visão Geral, Feedbacks, Insights e Ações são as MESMAS páginas
                   dos clientes: o endereço /equipe é que faz o banco entregar só

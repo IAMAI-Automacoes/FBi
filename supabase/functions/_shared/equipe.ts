@@ -197,7 +197,8 @@ export const SCHEMA_AVISO = {
 
 // ── Pedido automático ────────────────────────────────────────────────────────
 // O sistema pede feedback sozinho, de tempos em tempos (toda semana, a cada 15
-// dias ou todo mês), sempre de manhã e nunca no domingo.
+// dias ou todo mês), sempre de manhã e nunca no domingo. O mensal é pelo
+// calendário: no começo do mês (dia 1) ou no dia que o dono escolher.
 
 export const FREQUENCIAS_AUTOMATICAS = [7, 14, 30] as const
 export const frequenciaValida = (v: unknown): v is (typeof FREQUENCIAS_AUTOMATICAS)[number] =>
@@ -222,16 +223,50 @@ export function proximaManha(agora: number): number {
   return manhaUtil(agora + DIA_MS)
 }
 
-/** Quando sai o próximo pedido, contando `cadaDias` a partir de `base`. */
-export function proximoPedido(base: number, cadaDias: number): number {
+/** A frequência que anda pelo calendário (dia do mês) em vez de contar dias. */
+export const MENSAL = 30
+
+/** O dia do mês do pedido mensal, de 1 a 31; null = não serve. */
+export function diaDoMesValido(v: unknown): number | null {
+  const n = Number(v)
+  return Number.isInteger(n) && n >= 1 && n <= 31 ? n : null
+}
+
+/**
+ * Pedido mensal: a próxima vez que cai o dia `dia`, DEPOIS de hoje (pelo
+ * calendário de Brasília), às 10h. Em mês mais curto vale o último dia dele
+ * (dia 31 em fevereiro sai no dia 28 ou 29), e domingo vira segunda.
+ */
+export function proximoDiaDoMes(agora: number, dia: number): number {
+  const d = diaDoMesValido(dia) ?? 1
+  const local = new Date(agora - BRASILIA_MS)
+  const ano = local.getUTCFullYear()
+  const mes = local.getUTCMonth()
+  // O Date resolve sozinho o mês 12 como janeiro do ano seguinte.
+  const noMes = (m: number) => Math.min(d, new Date(Date.UTC(ano, m + 1, 0)).getUTCDate())
+  const esteMes = noMes(mes)
+  const [m, diaAlvo] = esteMes > local.getUTCDate() ? [mes, esteMes] : [mes + 1, noMes(mes + 1)]
+  // Meio-dia de Brasília do dia alvo: a manhã útil dele (ou a segunda seguinte).
+  return manhaUtil(Date.UTC(ano, m, diaAlvo) + BRASILIA_MS + 12 * 3_600_000)
+}
+
+/**
+ * Quando sai o próximo pedido depois de `base`. Semanal e quinzenal contam os
+ * dias; o mensal vai para o dia do mês escolhido (1 quando não foi dito).
+ */
+export function proximoPedido(base: number, cadaDias: number, diaDoMes?: number | null): number {
+  if (Math.trunc(cadaDias) === MENSAL) return proximoDiaDoMes(base, diaDoMes ?? 1)
   return manhaUtil(base + Math.max(1, Math.trunc(cadaDias)) * DIA_MS)
 }
 
 /**
- * Ao ligar (ou mudar a frequência): o primeiro pedido automático respeita o
- * último pedido que já saiu, para não mandar dois em seguida, e nunca cai hoje.
+ * Ao ligar (ou mudar a frequência ou o dia). Semanal e quinzenal respeitam o
+ * último pedido que já saiu, para não mandar dois em seguida. O mensal segue o
+ * calendário: é o dia que o dono escolheu, tenha ele pedido à mão ou não. Em
+ * nenhum caso cai hoje.
  */
-export function primeiroPedidoAutomatico(agora: number, cadaDias: number, ultimoPedidoEm: number | null): number {
+export function primeiroPedidoAutomatico(agora: number, cadaDias: number, ultimoPedidoEm: number | null, diaDoMes?: number | null): number {
+  if (Math.trunc(cadaDias) === MENSAL) return proximoDiaDoMes(agora, diaDoMes ?? 1)
   const pelaFrequencia = ultimoPedidoEm ? proximoPedido(ultimoPedidoEm, cadaDias) : 0
   return Math.max(proximaManha(agora), pelaFrequencia)
 }

@@ -24,6 +24,7 @@ import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
+import { PainelIndicacoes } from '@/pages/admin/PainelIndicacoes'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
@@ -2156,12 +2157,19 @@ export default function Admin() {
               />
             ) : (
               <div className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-gray-500" />
-                    <h2 className="text-base font-semibold text-gray-800">Afiliados</h2>
+                {/* Restaurante que indica restaurante: ganha o benefício escrito aqui. */}
+                <PainelIndicacoes />
+
+                {/* Quem não é restaurante: só indica e ganha comissão em dinheiro. */}
+                <div className="flex items-start justify-between gap-4 mb-5">
+                  <div className="flex items-start gap-2">
+                    <Users className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-800">Afiliados</h2>
+                      <p className="mt-1 text-[12px] text-gray-500">Quem não é restaurante: só indica e ganha comissão em dinheiro a cada mensalidade paga.</p>
+                    </div>
                   </div>
-                  <Button size="sm" onClick={openAddAfil}><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
+                  <Button size="sm" onClick={openAddAfil} className="shrink-0"><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
                 </div>
                 {loadingAfil ? (
                   <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>

@@ -192,6 +192,7 @@ export type Database = {
           id: string
           nome: string
           observacoes: string | null
+          restaurante_id: number | null
           stripe_account_id: string | null
           stripe_connect_status: string
           telefone: string | null
@@ -213,6 +214,7 @@ export type Database = {
           id?: string
           nome: string
           observacoes?: string | null
+          restaurante_id?: number | null
           stripe_account_id?: string | null
           stripe_connect_status?: string
           telefone?: string | null
@@ -234,12 +236,21 @@ export type Database = {
           id?: string
           nome?: string
           observacoes?: string | null
+          restaurante_id?: number | null
           stripe_account_id?: string | null
           stripe_connect_status?: string
           telefone?: string | null
           tipo_conta?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "afiliados_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agentes_ia: {
         Row: {
@@ -879,6 +890,7 @@ export type Database = {
           atualizado_em: string
           atualizado_por: string | null
           cada_dias: number
+          dia_do_mes: number | null
           pergunta: string
           proximo_em: string | null
           restaurante_id: number
@@ -890,6 +902,7 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           cada_dias?: number
+          dia_do_mes?: number | null
           pergunta: string
           proximo_em?: string | null
           restaurante_id: number
@@ -901,6 +914,7 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           cada_dias?: number
+          dia_do_mes?: number | null
           pergunta?: string
           proximo_em?: string | null
           restaurante_id?: number
@@ -1687,6 +1701,120 @@ export type Database = {
             foreignKeyName: "acoes_ia_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      indicacao_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          beneficio: string
+          id: boolean
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          beneficio?: string
+          id?: boolean
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          beneficio?: string
+          id?: boolean
+        }
+        Relationships: []
+      }
+      indicacao_premios: {
+        Row: {
+          aplicado_em: string | null
+          aplicado_por: string | null
+          beneficio: string
+          criado_em: string
+          id: string
+          indicado_restaurante_id: number | null
+          restaurante_id: number
+          status: string
+        }
+        Insert: {
+          aplicado_em?: string | null
+          aplicado_por?: string | null
+          beneficio: string
+          criado_em?: string
+          id?: string
+          indicado_restaurante_id?: number | null
+          restaurante_id: number
+          status?: string
+        }
+        Update: {
+          aplicado_em?: string | null
+          aplicado_por?: string | null
+          beneficio?: string
+          criado_em?: string
+          id?: string
+          indicado_restaurante_id?: number | null
+          restaurante_id?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicacao_premios_indicado_restaurante_id_fkey"
+            columns: ["indicado_restaurante_id"]
+            isOneToOne: true
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacao_premios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      indicacoes: {
+        Row: {
+          afiliado_id: string
+          codigo: string
+          criado_em: string
+          indicado_restaurante_id: number
+          origem: string
+          pagou_em: string | null
+        }
+        Insert: {
+          afiliado_id: string
+          codigo: string
+          criado_em?: string
+          indicado_restaurante_id: number
+          origem?: string
+          pagou_em?: string | null
+        }
+        Update: {
+          afiliado_id?: string
+          codigo?: string
+          criado_em?: string
+          indicado_restaurante_id?: number
+          origem?: string
+          pagou_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicacoes_afiliado_id_fkey"
+            columns: ["afiliado_id"]
+            isOneToOne: false
+            referencedRelation: "afiliados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indicacoes_indicado_restaurante_id_fkey"
+            columns: ["indicado_restaurante_id"]
+            isOneToOne: true
             referencedRelation: "restaurantes"
             referencedColumns: ["id"]
           },
@@ -4288,6 +4416,28 @@ export type Database = {
           media_30d: number
           quantidade_30d: number
         }[]
+      }
+      indicacao_admin: { Args: never; Returns: Json }
+      indicacao_admin_premio: {
+        Args: { p_id: string; p_status: string }
+        Returns: Json
+      }
+      indicacao_admin_salvar: {
+        Args: { p_ativo: boolean; p_beneficio: string }
+        Returns: Json
+      }
+      indicacao_codigo_novo: { Args: { p_nome: string }; Returns: string }
+      indicacao_eh_admin: { Args: never; Returns: boolean }
+      indicacao_ja_pagou: {
+        Args: { p_restaurante_id: number }
+        Returns: boolean
+      }
+      indicacao_liberada: { Args: never; Returns: boolean }
+      indicacao_minha: { Args: never; Returns: Json }
+      indicacao_registrar: { Args: { p_codigo: string }; Returns: Json }
+      indicacao_registrar_pagamento: {
+        Args: { p_restaurante_id: number }
+        Returns: string
       }
       influencer_conta: {
         Args: { p_email: string }

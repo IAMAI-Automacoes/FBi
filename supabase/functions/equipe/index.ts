@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
       },
       automatico: async (restauranteId) => {
         const { data } = await db.from('equipe_automatico')
-          .select('restaurante_id, ativo, cada_dias, pergunta, proximo_em, ultimo_em, ultimo_erro').eq('restaurante_id', restauranteId).maybeSingle()
+          .select('restaurante_id, ativo, cada_dias, dia_do_mes, pergunta, proximo_em, ultimo_em, ultimo_erro').eq('restaurante_id', restauranteId).maybeSingle()
         return data ? { ...data, restaurante_id: Number(data.restaurante_id) } : null
       },
       salvarAutomatico: async (restauranteId, campos) => {
@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
       },
       automaticosVencidos: async (ate) => {
         const { data, error } = await db.from('equipe_automatico')
-          .select('restaurante_id, ativo, cada_dias, pergunta, proximo_em, ultimo_em, ultimo_erro')
+          .select('restaurante_id, ativo, cada_dias, dia_do_mes, pergunta, proximo_em, ultimo_em, ultimo_erro')
           .eq('ativo', true).lte('proximo_em', ate).order('proximo_em').limit(5)
         if (error) throw error
         return (data ?? []).map((a: { restaurante_id: number }) => ({ ...a, restaurante_id: Number(a.restaurante_id) }))

@@ -3,8 +3,9 @@
  *   node --experimental-strip-types src/lib/__testes__/equipe.teste.ts
  */
 import {
-  AVISO_MAX, AVISO_MIN, contasDoEnvio, formatarAteQuando, fraseDeRespostas, fraseDoPrazo, FREQUENCIAS, lerListaColada, PERGUNTA_MAX, PERGUNTA_MIN,
-  podeReceber, resumoDosPedidos, ROTULO_FREQUENCIA, situacaoDoFuncionario, type ConviteAnonimo,
+  AVISO_MAX, AVISO_MIN, avisoDoDiaDoMes, contasDoEnvio, DIA_COMECO_DO_MES, DIA_ESPECIFICO_SUGERIDO, diaDoMesDe, DIAS_ESPECIFICOS, formatarAteQuando, fraseDeRespostas,
+  fraseDoPrazo, FREQUENCIAS, lerListaColada, MENSAL, PERGUNTA_MAX, PERGUNTA_MIN,
+  podeReceber, resumoDaFrequencia, resumoDosPedidos, ROTULO_FREQUENCIA, situacaoDoFuncionario, type ConviteAnonimo,
 } from '../equipe.ts'
 import * as servidor from '../../../supabase/functions/_shared/equipe.ts'
 import { caminhoDoPublico, ehRotaDaEquipe, levaOPublico, TABELAS_COM_PUBLICO } from '../publico-rota.ts'
@@ -49,6 +50,16 @@ ok('contas de envio vazio não divide por zero', c.taxa === 0 && c.total === 0)
 ok('pergunta, aviso e frequências: os mesmos números da função equipe', PERGUNTA_MIN === servidor.PERGUNTA_MIN && PERGUNTA_MAX === servidor.PERGUNTA_MAX
   && AVISO_MIN === servidor.AVISO_MIN && AVISO_MAX === servidor.AVISO_MAX && FREQUENCIAS.join() === servidor.FREQUENCIAS_AUTOMATICAS.join())
 ok('frequência por extenso', ROTULO_FREQUENCIA[7] === 'Toda semana' && ROTULO_FREQUENCIA[14] === 'A cada 15 dias' && ROTULO_FREQUENCIA[30] === 'Todo mês')
+
+// Pedido mensal: o dia do mês
+ok('mensal: a mesma frequência e a mesma regra de dia da função equipe', MENSAL === servidor.MENSAL
+  && [1, 2, 15, 31].every((d) => diaDoMesDe(d) === servidor.diaDoMesValido(d)) && [0, 32, 1.5, 'x', null, undefined].every((d) => servidor.diaDoMesValido(d) === null && diaDoMesDe(d) === DIA_COMECO_DO_MES))
+ok('dias de "Em um dia específico": do 2 ao 31, todos aceitos pela função, e o sugerido está entre eles', DIAS_ESPECIFICOS.length === 30 && DIAS_ESPECIFICOS[0] === 2 && DIAS_ESPECIFICOS[29] === 31
+  && DIAS_ESPECIFICOS.every((d) => servidor.diaDoMesValido(d) === d) && DIAS_ESPECIFICOS.includes(DIA_ESPECIFICO_SUGERIDO) && !DIAS_ESPECIFICOS.includes(DIA_COMECO_DO_MES))
+ok('resumo da frequência: o mensal diz o dia', resumoDaFrequencia(7, 20) === 'Toda semana' && resumoDaFrequencia(14) === 'A cada 15 dias'
+  && resumoDaFrequencia(30) === 'Todo mês, no começo do mês' && resumoDaFrequencia(30, 1) === 'Todo mês, no começo do mês' && resumoDaFrequencia(30, 15) === 'Todo mês, no dia 15' && resumoDaFrequencia(30, null) === 'Todo mês, no começo do mês')
+ok('aviso do dia que não existe em todo mês: só do 29 em diante', avisoDoDiaDoMes(28) === null && avisoDoDiaDoMes(1) === null
+  && avisoDoDiaDoMes(29)!.includes('dia 29') && avisoDoDiaDoMes(31)!.includes('último dia do mês'))
 
 // Visão Geral da equipe: os números dos pedidos de feedback
 const envio = (id: number, tipo: 'pedido' | 'aviso', criado_em: string, status = 'concluido') => ({ id, tipo, status: status as 'concluido', criado_em })

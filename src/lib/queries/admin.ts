@@ -286,10 +286,14 @@ export interface Afiliado {
   created_at: string
 }
 
+/** Os afiliados de fora. O restaurante que indica outro também tem uma linha
+    em `afiliados` (restaurante_id preenchido, comissão 0), mas ele aparece em
+    "Indicação entre restaurantes" (PainelIndicacoes), não aqui. */
 export async function buscarAfiliados(): Promise<Afiliado[]> {
   const { data, error } = await supabase
     .from('afiliados')
     .select('*')
+    .is('restaurante_id', null)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as Afiliado[]

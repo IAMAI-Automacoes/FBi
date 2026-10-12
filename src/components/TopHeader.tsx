@@ -14,7 +14,9 @@ import { easyFeedLogoInterna } from '@/assets/brand'
 import { PilulaDemo } from '@/components/demo/ControleDemo'
 import { encerrarDemo } from '@/lib/queries/demo'
 import { NavEquipe } from '@/components/equipe/NavEquipe'
+import { NavDescontos } from '@/components/descontos/NavDescontos'
 import { ehRotaDaEquipe } from '@/lib/publico-rota'
+import { ehRotaDeDescontos } from '@/lib/descontos'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,8 +44,6 @@ const routeTitles: Record<string, string> = {
   '/acoes/arquivadas': 'Ações',
   '/relatorios': 'Relatórios',
   '/google': 'Google',
-  '/missoes': 'Missões',
-  '/missoes/historico': 'Missões',
   '/equipe': 'Equipe',
   '/qrcode': 'QR Codes',
   '/garcons': 'Garçons',
@@ -55,7 +55,8 @@ export function TopHeader() {
   const { usuario, logout, sessaoDemo } = useAuth()
   const { profile } = useUserProfile()
   const naEquipe = ehRotaDaEquipe(location.pathname)
-  const title = naEquipe ? 'Equipe' : routeTitles[location.pathname] || 'Dashboard'
+  const emDescontos = ehRotaDeDescontos(location.pathname)
+  const title = naEquipe ? 'Equipe' : emDescontos ? 'Descontos' : routeTitles[location.pathname] || 'Dashboard'
 
   const { extra } = useHeaderExtra()
   const { isAdmin } = usePlatformAdmin()
@@ -225,6 +226,13 @@ export function TopHeader() {
         {naEquipe && (
           <div className={extra ? 'px-4 sm:px-6' : 'px-4 pb-3 sm:px-6'}>
             <NavEquipe />
+          </div>
+        )}
+
+        {/* Descontos: Vídeos e Indicações. */}
+        {emDescontos && (
+          <div className={extra ? 'px-4 sm:px-6' : 'px-4 pb-3 sm:px-6'}>
+            <NavDescontos />
           </div>
         )}
 

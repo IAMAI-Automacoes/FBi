@@ -12,8 +12,9 @@ import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import { formatarDuracao, ROTULO_STATUS, type EnvioVideo, type Missao, type StatusEnvio } from '@/lib/missoes'
 import { buscarEnvios, buscarMissoes, linkDoVideo } from '@/lib/queries/missoes'
+import { ROTA_DESCONTOS } from '@/lib/descontos'
 
-/* Histórico das missões de vídeo (/missoes/historico): cada vídeo que o
+/* Histórico das missões de vídeo (/descontos/historico): cada vídeo que o
    restaurante mandou, com o resultado da IA (ou da equipe) e o vídeo. */
 
 const COR_STATUS: Record<StatusEnvio, string> = {
@@ -138,7 +139,7 @@ export default function MissoesHistorico() {
           <p className="mt-1 text-sm text-gray-500">Todos os vídeos que você mandou e o resultado de cada um.</p>
         </div>
         <Button asChild variant="outline" size="sm" className="shrink-0">
-          <Link to="/missoes"><ArrowLeft className="mr-1.5 h-4 w-4" /> Voltar para Missões</Link>
+          <Link to={ROTA_DESCONTOS}><ArrowLeft className="mr-1.5 h-4 w-4" /> Voltar para Vídeos</Link>
         </Button>
       </div>
 
@@ -147,7 +148,7 @@ export default function MissoesHistorico() {
       ) : historico.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center shadow-sm">
           <p className="text-sm text-gray-500">Você ainda não mandou nenhum vídeo.</p>
-          <Button asChild size="sm" variant="link" className="mt-1"><Link to="/missoes">Ver a missão da vez</Link></Button>
+          <Button asChild size="sm" variant="link" className="mt-1"><Link to={ROTA_DESCONTOS}>Ver a missão da vez</Link></Button>
         </div>
       ) : (
         <>

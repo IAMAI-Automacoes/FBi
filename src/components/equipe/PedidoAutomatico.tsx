@@ -5,18 +5,23 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { formatarAteQuando, FREQUENCIAS, PERGUNTA_MAX, PERGUNTA_MIN, ROTULO_FREQUENCIA, type Frequencia } from '@/lib/equipe'
+import {
+  avisoDoDiaDoMes, DIA_COMECO_DO_MES, DIA_ESPECIFICO_SUGERIDO, diaDoMesDe, DIAS_ESPECIFICOS, formatarAteQuando, FREQUENCIAS, MENSAL,
+  PERGUNTA_MAX, PERGUNTA_MIN, resumoDaFrequencia, ROTULO_FREQUENCIA, type Frequencia,
+} from '@/lib/equipe'
 import { acaoEquipe, type PedidoAutomaticoConfig } from '@/lib/queries/equipe'
 import { Cartao, Rotulo } from './pecas'
 
 /* Pedido automático: o sistema pede feedback sozinho, de tempos em tempos, para
    toda a equipe que pode receber. Quem guarda e dispara é a função equipe
    (ações "auto_ler" e "auto_salvar"); a rotina do minuto cria o pedido quando
-   a data chega. */
+   a data chega. O mensal sai num dia do mês: no começo (dia 1) ou no dia que
+   o dono escolher. */
 export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
   const [salvo, setSalvo] = useState<PedidoAutomaticoConfig | null>(null)
   const [ativo, setAtivo] = useState(false)
-  const [cada, setCada] = useState<Frequencia>(30)
+  const [cada, setCada] = useState<Frequencia>(MENSAL)
+  const [dia, setDia] = useState(DIA_COMECO_DO_MES)
   const [pergunta, setPergunta] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -25,6 +30,7 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
     setSalvo(c)
     setAtivo(c.ativo)
     setCada(c.cada_dias)
+    setDia(diaDoMesDe(c.dia_do_mes))
     setPergunta(c.pergunta)
   }
 
@@ -35,15 +41,20 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
     })
   }, [])
 
+  const mensal = cada === MENSAL
+  const noComeco = dia === DIA_COMECO_DO_MES
+  const avisoDoDia = mensal ? avisoDoDiaDoMes(dia) : null
+
   const limpa = pergunta.trim()
   const perguntaOk = limpa.length >= PERGUNTA_MIN && limpa.length <= PERGUNTA_MAX
-  const mudou = !!salvo && (ativo !== salvo.ativo || cada !== salvo.cada_dias || limpa !== salvo.pergunta.trim())
+  const mudou = !!salvo && (ativo !== salvo.ativo || cada !== salvo.cada_dias || limpa !== salvo.pergunta.trim()
+    || (mensal && dia !== diaDoMesDe(salvo.dia_do_mes)))
 
   const salvar = async () => {
     if (!perguntaOk) return
     setSalvando(true)
     setErro(null)
-    const r = await acaoEquipe<PedidoAutomaticoConfig>('auto_salvar', { ativo, cada_dias: cada, pergunta: limpa })
+    const r = await acaoEquipe<PedidoAutomaticoConfig>('auto_salvar', { ativo, cada_dias: cada, dia_do_mes: mensal ? dia : null, pergunta: limpa })
     setSalvando(false)
     if (!r.ok || typeof r.pergunta !== 'string') return setErro(r.error || 'Não foi possível salvar.')
     aplicar(r as PedidoAutomaticoConfig)
@@ -76,6 +87,27 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
                 {FREQUENCIAS.map((f) => <SelectItem key={f} value={String(f)}>{ROTULO_FREQUENCIA[f]}</SelectItem>)}
               </SelectContent>
             </Select>
+            {mensal && (
+              <>
+                <Rotulo className="mt-4">Em que dia</Rotulo>
+                <Select value={noComeco ? 'comeco' : 'dia'} onValueChange={(v) => setDia(v === 'comeco' ? DIA_COMECO_DO_MES : noComeco ? DIA_ESPECIFICO_SUGERIDO : dia)}>
+                  <SelectTrigger className="mt-1.5" aria-label="Em que dia do mês o pedido sai"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="comeco">No começo do mês</SelectItem>
+                    <SelectItem value="dia">Em um dia específico</SelectItem>
+                  </SelectContent>
+                </Select>
+                {!noComeco && (
+                  <Select value={String(dia)} onValueChange={(v) => setDia(Number(v))}>
+                    <SelectTrigger className="mt-2" aria-label="Dia do mês"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {DIAS_ESPECIFICOS.map((d) => <SelectItem key={d} value={String(d)}>Dia {d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {avisoDoDia && <p className="mt-1.5 text-xs text-gray-500">{avisoDoDia}</p>}
+              </>
+            )}
           </div>
           <div>
             <Rotulo>A pergunta</Rotulo>
@@ -98,7 +130,7 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
             {salvo.ativo && salvo.proximo_em
-              ? `Próximo pedido: ${formatarAteQuando(salvo.proximo_em)}. Sai de manhã, nunca no domingo.`
+              ? `${resumoDaFrequencia(salvo.cada_dias, salvo.dia_do_mes)}. Próximo pedido: ${formatarAteQuando(salvo.proximo_em)}. Sai de manhã, nunca no domingo.`
               : 'Desligado: você pede quando quiser, no botão "Pedir feedback".'}
           </p>
           {mudou && (

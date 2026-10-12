@@ -14,13 +14,13 @@
 //   rascunho_aviso → { acao_id }: o texto que a IA sugere para contar à equipe que a ação foi concluída
 //   criar_aviso    → { acao_id, texto }: põe o aviso (já revisado) na fila, para a equipe toda
 //   auto_ler       → como está o pedido automático
-//   auto_salvar    → { ativo, cada_dias, pergunta }: liga, desliga ou muda o pedido automático
+//   auto_salvar    → { ativo, cada_dias, dia_do_mes?, pergunta }: liga, desliga ou muda o pedido automático
 // Só a rotina do banco (x-cron-secret), de minuto em minuto:
 //   tick → cria o pedido automático que venceu e manda a próxima mensagem da fila
 
 import {
-  aberturaDoAviso, aberturaDoConvite, digitandoConviteMs, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
-  frequenciaValida, intervaloEntreConvitesMs, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO,
+  aberturaDoAviso, aberturaDoConvite, diaDoMesValido, digitandoConviteMs, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
+  frequenciaValida, MENSAL, intervaloEntreConvitesMs, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO,
   prazoIdentidadeHoras, primeiroPedidoAutomatico, proximaManha, proximoPedido, rascunhoPadraoDoAviso, TRAVADO_MS,
   validarAviso, validarPergunta,
 } from '../_shared/equipe.ts'
@@ -41,6 +41,8 @@ export interface EnvioLinha { id: number; restaurante_id: number; pergunta: stri
 export interface AcaoLinha { id: number; restaurante_id: number; titulo: string; plano: string; categoria: string; sensivel: boolean }
 export interface AutomaticoLinha {
   restaurante_id: number; ativo: boolean; cada_dias: number; pergunta: string
+  /** Só no mensal: o dia do mês em que o pedido sai (1 = começo do mês). */
+  dia_do_mes: number | null
   proximo_em: string | null; ultimo_em: string | null; ultimo_erro: string | null
 }
 
@@ -117,6 +119,7 @@ const RECUSAS = {
   aviso_invalido: [400, 'Escreva o aviso (de 20 a 600 letras).'],
   ja_avisou: [409, 'A equipe já foi avisada desta ação.'],
   frequencia_invalida: [400, 'Escolha toda semana, a cada 15 dias ou todo mês.'],
+  dia_invalido: [400, 'Escolha um dia do mês de 1 a 31.'],
   falhou: [500, 'Não foi possível agora. Tente de novo.'],
 } as const
 
@@ -191,7 +194,7 @@ export async function criarPedidosAutomaticos(deps: DepsEquipe): Promise<number>
     }
     const podem = (await deps.db.funcionarios(rid)).filter(podeReceber)
     if (!podem.length) {
-      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias)), ultimo_erro: 'Nenhum funcionário ativo para receber.' })
+      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_erro: 'Nenhum funcionário ativo para receber.' })
       continue
     }
     const pergunta = validarPergunta(a.pergunta) ?? PERGUNTA_PADRAO
@@ -204,7 +207,7 @@ export async function criarPedidosAutomaticos(deps: DepsEquipe): Promise<number>
       telefone: f.telefone,
       texto: montarConvite({ nome: f.nome, restaurante, pergunta, sorteio: deps.sorteio }),
     })))
-    await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias)), ultimo_em: iso(agora), ultimo_erro: null })
+    await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_em: iso(agora), ultimo_erro: null })
     criados++
   }
   return criados
@@ -347,27 +350,39 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
         if (!frequenciaValida(cada)) return recusa('frequencia_invalida')
         const pergunta = validarPergunta(corpo.pergunta)
         if (!pergunta) return recusa('pergunta_invalida')
-        // Mexeu só na pergunta: a data combinada continua. Ligou agora ou mudou
-        // a frequência: recalcula, respeitando o último pedido que já saiu.
-        const manter = ativo && atual?.ativo === true && atual.cada_dias === cada && !!atual.proximo_em
-          && new Date(atual.proximo_em).getTime() > deps.agora()
+        // Mensal: o dia do mês (sem dizer, é o começo do mês). Nas outras
+        // frequências o dia não existe.
+        let dia: number | null = null
+        if (cada === MENSAL) {
+          dia = corpo.dia_do_mes == null ? 1 : diaDoMesValido(corpo.dia_do_mes)
+          if (dia == null) return recusa('dia_invalido')
+        }
+        // Mexeu só na pergunta: a data combinada continua. Ligou agora, mudou a
+        // frequência ou o dia: recalcula.
+        const manter = ativo && atual?.ativo === true && atual.cada_dias === cada && (atual.dia_do_mes ?? null) === dia
+          && !!atual.proximo_em && new Date(atual.proximo_em).getTime() > deps.agora()
         const ultimo = await deps.db.ultimoPedidoEm(restauranteId)
         const proximo = !ativo
           ? null
           : manter
             ? atual!.proximo_em
-            : iso(primeiroPedidoAutomatico(deps.agora(), cada, ultimo ? new Date(ultimo).getTime() : null))
+            : iso(primeiroPedidoAutomatico(deps.agora(), cada, ultimo ? new Date(ultimo).getTime() : null, dia))
         await deps.db.salvarAutomatico(restauranteId, {
-          ativo, cada_dias: cada, pergunta, proximo_em: proximo, ultimo_erro: null, atualizado_por: quem.email.toLowerCase(),
+          ativo, cada_dias: cada, dia_do_mes: dia, pergunta, proximo_em: proximo, ultimo_erro: null, atualizado_por: quem.email.toLowerCase(),
         })
-        return { status: 200, corpo: { ok: true, ativo, cada_dias: cada, pergunta, proximo_em: proximo, ultimo_em: atual?.ultimo_em ?? null, ultimo_erro: null } }
+        return {
+          status: 200,
+          corpo: { ok: true, ativo, cada_dias: cada, dia_do_mes: dia ?? 1, pergunta, proximo_em: proximo, ultimo_em: atual?.ultimo_em ?? null, ultimo_erro: null },
+        }
       }
       return {
         status: 200,
         corpo: {
           ok: true,
           ativo: atual?.ativo === true,
-          cada_dias: atual?.cada_dias ?? 30,
+          cada_dias: atual?.cada_dias ?? MENSAL,
+          // Sempre um número para a tela: sem nada gravado, o começo do mês.
+          dia_do_mes: atual?.dia_do_mes ?? 1,
           pergunta: atual?.pergunta || PERGUNTA_PADRAO,
           proximo_em: atual?.ativo ? atual.proximo_em : null,
           ultimo_em: atual?.ultimo_em ?? null,

@@ -5,7 +5,7 @@
  */
 import {
   aberturaDoAviso, aberturaDoConvite, digitandoConviteMs, doRestaurante, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
-  frequenciaValida, intervaloEntreConvitesMs, prazoIdentidadeHoras, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO,
+  diaDoMesValido, frequenciaValida, intervaloEntreConvitesMs, prazoIdentidadeHoras, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO, proximoDiaDoMes,
   primeiroNome, primeiroPedidoAutomatico, PROMPT_AVISO, proximaManha, proximoPedido, rascunhoPadraoDoAviso, validarAviso, validarPergunta,
 } from '../equipe.ts'
 import {
@@ -102,7 +102,7 @@ function cenario(p: {
       salvarAutomatico: async (rid, campos) => {
         const a = automaticos.find((x) => x.restaurante_id === rid)
         if (a) Object.assign(a, campos)
-        else automaticos.push({ restaurante_id: rid, ativo: false, cada_dias: 30, pergunta: '', proximo_em: null, ultimo_em: null, ultimo_erro: null, ...campos } as AutomaticoLinha)
+        else automaticos.push({ restaurante_id: rid, ativo: false, cada_dias: 30, dia_do_mes: null, pergunta: '', proximo_em: null, ultimo_em: null, ultimo_erro: null, ...campos } as AutomaticoLinha)
       },
       automaticosVencidos: async (ate) => automaticos.filter((a) => a.ativo && !!a.proximo_em && a.proximo_em <= ate),
       ultimoPedidoEm: async (rid) => envios.filter((e) => e.restaurante_id === rid && (e.tipo ?? 'pedido') === 'pedido' && e.status !== 'cancelado')
@@ -302,15 +302,47 @@ ok('frequências: toda semana, a cada 15 dias ou todo mês', [7, 14, 30].every(f
 ok('próxima manhã: amanhã às 10h de Brasília', dia(new Date(proximaManha(AGORA)).toISOString()) === '2026-10-13T13:00:00.000Z')
 ok('próxima manhã: de sábado pula o domingo e cai na segunda', new Date(proximaManha(Date.parse('2026-10-17T15:00:00Z'))).toISOString() === '2026-10-19T13:00:00.000Z')
 ok('próxima manhã: tarde da noite em Brasília ainda é "amanhã" de lá, não de UTC', new Date(proximaManha(Date.parse('2026-10-13T01:30:00Z'))).toISOString() === '2026-10-13T13:00:00.000Z')
-ok('próximo pedido: conta os dias e vai para as 10h; domingo vira segunda', new Date(proximoPedido(AGORA, 7)).toISOString() === '2026-10-19T13:00:00.000Z'
-  && new Date(proximoPedido(AGORA, 30)).toISOString() === '2026-11-11T13:00:00.000Z' && new Date(proximoPedido(Date.parse('2026-10-11T15:00:00Z'), 7)).toISOString() === '2026-10-19T13:00:00.000Z')
-ok('ao ligar: sem pedido anterior, o primeiro sai amanhã cedo', primeiroPedidoAutomatico(AGORA, 30, null) === proximaManha(AGORA))
+ok('próximo pedido (semanal e quinzenal): conta os dias e vai para as 10h; domingo vira segunda', new Date(proximoPedido(AGORA, 7)).toISOString() === '2026-10-19T13:00:00.000Z'
+  && new Date(proximoPedido(AGORA, 14)).toISOString() === '2026-10-26T13:00:00.000Z' && new Date(proximoPedido(Date.parse('2026-10-11T15:00:00Z'), 7)).toISOString() === '2026-10-19T13:00:00.000Z')
+
+// Mensal: pelo calendário (12/10/2026 é segunda).
+const dataDe = (ms: number) => new Date(ms).toISOString()
+ok('dia do mês: de 1 a 31, inteiro', [1, 15, 31, '10'].every((d) => diaDoMesValido(d) === Number(d)) && [0, 32, 1.5, 'x', null, undefined].every((d) => diaDoMesValido(d) === null))
+ok('mensal no começo do mês: o próximo dia 1, às 10h de Brasília (1º de novembro é domingo, vai para segunda)', dataDe(proximoDiaDoMes(AGORA, 1)) === '2026-11-02T13:00:00.000Z')
+ok('mensal em dia que ainda não passou: é neste mês', dataDe(proximoDiaDoMes(AGORA, 20)) === '2026-10-20T13:00:00.000Z')
+ok('mensal no dia de hoje: nunca cai hoje, vai para o mês que vem', dataDe(proximoDiaDoMes(AGORA, 12)) === '2026-11-12T13:00:00.000Z')
+ok('mensal em dia que já passou: mês que vem', dataDe(proximoDiaDoMes(AGORA, 5)) === '2026-11-05T13:00:00.000Z')
+ok('dia 31 em mês de 30: sai no último dia do mês', dataDe(proximoDiaDoMes(Date.parse('2026-10-31T15:00:00Z'), 31)) === '2026-11-30T13:00:00.000Z')
+ok('dia 30 em fevereiro: sai no dia 28 (2027 não é bissexto)', dataDe(proximoDiaDoMes(Date.parse('2027-02-01T15:00:00Z'), 30)) === '2027-03-01T13:00:00.000Z'
+  && dataDe(proximoDiaDoMes(Date.parse('2027-01-31T15:00:00Z'), 30)) === '2027-03-01T13:00:00.000Z')
+ok('virada de ano: de dezembro para janeiro', dataDe(proximoDiaDoMes(Date.parse('2026-12-15T15:00:00Z'), 10)) === '2027-01-11T13:00:00.000Z')
+ok('o "hoje" é o de Brasília: 23h do dia 19 lá ainda é antes do dia 20', dataDe(proximoDiaDoMes(Date.parse('2026-10-20T02:00:00Z'), 20)) === '2026-10-20T13:00:00.000Z')
+ok('próximo pedido mensal: sem dia dito, é o começo do mês; com dia, é ele', dataDe(proximoPedido(AGORA, 30)) === '2026-11-02T13:00:00.000Z' && dataDe(proximoPedido(AGORA, 30, 20)) === '2026-10-20T13:00:00.000Z')
+ok('ao ligar o mensal: segue o calendário, mesmo com um pedido feito ontem', dataDe(primeiroPedidoAutomatico(AGORA, 30, AGORA - 86_400_000, 15)) === '2026-10-15T13:00:00.000Z'
+  && dataDe(primeiroPedidoAutomatico(AGORA, 30, null)) === '2026-11-02T13:00:00.000Z')
+ok('ao ligar (semanal e quinzenal): sem pedido anterior, o primeiro sai amanhã cedo', primeiroPedidoAutomatico(AGORA, 7, null) === proximaManha(AGORA) && primeiroPedidoAutomatico(AGORA, 14, null) === proximaManha(AGORA))
 ok('ao ligar: com pedido recente, espera a frequência a partir dele (não manda dois em seguida)', new Date(primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-10-10T15:00:00Z'))).toISOString() === '2026-10-17T13:00:00.000Z'
   && primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-09-01T15:00:00Z')) === proximaManha(AGORA))
 
 c = cenario()
 r = await tratarEquipe({ acao: 'auto_ler' }, c.deps)
-ok('automático nunca configurado: desligado, todo mês, com a pergunta padrão', r.status === 200 && r.corpo.ativo === false && r.corpo.cada_dias === 30 && r.corpo.pergunta === PERGUNTA_PADRAO && r.corpo.proximo_em === null)
+ok('automático nunca configurado: desligado, todo mês no começo do mês, com a pergunta padrão', r.status === 200 && r.corpo.ativo === false && r.corpo.cada_dias === 30
+  && r.corpo.dia_do_mes === 1 && r.corpo.pergunta === PERGUNTA_PADRAO && r.corpo.proximo_em === null)
+{
+  const m = cenario()
+  let rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, pergunta: PERGUNTA_PADRAO }, m.deps)
+  ok('ligar o mensal sem dizer o dia: começo do mês', rm.status === 200 && rm.corpo.dia_do_mes === 1 && rm.corpo.proximo_em === '2026-11-02T13:00:00.000Z' && m.automaticos[0].dia_do_mes === 1, rm.corpo)
+  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO }, m.deps)
+  ok('mudar o dia do mensal: recalcula para o dia escolhido', rm.corpo.dia_do_mes === 20 && rm.corpo.proximo_em === '2026-10-20T13:00:00.000Z' && m.automaticos[0].dia_do_mes === 20)
+  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 20, pergunta: 'O que mais atrapalha o seu dia de trabalho?' }, m.deps)
+  ok('mensal, mudou só a pergunta: a data combinada continua', rm.corpo.proximo_em === '2026-10-20T13:00:00.000Z')
+  rm = await tratarEquipe({ acao: 'auto_ler' }, m.deps)
+  ok('ler o mensal: devolve o dia escolhido', rm.corpo.cada_dias === 30 && rm.corpo.dia_do_mes === 20)
+  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 40, pergunta: PERGUNTA_PADRAO }, m.deps)
+  ok('dia do mês inválido: recusa', rm.status === 400 && rm.corpo.motivo === 'dia_invalido')
+  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO }, m.deps)
+  ok('semanal: o dia do mês não vale (fica vazio)', rm.status === 200 && m.automaticos[0].dia_do_mes === null && rm.corpo.proximo_em === '2026-10-13T13:00:00.000Z')
+}
 r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 14, pergunta: 'O que mais atrapalha o seu dia de trabalho?' }, c.deps)
 ok('ligar o automático: guarda a frequência e a pergunta, e marca o primeiro para amanhã cedo', r.status === 200 && r.corpo.ativo === true && r.corpo.proximo_em === '2026-10-13T13:00:00.000Z'
   && c.automaticos[0].cada_dias === 14 && c.automaticos[0].pergunta === 'O que mais atrapalha o seu dia de trabalho?' && c.envios.length === 0, r.corpo)
@@ -325,7 +357,7 @@ ok('frequência ou pergunta inválida: recusa', (await tratarEquipe({ acao: 'aut
 ok('automático: quem não é admin da plataforma não mexe', (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, cenario({ admin: false }).deps)).status === 403)
 
 const AUTO = (extra: Partial<AutomaticoLinha> = {}): AutomaticoLinha => ({
-  restaurante_id: 11, ativo: true, cada_dias: 7, pergunta: 'O que mais atrapalha o seu dia de trabalho?', proximo_em: new Date(AGORA - 60_000).toISOString(), ultimo_em: null, ultimo_erro: null, ...extra,
+  restaurante_id: 11, ativo: true, cada_dias: 7, dia_do_mes: null, pergunta: 'O que mais atrapalha o seu dia de trabalho?', proximo_em: new Date(AGORA - 60_000).toISOString(), ultimo_em: null, ultimo_erro: null, ...extra,
 })
 c = cenario({ automaticos: [AUTO()] })
 let criados = await criarPedidosAutomaticos(c.deps)
@@ -334,6 +366,14 @@ ok('data vencida: cria o pedido para quem pode receber e marca o próximo', cria
   && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && c.automaticos[0].ultimo_em === new Date(AGORA).toISOString() && c.automaticos[0].ultimo_erro === null, c.automaticos)
 criados = await criarPedidosAutomaticos(c.deps)
 ok('não cria de novo no minuto seguinte', criados === 0 && c.envios.length === 1)
+{
+  const v = cenario({ automaticos: [AUTO({ cada_dias: 30, dia_do_mes: 12 })] })
+  const n = await criarPedidosAutomaticos(v.deps)
+  ok('mensal vencido: cria o pedido e marca o mesmo dia do mês que vem', n === 1 && v.envios.length === 1 && v.automaticos[0].proximo_em === '2026-11-12T13:00:00.000Z', v.automaticos)
+  const semDia = cenario({ automaticos: [AUTO({ cada_dias: 30, dia_do_mes: null })] })
+  await criarPedidosAutomaticos(semDia.deps)
+  ok('mensal antigo, sem dia gravado: passa a sair no começo do mês', semDia.automaticos[0].proximo_em === '2026-11-02T13:00:00.000Z', semDia.automaticos)
+}
 c = cenario({ automaticos: [AUTO({ proximo_em: new Date(AGORA + 3_600_000).toISOString() })] })
 ok('data ainda não chegou: nada', (await criarPedidosAutomaticos(c.deps)) === 0 && c.envios.length === 0)
 c = cenario({ automaticos: [AUTO({ ativo: false })] })

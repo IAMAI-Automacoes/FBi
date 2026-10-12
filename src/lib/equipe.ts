@@ -48,6 +48,29 @@ export interface Envio {
 export const FREQUENCIAS = [7, 14, 30] as const
 export type Frequencia = (typeof FREQUENCIAS)[number]
 export const ROTULO_FREQUENCIA: Record<Frequencia, string> = { 7: 'Toda semana', 14: 'A cada 15 dias', 30: 'Todo mês' }
+/** A frequência que anda pelo calendário: sai num dia do mês, não a cada N dias. */
+export const MENSAL = 30
+/** O dia do pedido mensal quando o dono não escolhe: o começo do mês. */
+export const DIA_COMECO_DO_MES = 1
+/** Os dias que a tela oferece em "Em um dia específico" (o dia 1 é o "começo do mês"). */
+export const DIAS_ESPECIFICOS = Array.from({ length: 30 }, (_, i) => i + 2)
+/** Dia que a tela sugere ao trocar para "Em um dia específico". */
+export const DIA_ESPECIFICO_SUGERIDO = 15
+/** O dia do mês que veio do servidor, de 1 a 31; qualquer outra coisa vira o começo do mês. */
+export function diaDoMesDe(v: unknown): number {
+  const n = Number(v)
+  return Number.isInteger(n) && n >= 1 && n <= 31 ? n : DIA_COMECO_DO_MES
+}
+/** "Toda semana", "Todo mês, no começo do mês", "Todo mês, no dia 15". */
+export function resumoDaFrequencia(cada: Frequencia, diaDoMes?: number | null): string {
+  if (cada !== MENSAL) return ROTULO_FREQUENCIA[cada]
+  const dia = diaDoMesDe(diaDoMes)
+  return dia === DIA_COMECO_DO_MES ? 'Todo mês, no começo do mês' : `Todo mês, no dia ${dia}`
+}
+/** O aviso de quando o dia não existe em todos os meses (29, 30 e 31). */
+export function avisoDoDiaDoMes(dia: number): string | null {
+  return dia >= 29 ? `Nos meses que não têm dia ${dia}, sai no último dia do mês.` : null
+}
 export type StatusConvite = 'na_fila' | 'enviando' | 'enviado' | 'falhou' | 'cancelado'
 /** O convite como a página do restaurante vê: sem dizer de quem é. */
 export interface ConviteAnonimo { envio_id: number; status: StatusConvite; respondeu: boolean }
