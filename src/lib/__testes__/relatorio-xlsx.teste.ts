@@ -112,5 +112,45 @@ checa(
   'Nada a mostrar neste período.',
 )
 
+// ── A planilha do cliente não mudou de palavras ─────────────────────────────
+const linhasDoResumo = (w: ExcelJS.Worksheet) => {
+  const rotulos: string[] = []
+  w.eachRow((r) => { const v = r.getCell(1).value; if (typeof v === 'string') rotulos.push(v) })
+  return rotulos
+}
+const rotulosCliente = linhasDoResumo(resumo)
+checa('cliente: título e linhas de sempre', [
+  rotulosCliente[0], rotulosCliente.includes('Avaliações recebidas (mensagens)'), rotulosCliente.includes('Avaliações negativas'),
+  rotulosCliente.includes('Clientes diferentes'), rotulosCliente.includes('Clientes que voltaram a avaliar'), rotulosCliente.includes('Mensagens por cliente'),
+], ['Relatório de satisfação · Camelo', true, true, true, true, true])
+checa('cliente: nada de funcionário na planilha', rotulosCliente.some((r) => /funcion|feedback/i.test(r)), false)
+
+// ── Relatório da equipe: outras palavras e só contagens de participação ─────
+const participacao = { ativos: 12, minimo: 5, falaram: 7, mais_de_uma_vez: 2, feedbacks: 11, identificados: 6, anonimos: 4, aguardando: 1, pedidos: 2, receberam: 20, responderam: 9 }
+const daEquipe = await gerarXlsxRelatorio({ ...dados, publico: 'equipe', participacao } as never)
+const wb3 = new ExcelJS.Workbook()
+await wb3.xlsx.load(await daEquipe.arrayBuffer())
+checa('equipe: a aba da lista se chama Feedbacks', wb3.worksheets.map((w) => w.name), ['Resumo', 'Categorias', 'Temas', 'Evolução', 'Insights e ações', 'Feedbacks'])
+const resumoEquipe = wb3.getWorksheet('Resumo')!
+const rotulosEquipe = linhasDoResumo(resumoEquipe)
+checa('equipe: título e linhas com as palavras da equipe', [
+  rotulosEquipe[0], rotulosEquipe.includes('Feedbacks recebidos (mensagens)'), rotulosEquipe.includes('Feedbacks negativos'),
+  rotulosEquipe.includes('Funcionários que falaram'), rotulosEquipe.includes('Feedbacks anônimos'), rotulosEquipe.includes('Pedidos de feedback enviados'),
+], ['Relatório da equipe · Camelo', true, true, true, true, true])
+checa('equipe: nada de cliente no resumo', rotulosEquipe.filter((r) => /cliente|avalia/i.test(r)), [])
+const linhaDe = (w: ExcelJS.Worksheet, rotulo: string) => { let n = 0; w.eachRow((r, i) => { if (r.getCell(1).value === rotulo) n = i }); return n }
+checa('equipe: quantos falaram é número', resumoEquipe.getCell(linhaDe(resumoEquipe, 'Funcionários que falaram'), 2).value, 7)
+checa('equipe: a resposta aos pedidos vem por extenso', resumoEquipe.getCell(linhaDe(resumoEquipe, 'Pedidos de feedback enviados'), 3).value, '2 pedidos de feedback: 9 de 20 responderam (45%).')
+checa('equipe: a coluna do texto não fala em cliente', wb3.getWorksheet('Feedbacks')!.getRow(4).getCell(5).value, 'O que a pessoa disse')
+
+// Equipe pequena: o número de pessoas não sai, e a planilha diz por quê.
+const pequena = await gerarXlsxRelatorio({ ...dados, publico: 'equipe', participacao: { ...participacao, ativos: 3, falaram: null, mais_de_uma_vez: null } } as never)
+const wb4 = new ExcelJS.Workbook()
+await wb4.xlsx.load(await pequena.arrayBuffer())
+const resumoPequena = wb4.getWorksheet('Resumo')!
+const linhaFalaram = linhaDe(resumoPequena, 'Funcionários que falaram')
+checa('equipe pequena: célula vazia em vez de número', resumoPequena.getCell(linhaFalaram, 2).value ?? null, null)
+checa('equipe pequena: e a explicação ao lado', String(resumoPequena.getCell(linhaFalaram, 3).value).includes('proteger o anonimato'), true)
+
 console.log(falhas === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${falhas} TESTE(S) FALHARAM`)
 if (falhas > 0) process.exit(1)

@@ -1,5 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+// Extensão explícita: o teste roda com `node --experimental-strip-types`.
+import type { ParticipacaoDaEquipe, PublicoDoRelatorio } from './relatorio-textos.ts'
 
 /**
  * A planilha do relatório.
@@ -46,6 +48,10 @@ export interface DadosCsv {
   avaliacoes: any[]
   /** Resumo escrito pela IA, quando já foi gerado na tela. */
   resumoIa?: string | null
+  /** De quem é o relatório. Sem dizer, é o dos clientes. */
+  publico?: PublicoDoRelatorio
+  /** Só no relatório da equipe: as contagens de participação. */
+  participacao?: ParticipacaoDaEquipe | null
 }
 
 /**

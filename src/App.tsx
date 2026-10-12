@@ -239,7 +239,7 @@ const App = () => (
               <Route path="/missoes" element={<Navigate to={ROTA_DESCONTOS} replace />} />
               <Route path="/missoes/historico" element={<Navigate to={ROTA_DESCONTOS_HISTORICO} replace />} />
               {/* Equipe (feedback dos funcionários): só o admin por enquanto, ver
-                  AreaEquipe. Visão Geral, Feedbacks, Insights e Ações são as MESMAS páginas
+                  AreaEquipe. Visão Geral, Feedbacks, Insights, Ações e Relatórios são as MESMAS páginas
                   dos clientes: o endereço /equipe é que faz o banco entregar só
                   o que a equipe falou (lib/publico-rota.ts). */}
               <Route path="/equipe" element={<AreaEquipe><Index /></AreaEquipe>} />
@@ -248,6 +248,7 @@ const App = () => (
               <Route path="/equipe/insights" element={<AreaEquipe><Insights /></AreaEquipe>} />
               <Route path="/equipe/acoes" element={<AreaEquipe><Actions /></AreaEquipe>} />
               <Route path="/equipe/acoes/arquivadas" element={<AreaEquipe><AcoesArquivadas /></AreaEquipe>} />
+              <Route path="/equipe/relatorios" element={<AreaEquipe><Reports /></AreaEquipe>} />
               <Route
                 path="/qrcode"
                 element={

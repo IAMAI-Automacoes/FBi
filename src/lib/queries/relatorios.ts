@@ -13,6 +13,7 @@ import {
   construirSystemPromptResumoExecutivo,
   construirSystemPromptRelatorioEstruturado,
 } from '@/lib/prompts-sistema'
+import { fraseDosPedidos, lerParticipacao, type ParticipacaoDaEquipe } from '@/lib/relatorio-textos'
 import { parseISO, format, getDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -226,6 +227,17 @@ export async function buscarEstatisticasRelatorio(
   }
 }
 
+/**
+ * Relatório da equipe: quantos funcionários falaram, como quiseram aparecer e
+ * a resposta aos pedidos, desde `desde`. Só contagens (o banco não entrega
+ * nomes) e só para quem pode ver a Equipe; para os outros volta null.
+ */
+export async function buscarParticipacaoDaEquipe(desde: Date): Promise<ParticipacaoDaEquipe | null> {
+  const { data, error } = await supabase.rpc('equipe_relatorio_participacao', { p_desde: desde.toISOString() })
+  if (error) throw error
+  return data ? lerParticipacao(data) : null
+}
+
 export async function buscarInsightsAtivos(restauranteId: number, limit: number) {
   const { data, error } = await supabase
     .from('insights')
@@ -268,8 +280,52 @@ export interface AnaliseRelatorio {
   porIa: boolean
 }
 
+/** A análise calculada do relatório DA EQUIPE (mesmos campos, outras palavras). */
+function analiseFallbackDaEquipe(dados: any): AnaliseRelatorio {
+  const k = dados.kpis || {}
+  const e = dados.estatisticas || {}
+  const p: ParticipacaoDaEquipe | null = dados.participacao ?? null
+  const comparar = k.hasPrevData && k.prevConfiavel
+  const quemFalou = p && p.falaram != null ? ` de ${p.falaram} ${p.falaram === 1 ? 'funcionário' : 'funcionários'}` : ''
+  return {
+    titulo: `${k.totalFeedbacks || 0} feedbacks da equipe no período`,
+    resumo: [
+      `No período (${String(dados.periodo || '').toLowerCase()}), a equipe deu ${k.totalFeedbacks || 0} feedbacks${quemFalou}.`,
+      `O índice de satisfação ficou em ${k.sentiment ?? 0} de 100.`,
+      comparar ? `No período anterior era ${k.prevSentiment ?? 0} de 100.` : '',
+    ].filter(Boolean).join(' '),
+    ponto_forte: k.positivos
+      ? `${k.positivos} de ${k.totalFeedbacks} feedbacks foram positivos (${k.positivePercent}%).`
+      : 'Nenhum feedback positivo registrado no período.',
+    ponto_fraco:
+      k.criticalTheme && k.criticalTheme !== 'Nenhum'
+        ? `O tema "${k.criticalTheme}" concentrou reclamações: ${k.criticalPercent}% dos feedbacks sobre ele foram negativos.`
+        : `${k.negativos || 0} feedbacks negativos no período.`,
+    leitura_categorias: (e.porCategoria || [])
+      .map((c: any) => `${c.nome}: ${c.satisfacao} de 100 em ${c.total} feedbacks.`)
+      .join(' '),
+    leitura_clientes: p
+      ? [
+          p.falaram != null ? `${p.falaram} de ${p.ativos} funcionários ativos falaram.` : '',
+          fraseDosPedidos(p),
+          p.feedbacks ? `${p.identificados} feedbacks vieram com o nome e ${p.anonimos} anônimos.` : '',
+        ].filter(Boolean).join(' ')
+      : 'Sem dados de participação neste período.',
+    recomendacoes:
+      k.criticalTheme && k.criticalTheme !== 'Nenhum'
+        ? [`Conversar com a equipe sobre "${k.criticalTheme}" e combinar uma mudança concreta.`]
+        : ['Manter o que está funcionando e seguir pedindo feedback à equipe.'],
+    alerta_amostra:
+      (k.totalFeedbacks || 0) < 10
+        ? 'A quantidade de feedbacks ainda é pequena, então esta leitura é preliminar.'
+        : '',
+    porIa: false,
+  }
+}
+
 /** Análise escrita sem IA — usada quando a chamada falha ou volta inválida. */
 function analiseFallback(dados: any): AnaliseRelatorio {
+  if (dados?.publico === 'equipe') return analiseFallbackDaEquipe(dados)
   const k = dados.kpis || {}
   const e = dados.estatisticas || {}
   const comparar = k.hasPrevData && k.prevConfiavel

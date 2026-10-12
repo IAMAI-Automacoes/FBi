@@ -18,9 +18,14 @@ import {
   buscarKpis, buscarTendencia, getPeriodDates, PeriodInfo,
 } from '@/lib/queries/visao-geral'
 import {
-  buscarEstatisticasRelatorio, gerarAnaliseRelatorio, gerarResumoExecutivo, salvarRelatorio,
+  buscarEstatisticasRelatorio, buscarParticipacaoDaEquipe, gerarAnaliseRelatorio, gerarResumoExecutivo, salvarRelatorio,
   EstatisticasRelatorio, AnaliseRelatorio,
 } from '@/lib/queries/relatorios'
+import {
+  contar, detalheDeQuemFalou, divisaoDaIdentidade, fraseDoTemaCritico, fraseDosPedidos, semNada, taxaDeResposta, textosDoRelatorio,
+  valorDeQuemFalou, type ParticipacaoDaEquipe, type PublicoDoRelatorio, type TextosDoRelatorio,
+} from '@/lib/relatorio-textos'
+import { usePublico } from '@/lib/publico'
 import { buscarTemas, TemaFeedback } from '@/lib/queries/temas'
 import { estiloCategoria } from '@/lib/categorias-feedback'
 import { gerarPdfRelatorio } from '@/lib/pdf/gerar-pdf-relatorio'
@@ -56,7 +61,7 @@ function baixar(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
-function SatisfacaoTooltip({ active, payload }: { active?: boolean; payload?: any[] }) {
+function SatisfacaoTooltip({ active, payload, t }: { active?: boolean; payload?: any[]; t: TextosDoRelatorio }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
@@ -65,18 +70,24 @@ function SatisfacaoTooltip({ active, payload }: { active?: boolean; payload?: an
       {d.avaliacoes > 0 ? (
         <p className="text-xs text-muted-foreground">
           Satisfação: <span className="font-semibold text-foreground">{d.sentiment}%</span>
-          {' · '}{d.avaliacoes} avaliaç{d.avaliacoes !== 1 ? 'ões' : 'ão'}
+          {' · '}{contar(d.avaliacoes, t)}
         </p>
       ) : (
-        <p className="text-xs text-muted-foreground italic">Sem avaliações</p>
+        <p className="text-xs text-muted-foreground italic">{semNada(t)}</p>
       )}
     </div>
   )
 }
 
+/* A mesma página serve os clientes (/relatorios) e a equipe (/equipe/relatorios).
+   O endereço decide de quem são os dados (publico-rota.ts) e as palavras
+   (relatorio-textos.ts). Na equipe entram ainda os números de participação,
+   que são só contagens: o relatório nunca sabe quem falou. */
 export default function Reports() {
   const { profile, loading: profileLoading } = useUserProfile()
-  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>('relatorios:periodo', '30d')
+  const { publico, ehEquipe, caminho, chave } = usePublico()
+  const t = textosDoRelatorio(publico)
+  const [period, setPeriod] = useFiltroPersistente<PeriodInfo>(chave('relatorios:periodo'), '30d')
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState<any>(null)
   const [stats, setStats] = useState<EstatisticasRelatorio | null>(null)
@@ -90,6 +101,8 @@ export default function Reports() {
   // Elogios/críticas em pílula (layout novo) — mesma RPC que já alimenta
   // `TemasFeedback.tsx` na Visão Geral, só filtrada pelo período do relatório.
   const [temas, setTemas] = useState<TemaFeedback[]>([])
+  // Só na equipe: quantos falaram, como quiseram aparecer, resposta aos pedidos.
+  const [participacao, setParticipacao] = useState<ParticipacaoDaEquipe | null>(null)
 
   const restauranteId = profile?.restaurante_id ?? null
 
@@ -102,13 +115,19 @@ export default function Reports() {
       setAnalise(null) // a leitura da IA é por período
     }
     try {
-      const [k, e, t, tm] = await Promise.all([
+      const [k, e, tend, tm, part] = await Promise.all([
         buscarKpis(restauranteId, period),
         buscarEstatisticasRelatorio(restauranteId, period),
         buscarTendencia(restauranteId, period),
         buscarTemas(restauranteId, getPeriodDates(period).days, 'todos'),
+        ehEquipe && restauranteId ? buscarParticipacaoDaEquipe(getPeriodDates(period).currentStart) : Promise.resolve(null),
       ])
-      setKpis(k); setStats(e); setTendencia(t); setTemas(tm)
+      // Feedback da equipe não guarda telefone: "quantas pessoas" vem da
+      // contagem do banco (que some na equipe pequena, para proteger o anônimo).
+      const est = part
+        ? { ...e, clientesUnicos: part.falaram ?? 0, clientesRecorrentes: part.mais_de_uma_vez ?? 0, mensagensPorCliente: part.falaram ? Number((part.feedbacks / part.falaram).toFixed(1)) : 0 }
+        : e
+      setKpis(k); setStats(est); setTendencia(tend); setTemas(tm); setParticipacao(part)
       if (restauranteId) {
         const { data: r } = await supabase
           .from('restaurantes').select('nome_restaurante').eq('id', restauranteId).single()
@@ -119,7 +138,7 @@ export default function Reports() {
       if (!silencioso) toast.error('Não foi possível carregar os dados do relatório.')
     }
     if (!silencioso) setLoading(false)
-  }, [restauranteId, period])
+  }, [restauranteId, period, ehEquipe])
 
   useEffect(() => {
     if (profileLoading) return
@@ -195,6 +214,8 @@ export default function Reports() {
         insights: insRes.data || [],
         acoes: acoesRes.data || [],
         avaliacoes: brutosRes.data || [],
+        publico,
+        participacao,
         // Só entra se a leitura da IA já foi gerada na tela: a planilha não vai
         // chamar a IA por conta própria — baixar um arquivo não deveria custar
         // uma chamada nem a espera dela.
@@ -203,7 +224,7 @@ export default function Reports() {
 
       baixar(
         blob,
-        `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.xlsx`,
+        `${t.arquivo}-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.xlsx`,
       )
       toast.success('Planilha baixada')
     } catch (e: any) {
@@ -250,6 +271,9 @@ export default function Reports() {
     return {
       periodo: PERIOD_LABEL[period],
       geradoEm: new Date().toISOString(),
+      // De quem é o relatório: a IA, o PDF e o texto calculado leem daqui.
+      publico,
+      participacao,
       kpis,
       estatisticas: stats,
       categorias: stats?.porCategoria ?? [],
@@ -310,7 +334,7 @@ export default function Reports() {
       const dados = await montarDados()
       const a = await obterAnalise(dados)
       const blob = await gerarPdfRelatorio(dados, a, nomeRestaurante)
-      baixar(blob, `relatorio-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.pdf`)
+      baixar(blob, `${t.arquivo}-${nomeRestaurante.replace(/\s+/g, '-').toLowerCase()}-${period}.pdf`)
       toast.success(a.porIa ? 'PDF gerado com análise da IA!' : 'PDF gerado (sem IA).')
     } catch (e: any) {
       console.error(e)
@@ -338,6 +362,7 @@ export default function Reports() {
     period, setPeriod, semDados, kpis, stats, tendencia, temas,
     analise, resumoExecutivo, analisando, handleAnalisar,
     gerandoPdf, gerandoCsv, handleExportCSV, handleExportPdf, diasComDados,
+    publico, t, participacao, caminho,
   }
 
   return <LayoutNovo {...layoutProps} />
@@ -360,6 +385,12 @@ interface LayoutProps {
   handleExportCSV: () => void
   handleExportPdf: () => void
   diasComDados: number
+  publico: PublicoDoRelatorio
+  t: TextosDoRelatorio
+  /** Só na equipe. */
+  participacao: ParticipacaoDaEquipe | null
+  /** "/feedbacks" → "/equipe/feedbacks" nas páginas da equipe. */
+  caminho: (c: string) => string
 }
 
 /** Cor da barra de categoria por faixa de valor (vermelho→âmbar→verde),
@@ -420,6 +451,7 @@ function CardNovo({ className, children }: { className?: string; children: React
 function LayoutNovo({
   period, setPeriod, semDados, kpis, stats, tendencia, temas,
   gerandoPdf, gerandoCsv, handleExportCSV, handleExportPdf,
+  publico, t, participacao, caminho,
 }: LayoutProps) {
   const satisfacaoCaindo =
     !!kpis.hasPrevData && !!kpis.prevConfiavel && String(kpis.sentimentTrend).trim().startsWith('-')
@@ -450,6 +482,15 @@ function LayoutNovo({
 
   const { days: diasDoPeriodo } = getPeriodDates(period)
   const mediaPorDia = diasDoPeriodo > 0 ? kpis.totalFeedbacks / diasDoPeriodo : 0
+
+  // Só na equipe: como as pessoas quiseram aparecer e a resposta aos pedidos.
+  const identidade = participacao ? divisaoDaIdentidade(participacao) : []
+  const resposta = participacao ? taxaDeResposta(participacao) : null
+  const COR_IDENTIDADE = {
+    identificados: { barra: 'bg-blue-500', texto: 'text-blue-600' },
+    anonimos: { barra: 'bg-slate-500', texto: 'text-slate-600' },
+    aguardando: { barra: 'bg-amber-400', texto: 'text-amber-600' },
+  } as const
 
   return (
     // `-m-4 sm:-m-6 lg:-m-8` cancela o padding-top que o Layout (scroll
@@ -533,7 +574,7 @@ function LayoutNovo({
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900">Planilha (Excel)</p>
                     <p className="text-xs leading-snug text-gray-500">
-                      Uma aba por seção: resumo, categorias, temas, avaliações
+                      Uma aba por seção: resumo, categorias, temas, {t.varios}
                     </p>
                   </div>
                 </DropdownMenuItem>
@@ -549,11 +590,8 @@ function LayoutNovo({
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border bg-gray-50">
               <FileText className="h-7 w-7 text-gray-400" />
             </div>
-            <p className="font-semibold text-gray-900">Nenhuma avaliação neste período</p>
-            <p className="mt-1 max-w-sm text-sm text-gray-500">
-              Assim que seus clientes começarem a responder, o relatório aparece aqui. Tente um período maior ou
-              compartilhe o QR Code.
-            </p>
+            <p className="font-semibold text-gray-900">{t.semDadosTitulo}</p>
+            <p className="mt-1 max-w-sm text-sm text-gray-500">{t.semDadosTexto}</p>
           </div>
         </CardNovo>
       ) : (
@@ -572,7 +610,7 @@ function LayoutNovo({
                 assunto) pareceria não bater com o topo. */}
             <KpiCardNovo
               icon={MessageCircle} iconBg="bg-blue-50" iconColor="text-blue-600"
-              label="Avaliações recebidas" valor={String(kpis.totalMensagens)}
+              label={t.recebidas} valor={String(kpis.totalMensagens)}
               trend={kpis.mensagensTrend}
               hasPrevData={kpis.prevMensagens > 0}
               prevConfiavel={kpis.prevMensagens >= 3}
@@ -591,30 +629,81 @@ function LayoutNovo({
             />
             <KpiCardNovo
               icon={ThumbsUp} iconBg="bg-green-50" iconColor="text-green-600"
-              label="Avaliações positivas" valor={`${kpis.positivePercent}%`}
+              label={t.positivas} valor={`${kpis.positivePercent}%`}
               trend={kpis.positivePercentTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
               prevTotal={kpis.prevTotal}
             />
-            <KpiCardNovo
-              icon={Users} iconBg="bg-slate-100" iconColor="text-slate-600"
-              label="Clientes que avaliaram" valor={String(stats.clientesUnicos)}
-              detalhe={
-                stats.clientesRecorrentes > 0
-                  ? `${stats.clientesRecorrentes} avaliaram mais de uma vez`
-                  : 'nenhum avaliou duas vezes ainda'
-              }
-            />
+            {participacao ? (
+              <KpiCardNovo
+                icon={Users} iconBg="bg-slate-100" iconColor="text-slate-600"
+                label={t.pessoas} valor={valorDeQuemFalou(participacao)}
+                detalhe={detalheDeQuemFalou(participacao)}
+              />
+            ) : (
+              <KpiCardNovo
+                icon={Users} iconBg="bg-slate-100" iconColor="text-slate-600"
+                label={t.pessoas} valor={String(stats.clientesUnicos)}
+                detalhe={
+                  stats.clientesRecorrentes > 0
+                    ? `${stats.clientesRecorrentes} avaliaram mais de uma vez`
+                    : 'nenhum avaliou duas vezes ainda'
+                }
+              />
+            )}
           </div>
+
+          {/* Só na equipe: quem quis aparecer e quem respondeu aos pedidos.
+              São contagens; o relatório não sabe de quem é cada feedback. */}
+          {participacao && (
+            <CardNovo>
+              <h3 className="text-base font-bold text-gray-900">Participação da equipe</h3>
+              <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Como quiseram aparecer</p>
+                  {identidade.length === 0 ? (
+                    <p className="mt-2 text-sm text-gray-400">Nenhum feedback com a escolha registrada neste período.</p>
+                  ) : (
+                    <>
+                      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                        {identidade.map((i) => (
+                          <div key={i.chave}>
+                            <p className={cn('text-2xl font-bold', COR_IDENTIDADE[i.chave].texto)}>{i.percentual}%</p>
+                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                              <span className={cn('h-2 w-2 rounded-full', COR_IDENTIDADE[i.chave].barra)} />
+                              {i.rotulo} ({i.n})
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                        {identidade.map((i) => (
+                          <div key={i.chave} className={COR_IDENTIDADE[i.chave].barra} style={{ width: `${i.percentual}%` }} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Resposta aos pedidos de feedback</p>
+                  <p className="mt-3 text-2xl font-bold text-gray-900">{resposta == null ? '—' : `${resposta}%`}</p>
+                  <p className="mt-0.5 text-sm text-gray-500">{fraseDosPedidos(participacao)}</p>
+                  <Link to="/equipe/funcionarios" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900">
+                    Ver os pedidos <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </CardNovo>
+          )}
 
           {/* Como as avaliações se dividem */}
           <CardNovo>
-            <h3 className="text-base font-bold text-gray-900">Como as avaliações se dividem</h3>
+            <h3 className="text-base font-bold text-gray-900">{t.comoSeDividem}</h3>
             <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
               <div className="flex shrink-0 gap-6">
                 {[
-                  { valor: kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: 'Positivas' },
-                  { valor: kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: 'Neutras' },
-                  { valor: kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: 'Negativas' },
+                  { valor: kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: publico === 'equipe' ? 'Positivos' : 'Positivas' },
+                  { valor: kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: publico === 'equipe' ? 'Neutros' : 'Neutras' },
+                  { valor: kpis.negativePercent, cor: 'text-red-500', dot: 'bg-red-500', label: publico === 'equipe' ? 'Negativos' : 'Negativas' },
                   { valor: kpis.suggestionPercent, cor: 'text-sky-600', dot: 'bg-sky-500', label: 'Sugestões' },
                 ].map((s) => (
                   <div key={s.label}>
@@ -654,12 +743,12 @@ function LayoutNovo({
                   </p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{kpis.criticalTheme}</p>
                   <p className="mt-1 text-sm text-gray-600">
-                    {kpis.criticalPercent}% das avaliações relacionadas a este tema foram negativas.
+                    {fraseDoTemaCritico(kpis.criticalPercent, publico)}
                   </p>
                   {temaCriticoCount > 0 && (
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
                       <FileText className="h-3.5 w-3.5" />
-                      {temaCriticoCount} avaliaç{temaCriticoCount !== 1 ? 'ões' : 'ão'}
+                      {contar(temaCriticoCount, t)}
                     </p>
                   )}
                 </div>
@@ -671,9 +760,9 @@ function LayoutNovo({
                       que o dono está vendo aqui, sem precisar refiltrar. */}
                   <Button asChild className={BOTAO_PILULA_VERMELHA}>
                     <Link
-                      to={`/feedbacks?periodo=${period}&categoria=${encodeURIComponent(kpis.criticalTheme)}&sentimento=negativo`}
+                      to={`${caminho('/feedbacks')}?periodo=${period}&categoria=${encodeURIComponent(kpis.criticalTheme)}&sentimento=negativo`}
                     >
-                      Ver avaliações
+                      {t.verTodas}
                     </Link>
                   </Button>
                 </div>
@@ -744,7 +833,7 @@ function LayoutNovo({
                         }}
                       />
                     )}
-                    <ChartTooltip content={<SatisfacaoTooltip />} />
+                    <ChartTooltip content={<SatisfacaoTooltip t={t} />} />
                     <Area
                       type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-1))" strokeWidth={2.5}
                       fillOpacity={1} fill="url(#gradSatisfacaoNovo)" connectNulls
@@ -777,7 +866,8 @@ function LayoutNovo({
                     return (
                       <div key={c.nome} className="flex items-center gap-3">
                         <Icone className={cn('h-4 w-4 shrink-0', estilo.corTexto)} />
-                        <span className="w-32 shrink-0 truncate text-sm text-gray-700">{c.nome}</span>
+                        {/* Os nomes das categorias da equipe são mais compridos ("Treinamento e crescimento"). */}
+                        <span className={cn('shrink-0 truncate text-sm text-gray-700', publico === 'equipe' ? 'w-32 sm:w-48' : 'w-32')}>{c.nome}</span>
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                           {/* largura com piso mínimo: em 0% a barra some de vista e
                               parece "sem avaliação nenhuma" — mas a categoria só
@@ -792,7 +882,7 @@ function LayoutNovo({
                           {c.satisfacao}%
                         </span>
                         <span className="w-24 shrink-0 text-right text-[11px] text-gray-400">
-                          ({c.total} avaliaç{c.total !== 1 ? 'ões' : 'ão'})
+                          ({contar(c.total, t)})
                         </span>
                       </div>
                     )
@@ -802,7 +892,7 @@ function LayoutNovo({
             )}
 
             <CardNovo className="lg:col-span-2">
-              <h3 className="text-base font-bold text-gray-900">O que os clientes mais comentam</h3>
+              <h3 className="text-base font-bold text-gray-900">{t.maisComentam}</h3>
               {gruposDeTemas.length === 0 ? (
                 <p className="mt-4 text-sm text-gray-400">Ainda não há comentários suficientes neste período.</p>
               ) : (
@@ -824,7 +914,7 @@ function LayoutNovo({
                 </div>
               )}
               <Link
-                to={`/feedbacks?periodo=${period}`}
+                to={`${caminho('/feedbacks')}?periodo=${period}`}
                 className="mt-4 flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
               >
                 Ver todos os comentários <ChevronRight className="h-4 w-4" />
@@ -835,11 +925,11 @@ function LayoutNovo({
           {/* Comportamento das avaliações */}
           {(stats.faixaMaisMovimentada || stats.melhorDia || kpis.totalFeedbacks > 0) && (
             <div>
-              <h3 className="mb-3 text-base font-bold text-gray-900">Comportamento das avaliações</h3>
+              <h3 className="mb-3 text-base font-bold text-gray-900">{t.quandoChegam}</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 <KpiCardNovo
                   icon={TrendingUp} iconBg="bg-blue-50" iconColor="text-blue-600"
-                  label="Média de avaliações por dia"
+                  label={t.mediaPorDia}
                   valor={mediaPorDia.toFixed(1).replace('.', ',')}
                   trend={kpis.totalTrend} hasPrevData={kpis.hasPrevData} prevConfiavel={kpis.prevConfiavel}
                   prevTotal={kpis.prevTotal}
@@ -852,7 +942,7 @@ function LayoutNovo({
                     <p className="text-2xl font-bold text-gray-900">
                       {stats.faixaMaisMovimentada.nome.split(' ')[0]}
                     </p>
-                    <p className="mt-0.5 text-sm text-gray-500">Horário com mais avaliações</p>
+                    <p className="mt-0.5 text-sm text-gray-500">{t.horarioComMais}</p>
                     <span className="mt-2 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-600">
                       {stats.faixaMaisMovimentada.nome.match(/\(([^)]+)\)/)?.[1] ?? ''}
                     </span>
@@ -864,7 +954,7 @@ function LayoutNovo({
                       <CalendarDays className="h-5 w-5 text-green-600" />
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{stats.melhorDia.nome}</p>
-                    <p className="mt-0.5 text-sm text-gray-500">Dia com mais avaliações</p>
+                    <p className="mt-0.5 text-sm text-gray-500">{t.diaComMais}</p>
                     <span className="mt-2 inline-block rounded-full bg-green-50 px-2.5 py-0.5 text-[11px] font-medium text-green-700">
                       {(stats.melhorDia.satisfacao / 10).toFixed(1).replace('.', ',')} de satisfação média
                     </span>

@@ -4326,6 +4326,10 @@ export type Database = {
         }
         Returns: Json
       }
+      equipe_relatorio_participacao: {
+        Args: { p_desde: string }
+        Returns: Json
+      }
       equipe_revelar_mensagens: {
         Args: { p_restaurante_id?: number; p_telefone?: string }
         Returns: number

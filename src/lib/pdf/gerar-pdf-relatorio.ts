@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AnaliseRelatorio } from '@/lib/queries/relatorios'
 import { situacaoLegivel } from '@/lib/relatorio-csv'
+import { linhasDaParticipacao, textosDoRelatorio, valorDeQuemFalou, type ParticipacaoDaEquipe } from '@/lib/relatorio-textos'
 import {
   barraEmpilhada,
   barrasHorizontais,
@@ -64,6 +65,11 @@ export async function gerarPdfRelatorio(
   const doc = new jsPDF()
   const kpis = dadosRelatorio.kpis || {}
   const est = dadosRelatorio.estatisticas || {}
+  // De quem é o relatório (clientes ou equipe): muda as palavras e, na equipe,
+  // a seção de pessoas vira a de participação (só contagens, sem nomes).
+  const daEquipe = dadosRelatorio.publico === 'equipe'
+  const t = textosDoRelatorio(daEquipe ? 'equipe' : 'cliente')
+  const participacao: ParticipacaoDaEquipe | null = daEquipe ? dadosRelatorio.participacao ?? null : null
   let y = 0
 
   const setCor = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2])
@@ -228,7 +234,7 @@ export async function gerarPdfRelatorio(
   doc.text(limpar(nomeRestaurante || 'Restaurante'), M, 15)
   doc.setFontSize(10.5)
   doc.setFont('helvetica', 'normal')
-  doc.text('Relatório de Satisfação dos Clientes', M, 22.5)
+  doc.text(t.tituloDoDocumento, M, 22.5)
   doc.setFontSize(9)
   const dataGer = new Date(dadosRelatorio.geradoEm || Date.now())
   doc.text(
@@ -264,10 +270,10 @@ export async function gerarPdfRelatorio(
   const caixas = [
     // Mensagens, igual ao card do topo da tela. O número de assuntos aparece
     // na barra de divisão logo abaixo, que é onde ele é usado.
-    { valor: String(kpis.totalMensagens ?? kpis.totalFeedbacks ?? 0), rotulo: 'Avaliações recebidas' },
+    { valor: String(kpis.totalMensagens ?? kpis.totalFeedbacks ?? 0), rotulo: t.recebidas },
     { valor: `${kpis.sentiment ?? 0}/100`, rotulo: 'Índice de satisfação' },
     { valor: `${kpis.positivePercent ?? 0}%`, rotulo: 'Positivas' },
-    { valor: String(est.clientesUnicos ?? 0), rotulo: 'Clientes' },
+    { valor: participacao ? valorDeQuemFalou(participacao) : String(est.clientesUnicos ?? 0), rotulo: t.pessoasCurto },
   ]
   espaco(26)
   const lg = (UTIL - 3 * 4) / 4
@@ -294,7 +300,7 @@ export async function gerarPdfRelatorio(
   doc.text(
     comparar
       ? limpar(`Comparado ao período anterior: ${kpis.totalTrend} em volume, ${kpis.sentimentTrend} de satisfação.`)
-      : limpar(`Sem comparação confiável com o período anterior: ele teve apenas ${kpis.prevTotal ?? 0} ${(kpis.prevTotal ?? 0) === 1 ? 'avaliação' : 'avaliações'}.`),
+      : limpar(`Sem comparação confiável com o período anterior: ele teve apenas ${kpis.prevTotal ?? 0} ${(kpis.prevTotal ?? 0) === 1 ? t.um : t.varios}.`),
     M,
     y,
   )
@@ -307,7 +313,7 @@ export async function gerarPdfRelatorio(
     // o mesmo padrão dos outros por consistência — mudar de altura no futuro
     // (ex.: legenda de duas linhas) não volta a abrir o bug de título órfão.
     blocoUnido(16 + 8 + 20)
-    secao('Como as avaliações se dividem')
+    secao(t.comoSeDividem)
     // Uma linha dizendo sobre O QUE é a divisão: os números aqui são
     // assuntos, e o card acima mostra mensagens. Sem isto, as duas contagens
     // aparecem na mesma página sem nada ligando uma à outra.
@@ -382,7 +388,7 @@ export async function gerarPdfRelatorio(
     // de números exigem ler todas para achar a menor.
     doc.setFontSize(7.5)
     setCor(CINZA)
-    doc.text('avaliações', M + 44, y - 1, { align: 'right' })
+    doc.text(t.varios, M + 44, y - 1, { align: 'right' })
     doc.text('satisfação (0-100)', M + UTIL, y - 1, { align: 'right' })
     y = barrasHorizontais(doc, {
       x: M,
@@ -403,7 +409,7 @@ export async function gerarPdfRelatorio(
       doc.setFontSize(7)
       doc.setFont('helvetica', 'italic')
       setCor(CINZA)
-      doc.text('— = nenhuma avaliação nesta categoria no período.', M, y + 2)
+      doc.text(daEquipe ? '— = nenhum feedback nesta categoria no período.' : '— = nenhuma avaliação nesta categoria no período.', M, y + 2)
       y += 4
     }
     y += 3
@@ -415,8 +421,9 @@ export async function gerarPdfRelatorio(
   // fotografias de um instante.
   const tendencia = dadosRelatorio.tendencia || []
   if (tendencia.length > 1) {
-    const notaEvolucao =
-      'Linha: satisfação do dia. Barras ao fundo: quantas avaliações houve. Dia sem avaliação não recebe ponto.'
+    const notaEvolucao = daEquipe
+      ? 'Linha: satisfação do dia. Barras ao fundo: quantos feedbacks houve. Dia sem feedback não recebe ponto.'
+      : 'Linha: satisfação do dia. Barras ao fundo: quantas avaliações houve. Dia sem avaliação não recebe ponto.'
     const alturaParagrafo = linhasDe(notaEvolucao, 9) * 4.5 + 2
     // 42mm de altura, não 30: num gráfico de 30mm uma queda de 8 pontos de
     // satisfação virava um degrau de 2mm, indistinguível de ruído. Mais alto,
@@ -485,7 +492,7 @@ export async function gerarPdfRelatorio(
         listas.reduce((soma, l) => soma + alturaLista(l.itens.length, l.total > 8), 0) +
         2,
     )
-    secao('O que os clientes mais comentam')
+    secao(t.maisComentam)
     paragrafo(notaTemas, { tamanho: 9, cor: CINZA, lh: 4.5 })
 
     const desenharLista = (titulo: string, itens: any[], total: number, cor: [number, number, number]) => {
@@ -527,13 +534,14 @@ export async function gerarPdfRelatorio(
   const porDia = dadosRelatorio.porDiaSemana || []
   const porHora = dadosRelatorio.porFaixaHorario || []
   if (porDia.length > 0 || porHora.length > 0) {
-    const notaQuando =
-      'Horario em que a mensagem foi enviada, nao o do atendimento. Satisfacao em branco = nenhuma avaliacao naquele recorte.'
+    const notaQuando = daEquipe
+      ? 'Horario em que a mensagem foi enviada, nao o do turno. Satisfacao em branco = nenhum feedback naquele recorte.'
+      : 'Horario em que a mensagem foi enviada, nao o do atendimento. Satisfacao em branco = nenhuma avaliacao naquele recorte.'
     // Linha de cabeçalho (~7mm) + uma linha por item (~7mm) das duas tabelas
     // lado a lado — a mais alta das duas manda na altura reservada.
     const alturaTabelas = 7 + Math.max(porDia.length, porHora.length) * 7
     blocoUnido(16 + linhasDe(notaQuando, 9) * 4.5 + 2 + alturaTabelas)
-    secao('Quando as avaliacoes chegam')
+    secao(daEquipe ? 'Quando os feedbacks chegam' : 'Quando as avaliacoes chegam')
     paragrafo(notaQuando, { tamanho: 9, cor: CINZA, lh: 4.5 })
 
     const topoTabelas = y + 1
@@ -584,16 +592,20 @@ export async function gerarPdfRelatorio(
   // ── Clientes ─────────────────────────────────────────────────────────────
   if (analise.leitura_clientes) {
     const detalhes = [
-      `Clientes diferentes que avaliaram: ${est.clientesUnicos ?? 0}`,
-      `Clientes que avaliaram mais de uma vez: ${est.clientesRecorrentes ?? 0}`,
+      ...(participacao
+        ? linhasDaParticipacao(participacao).map(limpar)
+        : [
+            `Clientes diferentes que avaliaram: ${est.clientesUnicos ?? 0}`,
+            `Clientes que avaliaram mais de uma vez: ${est.clientesRecorrentes ?? 0}`,
+          ]),
       est.faixaMaisMovimentada
-        ? `Horário com mais avaliações: ${limpar(est.faixaMaisMovimentada.nome)} (${est.faixaMaisMovimentada.total})`
+        ? `${t.horarioComMais}: ${limpar(est.faixaMaisMovimentada.nome)} (${est.faixaMaisMovimentada.total})`
         : '',
       est.melhorDia ? `Melhor dia: ${est.melhorDia.nome} (${est.melhorDia.satisfacao}/100)` : '',
       est.piorDia ? `Dia mais fraco: ${est.piorDia.nome} (${est.piorDia.satisfacao}/100)` : '',
     ].filter(Boolean)
     blocoUnido(16 + linhasDe(analise.leitura_clientes, 9.5) * 4.8 + 2 + detalhes.length * 4.6 + 2)
-    secao('Clientes')
+    secao(t.secaoDePessoas)
     paragrafo(analise.leitura_clientes, { tamanho: 9.5, lh: 4.8 })
     doc.setFontSize(9)
     setCor(CINZA)
@@ -687,7 +699,7 @@ export async function gerarPdfRelatorio(
   // "(continuação)" do `espaco()` já avisa que ainda é a mesma seção.
   const feedbacks = dadosRelatorio.feedbacks || []
   if (feedbacks.length > 0) {
-    secao('O que os clientes escreveram')
+    secao(t.escreveram)
     for (const f of feedbacks) {
       const sent = String(f.sentimento || '').toLowerCase()
       const cor = sent === 'positivo' ? VERDE : sent === 'negativo' ? VERMELHO : sent.startsWith('sugest') ? CEU : CINZA_NEUTRO

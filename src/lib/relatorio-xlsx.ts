@@ -9,6 +9,7 @@ import {
   // Extensão explícita: é o que permite rodar o teste com
   // `node --experimental-strip-types`, sem passar por bundler.
 } from './relatorio-csv.ts'
+import { fraseDosPedidos, textosDoRelatorio } from './relatorio-textos.ts'
 
 /**
  * A planilha do relatório, em Excel de verdade (.xlsx).
@@ -167,6 +168,10 @@ function colorirSentimento(ws: ExcelJS.Worksheet, coluna: number, primeiraLinha 
  */
 export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   const { kpis, stats } = d
+  // As palavras do público (cliente "avalia", funcionário "dá feedback").
+  const daEquipe = d.publico === 'equipe'
+  const t = textosDoRelatorio(d.publico)
+  const part = daEquipe ? d.participacao ?? null : null
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Easy Feed'
   wb.created = new Date()
@@ -184,7 +189,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   const resumo = criarAba(
     wb,
     'Resumo',
-    `Relatório de satisfação · ${d.nomeRestaurante}`,
+    `${daEquipe ? 'Relatório da equipe' : 'Relatório de satisfação'} · ${d.nomeRestaurante}`,
     `${d.rotuloPeriodo} (${format(d.inicio, 'dd/MM/yyyy')} a ${format(d.fim, 'dd/MM/yyyy')}) · gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
     [
       { titulo: 'Métrica', largura: 44 },
@@ -199,21 +204,35 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
       : 'Nenhum'
 
   preencher(resumo, [
-    ['Avaliações recebidas (mensagens)', num(kpis.totalMensagens), variacao(kpis.mensagensTrend)],
+    [`${t.recebidas} (mensagens)`, num(kpis.totalMensagens), variacao(kpis.mensagensTrend)],
     ['Assuntos citados (base das outras abas)', num(kpis.totalFeedbacks), variacao(kpis.totalTrend)],
     ['Índice de satisfação (0-100)', num(kpis.sentiment), variacao(kpis.sentimentTrend)],
-    ['Avaliações positivas', num(kpis.positivos), `${kpis.positivePercent ?? 0}% do total`],
-    ['Avaliações neutras', num(kpis.neutros), `${kpis.neutralPercent ?? 0}% do total`],
-    ['Avaliações negativas', num(kpis.negativos), `${kpis.negativePercent ?? 0}% do total`],
+    [t.positivas, num(kpis.positivos), `${kpis.positivePercent ?? 0}% do total`],
+    [t.neutras, num(kpis.neutros), `${kpis.neutralPercent ?? 0}% do total`],
+    [t.negativas, num(kpis.negativos), `${kpis.negativePercent ?? 0}% do total`],
     ['Sugestões', num(kpis.sugestoes ?? 0), `${kpis.suggestionPercent ?? 0}% do total`],
     // Linha de integridade, não métrica: o valor esperado é zero.
     ...(kpis.semClassificacao > 0
       ? [['Sem classificação de sentimento', num(kpis.semClassificacao), 'verifique com o suporte']]
       : []),
     ['Tema que mais preocupa', temaCritico, ''],
-    ['Clientes diferentes', num(stats?.clientesUnicos), ''],
-    ['Clientes que voltaram a avaliar', num(stats?.clientesRecorrentes), ''],
-    ['Mensagens por cliente', num(stats?.mensagensPorCliente), ''],
+    // Clientes: quem escreveu, pelo telefone. Equipe: só as contagens que o
+    // banco entrega (feedback da equipe não guarda telefone nem nome aqui).
+    ...(part
+      ? [
+          ['Funcionários ativos', part.ativos, ''],
+          ['Funcionários que falaram', part.falaram, part.falaram == null ? `não informado com menos de ${part.minimo} funcionários, para proteger o anonimato` : ''],
+          ['Funcionários que falaram mais de uma vez', part.mais_de_uma_vez, ''],
+          ['Feedbacks com o nome', part.identificados, ''],
+          ['Feedbacks anônimos', part.anonimos, ''],
+          ['Feedbacks aguardando a escolha', part.aguardando, ''],
+          ['Pedidos de feedback enviados', part.pedidos, fraseDosPedidos(part)],
+        ]
+      : [
+          [t.pessoasDiferentes, num(stats?.clientesUnicos), ''],
+          [t.pessoasQueVoltaram, num(stats?.clientesRecorrentes), ''],
+          [t.mensagensPorPessoa, num(stats?.mensagensPorCliente), ''],
+        ]),
   ] as (string | number | Date | null)[][])
 
   resumo.getColumn(2).numFmt = '#.##0,0##'
@@ -238,10 +257,10 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   // que "avaliação" é pessoa e não saber a escala da satisfação.
   const inicioGlossario = (resumo.lastRow?.number ?? 5) + 2
   const glossario: [string, string][] = [
-    ['Mensagem', 'Uma vez que um cliente escreveu.'],
+    ['Mensagem', t.glossarioMensagem],
     ['Assunto', 'Um ponto levantado dentro de uma mensagem. Quem falou de comida e de atendimento gerou dois — por isso as abas somam mais que as mensagens.'],
     ['Satisfação', 'Escala de 0 a 100. 100 = só positivas; 50 = tantas positivas quanto negativas; 0 = só negativas. Sugestões não entram na conta.'],
-    ['Célula vazia', 'Não houve avaliação naquele recorte — diferente de zero.'],
+    ['Célula vazia', daEquipe ? 'Não houve feedback naquele recorte — diferente de zero.' : 'Não houve avaliação naquele recorte — diferente de zero.'],
   ]
   const tituloGloss = resumo.getCell(inicioGlossario, 1)
   tituloGloss.value = 'COMO LER ESTA PLANILHA'
@@ -262,11 +281,11 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
     wb,
     'Categorias',
     'Satisfação por categoria',
-    'Onde o restaurante vai melhor e pior, da satisfação mais baixa para a mais alta. Sugestões ficam de fora: não são satisfação nem insatisfação.',
+    t.ondeVaiMelhorEPior,
     [
       { titulo: 'Categoria', largura: 30 },
-      { titulo: 'Avaliações', largura: 14, formato: '#.##0', alinhamento: 'right' },
-      { titulo: '% das avaliações', largura: 18, formato: '0,0"%"', alinhamento: 'right' },
+      { titulo: t.Varios, largura: 14, formato: '#.##0', alinhamento: 'right' },
+      { titulo: daEquipe ? '% dos feedbacks' : '% das avaliações', largura: 18, formato: '0,0"%"', alinhamento: 'right' },
       { titulo: 'Satisfação (0-100)', largura: 20, formato: '#.##0', alinhamento: 'right' },
     ],
   )
@@ -289,7 +308,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   const temas = criarAba(
     wb,
     'Temas',
-    'O que os clientes mais comentam',
+    t.maisComentam,
     'Assuntos que a IA agrupou a partir do que foi escrito. Use o filtro da coluna "Tipo" para ver só reclamações, elogios ou sugestões.',
     [
       { titulo: 'Tipo', largura: 16 },
@@ -323,10 +342,10 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
     wb,
     'Evolução',
     'Evolução dia a dia',
-    'Um dia por linha, do mais antigo ao mais recente. Satisfação em branco = nenhuma avaliação naquele dia.',
+    `Um dia por linha, do mais antigo ao mais recente. Satisfação em branco = ${daEquipe ? 'nenhum feedback' : 'nenhuma avaliação'} naquele dia.`,
     [
       { titulo: 'Data', largura: 16 },
-      { titulo: 'Avaliações', largura: 14, formato: '#.##0', alinhamento: 'right' },
+      { titulo: t.Varios, largura: 14, formato: '#.##0', alinhamento: 'right' },
       { titulo: 'Satisfação (0-100)', largura: 20, formato: '#.##0', alinhamento: 'right' },
     ],
   )
@@ -363,7 +382,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   blocoExtra(
     evolucao,
     'POR DIA DA SEMANA (soma de todas as semanas do período)',
-    ['Dia', 'Avaliações', 'Satisfação (0-100)'],
+    ['Dia', t.Varios, 'Satisfação (0-100)'],
     (stats?.porDiaSemana ?? []).map((x: { nome: string; total: number; satisfacao: number | null }) => [
       x.nome,
       num(x.total),
@@ -373,7 +392,7 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   blocoExtra(
     evolucao,
     'POR FAIXA DE HORÁRIO (hora em que a mensagem chegou, não a do atendimento)',
-    ['Faixa', 'Avaliações', 'Satisfação (0-100)'],
+    ['Faixa', t.Varios, 'Satisfação (0-100)'],
     (stats?.porFaixaHorario ?? []).map((x: { nome: string; total: number; satisfacao: number | null }) => [
       x.nome,
       num(x.total),
@@ -413,15 +432,15 @@ export async function gerarXlsxRelatorio(d: DadosCsv): Promise<Blob> {
   // verdade: ordenar por data aqui ordena cronologicamente, não alfabeticamente.
   const avaliacoes = criarAba(
     wb,
-    'Avaliações',
-    'Todas as avaliações do período',
-    'Uma linha por assunto citado, da mais recente à mais antiga. O total daqui é o mesmo "Assuntos citados" da aba Resumo.',
+    t.Varios,
+    t.todasDoPeriodo,
+    `Uma linha por assunto citado, ${daEquipe ? 'do mais recente ao mais antigo' : 'da mais recente à mais antiga'}. O total daqui é o mesmo "Assuntos citados" da aba Resumo.`,
     [
       { titulo: 'Data', largura: 13, formato: 'dd/mm/aaaa', alinhamento: 'center' },
       { titulo: 'Hora', largura: 9, formato: 'hh:mm', alinhamento: 'center' },
       { titulo: 'Categoria', largura: 20 },
       { titulo: 'Sentimento', largura: 15, alinhamento: 'center' },
-      { titulo: 'O que o cliente disse', largura: 80 },
+      { titulo: t.oQueDisse, largura: 80 },
     ],
   )
   preencher(

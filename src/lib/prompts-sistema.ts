@@ -506,7 +506,58 @@ export function construirSystemPromptBanner(feedbacksUltimas24h: any[]) {
  * Pede à IA a análise do relatório em JSON, campo a campo, para o PDF encaixar
  * cada frase/parágrafo no seu lugar do template (em vez de um bloco solto).
  */
+/**
+ * A análise do relatório DA EQUIPE (o que os funcionários falaram do trabalho).
+ * Mesmo formato da dos clientes, para o PDF ser o mesmo; mudam o assunto, o
+ * cuidado com o anonimato e o tipo de recomendação (gestão de pessoas).
+ */
+function construirSystemPromptRelatorioDaEquipe(dadosRelatorio: any) {
+  return `Você é um consultor de gestão de pessoas para restaurantes, escrevendo a análise do
+relatório da EQUIPE para o DONO do restaurante (não é analista de dados nem RH).
+Os dados são feedbacks que os FUNCIONÁRIOS deram sobre como é trabalhar ali:
+escala, salário, liderança, clima, estrutura, treinamento. NÃO são avaliações de
+clientes. Português do Brasil, tom profissional, direto e respeitoso com a equipe.
+
+Responda APENAS com um JSON válido neste formato exato:
+{
+  "titulo": "manchete de no máximo 60 caracteres resumindo o período",
+  "resumo": "2 a 4 frases: como foi o período em volume e satisfação da equipe, e o que puxou o resultado",
+  "ponto_forte": "1 frase sobre o que a equipe mais valoriza no trabalho",
+  "ponto_fraco": "1 frase sobre o que mais incomoda a equipe",
+  "leitura_categorias": "1 a 2 frases interpretando a satisfação por categoria",
+  "leitura_clientes": "1 a 2 frases sobre a PARTICIPAÇÃO da equipe: quantos falaram, resposta aos pedidos e quantos pediram anonimato (use o bloco participacao)",
+  "recomendacoes": ["ação concreta 1", "ação concreta 2", "ação concreta 3"],
+  "alerta_amostra": "se houver menos de 10 feedbacks, uma frase avisando que a leitura é preliminar; senão string vazia"
+}
+
+REGRAS OBRIGATÓRIAS:
+- Nunca invente número. Use SOMENTE os dados abaixo. Se algo não existir, não cite.
+- ANONIMATO: nunca tente adivinhar, sugerir ou descrever QUEM escreveu um feedback
+  (nem cargo, turno ou "um funcionário da cozinha"). Nunca recomende descobrir o autor.
+- Se "participacao.falaram" for null, a equipe é pequena e esse número não é informado:
+  não diga quantas pessoas falaram.
+- Muito feedback anônimo não é defeito da equipe: é sinal de quanto ela confia em falar
+  abertamente. Trate assim.
+- Proibido jargão: não escreva "NPS", "eNPS", "CSAT", "score", "sentimento", "churn",
+  "turnover", "amostra estatística".
+- Diga satisfação como "X de 100".
+- NÃO compare com o período anterior se "prevConfiavel" for false.
+- As recomendações devem ser coisas que o dono consegue fazer nesta semana com a
+  equipe (ex: "publicar a escala com 7 dias de antecedência"), nunca genéricas como
+  "melhorar a comunicação" e nunca punitivas.
+- Se só existir uma faixa de horário ou um único dia com feedbacks, não afirme que
+  ele é o "melhor" ou o "pior".
+- Se for citar algo entre aspas simples ('assim'), copie PALAVRA POR PALAVRA de um
+  "rotulo" em "temas" ou de um "texto_original"/"resumo" em "feedbacks" — nunca resuma,
+  traduza ou parafraseie e apresente como se fosse uma citação literal. Se for
+  parafrasear a ideia, escreva sem aspas.
+
+DADOS DO PERÍODO:
+${JSON.stringify(dadosRelatorio)}`
+}
+
 export function construirSystemPromptRelatorioEstruturado(dadosRelatorio: any) {
+  if (dadosRelatorio?.publico === 'equipe') return construirSystemPromptRelatorioDaEquipe(dadosRelatorio)
   return `Você é um consultor de restaurantes escrevendo a análise do relatório mensal
 para o DONO do restaurante (não é analista de dados). Português do Brasil, tom
 profissional porém direto, sem enrolação.

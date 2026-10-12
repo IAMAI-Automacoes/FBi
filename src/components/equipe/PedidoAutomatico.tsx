@@ -22,6 +22,10 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
   const [ativo, setAtivo] = useState(false)
   const [cada, setCada] = useState<Frequencia>(MENSAL)
   const [dia, setDia] = useState(DIA_COMECO_DO_MES)
+  // A função equipe publicada sabe o dia do mês? Enquanto a versão antiga
+  // estiver no ar (ela conta 30 dias e ignora o dia), a tela não oferece a
+  // escolha: não promete uma data que o servidor não vai cumprir.
+  const [servidorSabeODia, setServidorSabeODia] = useState(false)
   const [pergunta, setPergunta] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -31,6 +35,7 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
     setAtivo(c.ativo)
     setCada(c.cada_dias)
     setDia(diaDoMesDe(c.dia_do_mes))
+    setServidorSabeODia(typeof c.dia_do_mes === 'number')
     setPergunta(c.pergunta)
   }
 
@@ -41,7 +46,7 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
     })
   }, [])
 
-  const mensal = cada === MENSAL
+  const mensal = cada === MENSAL && servidorSabeODia
   const noComeco = dia === DIA_COMECO_DO_MES
   const avisoDoDia = mensal ? avisoDoDiaDoMes(dia) : null
 
@@ -130,7 +135,7 @@ export function PedidoAutomatico({ onMudou }: { onMudou?: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
             {salvo.ativo && salvo.proximo_em
-              ? `${resumoDaFrequencia(salvo.cada_dias, salvo.dia_do_mes)}. Próximo pedido: ${formatarAteQuando(salvo.proximo_em)}. Sai de manhã, nunca no domingo.`
+              ? `${servidorSabeODia ? resumoDaFrequencia(salvo.cada_dias, salvo.dia_do_mes) : ROTULO_FREQUENCIA[salvo.cada_dias]}. Próximo pedido: ${formatarAteQuando(salvo.proximo_em)}. Sai de manhã, nunca no domingo.`
               : 'Desligado: você pede quando quiser, no botão "Pedir feedback".'}
           </p>
           {mudou && (
