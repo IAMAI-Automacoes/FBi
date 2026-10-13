@@ -43,7 +43,7 @@ export interface Vocabulario {
   quemFala: string
 }
 
-export interface ItemDoMenu { nome: string; href: string }
+export interface ItemDoMenu { nome: string; href: string; /** Só o admin da plataforma vê, por enquanto. */ soAdmin?: boolean }
 
 export interface DefinicaoDaArea {
   id: Area
@@ -104,6 +104,9 @@ export const MENU_DO_RH: readonly ItemDoMenu[] = [
   { nome: 'Ações', href: '/equipe/acoes' },
   { nome: 'Relatórios', href: '/equipe/relatorios' },
   { nome: 'Funcionários', href: '/equipe/funcionarios' },
+  // A mesma página Descontos do restaurante (vídeos e indicações), com a mesma
+  // regra: só o admin da plataforma por enquanto.
+  { nome: 'Descontos', href: '/descontos', soAdmin: true },
 ]
 
 /**
@@ -120,15 +123,16 @@ export function itemAtivoDoMenu(itens: readonly ItemDoMenu[], caminho: string): 
 
 // ── As rotas de cada versão ──────────────────────────────────────────────────
 /** O que a conta RH abre além das páginas /equipe. */
-const ROTAS_COMUNS = ['/whatsapp', '/configuracoes', '/minha-conta', '/sugestoes', '/assinatura', '/checkout', '/onboarding', '/admin', '/escolher-versao']
+const ROTAS_COMUNS = ['/whatsapp', '/descontos', '/configuracoes', '/minha-conta', '/sugestoes', '/assinatura', '/checkout', '/onboarding', '/admin', '/escolher-versao']
 
 const dentroDe = (raiz: string, caminho: string) => caminho === raiz || caminho.startsWith(`${raiz}/`)
 
 /**
  * A conta desta área pode abrir este endereço?
  * Restaurante: tudo como sempre (cada página tem a própria trava, e a Equipe
- * continua só para o admin). RH: só as páginas da equipe e as comuns; QR Code,
- * Garçons, Google, Descontos e as páginas de cliente não existem nessa versão.
+ * continua só para o admin). RH: só as páginas da equipe e as comuns (WhatsApp,
+ * Descontos, Configurações…); QR Code, Garçons, Google e as páginas de cliente
+ * não existem nessa versão.
  */
 export function rotaPermitidaNaArea(area: unknown, caminho: string): boolean {
   if (areaDe(area) !== 'rh') return true

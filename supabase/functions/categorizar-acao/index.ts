@@ -33,6 +33,7 @@
 import { json, preflight } from '../_shared/cors.ts'
 import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChama } from '../_shared/quem-chama.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
@@ -165,13 +166,19 @@ Deno.serve(async (req: Request) => {
 
     const db: Db = clienteAdmin()
 
+    // Só o dono da conta da ação (ou o admin da plataforma, ou o próprio
+    // servidor). Ver _shared/quem-chama.ts.
+    const quem = await quemChama(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
+
     const { data: acao, error: erroAcao } = await db
       .from('acoes_operacionais')
       .select('id, titulo_acao, plano_detalhado, categoria, prioridade, restaurante_id, insight_id, status, arquivada_em, publico')
       .eq('id', acaoId)
       .single()
 
-    if (erroAcao || !acao) return json({ error: 'Ação não encontrada' }, 404)
+    // Ação de outra conta responde igual a ação que não existe.
+    if (erroAcao || !acao || !podeMexerNaConta(quem, acao.restaurante_id)) return json({ error: 'Ação não encontrada' }, 404)
     // Ação criada na página da equipe só enxerga feedback da equipe.
     const publico = publicoDe(acao.publico)
 

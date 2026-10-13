@@ -25,6 +25,7 @@
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChama } from '../_shared/quem-chama.ts'
 import { carregarPrompts, type Prompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
@@ -485,6 +486,12 @@ Deno.serve(async (req: Request) => {
     if (!insightSolicitado) return json({ error: 'insight_id é obrigatório' }, 400)
 
     const db = clienteAdmin()
+
+    // Só o dono desta conta (ou o admin da plataforma, ou o próprio servidor)
+    // cria ação nela. Ver _shared/quem-chama.ts.
+    const quem = await quemChama(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
+    if (!podeMexerNaConta(quem, restauranteId)) return json({ error: 'Esta conta não é sua.' }, 403)
 
     const { data: config } = await db
       .from('restaurantes')

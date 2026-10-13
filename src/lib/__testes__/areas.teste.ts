@@ -37,8 +37,9 @@ const chavesV = Object.keys(vr) as (keyof typeof vr)[]
 ok('nenhuma palavra do RH fala de restaurante', chavesV.every((k) => !/restaurante/i.test(ve[k])) && !/restaurante|gar[cç]om|card[aá]pio|mesa/i.test(`${DEFINICOES.rh.descricao} ${DEFINICOES.rh.paraQuem} ${DEFINICOES.rh.resumo}`))
 
 // ── O menu do RH ─────────────────────────────────────────────────────────────
-ok('menu do RH, na ordem', MENU_DO_RH.map((i) => i.nome).join() === 'Visão Geral,Feedbacks,WhatsApp,Insights,Ações,Relatórios,Funcionários')
-ok('o menu do RH não tem nada de restaurante', !MENU_DO_RH.some((i) => /qr|gar[cç]|google|desconto/i.test(i.nome + i.href)))
+ok('menu do RH, na ordem', MENU_DO_RH.map((i) => i.nome).join() === 'Visão Geral,Feedbacks,WhatsApp,Insights,Ações,Relatórios,Funcionários,Descontos')
+ok('Descontos no RH segue a regra do restaurante: só o admin por enquanto', MENU_DO_RH.filter((i) => i.soAdmin).map((i) => i.href).join() === '/descontos')
+ok('o menu do RH não tem QR Code, Garçons nem Google', !MENU_DO_RH.some((i) => /qr|gar[cç]|google/i.test(i.nome + i.href)))
 ok('todo item do menu do RH é um endereço que o RH pode abrir', MENU_DO_RH.every((i) => rotaPermitidaNaArea('rh', i.href)))
 ok('/equipe acende só a Visão Geral', itemAtivoDoMenu(MENU_DO_RH, '/equipe') === '/equipe')
 ok('cada página acende o próprio item, não a Visão Geral', MENU_DO_RH.every((i) => itemAtivoDoMenu(MENU_DO_RH, i.href) === i.href))
@@ -48,12 +49,12 @@ ok('a raiz "/" não acende em toda página (menu do restaurante)', itemAtivoDoMe
   && itemAtivoDoMenu([{ nome: 'Visão Geral', href: '/' }], '/qrcode') === null && itemAtivoDoMenu([{ nome: 'Visão Geral', href: '/' }], '/') === '/')
 
 // ── As rotas ─────────────────────────────────────────────────────────────────
-const DE_RESTAURANTE = ['/', '/feedbacks', '/insights', '/acoes', '/acoes/arquivadas', '/relatorios', '/google', '/qrcode', '/garcons', '/descontos', '/descontos/indicacoes', '/missoes']
+const DE_RESTAURANTE = ['/', '/feedbacks', '/insights', '/acoes', '/acoes/arquivadas', '/relatorios', '/google', '/qrcode', '/garcons', '/missoes']
 ok('restaurante abre tudo como sempre (cada página tem a própria trava)', [...DE_RESTAURANTE, '/equipe', '/equipe/feedbacks', '/whatsapp', '/configuracoes'].every((c) => rotaPermitidaNaArea('restaurante', c)))
 ok('conta sem versão também não é barrada aqui', DE_RESTAURANTE.every((c) => rotaPermitidaNaArea(null, c)))
 ok('RH não abre as páginas de cliente e de restaurante', DE_RESTAURANTE.every((c) => !rotaPermitidaNaArea('rh', c)), DE_RESTAURANTE.filter((c) => rotaPermitidaNaArea('rh', c)))
 ok('RH abre as páginas da equipe', ['/equipe', '/equipe/feedbacks', '/equipe/insights', '/equipe/acoes', '/equipe/acoes/arquivadas', '/equipe/relatorios', '/equipe/funcionarios'].every((c) => rotaPermitidaNaArea('rh', c)))
-ok('RH abre o que é comum às versões', ['/whatsapp', '/configuracoes', '/minha-conta', '/sugestoes', '/assinatura', '/checkout', '/checkout/sucesso', '/onboarding', '/escolher-versao'].every((c) => rotaPermitidaNaArea('rh', c)))
+ok('RH abre o que é comum às versões', ['/whatsapp', '/descontos', '/descontos/historico', '/descontos/indicacoes', '/configuracoes', '/minha-conta', '/sugestoes', '/assinatura', '/checkout', '/checkout/sucesso', '/onboarding', '/escolher-versao'].every((c) => rotaPermitidaNaArea('rh', c)))
 ok('endereço parecido não passa (/equipex, /whatsappx)', !rotaPermitidaNaArea('rh', '/equipex') && !rotaPermitidaNaArea('rh', '/whatsappx') && !rotaPermitidaNaArea('rh', '/configuracoes-x'))
 
 // ── O convite ────────────────────────────────────────────────────────────────

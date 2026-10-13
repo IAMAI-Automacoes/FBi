@@ -2256,6 +2256,7 @@ export type Database = {
           oculta: boolean
           payload: Json | null
           por_api: boolean
+          publico: string
           reacao: string | null
           responde_message_id: string | null
           restaurante_id: number
@@ -2285,6 +2286,7 @@ export type Database = {
           oculta?: boolean
           payload?: Json | null
           por_api?: boolean
+          publico?: string
           reacao?: string | null
           responde_message_id?: string | null
           restaurante_id: number
@@ -2314,6 +2316,7 @@ export type Database = {
           oculta?: boolean
           payload?: Json | null
           por_api?: boolean
+          publico?: string
           reacao?: string | null
           responde_message_id?: string | null
           restaurante_id?: number
@@ -4253,6 +4256,10 @@ export type Database = {
           permitido: boolean
         }[]
       }
+      conta_usa_as_duas_versoes: {
+        Args: { p_restaurante_id: number }
+        Returns: boolean
+      }
       contato_contexto_parar: {
         Args: { p_restaurante_id: number; p_telefone: string }
         Returns: Json
@@ -4661,6 +4668,10 @@ export type Database = {
         }[]
       }
       whatsapp_interativo: { Args: { p_payload: Json }; Returns: Json }
+      whatsapp_publico_da_conta: {
+        Args: { p_restaurante_id: number }
+        Returns: string
+      }
       whatsapp_texto_do_interativo: {
         Args: { p_interativo: Json }
         Returns: string

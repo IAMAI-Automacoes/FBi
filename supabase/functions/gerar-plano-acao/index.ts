@@ -1,6 +1,7 @@
 import { json, preflight } from '../_shared/cors.ts'
 import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChama } from '../_shared/quem-chama.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { publicoDe } from '../_shared/publico.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
@@ -74,13 +75,19 @@ Deno.serve(async (req: Request) => {
 
     const db = clienteAdmin()
 
+    // Só o dono da conta da ação (ou o admin da plataforma, ou o próprio
+    // servidor). Ver _shared/quem-chama.ts.
+    const quem = await quemChama(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
+
     const { data: acao, error: acaoErr } = await db
       .from('acoes_operacionais')
       .select('*')
       .eq('id', acaoId)
-      .single()
+      .maybeSingle()
     if (acaoErr) throw acaoErr
-    if (!acao) return json({ error: 'Ação não encontrada' }, 404)
+    // Ação de outra conta responde igual a ação que não existe.
+    if (!acao || !podeMexerNaConta(quem, acao.restaurante_id)) return json({ error: 'Ação não encontrada' }, 404)
     // Plano de ação da equipe usa só o que veio da equipe como contexto.
     const publico = publicoDe(acao.publico)
 
