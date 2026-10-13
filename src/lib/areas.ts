@@ -169,3 +169,59 @@ export const RECUSA_DA_ESCOLHA: Record<string, string> = {
   area_invalida: 'Essa versão não existe.',
   sem_conta: 'Não achamos a sua conta. Recarregue a página e tente de novo.',
 }
+
+// ── Versão RH: o perfil da empresa (Configurações → Sobre a empresa) ─────────
+/** Os ramos que o onboarding e as Configurações oferecem. */
+export const RAMOS_DE_EMPRESA: readonly string[] = [
+  'Comércio e varejo', 'Serviços', 'Saúde', 'Educação', 'Indústria', 'Tecnologia', 'Construção',
+  'Transporte e logística', 'Alimentação', 'Hotelaria e turismo', 'Outro',
+]
+
+/**
+ * O que a empresa conta sobre si. A IA usa como contexto ao ler o feedback da
+ * equipe e ao sugerir ações. `ramo` e `numero_funcionarios` são colunas de
+ * `restaurantes`; os outros três ficam em `perfil_restaurante` (jsonb).
+ */
+export interface SobreAEmpresa {
+  ramo: string
+  /** Texto do campo (só dígitos); '' = não informado. */
+  numero_funcionarios: string
+  o_que_faz: string
+  turnos: string
+  unidades: string
+}
+
+export const SOBRE_A_EMPRESA_VAZIO: SobreAEmpresa = { ramo: '', numero_funcionarios: '', o_que_faz: '', turnos: '', unidades: '' }
+
+export const LIMITES_DA_EMPRESA = { o_que_faz: 500, turnos: 200, unidades: 200, funcionarios: 100000 } as const
+
+const umaLinha = (v: unknown, max: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
+
+/** Lê o perfil da empresa da linha de `restaurantes` (colunas + jsonb). */
+export function lerSobreAEmpresa(linha: { ramo?: unknown; numero_funcionarios?: unknown; perfil_restaurante?: unknown } | null | undefined): SobreAEmpresa {
+  const p = (linha?.perfil_restaurante && typeof linha.perfil_restaurante === 'object' ? linha.perfil_restaurante : {}) as Record<string, unknown>
+  const n = Number(linha?.numero_funcionarios)
+  return {
+    ramo: umaLinha(linha?.ramo, 80),
+    numero_funcionarios: Number.isInteger(n) && n > 0 ? String(n) : '',
+    o_que_faz: String(p.o_que_faz ?? '').trim().slice(0, LIMITES_DA_EMPRESA.o_que_faz),
+    turnos: umaLinha(p.turnos, LIMITES_DA_EMPRESA.turnos),
+    unidades: umaLinha(p.unidades, LIMITES_DA_EMPRESA.unidades),
+  }
+}
+
+/** O número de funcionários como o banco aceita (1 a 100.000), ou null. */
+export function numeroDeFuncionarios(texto: string): number | null {
+  const n = Number(String(texto).replace(/\D/g, ''))
+  return Number.isInteger(n) && n >= 1 && n <= LIMITES_DA_EMPRESA.funcionarios ? n : null
+}
+
+/** As três chaves que vão para `perfil_restaurante`, já limpas (vazio não é gravado). */
+export function sobreAEmpresaNoPerfil(e: SobreAEmpresa): Record<string, string> {
+  const pares: [string, string][] = [
+    ['o_que_faz', e.o_que_faz.trim().slice(0, LIMITES_DA_EMPRESA.o_que_faz)],
+    ['turnos', umaLinha(e.turnos, LIMITES_DA_EMPRESA.turnos)],
+    ['unidades', umaLinha(e.unidades, LIMITES_DA_EMPRESA.unidades)],
+  ]
+  return Object.fromEntries(pares.filter(([, v]) => v !== ''))
+}

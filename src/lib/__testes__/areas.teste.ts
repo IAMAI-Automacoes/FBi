@@ -3,8 +3,8 @@
  *   node --experimental-strip-types src/lib/__testes__/areas.teste.ts
  */
 import {
-  areaDe, AREAS, conviteDoEndereco, DEFINICOES, definicaoDa, inicioDa, itemAtivoDoMenu, linkDoConvite, MENU_DO_RH,
-  RECUSA_DA_ESCOLHA, rotaPermitidaNaArea, vocabularioDa,
+  areaDe, AREAS, conviteDoEndereco, DEFINICOES, definicaoDa, inicioDa, itemAtivoDoMenu, lerSobreAEmpresa, LIMITES_DA_EMPRESA, linkDoConvite, MENU_DO_RH,
+  numeroDeFuncionarios, RAMOS_DE_EMPRESA, RECUSA_DA_ESCOLHA, rotaPermitidaNaArea, SOBRE_A_EMPRESA_VAZIO, sobreAEmpresaNoPerfil, vocabularioDa,
 } from '../areas.ts'
 
 let falhas = 0
@@ -71,6 +71,24 @@ ok('e a tela lê de volta o mesmo convite', conviteDoEndereco(new URL(link).sear
 
 // ── As recusas ───────────────────────────────────────────────────────────────
 ok('toda recusa do banco tem frase', ['convite_invalido', 'ja_escolhida', 'area_invalida', 'sem_conta'].every((m) => (RECUSA_DA_ESCOLHA[m] ?? '').length > 10))
+
+// ── Sobre a empresa (versão RH) ──────────────────────────────────────────────
+ok('ramos: lista com "Outro" no fim, sem repetição', RAMOS_DE_EMPRESA.length >= 8 && RAMOS_DE_EMPRESA.at(-1) === 'Outro' && new Set(RAMOS_DE_EMPRESA).size === RAMOS_DE_EMPRESA.length)
+let emp = lerSobreAEmpresa({ ramo: '  Comércio   e varejo ', numero_funcionarios: 35, perfil_restaurante: { o_que_faz: ' Loja de materiais.\nEntrega própria. ', turnos: 'Seg a sáb,\n8h às 18h', unidades: 'Matriz e filial', estilo: 'não é meu' } })
+ok('lê o perfil da empresa das colunas e do JSON', emp.ramo === 'Comércio e varejo' && emp.numero_funcionarios === '35' && emp.o_que_faz === 'Loja de materiais.\nEntrega própria.'
+  && emp.turnos === 'Seg a sáb, 8h às 18h' && emp.unidades === 'Matriz e filial' && Object.keys(emp).length === 5, emp)
+ok('conta sem nada preenchido (ou linha vazia): tudo vazio, sem quebrar', JSON.stringify(lerSobreAEmpresa(null)) === JSON.stringify(SOBRE_A_EMPRESA_VAZIO)
+  && JSON.stringify(lerSobreAEmpresa({ ramo: null, numero_funcionarios: null, perfil_restaurante: null })) === JSON.stringify(SOBRE_A_EMPRESA_VAZIO)
+  && lerSobreAEmpresa({ numero_funcionarios: 0, perfil_restaurante: 'texto' }).numero_funcionarios === '')
+ok('número de funcionários: de 1 a 100.000, só dígitos', numeroDeFuncionarios('35') === 35 && numeroDeFuncionarios(' 1.200 ') === 1200 && numeroDeFuncionarios('100000') === 100000
+  && numeroDeFuncionarios('') === null && numeroDeFuncionarios('0') === null && numeroDeFuncionarios('100001') === null && numeroDeFuncionarios('muitos') === null)
+ok('o que vai para o JSON: só o que foi escrito, limpo e no limite', JSON.stringify(sobreAEmpresaNoPerfil({ ...SOBRE_A_EMPRESA_VAZIO, o_que_faz: '  Clínica de fisioterapia  ', turnos: '   ' })) === '{"o_que_faz":"Clínica de fisioterapia"}'
+  && Object.keys(sobreAEmpresaNoPerfil(SOBRE_A_EMPRESA_VAZIO)).length === 0
+  && sobreAEmpresaNoPerfil({ ...SOBRE_A_EMPRESA_VAZIO, o_que_faz: 'a'.repeat(900), unidades: 'u'.repeat(900) }).o_que_faz.length === LIMITES_DA_EMPRESA.o_que_faz
+  && sobreAEmpresaNoPerfil({ ...SOBRE_A_EMPRESA_VAZIO, unidades: 'u'.repeat(900) }).unidades.length === LIMITES_DA_EMPRESA.unidades)
+emp = lerSobreAEmpresa({ ramo: 'Saúde', numero_funcionarios: 12, perfil_restaurante: sobreAEmpresaNoPerfil({ ...SOBRE_A_EMPRESA_VAZIO, o_que_faz: 'Clínica', turnos: 'Manhã e tarde', unidades: 'Uma' }) })
+ok('o que foi salvo volta igual na próxima leitura', emp.o_que_faz === 'Clínica' && emp.turnos === 'Manhã e tarde' && emp.unidades === 'Uma')
+ok('as chaves da empresa não batem com as do perfil do restaurante (a conta do admin usa as duas)', Object.keys(sobreAEmpresaNoPerfil({ ...SOBRE_A_EMPRESA_VAZIO, o_que_faz: 'x', turnos: 'y', unidades: 'z' })).join() === 'o_que_faz,turnos,unidades')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nversões por área: tudo certo')
 process.exit(falhas ? 1 : 0)

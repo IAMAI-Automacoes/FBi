@@ -45,7 +45,7 @@ import { getIniciais } from '@/lib/iniciais'
 import { WhatsAppTab, CartaoNumeroDoDono } from '@/pages/settings/WhatsAppTab'
 import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
 import { useArea } from '@/lib/area'
-import { inicioDa } from '@/lib/areas'
+import { inicioDa, RAMOS_DE_EMPRESA } from '@/lib/areas'
 
 /** Restaurante (ou empresa, na versão RH), coleta, IA, avisos urgentes, WhatsApp e confirmação. */
 const TOTAL_PASSOS = 6
@@ -55,7 +55,7 @@ const TOTAL_PASSOS = 6
    campo "mesas" guarda o NÚMERO DE FUNCIONÁRIOS (no estado da tela; no banco
    vão para colunas próprias, `ramo` e `numero_funcionarios`). */
 const CULINARIAS = ['Brasileira', 'Italiana', 'Japonesa', 'Fast Food', 'Pizzaria', 'Churrascaria', 'Outro']
-const RAMOS = ['Comércio e varejo', 'Serviços', 'Saúde', 'Educação', 'Indústria', 'Tecnologia', 'Construção', 'Transporte e logística', 'Alimentação', 'Hotelaria e turismo', 'Outro']
+const RAMOS = RAMOS_DE_EMPRESA   // a mesma lista de Configurações → Sobre a empresa
 const FOCOS_DO_RESTAURANTE = ['Atendimento', 'Comida', 'Ambiente', 'Preço', 'Tempo de Espera']
 const FOCOS_DO_RH = ['Liderança', 'Escala e horários', 'Salário e benefícios', 'Clima da equipe', 'Estrutura de trabalho']
 

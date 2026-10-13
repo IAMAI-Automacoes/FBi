@@ -16,7 +16,8 @@ import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
 import { useArea } from '@/lib/area'
-import { inicioDa } from '@/lib/areas'
+import { inicioDa, lerSobreAEmpresa, numeroDeFuncionarios, SOBRE_A_EMPRESA_VAZIO, sobreAEmpresaNoPerfil, type SobreAEmpresa } from '@/lib/areas'
+import { SobreEmpresaTab } from './settings/SobreEmpresaTab'
 
 const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
@@ -50,6 +51,8 @@ export default function Settings() {
   const [restaurante, setRestaurante] = useState<RestauranteForm>(RESTAURANTE_VAZIO)
   const [mascote, setMascote] = useState<MascoteForm>(MASCOTE_VAZIO)
   const [perfil, setPerfil] = useState<PerfilNegocioForm>(PERFIL_VAZIO)
+  // Versão RH: o perfil da empresa (seção "Sobre a empresa").
+  const [empresa, setEmpresa] = useState<SobreAEmpresa>(SOBRE_A_EMPRESA_VAZIO)
   const [expiracaoFeedback, setExpiracaoFeedback] = useState(EXPIRACAO_PADRAO)
   // Número dos avisos urgentes (cartão na seção WhatsApp). Salva pela barra
   // da página, como o resto.
@@ -63,6 +66,7 @@ export default function Settings() {
     restaurante: RESTAURANTE_VAZIO,
     mascote: MASCOTE_VAZIO,
     perfil: PERFIL_VAZIO,
+    empresa: SOBRE_A_EMPRESA_VAZIO,
     expiracaoFeedback: EXPIRACAO_PADRAO,
     numeroDono: '',
   })
@@ -88,7 +92,7 @@ export default function Settings() {
     const carregar = async () => {
       const { data } = await supabase
         .from('restaurantes')
-        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights, telefone_contato, whatsapp_dono, numero_whatsapp')
+        .select('nome_restaurante, detalhes, logo_url, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, config_insights, telefone_contato, whatsapp_dono, numero_whatsapp, ramo, numero_funcionarios')
         .eq('id', restauranteId)
         .single()
 
@@ -126,11 +130,13 @@ export default function Settings() {
         setRestaurante(r)
         setMascote(m)
         setPerfil(p)
+        const e = lerSobreAEmpresa(data)
+        setEmpresa(e)
         const dono = data.whatsapp_dono || ''
         setNumeroDono(dono)
         setNumeroDonoTemDigitos(Boolean(dono))
         setNumeroRestaurante(data.numero_whatsapp ?? null)
-        setSalvo({ restaurante: r, mascote: m, perfil: p, expiracaoFeedback: expiracao, numeroDono: dono })
+        setSalvo({ restaurante: r, mascote: m, perfil: p, empresa: e, expiracaoFeedback: expiracao, numeroDono: dono })
       }
       setCarregandoDados(false)
     }
@@ -138,7 +144,7 @@ export default function Settings() {
   }, [loading, restauranteId])
 
   const alterado =
-    JSON.stringify({ restaurante, mascote, perfil, expiracaoFeedback, numeroDono }) !== JSON.stringify(salvo)
+    JSON.stringify({ restaurante, mascote, perfil, empresa, expiracaoFeedback, numeroDono }) !== JSON.stringify(salvo)
 
   const handleSalvar = async () => {
     // Antes isto era um `return` mudo: o botão parecia não fazer nada.
@@ -187,7 +193,11 @@ export default function Settings() {
         detalhes: perfil.detalhes,
         tipo_culinaria: perfil.tipo_culinaria || null,
         numero_mesas: perfil.numero_mesas ? Number(perfil.numero_mesas) : null,
-        perfil_restaurante: perfilParaJson(perfil),
+        // O que a empresa conta sobre si (versão RH) mora no mesmo JSON. Vai
+        // junto nas duas versões: a conta do admin usa as duas, e salvar numa
+        // não pode apagar o que foi escrito na outra.
+        perfil_restaurante: { ...perfilParaJson(perfil), ...sobreAEmpresaNoPerfil(empresa) },
+        ...(ehRh ? { ramo: empresa.ramo || null, numero_funcionarios: numeroDeFuncionarios(empresa.numero_funcionarios) } : {}),
         config_insights: {
           ...configInsightsBruto.current,
           expiracao_feedback_dias: expiracaoFeedback,
@@ -213,7 +223,7 @@ export default function Settings() {
       })
       return
     }
-    setSalvo({ restaurante, mascote, perfil, expiracaoFeedback, numeroDono })
+    setSalvo({ restaurante, mascote, perfil, empresa, expiracaoFeedback, numeroDono })
     // Atualiza os caches persistentes (sem F5): o contexto (sidebar/banner/chat) e
     // os dados do restaurante no useAuth. As telas que buscam do banco já vêm
     // frescas ao navegar por causa do cache: 'no-store'.
@@ -226,6 +236,7 @@ export default function Settings() {
     setRestaurante(salvo.restaurante)
     setMascote(salvo.mascote)
     setPerfil(salvo.perfil)
+    setEmpresa(salvo.empresa)
     setExpiracaoFeedback(salvo.expiracaoFeedback)
     setNumeroDono(salvo.numeroDono)
     setNumeroDonoTemDigitos(Boolean(salvo.numeroDono))
@@ -281,12 +292,14 @@ export default function Settings() {
     )
   }
 
-  // Versão RH: "Sobre o restaurante" (cozinha, mesas, público), a base de
-  // conhecimento (o que a assistente responde aos clientes) e a validade do
-  // feedback dos clientes não se aplicam. O feedback da equipe vale 90 dias.
+  // Versão RH: no lugar de "Sobre o restaurante" (cozinha, mesas, público) entra
+  // "Sobre a empresa". A base de conhecimento (o que a assistente responde aos
+  // clientes) e a validade do feedback dos clientes não se aplicam: o feedback
+  // da equipe vale 90 dias.
   const navItems = ehRh
     ? [
         { id: 'restaurante', label: 'Empresa' },
+        { id: 'perfil', label: 'Sobre a empresa' },
         { id: 'whatsapp', label: 'WhatsApp' },
         { id: 'mascote', label: 'Assistente de IA' },
       ]
@@ -347,6 +360,11 @@ export default function Settings() {
                   onUploadingChange={setEnviandoArquivo}
                 />
               </section>
+              {ehRh && (
+                <section id="perfil" className="scroll-mt-28">
+                  <SobreEmpresaTab value={empresa} onChange={setEmpresa} />
+                </section>
+              )}
               {!ehRh && (
                 <>
                   <section id="perfil" className="scroll-mt-28">
