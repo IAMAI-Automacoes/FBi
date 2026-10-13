@@ -522,12 +522,14 @@ export interface ContaAdmin {
   /** Nulo = conta ativa. Preenchido = excluída (reversível). */
   excluida_em: string | null
   created_at: string
+  /** A versão do EasyFeed: 'restaurante' | 'rh' (lib/areas.ts). Nulo = ainda não escolheu. */
+  area: string | null
 }
 
 export async function buscarContas(): Promise<ContaAdmin[]> {
   const { data, error } = await supabase
     .from('restaurantes')
-    .select('id, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at')
+    .select('id, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at, area')
     .order('created_at', { ascending: false })
   if (error) throw error
 
@@ -548,6 +550,7 @@ export async function buscarContas(): Promise<ContaAdmin[]> {
     onboarding_completo: r.onboarding_completo,
     excluida_em: r.excluida_em ?? null,
     created_at: r.created_at,
+    area: r.area ?? null,
   })) as ContaAdmin[]
 }
 

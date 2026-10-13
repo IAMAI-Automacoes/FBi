@@ -27,13 +27,18 @@ import {
 import type { ResultadoEnvio } from '../_shared/uazapi.ts'
 
 /**
- * Enquanto a página é só do admin da plataforma. Para liberar aos donos: false
- * aqui, `equipe_liberada()` no banco, o SoAdminPlataforma das rotas (App.tsx) e
- * o soAdmin do menu (AppSidebar.tsx).
+ * Quem usa o feedback da equipe: a conta da versão RH (é o produto dela) e, na
+ * conta de restaurante, só o admin da plataforma por enquanto. É a mesma regra
+ * de `equipe_liberada()` no banco. Para liberar aos donos de restaurante: mude
+ * aqui e lá, e tire o SoAdminPlataforma de AreaEquipe e o soAdmin do menu.
  */
-export const SO_ADMIN = true
+export const podeUsarAEquipe = (quem: Pick<Quem, 'ehAdmin' | 'area'>): boolean => quem.ehAdmin || quem.area === 'rh'
 
-export interface Quem { restauranteId: number | null; nomeRestaurante: string; email: string; ehAdmin: boolean }
+export interface Quem {
+  restauranteId: number | null; nomeRestaurante: string; email: string; ehAdmin: boolean
+  /** A versão da conta: 'restaurante' | 'rh' (restaurantes.area). */
+  area?: string | null
+}
 export interface FuncionarioLinha { id: number; restaurante_id: number; nome: string; telefone: string; ativo: boolean; opt_out_em: string | null }
 export interface ConviteLinha { id: number; envio_id: number; restaurante_id: number; funcionario_id: number | null; telefone: string; texto: string }
 export interface EnvioLinha { id: number; restaurante_id: number; pergunta: string; status: string }
@@ -63,7 +68,7 @@ export interface DepsEquipe {
   }
   /** A IA que rascunha o aviso. null = desligada, sem crédito ou fora do ar (vale o texto-modelo). */
   ia: {
-    rascunhoAviso: (p: { restauranteId: number; restaurante: string; titulo: string; plano: string; categoria: string }) => Promise<string | null>
+    rascunhoAviso: (p: { restauranteId: number; restaurante: string; area?: string | null; titulo: string; plano: string; categoria: string }) => Promise<string | null>
   }
   db: {
     funcionarios: (restauranteId: number) => Promise<FuncionarioLinha[]>
@@ -105,7 +110,7 @@ export interface Resultado { status: number; corpo: Record<string, unknown> }
 
 const RECUSAS = {
   sem_login: [401, 'Entre de novo na sua conta.'],
-  so_admin: [403, 'Disponível só para o admin por enquanto.'],
+  so_admin: [403, 'O feedback da equipe faz parte da versão RH do EasyFeed.'],
   so_rotina: [401, 'Só a rotina do sistema chama isto.'],
   sem_restaurante: [403, 'Esta conta não tem restaurante.'],
   pedido_invalido: [400, 'Pedido inválido.'],
@@ -241,7 +246,7 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
 
   const quem = await deps.quemPede()
   if (!quem?.email) return recusa('sem_login')
-  if (SO_ADMIN && !quem.ehAdmin) return recusa('so_admin')
+  if (!podeUsarAEquipe(quem)) return recusa('so_admin')
   if (!quem.restauranteId) return recusa('sem_restaurante')
   const restauranteId = quem.restauranteId
 
@@ -303,7 +308,7 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
       if (acao === 'rascunho_aviso') {
         // Já avisou: não gasta IA para um texto que não vai sair.
         const daIa = jaAvisouEm ? null : validarAviso(await deps.ia.rascunhoAviso({
-          restauranteId, restaurante: quem.nomeRestaurante, titulo: a.titulo, plano: a.plano, categoria: a.categoria,
+          restauranteId, restaurante: quem.nomeRestaurante, area: quem.area ?? null, titulo: a.titulo, plano: a.plano, categoria: a.categoria,
         }).catch(() => null))
         return {
           status: 200,

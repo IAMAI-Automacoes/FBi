@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ComponentType } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -32,6 +32,8 @@ import { contarFeedbacksNaoLidos, marcarFeedbacksVistos } from '@/lib/queries/fe
 import { supabase } from '@/lib/supabase/client'
 import { listarConversas } from '@/lib/queries/whatsapp'
 import { WhatsappIcon } from './WhatsappIcon'
+import { useArea } from '@/lib/area'
+import { itemAtivoDoMenu, MENU_DO_RH } from '@/lib/areas'
 
 const navigation = [
   { name: 'Visão Geral', href: '/', icon: LayoutDashboard, modulo: 'visao_geral' },
@@ -57,14 +59,34 @@ const navigation = [
   { name: 'Equipe', href: '/equipe', icon: HeartHandshake, modulo: 'visao_geral', soAdmin: true },
 ]
 
+/* O menu da versão RH: as páginas /equipe direto no menu lateral (a lista e a
+   ordem vêm de lib/areas.ts; aqui entram o ícone e o módulo da permissão). */
+type IconeDoMenu = ComponentType<{ className?: string }>
+interface ItemDaBarra { name: string; href: string; icon: IconeDoMenu; modulo: string; soAdmin?: boolean }
+
+const ICONE_DO_RH: Record<string, { icon: IconeDoMenu; modulo: string }> = {
+  '/equipe': { icon: LayoutDashboard, modulo: 'visao_geral' },
+  '/equipe/feedbacks': { icon: MessageSquare, modulo: 'feedbacks' },
+  '/whatsapp': { icon: WhatsappIcon, modulo: 'whatsapp' },
+  '/equipe/insights': { icon: Lightbulb, modulo: 'insights' },
+  '/equipe/acoes': { icon: Zap, modulo: 'acoes' },
+  '/equipe/relatorios': { icon: FileBarChart, modulo: 'relatorios' },
+  '/equipe/funcionarios': { icon: Users, modulo: 'visao_geral' },
+}
+const navegacaoDoRh: ItemDaBarra[] = MENU_DO_RH.map((i) => ({ name: i.nome, href: i.href, ...ICONE_DO_RH[i.href] }))
+
 export function AppSidebar() {
   const location = useLocation()
   const { nomeRestaurante, logoUrl } = useRestauranteConfig()
   const { podeVer } = usePermissoes()
   const { usuario, ehAdminPlataforma } = useAuth()
+  // A versão da conta decide o menu: restaurante (o de sempre) ou RH.
+  const { ehRh } = useArea()
+  const itens: readonly ItemDaBarra[] = ehRh ? navegacaoDoRh : navigation
+  const ativoNoRh = ehRh ? itemAtivoDoMenu(MENU_DO_RH, location.pathname) : null
 
   const isSugestoesActive = location.pathname === '/sugestoes'
-  const isFeedbacksActive = location.pathname === '/feedbacks'
+  const isFeedbacksActive = location.pathname === (ehRh ? '/equipe/feedbacks' : '/feedbacks')
 
   // Badge de mensagens não lidas do suporte (novas + editadas)
   const [naoLidas, setNaoLidas] = useState(0)
@@ -96,7 +118,8 @@ export function AppSidebar() {
   const restauranteId = usuario?.restaurante_id ?? null
   const [pendentes, setPendentes] = useState(0)
   useEffect(() => {
-    if (!restauranteId) { setPendentes(0); return }
+    // Na versão RH não existe garçom nem bonificação.
+    if (!restauranteId || ehRh) { setPendentes(0); return }
     const atualizar = () => contarGarconsPendentes(restauranteId).then(setPendentes).catch(() => {})
     atualizar()
     const intervalo = setInterval(atualizar, 60_000)
@@ -110,7 +133,7 @@ export function AppSidebar() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'qr_scans' }, atualizar)
       .subscribe()
     return () => { clearInterval(intervalo); supabase.removeChannel(ch) }
-  }, [restauranteId])
+  }, [restauranteId, ehRh])
 
   // Numerozinho de "chegou feedback negativo ou sugestão" (Negativo,
   // Positivo e Negativo ou Sugestão) — conta desde a última vez que a aba
@@ -121,7 +144,8 @@ export function AppSidebar() {
   const [feedbacksNaoLidos, setFeedbacksNaoLidos] = useState(0)
   useEffect(() => {
     if (!restauranteId) { setFeedbacksNaoLidos(0); return }
-    const atualizar = () => contarFeedbacksNaoLidos(restauranteId).then(setFeedbacksNaoLidos).catch(() => {})
+    // Restaurante: os feedbacks dos clientes. RH: os dos funcionários.
+    const atualizar = () => contarFeedbacksNaoLidos(restauranteId, ehRh ? 'equipe' : 'cliente').then(setFeedbacksNaoLidos).catch(() => {})
     atualizar()
     // A mensagem já chega gravada com o sentimento geral: basta ouvir ela.
     const ch = supabase
@@ -133,7 +157,7 @@ export function AppSidebar() {
       )
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [restauranteId])
+  }, [restauranteId, ehRh])
 
   // Numerozinho do WhatsApp: quantas CONVERSAS (contatos e grupos) têm
   // mensagem não lida — mesma conta da tela. Abrir a página não zera nada;
@@ -203,11 +227,15 @@ export function AppSidebar() {
             explícito do Raver). É o espaço em volta que fica menor, sobrando
             mais altura pra rodapé/resto da barra lateral. */}
         <SidebarMenu className="gap-0.5">
-          {navigation
-            .filter((item) => podeVer(item.modulo) && (!('soAdmin' in item) || ehAdminPlataforma))
+          {itens
+            .filter((item) => podeVer(item.modulo) && (!item.soAdmin || ehAdminPlataforma))
             .map((item) => {
               // A subpágina (/acoes/arquivadas, /descontos/indicacoes) marca o item de cima.
-              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}/`))
+              // No RH vale o endereço mais específico: senão "/equipe" (Visão
+              // Geral) ficaria aceso em todas as páginas.
+              const isActive = ehRh
+                ? ativoNoRh === item.href
+                : location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(`${item.href}/`))
               return (
                 <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton

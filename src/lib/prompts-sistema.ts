@@ -57,6 +57,17 @@ O que muda nesta conversa:
 - Regra de trabalho (jornada, intervalo, hora extra, descanso, prazo de pagamento): cite a regra real
   (CLT, convenção coletiva da categoria). Sem certeza, diga que precisa conferir em vez de chutar.`
 
+/** Conta da versão RH: uma empresa qualquer, sem nada do produto de restaurante. */
+export const SOBRE_A_VERSAO_RH = `ATENÇÃO: ESTA CONTA É DA VERSÃO RH DO EASY FEED.
+É uma EMPRESA (pode ser de qualquer ramo), não um restaurante. Aqui o Easy Feed ouve só os
+FUNCIONÁRIOS dela, pelo WhatsApp, com a opção de cada um ficar anônimo.
+- Nesta conta NÃO existem clientes avaliando, QR Code, garçons, mesas, cardápio, Google nem
+  Descontos. Se alguma instrução acima falar disso, ela não vale aqui: não cite e não sugira.
+- Fale "empresa", "equipe" e "funcionários". Nunca chame a conta de restaurante.
+- As páginas são: Visão Geral, Feedbacks, WhatsApp, Insights, Ações, Relatórios e Funcionários
+  (onde se cadastra a equipe e se pede feedback).
+- Seu assunto é gestão de pessoas: clima, liderança, escala, remuneração, estrutura, comunicação.`
+
 export const REGRAS_RESPOSTA = `SOBRE O QUE VOCÊ PODE RESPONDER:
 Você conversa com o dono do restaurante e é o assistente DESTE negócio. Seu assunto é
 o restaurante e a gestão dele — em sentido amplo, não apenas os números do painel.
@@ -242,9 +253,12 @@ export function construirSystemPromptChef(
 
   // Conversa aberta nas páginas da equipe: os dados do contexto são dos funcionários.
   const daEquipe = ctx.publico === 'equipe'
-  const sobreAEquipe = daEquipe ? `\n\n${promptOverride('sobre_equipe') ?? SOBRE_A_EQUIPE}` : ''
+  // Versão RH: a conta é de uma empresa, e tudo nela é sobre os funcionários.
+  const daVersaoRh = ctx.restaurante?.area === 'rh'
+  const sobreAEquipe = (daEquipe || daVersaoRh ? `\n\n${promptOverride('sobre_equipe') ?? SOBRE_A_EQUIPE}` : '')
+    + (daVersaoRh ? `\n\n${promptOverride('sobre_versao_rh') ?? SOBRE_A_VERSAO_RH}` : '')
 
-  let prompt = `Você é o ${nome}, assistente de IA do painel de um restaurante, especialista em gestão e operação.
+  let prompt = `Você é o ${nome}, assistente de IA do painel de ${daVersaoRh ? 'uma empresa, especialista em gestão de pessoas' : 'um restaurante, especialista em gestão e operação'}.
 Personalidade: ${personalidade}
 
 ${sobre}${sobreAEquipe}
@@ -275,9 +289,11 @@ não estiver nos resultados, diga que não encontrou.`,
     const p = r.perfil || {}
     const servicos = Array.isArray(p.servicos) && p.servicos.length ? p.servicos.join(', ') : ''
     prompt += bloco(
-      'Perfil do restaurante',
+      daVersaoRh ? 'Perfil da empresa' : 'Perfil do restaurante',
       [
         `Nome: ${r.nome_restaurante || 'não informado'}`,
+        daVersaoRh && r.ramo ? `Ramo: ${r.ramo}` : '',
+        daVersaoRh && r.numero_funcionarios ? `Funcionários: ${r.numero_funcionarios}` : '',
         r.tipo_culinaria ? `Tipo de cozinha: ${r.tipo_culinaria}` : '',
         p.estilo ? `Estilo: ${p.estilo}` : '',
         p.localizacao ? `Localização: ${p.localizacao}` : '',

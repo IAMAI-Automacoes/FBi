@@ -85,7 +85,7 @@ export function AvisarEquipe({ acao, onFechar, onEnviado }: {
                 <p className="rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-700">A equipe já foi avisada desta ação em {formatarAteQuando(jaAvisou)}.</p>
               )}
               {!rascunho.whatsapp_conectado && (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">O WhatsApp do restaurante não está conectado. Conecte em Configurações para o aviso sair.</p>
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">O WhatsApp não está conectado. Conecte em Configurações para o aviso sair.</p>
               )}
               {quantos === 0 && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Nenhum funcionário ativo para receber.</p>

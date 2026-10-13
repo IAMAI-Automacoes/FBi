@@ -7,6 +7,7 @@ import { AppSidebar } from './AppSidebar'
 import { TopHeader } from './TopHeader'
 import { ChatFab } from './ChatFab'
 import { ehRotaDaEquipe } from '@/lib/publico-rota'
+import { useArea } from '@/lib/area'
 import { AvisoAssinatura } from './AvisoAssinatura'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -174,6 +175,10 @@ export default function Layout() {
   useEffect(() => { setSidebarAberto(!chatDesktop) }, [chatDesktop])
 
   const { pathname } = useLocation()
+  // Versão RH: o chat só tem dado nas páginas da equipe (é o endereço que
+  // entrega os feedbacks dos funcionários). Fora delas, ele não aparece.
+  const { ehRh } = useArea()
+  const chatDisponivel = !ehRh || ehRotaDaEquipe(pathname)
   const mostrarBarraScroll = !ROTAS_SEM_BARRA_SCROLL.includes(pathname)
   const mostrarTopo = !ROTAS_SEM_TOPO.includes(pathname)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -220,7 +225,7 @@ export default function Layout() {
           </main>
           {/* A `key` remonta o chat ao entrar ou sair das páginas da equipe: a
               conversa de lá é outra, com outro histórico e outro contexto. */}
-          <ChatFab key={ehRotaDaEquipe(pathname) ? 'equipe' : 'clientes'} open={chatAberto} onOpenChange={setChatAberto} />
+          {chatDisponivel && <ChatFab key={ehRotaDaEquipe(pathname) ? 'equipe' : 'clientes'} open={chatAberto} onOpenChange={setChatAberto} />}
         </div>
       </HeaderExtraProvider>
     </SidebarProvider>

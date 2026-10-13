@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
-import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from '@/components/vendas/ciclos-plano'
+import { CICLOS, recursosDaArea, type Ciclo } from '@/components/vendas/ciclos-plano'
+import { useArea } from '@/lib/area'
 import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { usePrecos } from '@/hooks/use-precos'
@@ -18,6 +19,8 @@ export default function Assinatura() {
   const { usuario, logout, ehAdminPlataforma } = useAuth()
   const navigate = useNavigate()
   const status = usuario?.assinatura_status ?? 'sem_assinatura'
+  // Mesmos planos nas duas versões; mudam as palavras e a lista do que vem junto.
+  const { area, ehRh } = useArea()
   const { planos, carregando, erro, porCiclo, recarregar } = usePrecos()
   const [abrindo, setAbrindo] = useState<Ciclo | null>(null)
   const [erroCheckout, setErroCheckout] = useState<string | null>(null)
@@ -87,7 +90,9 @@ export default function Assinatura() {
         : {
             titulo: 'Escolha um plano para começar',
             texto:
-              'Sua conta está criada. Falta ativar a assinatura para liberar o painel, os insights e o QR code do seu restaurante.',
+              ehRh
+                ? 'Sua conta está criada. Falta ativar a assinatura para liberar o painel, os insights e o canal de feedback da sua equipe.'
+                : 'Sua conta está criada. Falta ativar a assinatura para liberar o painel, os insights e o QR code do seu restaurante.',
           }
 
   return (
@@ -223,7 +228,7 @@ export default function Assinatura() {
             Incluso em qualquer plano
           </p>
           <ul className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {RECURSOS_INCLUSOS.map((r) => (
+            {recursosDaArea(area).map((r) => (
               <li key={r} className="flex items-start" style={{ gap: '9px' }}>
                 <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} style={{ color: cores.verde, marginTop: '3px' }} />
                 <span style={{ fontSize: '13.5px', lineHeight: 1.5, color: cores.corpoForte }}>{r}</span>

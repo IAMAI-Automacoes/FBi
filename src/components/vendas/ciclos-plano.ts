@@ -38,6 +38,21 @@ export const RECURSOS_INCLUSOS = [
   'Suporte por WhatsApp',
 ]
 
+/** O que o plano entrega na versão RH (mesmos planos e valores, por enquanto). */
+export const RECURSOS_DO_RH = [
+  'Feedbacks ilimitados da equipe',
+  'Anonimato escolhido por quem responde',
+  'Insights e ações gerados por IA',
+  'Relatórios em PDF e planilha',
+  'Pedido de feedback automático',
+  'Aviso na hora para relato grave',
+  'Assistente de IA com os dados da sua empresa',
+  'Suporte por WhatsApp',
+]
+
+/** A lista de recursos da versão da conta. */
+export const recursosDaArea = (area: unknown): string[] => (area === 'rh' ? RECURSOS_DO_RH : RECURSOS_INCLUSOS)
+
 export function ehCiclo(valor: string | null): valor is Ciclo {
   return valor === 'mensal' || valor === 'semestral' || valor === 'anual'
 }

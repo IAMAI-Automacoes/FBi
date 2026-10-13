@@ -367,6 +367,30 @@ export type Database = {
           },
         ]
       }
+      area_config: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          id: boolean
+          rh_convite: string
+          rh_modo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: boolean
+          rh_convite?: string
+          rh_modo?: string
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: boolean
+          rh_convite?: string
+          rh_modo?: string
+        }
+        Relationships: []
+      }
       aviso_pendente: {
         Row: {
           acao_id: number
@@ -2828,6 +2852,7 @@ export type Database = {
       }
       restaurantes: {
         Row: {
+          area: string | null
           assinatura_cancelada_em: string | null
           assinatura_expira_em: string | null
           assinatura_status: string
@@ -2856,6 +2881,7 @@ export type Database = {
           mascote_config: Json | null
           metodo_coleta_feedback: string | null
           nome_restaurante: string | null
+          numero_funcionarios: number | null
           numero_mesas: number | null
           numero_whatsapp: string | null
           onboarding_completo: boolean
@@ -2870,6 +2896,7 @@ export type Database = {
           qr_rotulo: string | null
           qr_textos_estilo: Json | null
           qr_titulo: string | null
+          ramo: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           telefone_contato: string | null
@@ -2886,6 +2913,7 @@ export type Database = {
           whatsapp_token: string | null
         }
         Insert: {
+          area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
           assinatura_status?: string
@@ -2914,6 +2942,7 @@ export type Database = {
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
           nome_restaurante?: string | null
+          numero_funcionarios?: number | null
           numero_mesas?: number | null
           numero_whatsapp?: string | null
           onboarding_completo?: boolean
@@ -2928,6 +2957,7 @@ export type Database = {
           qr_rotulo?: string | null
           qr_textos_estilo?: Json | null
           qr_titulo?: string | null
+          ramo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           telefone_contato?: string | null
@@ -2944,6 +2974,7 @@ export type Database = {
           whatsapp_token?: string | null
         }
         Update: {
+          area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
           assinatura_status?: string
@@ -2972,6 +3003,7 @@ export type Database = {
           mascote_config?: Json | null
           metodo_coleta_feedback?: string | null
           nome_restaurante?: string | null
+          numero_funcionarios?: number | null
           numero_mesas?: number | null
           numero_whatsapp?: string | null
           onboarding_completo?: boolean
@@ -2986,6 +3018,7 @@ export type Database = {
           qr_rotulo?: string | null
           qr_textos_estilo?: Json | null
           qr_titulo?: string | null
+          ramo?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           telefone_contato?: string | null
@@ -4116,6 +4149,15 @@ export type Database = {
           restaurante_id: number
         }[]
       }
+      admin_area_config: { Args: never; Returns: Json }
+      admin_area_salvar: {
+        Args: { p_modo: string; p_novo_convite?: boolean }
+        Returns: Json
+      }
+      admin_definir_area: {
+        Args: { p_area: string; p_restaurante_id: number }
+        Returns: Json
+      }
       admin_definir_vendedor: {
         Args: { p_email: string; p_vendedor: boolean }
         Returns: undefined
@@ -4145,6 +4187,9 @@ export type Database = {
         Args: { p_restaurante_id: number }
         Returns: undefined
       }
+      area_eh_admin: { Args: never; Returns: boolean }
+      area_opcoes: { Args: { p_convite?: string }; Returns: Json }
+      area_rh_permitida: { Args: { p_convite: string }; Returns: boolean }
       arquivar_concluidas_antigas: { Args: never; Returns: number }
       assinaturas_expirar_e_listar: {
         Args: never
@@ -4263,6 +4308,14 @@ export type Database = {
         Args: { p_restaurante_id: number; p_telefone: string }
         Returns: Json
       }
+      equipe_convites_anonimos: {
+        Args: never
+        Returns: {
+          envio_id: number
+          respondeu: boolean
+          status: string
+        }[]
+      }
       equipe_escolher_identidade: {
         Args: {
           p_escolha: string
@@ -4335,6 +4388,10 @@ export type Database = {
         Returns: number
       }
       equipe_vencer_identidades: { Args: never; Returns: number }
+      escolher_area: {
+        Args: { p_area: string; p_convite?: string }
+        Returns: Json
+      }
       expirar_assinaturas: { Args: never; Returns: number }
       feedbacks_para_geracao: {
         Args: { p_dias?: number; p_publico?: string; p_restaurante_id: number }

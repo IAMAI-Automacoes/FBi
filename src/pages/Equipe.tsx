@@ -74,7 +74,7 @@ export default function Equipe() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-gray-900">Funcionários</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            Cadastre quem trabalha no restaurante e peça feedback pelo WhatsApp. O que a equipe responder aparece em{' '}
+            Cadastre quem trabalha com você e peça feedback pelo WhatsApp. O que a equipe responder aparece em{' '}
             <Link to="/equipe/feedbacks" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Feedbacks</Link>, e a IA monta os{' '}
             <Link to="/equipe/insights" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Insights</Link> e as{' '}
             <Link to="/equipe/acoes" className="font-medium text-[#1D4ED8] underline-offset-2 hover:underline">Ações</Link>.
@@ -89,7 +89,7 @@ export default function Equipe() {
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            O WhatsApp do restaurante não está conectado. Dá para cadastrar os funcionários, mas os pedidos só saem depois de conectar em{' '}
+            O WhatsApp não está conectado. Dá para cadastrar os funcionários, mas os pedidos só saem depois de conectar em{' '}
             <Link to="/configuracoes" className="font-medium underline underline-offset-2">Configurações</Link>.
           </span>
         </p>

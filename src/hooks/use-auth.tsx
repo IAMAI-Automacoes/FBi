@@ -20,6 +20,9 @@ export interface UsuarioDados {
   assinatura_status: string | null
   /** Nulo = conta ativa. Preenchido = excluída (reversível pelo admin). */
   excluida_em: string | null
+  /** A versão do EasyFeed da conta: 'restaurante' | 'rh' (ver lib/areas.ts).
+      Nulo = ainda não escolheu. Só a função `escolher_area` e o admin escrevem. */
+  area?: string | null
   configuracoes?: any
   avatar_url?: string | null
   username?: string | null

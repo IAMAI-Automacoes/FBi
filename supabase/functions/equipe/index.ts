@@ -13,7 +13,7 @@ import { configUazapi, enviarTexto } from '../_shared/uazapi.ts'
 import { chamarIA } from '../_shared/openrouter.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
-import { PROMPT_AVISO, SCHEMA_AVISO } from '../_shared/equipe.ts'
+import { negocioDaArea, NOME_GENERICO_DA_EMPRESA, PROMPT_AVISO, SCHEMA_AVISO } from '../_shared/equipe.ts'
 import { tratarEquipe } from './handler.ts'
 
 /** O agente que rascunha o aviso de ação concluída (Admin → Agentes). */
@@ -54,13 +54,15 @@ Deno.serve(async (req: Request) => {
       const u = data?.user
       if (!u?.email) return null
       const [{ data: rest }, { data: admins }] = await Promise.all([
-        db.from('restaurantes').select('id, nome_restaurante').eq('auth_user_id', u.id).maybeSingle(),
+        db.from('restaurantes').select('id, nome_restaurante, area').eq('auth_user_id', u.id).maybeSingle(),
         db.from('platform_admins').select('email'),
       ])
       const email = u.email.toLowerCase()
       return {
         restauranteId: rest?.id ? Number(rest.id) : null,
-        nomeRestaurante: String(rest?.nome_restaurante ?? '').trim(),
+        // Conta RH ainda sem nome: a mensagem diz "da empresa", nunca "do restaurante".
+        nomeRestaurante: String(rest?.nome_restaurante ?? '').trim() || (rest?.area === 'rh' ? NOME_GENERICO_DA_EMPRESA : ''),
+        area: rest?.area ?? null,
         email,
         ehAdmin: (admins ?? []).some((a: { email: string }) => String(a.email).toLowerCase() === email),
       }
@@ -92,8 +94,11 @@ Deno.serve(async (req: Request) => {
       rascunhoAviso: async (p) => {
         const params = await paramsDoAgente(db, AGENTE_AVISO, { max_tokens: 300, temperature: 0.4 })
         if (!params) return null
+        const n = negocioDaArea(p.area)
         const prompt = montarPrompt(await carregarPrompts(db), 'ef_equipe_aviso', PROMPT_AVISO, {
-          restaurante: p.restaurante || 'o restaurante',
+          um_negocio: n.umNegocio,
+          Negocio: n.Negocio,
+          restaurante: p.restaurante || n.oNegocio,
           categoria: p.categoria || 'Outros',
           titulo: p.titulo,
           plano: p.plano || '(sem plano escrito)',
@@ -163,8 +168,8 @@ Deno.serve(async (req: Request) => {
         return data?.[0]?.criado_em ?? null
       },
       nomeDoRestaurante: async (restauranteId) => {
-        const { data } = await db.from('restaurantes').select('nome_restaurante').eq('id', restauranteId).maybeSingle()
-        return String(data?.nome_restaurante ?? '')
+        const { data } = await db.from('restaurantes').select('nome_restaurante, area').eq('id', restauranteId).maybeSingle()
+        return String(data?.nome_restaurante ?? '').trim() || (data?.area === 'rh' ? NOME_GENERICO_DA_EMPRESA : '')
       },
       prazoIdentidade: async () => {
         const { data } = await db.from('integracao_config').select('valor').eq('chave', 'EQUIPE_PRAZO_IDENTIDADE_HORAS').maybeSingle()

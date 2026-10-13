@@ -72,7 +72,7 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Pedir feedback para a equipe</DialogTitle>
-          <DialogDescription>Cada pessoa recebe uma mensagem do WhatsApp do restaurante e responde por lá, em texto ou áudio. A resposta aparece em Feedbacks, aqui na Equipe.</DialogDescription>
+          <DialogDescription>Cada pessoa recebe uma mensagem pelo WhatsApp e responde por lá, em texto ou áudio. A resposta aparece em Feedbacks, aqui na Equipe.</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -114,7 +114,7 @@ export function PedirFeedback({ aberto, funcionarios, onFechar, onCriado }: {
 
             {previa && !previa.whatsapp_conectado && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                O WhatsApp do restaurante não está conectado. Conecte em Configurações para o pedido sair.
+                O WhatsApp não está conectado. Conecte em Configurações para o pedido sair.
               </p>
             )}
           </div>

@@ -41,7 +41,23 @@ const FEMININOS = ['pizzaria', 'cantina', 'churrascaria', 'padaria', 'lanchonete
   'sorveteria', 'cafeteria', 'confeitaria', 'trattoria', 'osteria', 'esfiharia', 'pastelaria', 'tapiocaria',
   'creperia', 'doceria', 'adega', 'choperia', 'chopperia', 'cervejaria', 'peixaria', 'petiscaria', 'galeteria',
   'marmitaria', 'cozinha', 'tasca', 'taberna', 'bodega', 'panificadora', 'sanduicheria', 'temakeria',
-  'pamonharia', 'brasa', 'vila', 'toca', 'esquina', 'fazenda', 'quinta', 'barraca', 'tenda', 'cabana']
+  'pamonharia', 'brasa', 'vila', 'toca', 'esquina', 'fazenda', 'quinta', 'barraca', 'tenda', 'cabana',
+  // Versão RH: a conta pode ser de qualquer empresa.
+  'empresa', 'loja', 'clinica', 'farmacia', 'drogaria', 'escola', 'creche', 'faculdade', 'universidade', 'academia',
+  'oficina', 'imobiliaria', 'construtora', 'incorporadora', 'transportadora', 'distribuidora', 'agencia', 'industria',
+  'fabrica', 'metalurgica', 'grafica', 'editora', 'produtora', 'consultoria', 'corretora', 'seguradora', 'otica',
+  'livraria', 'papelaria', 'barbearia', 'boutique', 'pousada', 'lavanderia', 'floricultura', 'mercearia',
+  'cooperativa', 'associacao', 'fundacao', 'autoescola', 'startup']
+
+/** Nome que entra na mensagem quando a conta RH ainda não tem nome: "da empresa". */
+export const NOME_GENERICO_DA_EMPRESA = 'empresa'
+
+/** Como o prompt chama o negócio da conta: restaurante (versão Restaurante) ou empresa (versão RH). */
+export function negocioDaArea(area: unknown): { negocio: string; umNegocio: string; Negocio: string; oNegocio: string } {
+  return String(area ?? '') === 'rh'
+    ? { negocio: 'empresa', umNegocio: 'uma empresa', Negocio: 'Empresa', oNegocio: 'a empresa' }
+    : { negocio: 'restaurante', umNegocio: 'um restaurante', Negocio: 'Restaurante', oNegocio: 'o restaurante' }
+}
 
 export function doRestaurante(nome: unknown): string {
   const r = String(nome ?? '').replace(/\s+/g, ' ').trim()
@@ -172,9 +188,9 @@ export function montarAviso(p: { nome: unknown; restaurante: unknown; texto: str
 }
 
 /** O prompt do rascunho (agente `aviso_equipe`, chave `ef_equipe_aviso`). */
-export const PROMPT_AVISO = `Voce escreve uma mensagem curta de WhatsApp para a EQUIPE de um restaurante, contando que a gestao concluiu uma acao que nasceu do que a propria equipe comentou.
+export const PROMPT_AVISO = `Voce escreve uma mensagem curta de WhatsApp para a EQUIPE de {um_negocio}, contando que a gestao concluiu uma acao que nasceu do que a propria equipe comentou.
 
-Restaurante: {restaurante}
+{Negocio}: {restaurante}
 Categoria: {categoria}
 A acao concluida: {titulo}
 O que foi feito: {plano}

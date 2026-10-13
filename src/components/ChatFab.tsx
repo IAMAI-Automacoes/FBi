@@ -803,7 +803,7 @@ export function ChatFab({
         rId && !naEquipe ? supabase.from('garcons').select('nome_garcon').eq('restaurante_id', rId).eq('ativo', true) : vazio,
         rId
           ? supabase.from('restaurantes')
-              .select('nome_restaurante, detalhes, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao')
+              .select('nome_restaurante, detalhes, mascote_config, perfil_restaurante, tipo_culinaria, numero_mesas, ia_modo_acao, area, ramo, numero_funcionarios')
               .eq('id', rId).single()
           : Promise.resolve({ data: null as any }),
         buscarKpis(rId, '30d').catch(() => null),
@@ -839,6 +839,10 @@ export function ChatFab({
             perfil_notas: cfg.perfil_notas,
             tipo_culinaria: cfg.tipo_culinaria,
             numero_mesas: cfg.numero_mesas,
+            // Versão RH: a conta é de uma empresa (ramo e tamanho da equipe).
+            area: cfg.area ?? null,
+            ramo: cfg.ramo ?? null,
+            numero_funcionarios: cfg.numero_funcionarios ?? null,
             perfil,
           }
         : null,

@@ -6,10 +6,10 @@
 import {
   aberturaDoAviso, aberturaDoConvite, digitandoConviteMs, doRestaurante, FRASE_COMO_RESPONDER, FRASE_PARAR, FRASE_RESPONDER_AVISO,
   diaDoMesValido, frequenciaValida, intervaloEntreConvitesMs, prazoIdentidadeHoras, janelaDeEnvio, montarAviso, montarConvite, PERGUNTA_PADRAO, proximoDiaDoMes,
-  primeiroNome, primeiroPedidoAutomatico, PROMPT_AVISO, proximaManha, proximoPedido, rascunhoPadraoDoAviso, validarAviso, validarPergunta,
+  negocioDaArea, NOME_GENERICO_DA_EMPRESA, primeiroNome, primeiroPedidoAutomatico, PROMPT_AVISO, proximaManha, proximoPedido, rascunhoPadraoDoAviso, validarAviso, validarPergunta,
 } from '../equipe.ts'
 import {
-  criarPedidosAutomaticos, rodarTick, tratarEquipe,
+  criarPedidosAutomaticos, podeUsarAEquipe, rodarTick, tratarEquipe,
   type AcaoLinha, type AutomaticoLinha, type ConviteLinha, type DepsEquipe, type FuncionarioLinha,
 } from '../../equipe/handler.ts'
 
@@ -52,7 +52,7 @@ interface Envio { id: number; restaurante_id: number; pergunta: string; status: 
 interface Convite extends ConviteLinha { status: string; erro?: string | null; tentou_em?: string | null; enviado_em?: string | null; message_id?: string | null }
 
 function cenario(p: {
-  admin?: boolean; login?: boolean; cron?: boolean; agora?: number; conectado?: boolean
+  admin?: boolean; area?: string | null; login?: boolean; cron?: boolean; agora?: number; conectado?: boolean
   funcionarios?: FuncionarioLinha[]; envios?: Envio[]; convites?: Convite[]
   enviar?: () => { ok: boolean; incerto: boolean; messageId: string | null; erro: string | null }
   /** O valor de EQUIPE_PRAZO_IDENTIDADE_HORAS na configuração. */
@@ -76,7 +76,7 @@ function cenario(p: {
   const automaticos: AutomaticoLinha[] = p.automaticos ?? []
   const pedidosDeRascunho = { n: 0 }
   const deps: DepsEquipe = {
-    quemPede: async () => (p.login === false ? null : { restauranteId: 11, nomeRestaurante: 'Camelo', email: 'dono@camelo.com', ehAdmin: p.admin !== false }),
+    quemPede: async () => (p.login === false ? null : { restauranteId: 11, nomeRestaurante: 'Camelo', email: 'dono@camelo.com', ehAdmin: p.admin !== false, area: p.area ?? 'restaurante' }),
     ehCron: async () => p.cron === true,
     agora: () => agora,
     sorteio: () => 0,
@@ -151,7 +151,15 @@ let c = cenario({ login: false })
 let r = await tratarEquipe({ acao: 'previa' }, c.deps)
 ok('sem login: recusa', r.status === 401)
 r = await tratarEquipe({ acao: 'previa' }, cenario({ admin: false }).deps)
-ok('quem não é admin da plataforma: recusa (por enquanto)', r.status === 403 && r.corpo.motivo === 'so_admin')
+ok('conta de restaurante que não é admin da plataforma: recusa (por enquanto)', r.status === 403 && r.corpo.motivo === 'so_admin')
+r = await tratarEquipe({ acao: 'previa' }, cenario({ admin: false, area: 'rh' }).deps)
+ok('conta da versão RH: usa o feedback da equipe sem ser admin', r.status === 200 && typeof r.corpo.abertura === 'string', r.corpo)
+ok('a regra de quem usa a equipe: admin ou conta RH', podeUsarAEquipe({ ehAdmin: true, area: 'restaurante' }) && podeUsarAEquipe({ ehAdmin: false, area: 'rh' })
+  && !podeUsarAEquipe({ ehAdmin: false, area: 'restaurante' }) && !podeUsarAEquipe({ ehAdmin: false, area: null }) && !podeUsarAEquipe({ ehAdmin: false }))
+ok('nome nas mensagens: empresas no feminino e a conta RH sem nome', doRestaurante('Loja Bela') === 'da Loja Bela' && doRestaurante('Clínica Sorriso') === 'da Clínica Sorriso'
+  && doRestaurante('Mercado Bom') === 'do Mercado Bom' && doRestaurante(NOME_GENERICO_DA_EMPRESA) === 'da empresa' && doRestaurante('') === 'do restaurante')
+ok('o prompt do aviso fala do negócio da versão', negocioDaArea('rh').umNegocio === 'uma empresa' && negocioDaArea('restaurante').umNegocio === 'um restaurante' && negocioDaArea(null).Negocio === 'Restaurante'
+  && PROMPT_AVISO.includes('{um_negocio}') && PROMPT_AVISO.includes('{Negocio}: {restaurante}') && !/de um restaurante/i.test(PROMPT_AVISO))
 
 r = await tratarEquipe({ acao: 'previa' }, cenario().deps)
 ok('prévia: os pedaços fixos da mensagem e se o WhatsApp está conectado', r.status === 200 && String(r.corpo.abertura).includes('Helena, do Camelo')

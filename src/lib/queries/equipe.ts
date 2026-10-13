@@ -78,11 +78,16 @@ export async function buscarEnvios(restauranteId: number): Promise<Envio[]> {
   }))
 }
 
-/** Os convites sem dizer de quem são: só de qual envio, o status e se houve resposta. */
-export async function buscarConvites(restauranteId: number): Promise<ConviteAnonimo[]> {
-  const { data, error } = await supabase.from('equipe_convites').select('envio_id, status, respondeu_em').eq('restaurante_id', restauranteId)
+/**
+ * Os convites sem dizer de quem são: só de qual envio, o status e se houve
+ * resposta. Quem garante é o banco (`equipe_convites_anonimos`): o dono da
+ * conta não lê a tabela, porque ela diz qual funcionário respondeu e quando,
+ * e isso entregaria de quem é o feedback anônimo.
+ */
+export async function buscarConvites(_restauranteId: number): Promise<ConviteAnonimo[]> {
+  const { data, error } = await supabase.rpc('equipe_convites_anonimos')
   if (error) throw error
-  return (data ?? []).map((c) => ({ envio_id: Number(c.envio_id), status: c.status as StatusConvite, respondeu: !!c.respondeu_em }))
+  return (data ?? []).map((c) => ({ envio_id: Number(c.envio_id), status: c.status as StatusConvite, respondeu: !!c.respondeu }))
 }
 
 // ── A função equipe ──────────────────────────────────────────────────────────

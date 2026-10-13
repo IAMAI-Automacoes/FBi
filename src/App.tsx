@@ -41,6 +41,7 @@ const WhatsApp = lazy(() => import('./pages/WhatsApp'))
 const Admin = lazy(() => import('./pages/Admin'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 const Assinatura = lazy(() => import('./pages/Assinatura'))
+const EscolherArea = lazy(() => import('./pages/auth/EscolherArea'))
 const CheckoutSucesso = lazy(() => import('./pages/CheckoutSucesso'))
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
@@ -56,6 +57,7 @@ import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
 import { MODO_DEMO, PREFIXO_DEMO } from './lib/demo'
 import { ROTA_DESCONTOS, ROTA_DESCONTOS_HISTORICO, ROTA_INDICACOES } from './lib/descontos'
 import { lerCodigoIndicacao } from './lib/queries/stripe'
+import { lerConviteDeArea } from './lib/convite-area'
 import DemoLogin from './pages/demo/DemoLogin'
 import DemoEncerrada from './pages/demo/DemoEncerrada'
 
@@ -63,6 +65,9 @@ import DemoEncerrada from './pages/demo/DemoEncerrada'
 // entrada (vendas, cadastro, login), antes de a navegação tirar o `?ref=` do
 // endereço. Quem usa depois é a tela de assinatura.
 lerCodigoIndicacao()
+// O convite de versão (`?area=rh&convite=CODIGO`) é guardado do mesmo jeito:
+// quem usa é a tela de escolha, depois de a conta existir.
+lerConviteDeArea()
 
 const App = () => (
   <AuthProvider>
@@ -129,6 +134,9 @@ const App = () => (
 
           <Route element={<RotaProtegida />}>
             {/* Assinatura: exige conta, mas roda antes do onboarding */}
+            {/* Qual versão do EasyFeed a conta usa (Restaurante ou RH): logo
+                depois de criar e-mail e senha, antes da assinatura. */}
+            <Route path="/escolher-versao" element={<EscolherArea />} />
             <Route path="/assinatura" element={<Assinatura />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/checkout/sucesso" element={<CheckoutSucesso />} />

@@ -7,6 +7,7 @@ import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { supabase } from '@/lib/supabase/client'
 import { MODO_DEMO, PREFIXO_DEMO, ROTAS_BLOQUEADAS_NA_DEMO } from '@/lib/demo'
 import { demoEstaEncerrando } from '@/lib/queries/demo'
+import { inicioDa, rotaPermitidaNaArea } from '@/lib/areas'
 
 /* Rotas que uma conta sem plano ativo ainda precisa alcançar — é por elas que
    se paga. Barrar tudo deixaria a pessoa sem saída, inclusive quem só atrasou
@@ -171,6 +172,22 @@ export function RotaProtegida() {
     return <Navigate to="/" replace />
   }
 
+  // ── A versão do EasyFeed (Restaurante ou RH) ──
+  // Vem antes do pagamento: a tela de assinatura e o onboarding já mudam
+  // conforme a versão. Conta sem versão vai escolher (sem convite de RH a tela
+  // escolhe Restaurante sozinha, sem mostrar nada). As rotas de compra ficam
+  // de fora, para não interromper quem está voltando do pagamento.
+  const naEscolhaDaVersao = location.pathname === '/escolher-versao'
+  if (!usuario.area && !naEscolhaDaVersao && !acessoAdmin && !sessaoDemo && !ROTAS_DE_COMPRA.includes(location.pathname)) {
+    return <Navigate to="/escolher-versao" state={{ from: location }} replace />
+  }
+  if (usuario.area && naEscolhaDaVersao) {
+    return <Navigate to={inicioDa(usuario.area)} replace />
+  }
+  // Endereço que a versão da conta não tem (conta RH abrindo QR Code, Garçons
+  // ou as páginas de cliente): volta para o começo da versão.
+  const foraDaVersao = !rotaPermitidaNaArea(usuario.area, location.pathname)
+
   // Login por restaurante é único (não existe mais "membro convidado").
   const naRotaDePagamento = ROTAS_DE_PAGAMENTO.includes(location.pathname)
   const semPlanoAtivo = usuario.assinatura_status !== 'ativa'
@@ -193,7 +210,7 @@ export function RotaProtegida() {
   // Admin dentro da conta de um cliente (painel Admin → Contas → "Entrar"):
   // acesso total, sem paywall nem onboarding obrigatório. Quem confirma que a
   // sessão é do admin é o banco (`acesso_admin_atual`), não o navegador.
-  if (acessoAdmin) return <Outlet />
+  if (acessoAdmin) return foraDaVersao ? <Navigate to={inicioDa(usuario.area)} replace /> : <Outlet />
 
   if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
@@ -212,7 +229,11 @@ export function RotaProtegida() {
   }
 
   if (usuario.onboarding_completo === true && location.pathname === '/onboarding') {
-    return <Navigate to="/" replace />
+    return <Navigate to={inicioDa(usuario.area)} replace />
+  }
+
+  if (foraDaVersao) {
+    return <Navigate to={inicioDa(usuario.area)} replace />
   }
 
   return <Outlet />

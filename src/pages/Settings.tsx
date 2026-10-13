@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
+import { useArea } from '@/lib/area'
+import { inicioDa } from '@/lib/areas'
 
 const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
@@ -38,6 +40,8 @@ export default function Settings() {
   // — assim o Settings nunca fica em branco por causa de uma linha de pessoa
   // ausente/bloqueada por RLS.
   const { usuario, refetchUsuario, loading } = useAuth()
+  // A versão da conta: no RH saem as seções que são só de restaurante e de cliente.
+  const { area, ehRh, doNegocio } = useArea()
   const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
@@ -277,25 +281,34 @@ export default function Settings() {
     )
   }
 
-  const navItems = [
-    { id: 'restaurante', label: 'Restaurante' },
-    { id: 'perfil', label: 'Sobre o restaurante' },
-    { id: 'conhecimento', label: 'Base de conhecimento' },
-    { id: 'whatsapp', label: 'WhatsApp' },
-    { id: 'feedbacks', label: 'Feedbacks' },
-    { id: 'mascote', label: 'Assistente de IA' },
-  ]
+  // Versão RH: "Sobre o restaurante" (cozinha, mesas, público), a base de
+  // conhecimento (o que a assistente responde aos clientes) e a validade do
+  // feedback dos clientes não se aplicam. O feedback da equipe vale 90 dias.
+  const navItems = ehRh
+    ? [
+        { id: 'restaurante', label: 'Empresa' },
+        { id: 'whatsapp', label: 'WhatsApp' },
+        { id: 'mascote', label: 'Assistente de IA' },
+      ]
+    : [
+        { id: 'restaurante', label: 'Restaurante' },
+        { id: 'perfil', label: 'Sobre o restaurante' },
+        { id: 'conhecimento', label: 'Base de conhecimento' },
+        { id: 'whatsapp', label: 'WhatsApp' },
+        { id: 'feedbacks', label: 'Feedbacks' },
+        { id: 'mascote', label: 'Assistente de IA' },
+      ]
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
         <Link
-          to="/"
+          to={inicioDa(area)}
           className="text-muted-foreground hover:text-foreground hover:bg-secondary p-2 rounded-md transition-colors"
         >
           <ChevronLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-lg font-semibold text-foreground">Configurações do Restaurante</h1>
+        <h1 className="text-lg font-semibold text-foreground">Configurações {ehRh ? 'da Empresa' : 'do Restaurante'}</h1>
       </header>
 
       <main className="flex-1 p-6 md:p-10">
@@ -334,12 +347,16 @@ export default function Settings() {
                   onUploadingChange={setEnviandoArquivo}
                 />
               </section>
-              <section id="perfil" className="scroll-mt-28">
-                <PerfilNegocioTab value={perfil} onChange={setPerfil} />
-              </section>
-              <section id="conhecimento" className="scroll-mt-28">
-                <ConhecimentoTab restauranteId={restauranteId} />
-              </section>
+              {!ehRh && (
+                <>
+                  <section id="perfil" className="scroll-mt-28">
+                    <PerfilNegocioTab value={perfil} onChange={setPerfil} />
+                  </section>
+                  <section id="conhecimento" className="scroll-mt-28">
+                    <ConhecimentoTab restauranteId={restauranteId} />
+                  </section>
+                </>
+              )}
               <section id="whatsapp" className="scroll-mt-28">
                 <SecaoWhatsApp
                   restauranteId={restauranteId}
@@ -350,9 +367,11 @@ export default function Settings() {
                   }}
                 />
               </section>
-              <section id="feedbacks" className="scroll-mt-28">
-                <FeedbacksTab value={expiracaoFeedback} onChange={setExpiracaoFeedback} />
-              </section>
+              {!ehRh && (
+                <section id="feedbacks" className="scroll-mt-28">
+                  <FeedbacksTab value={expiracaoFeedback} onChange={setExpiracaoFeedback} />
+                </section>
+              )}
               <section id="mascote" className="scroll-mt-28">
                 <MascotTab
                   restauranteId={restauranteId}

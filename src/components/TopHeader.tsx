@@ -17,6 +17,8 @@ import { NavEquipe } from '@/components/equipe/NavEquipe'
 import { NavDescontos } from '@/components/descontos/NavDescontos'
 import { ehRotaDaEquipe } from '@/lib/publico-rota'
 import { ehRotaDeDescontos } from '@/lib/descontos'
+import { useArea } from '@/lib/area'
+import { itemAtivoDoMenu, MENU_DO_RH } from '@/lib/areas'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +58,12 @@ export function TopHeader() {
   const { profile } = useUserProfile()
   const naEquipe = ehRotaDaEquipe(location.pathname)
   const emDescontos = ehRotaDeDescontos(location.pathname)
-  const title = naEquipe ? 'Equipe' : emDescontos ? 'Descontos' : routeTitles[location.pathname] || 'Dashboard'
+  // Versão RH: as páginas /equipe estão no menu lateral, então o cabeçalho
+  // mostra o nome da página (e não "Equipe" com o menu de subpáginas).
+  const { ehRh } = useArea()
+  const ativoNoRh = ehRh ? itemAtivoDoMenu(MENU_DO_RH, location.pathname) : null
+  const tituloNoRh = MENU_DO_RH.find((i) => i.href === ativoNoRh)?.nome
+  const title = tituloNoRh ?? (naEquipe ? 'Equipe' : emDescontos ? 'Descontos' : routeTitles[location.pathname] || 'Dashboard')
 
   const { extra } = useHeaderExtra()
   const { isAdmin } = usePlatformAdmin()
@@ -223,7 +230,7 @@ export function TopHeader() {
 
         {/* Equipe: Funcionários, Feedbacks, Insights e Ações. Só o admin chega
             nessas rotas (AreaEquipe), então o menu não precisa conferir de novo. */}
-        {naEquipe && (
+        {naEquipe && !ehRh && (
           <div className={extra ? 'px-4 sm:px-6' : 'px-4 pb-3 sm:px-6'}>
             <NavEquipe />
           </div>

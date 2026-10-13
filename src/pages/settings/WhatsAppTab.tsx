@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { CampoTelefone } from '@/components/CampoTelefone'
+import { useArea } from '@/lib/area'
 
 interface EstadoWhats {
   hasInstance: boolean
@@ -47,6 +48,7 @@ export function WhatsAppTab({
   numeroDono?: CampoNumeroDoDono
 }) {
   const { toast } = useToast()
+  const { ehRh } = useArea()
   const [loading, setLoading] = useState(true)
   const [estado, setEstado] = useState<EstadoWhats | null>(null)
   const [conectando, setConectando] = useState(false)
@@ -268,7 +270,9 @@ export function WhatsAppTab({
           <CardTitle>WhatsApp</CardTitle>
         </div>
         <CardDescription>
-          Conecte o número de WhatsApp que recebe e responde os feedbacks dos clientes.
+          {ehRh
+            ? 'Conecte o número de WhatsApp da empresa que pede e recebe os feedbacks dos funcionários.'
+            : 'Conecte o número de WhatsApp que recebe e responde os feedbacks dos clientes.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -310,6 +314,7 @@ export function CartaoNumeroDoDono({
   semTitulo?: boolean
   children?: React.ReactNode
 }) {
+  const { ehRh, doNegocio } = useArea()
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
       <div className="flex items-start gap-2">
@@ -317,9 +322,10 @@ export function CartaoNumeroDoDono({
         <div className="flex-1">
           {!semTitulo && <p className="text-sm font-semibold text-gray-800">Avisos urgentes</p>}
           <p className={cn('text-[13px] text-muted-foreground', !semTitulo && 'mt-0.5')}>
-            Quando chegar um feedback grave — cliente passou mal, corpo estranho na comida,
-            praga no salão — mandamos uma mensagem na hora para este número.
-            Use o seu WhatsApp pessoal, diferente do WhatsApp do restaurante.
+            {ehRh
+              ? 'Quando chegar um relato grave (assédio, discriminação, ameaça, risco à segurança), mandamos uma mensagem na hora para este número, sem dizer quem escreveu.'
+              : 'Quando chegar um feedback grave — cliente passou mal, corpo estranho na comida, praga no salão — mandamos uma mensagem na hora para este número.'}
+            {' '}Use o seu WhatsApp pessoal, diferente do WhatsApp {doNegocio}.
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">

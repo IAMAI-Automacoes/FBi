@@ -14,6 +14,7 @@ import { getIniciais } from '@/lib/iniciais'
 import { Upload, Store, Loader2, X, Phone } from 'lucide-react'
 import { ImageCropper } from '@/components/ImageCropper'
 import { CampoTelefone } from '@/components/CampoTelefone'
+import { useArea } from '@/lib/area'
 
 export interface RestauranteForm {
   nome_restaurante: string
@@ -34,6 +35,8 @@ export function RestaurantTab({
   onUploadingChange?: (v: boolean) => void
 }) {
   const { toast } = useToast()
+  // Na versão RH esta seção é "Empresa": mesmo logo e nome, sem o contato para clientes.
+  const { ehRh } = useArea()
   const [enviando, setEnviando] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
@@ -96,7 +99,7 @@ export function RestaurantTab({
       <CardHeader className="bg-white pb-6 border-b border-gray-300">
         <CardTitle className="text-xl">Perfil do Restaurante</CardTitle>
         <CardDescription className="text-sm mt-1">
-          Gerencie a identidade visual e as informações principais do seu restaurante.
+          Gerencie a identidade visual e as informações principais {ehRh ? 'da sua empresa' : 'do seu restaurante'}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-10 p-6 sm:p-8 bg-white">
@@ -164,24 +167,32 @@ export function RestaurantTab({
             <div className="flex-1 space-y-5 w-full">
               <div className="space-y-2">
                 <Label htmlFor="nome_restaurante" className="text-gray-700">
-                  Nome do Restaurante
+                  {ehRh ? 'Nome da Empresa' : 'Nome do Restaurante'}
                 </Label>
                 <Input
                   id="nome_restaurante"
                   value={value.nome_restaurante}
                   onChange={(e) => onChange({ ...value, nome_restaurante: e.target.value })}
-                  placeholder="Nome público do seu restaurante"
+                  placeholder={ehRh ? 'Nome da sua empresa' : 'Nome público do seu restaurante'}
                   className="max-w-md"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Os dados do negócio (cozinha, mesas, público, diferenciais…) ficam na seção
-                <b> Sobre o restaurante</b>.
-              </p>
+              {ehRh ? (
+                <p className="text-xs text-muted-foreground">
+                  É o nome que aparece nas mensagens que a equipe recebe pelo WhatsApp.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Os dados do negócio (cozinha, mesas, público, diferenciais…) ficam na seção
+                  <b> Sobre o restaurante</b>.
+                </p>
+              )}
             </div>
           </div>
         </section>
 
+        {/* Só no restaurante: é o número que a resposta automática indica ao CLIENTE. */}
+        {!ehRh && (
         <section className="space-y-5 border-t border-gray-200 pt-8">
           <div className="flex items-center gap-2">
             <Phone className="w-4 h-4 text-primary" />
@@ -203,6 +214,7 @@ export function RestaurantTab({
             </p>
           </div>
         </section>
+        )}
       </CardContent>
 
       {cropFile && (

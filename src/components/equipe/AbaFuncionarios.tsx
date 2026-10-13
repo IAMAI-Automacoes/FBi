@@ -266,7 +266,7 @@ export function AbaFuncionarios({ restauranteId, funcionarios, onMudou }: {
 
       {funcionarios.length === 0 ? (
         <Cartao className="py-10 text-center">
-          <p className="text-sm font-medium text-gray-700">Cadastre quem trabalha no restaurante.</p>
+          <p className="text-sm font-medium text-gray-700">Cadastre quem trabalha com você.</p>
           <p className="mt-1 text-xs text-gray-500">Um por um, colando uma lista inteira ou trazendo os garçons que já têm número.</p>
         </Cartao>
       ) : (

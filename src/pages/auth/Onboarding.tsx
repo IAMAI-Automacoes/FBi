@@ -44,9 +44,20 @@ import {
 import { getIniciais } from '@/lib/iniciais'
 import { WhatsAppTab, CartaoNumeroDoDono } from '@/pages/settings/WhatsAppTab'
 import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
+import { useArea } from '@/lib/area'
+import { inicioDa } from '@/lib/areas'
 
-/** Restaurante, coleta, IA, avisos urgentes, WhatsApp e confirmação. */
+/** Restaurante (ou empresa, na versão RH), coleta, IA, avisos urgentes, WhatsApp e confirmação. */
 const TOTAL_PASSOS = 6
+
+/* Os mesmos 6 passos nas duas versões. O que muda são as perguntas do passo 1
+   e as palavras: na versão RH o campo "culinária" guarda o RAMO da empresa e o
+   campo "mesas" guarda o NÚMERO DE FUNCIONÁRIOS (no estado da tela; no banco
+   vão para colunas próprias, `ramo` e `numero_funcionarios`). */
+const CULINARIAS = ['Brasileira', 'Italiana', 'Japonesa', 'Fast Food', 'Pizzaria', 'Churrascaria', 'Outro']
+const RAMOS = ['Comércio e varejo', 'Serviços', 'Saúde', 'Educação', 'Indústria', 'Tecnologia', 'Construção', 'Transporte e logística', 'Alimentação', 'Hotelaria e turismo', 'Outro']
+const FOCOS_DO_RESTAURANTE = ['Atendimento', 'Comida', 'Ambiente', 'Preço', 'Tempo de Espera']
+const FOCOS_DO_RH = ['Liderança', 'Escala e horários', 'Salário e benefícios', 'Clima da equipe', 'Estrutura de trabalho']
 
 interface OnboardingData {
   restaurante_nome: string
@@ -62,6 +73,8 @@ export default function Onboarding() {
   const { usuario, logout, ehAdminPlataforma, ehVendedor } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
+  // A versão da conta: muda as perguntas do passo 1 e as palavras dos outros.
+  const { area, ehRh, doNegocio, noNegocio } = useArea()
 
   const [step, setStep] = useState(1)
   const [whatsappConectado, setWhatsappConectado] = useState(false)
@@ -180,16 +193,16 @@ export default function Onboarding() {
       return 'Confira o número dos avisos urgentes: precisa ter DDD e telefone completos.'
     }
     if (s === 4 && numeroDono && mesmoWhatsapp(numeroDono, numeroRestaurante)) {
-      return 'Este é o WhatsApp do restaurante. Os avisos urgentes precisam ir para o seu número pessoal.'
+      return `Este é o WhatsApp ${doNegocio}. Os avisos urgentes precisam ir para o seu número pessoal.`
     }
     // Admin não é cliente: pode deixar tudo em branco e avançar/finalizar. Não há
     // botão de "pular tudo" — são os próprios campos (e o WhatsApp) que ficam
     // opcionais pra ele. Cliente comum continua com tudo obrigatório.
     if (ehAdminPlataforma) return null
     if (s === 1) {
-      if (!data.restaurante_nome.trim()) return 'Informe o nome do restaurante.'
-      if (!data.restaurante_culinaria) return 'Selecione o tipo de culinária.'
-      if (!data.restaurante_mesas.trim()) return 'Informe o número de mesas.'
+      if (!data.restaurante_nome.trim()) return `Informe o nome ${doNegocio}.`
+      if (!data.restaurante_culinaria) return ehRh ? 'Selecione o ramo da empresa.' : 'Selecione o tipo de culinária.'
+      if (!data.restaurante_mesas.trim()) return ehRh ? 'Informe o número de funcionários.' : 'Informe o número de mesas.'
     }
     if (s === 3) {
       if (!data.ia_nome.trim()) return 'Dê um nome ao assistente de IA.'
@@ -263,8 +276,9 @@ export default function Onboarding() {
           // Não sobrescreve o nome com vazio (admin pode deixar em branco); o
           // cliente comum sempre chega aqui com o nome preenchido (obrigatório).
           ...(data.restaurante_nome.trim() && { nome_restaurante: data.restaurante_nome.trim() }),
-          tipo_culinaria: data.restaurante_culinaria || null,
-          numero_mesas: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null,
+          ...(ehRh
+            ? { ramo: data.restaurante_culinaria || null, numero_funcionarios: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null }
+            : { tipo_culinaria: data.restaurante_culinaria || null, numero_mesas: data.restaurante_mesas ? parseInt(data.restaurante_mesas, 10) : null }),
           metodo_coleta_feedback: data.como_coleta_feedbacks || null,
           logo_url: logoUrl || null,
           mascote_config: mascoteConfig,
@@ -275,7 +289,8 @@ export default function Onboarding() {
       if (error) throw error
 
       toast({ title: 'Tudo pronto' })
-      window.location.href = '/'
+      // Na versão RH o próximo passo é cadastrar a equipe: sem funcionário não há a quem pedir feedback.
+      window.location.href = ehRh ? '/equipe/funcionarios' : inicioDa(area)
     } catch (error: any) {
       console.error('Erro ao salvar onboarding:', error)
       toast({ title: error.message || 'Não foi possível salvar as configurações. Tente novamente.',
@@ -347,7 +362,7 @@ export default function Onboarding() {
           <CardTitle className="text-2xl font-bold text-gray-900 mt-2 flex items-center gap-2">
             {step === 1 && (
               <>
-                <Store className="h-6 w-6 text-[#1D4ED8]" /> Perfil do Restaurante
+                <Store className="h-6 w-6 text-[#1D4ED8]" /> {ehRh ? 'Perfil da Empresa' : 'Perfil do Restaurante'}
               </>
             )}
             {step === 2 && (
@@ -377,11 +392,13 @@ export default function Onboarding() {
             )}
           </CardTitle>
           <CardDescription className="text-base">
-            {step === 1 && 'Conte-nos um pouco sobre o seu estabelecimento.'}
-            {step === 2 && 'Como você costuma ouvir seus clientes hoje?'}
+            {step === 1 && (ehRh ? 'Conte-nos um pouco sobre a sua empresa.' : 'Conte-nos um pouco sobre o seu estabelecimento.')}
+            {step === 2 && (ehRh ? 'Como vocês costumam ouvir a equipe hoje?' : 'Como você costuma ouvir seus clientes hoje?')}
             {step === 3 && 'Vamos dar uma personalidade ao seu assistente.'}
-            {step === 4 && 'Seu WhatsApp pessoal, para saber na hora quando algo grave acontecer no restaurante.'}
-            {step === 5 && 'Conecte o WhatsApp do restaurante: o número em que os clientes mandam feedback. Precisa ser diferente do seu número pessoal do passo anterior.'}
+            {step === 4 && `Seu WhatsApp pessoal, para saber na hora quando algo grave acontecer ${noNegocio}.`}
+            {step === 5 && (ehRh
+              ? 'Conecte o WhatsApp da empresa: o número que vai conversar com os funcionários. Precisa ser diferente do seu número pessoal do passo anterior.'
+              : 'Conecte o WhatsApp do restaurante: o número em que os clientes mandam feedback. Precisa ser diferente do seu número pessoal do passo anterior.')}
             {step === 6 && 'Revise as informações antes de começarmos.'}
           </CardDescription>
         </CardHeader>
@@ -391,19 +408,19 @@ export default function Onboarding() {
             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-2">
                 <Label htmlFor="nome" className="text-gray-700">
-                  Nome do restaurante {!ehAdminPlataforma && <span className="text-red-500">*</span>}
+                  Nome {doNegocio} {!ehAdminPlataforma && <span className="text-red-500">*</span>}
                 </Label>
                 <Input
                   id="nome"
                   value={data.restaurante_nome}
                   onChange={(e) => setData({ ...data, restaurante_nome: e.target.value })}
-                  placeholder="Ex: Cantina do Chef"
+                  placeholder={ehRh ? 'Ex: Loja Bela Vista' : 'Ex: Cantina do Chef'}
                   className="bg-white"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="culinaria" className="text-gray-700">
-                  Tipo de culinária
+                  {ehRh ? 'Ramo da empresa' : 'Tipo de culinária'}
                 </Label>
                 <Select
                   value={data.restaurante_culinaria}
@@ -413,15 +430,7 @@ export default function Onboarding() {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {[
-                      'Brasileira',
-                      'Italiana',
-                      'Japonesa',
-                      'Fast Food',
-                      'Pizzaria',
-                      'Churrascaria',
-                      'Outro',
-                    ].map((t) => (
+                    {(ehRh ? RAMOS : CULINARIAS).map((t) => (
                       <SelectItem key={t} value={t}>
                         {t}
                       </SelectItem>
@@ -431,7 +440,7 @@ export default function Onboarding() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="mesas" className="text-gray-700">
-                  Número de mesas
+                  {ehRh ? 'Número de funcionários' : 'Número de mesas'}
                 </Label>
                 <Input
                   id="mesas"
@@ -439,11 +448,12 @@ export default function Onboarding() {
                   value={data.restaurante_mesas}
                   onChange={(e) => setData({ ...data, restaurante_mesas: e.target.value })}
                   placeholder="Ex: 20"
+                  min={1}
                   className="bg-white"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-gray-700">Foto/Logo do restaurante</Label>
+                <Label className="text-gray-700">{ehRh ? 'Logo da empresa' : 'Foto/Logo do restaurante'}</Label>
                 <div className="flex items-center gap-4">
                   <div
                     className="group relative flex items-center justify-center w-20 h-20 border border-gray-200 rounded-xl bg-gray-50 overflow-hidden cursor-pointer hover:border-[#1D4ED8]/50 transition-all shrink-0"
@@ -520,7 +530,9 @@ export default function Onboarding() {
                   id="como_coleta"
                   value={data.como_coleta_feedbacks}
                   onChange={(e) => setData({ ...data, como_coleta_feedbacks: e.target.value })}
-                  placeholder="Conte-nos um pouco sobre como ocorre a coleta de feedbacks no restaurante atualmente..."
+                  placeholder={ehRh
+                    ? 'Conte-nos como a equipe dá opinião hoje: reunião, caixa de sugestões, conversa com o gestor...'
+                    : 'Conte-nos um pouco sobre como ocorre a coleta de feedbacks no restaurante atualmente...'}
                   className="bg-white min-h-[120px] resize-none"
                 />
                 <p className="text-xs text-gray-500">Opcional</p>
@@ -564,7 +576,7 @@ export default function Onboarding() {
                   Áreas de foco principais
                 </Label>
                 <div className="flex flex-wrap gap-2">
-                  {['Atendimento', 'Comida', 'Ambiente', 'Preço', 'Tempo de Espera'].map((foco) => (
+                  {(ehRh ? FOCOS_DO_RH : FOCOS_DO_RESTAURANTE).map((foco) => (
                     <div key={foco} className="flex items-center space-x-2">
                       <Checkbox
                         id={`foco-${foco}`}
@@ -603,15 +615,15 @@ export default function Onboarding() {
                 <ul className="mt-2 space-y-1.5">
                   <li>
                     <span className="font-medium text-gray-900">Seu WhatsApp pessoal</span> (este passo):
-                    recebe os avisos urgentes, como cliente que passou mal.
+                    recebe os avisos urgentes, como {ehRh ? 'um relato de assédio ou de risco à segurança' : 'cliente que passou mal'}.
                   </li>
                   <li>
-                    <span className="font-medium text-gray-900">WhatsApp do restaurante</span> (próximo passo):
-                    o número em que os clientes mandam feedback. É nele que o EasyFeed fica conectado.
+                    <span className="font-medium text-gray-900">WhatsApp {doNegocio}</span> (próximo passo):
+                    {ehRh ? ' o número que conversa com os funcionários.' : ' o número em que os clientes mandam feedback.'} É nele que o EasyFeed fica conectado.
                   </li>
                 </ul>
                 <p className="mt-2">
-                  Não use o mesmo número nos dois: o aviso sai do WhatsApp do restaurante e vai para o seu.
+                  Não use o mesmo número nos dois: o aviso sai do WhatsApp {doNegocio} e vai para o seu.
                 </p>
               </div>
               {/* Só o número, antes do WhatsApp. Sem botão no cartão: é gravado
@@ -648,8 +660,8 @@ export default function Onboarding() {
                   <div>
                     <h4 className="font-semibold text-gray-900">{data.restaurante_nome}</h4>
                     <p className="text-gray-600 text-sm mt-1">
-                      {data.restaurante_culinaria || 'Culinária não informada'}
-                      {data.restaurante_mesas ? ` • ${data.restaurante_mesas} mesas` : ''}
+                      {data.restaurante_culinaria || (ehRh ? 'Ramo não informado' : 'Culinária não informada')}
+                      {data.restaurante_mesas ? ` • ${data.restaurante_mesas} ${ehRh ? 'funcionários' : 'mesas'}` : ''}
                     </p>
                   </div>
                 </div>

@@ -25,6 +25,7 @@ import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
 import { PainelIndicacoes } from '@/pages/admin/PainelIndicacoes'
+import { PainelVersoes } from '@/pages/admin/PainelVersoes'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
@@ -1729,6 +1730,9 @@ export default function Admin() {
             <div className="max-w-4xl mx-auto">
               <h2 className="mb-4 text-base font-semibold text-gray-800">Contas</h2>
 
+              {/* As versões do EasyFeed: convite do RH e troca de versão de uma conta. */}
+              <PainelVersoes contas={contas} aoMudar={loadContas} />
+
               {/* Busca */}
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -1794,6 +1798,17 @@ export default function Admin() {
                                 {ehVendedorConta(c) && (
                                   <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
                                     VENDEDOR
+                                  </span>
+                                )}
+                                {/* A versão: só marca o que foge do comum (restaurante é o padrão). */}
+                                {c.area === 'rh' && (
+                                  <span className="ml-2 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 text-[10px] font-bold tracking-wide align-middle">
+                                    RH
+                                  </span>
+                                )}
+                                {!c.area && (
+                                  <span className="ml-2 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-bold tracking-wide align-middle" title="A conta ainda não escolheu a versão">
+                                    SEM VERSÃO
                                   </span>
                                 )}
                                 {excluida && (

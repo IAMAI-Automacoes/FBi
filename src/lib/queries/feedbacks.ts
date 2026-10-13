@@ -189,7 +189,7 @@ export async function contarFeedbacksPorCategoria(
  * sugestão (ou sugestão e neutro). Positivo e Neutro não contam. O corte por
  * pedaço sem acento pega "Sugestão" e "sugestao".
  */
-export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<number> {
+export async function contarFeedbacksNaoLidos(restauranteId: number, publico: 'cliente' | 'equipe' = 'cliente'): Promise<number> {
   const { data: rest } = await supabase
     .from('restaurantes')
     .select('feedbacks_visto_em')
@@ -204,9 +204,9 @@ export async function contarFeedbacksNaoLidos(restauranteId: number): Promise<nu
     .eq('restaurante_id', restauranteId)
     .gt('created_at', desde)
     .or('sentimento.ilike.%negativ%,sentimento.ilike.%sugest%')
-    // É o numerozinho do menu "Feedbacks" (dos clientes): não muda quando a
-    // página aberta é da equipe.
-    .setHeader(CABECALHO_PUBLICO, 'cliente')
+    // É o numerozinho do menu "Feedbacks": o público é o da VERSÃO da conta
+    // (clientes no restaurante, funcionários no RH), não o da página aberta.
+    .setHeader(CABECALHO_PUBLICO, publico)
 
   if (error) return 0
   return count ?? 0
