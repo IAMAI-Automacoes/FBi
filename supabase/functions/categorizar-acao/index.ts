@@ -40,7 +40,7 @@ import { blocoPerfil, nomeDoAssistente } from '../_shared/perfil.ts'
 import { avaliarGravidade, normalizar, type NivelGravidade } from '../_shared/gravidade.ts'
 import { prioridadeAcaoManual } from '../_shared/limiar.ts'
 import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'categorizador_acao'
 
@@ -184,7 +184,7 @@ Deno.serve(async (req: Request) => {
       .eq('id', acao.restaurante_id)
       .single()
 
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), acao.restaurante_id)
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 600 })
     if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
 

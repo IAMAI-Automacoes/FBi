@@ -35,7 +35,7 @@ import { carregarPrompts, type Prompts } from '../_shared/prompts.ts'
 import {
   CATEGORIAS_EQUIPE, colunaDaUltimaAnalise, publicoDe, PUBLICOS, type Publico,
 } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, buscarMemorias, nomeDoAssistente, tomDoAssistente } from '../_shared/perfil.ts'
@@ -697,9 +697,12 @@ async function processarRestaurante(
   db: Db,
   restauranteId: number,
   force: boolean,
-  prompts: Prompts,
+  promptsGerais: Prompts,
   publico: Publico = 'cliente',
 ) {
+  // Os prompts são carregados uma vez para todas as contas; a versão (RH ou
+  // restaurante) é de cada conta.
+  const prompts = await comAreaDaConta(db, promptsGerais, restauranteId)
   const { data: config, error: configErr } = await db
     .from('restaurantes')
     .select('*')

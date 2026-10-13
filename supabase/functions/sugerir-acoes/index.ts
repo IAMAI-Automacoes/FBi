@@ -40,7 +40,7 @@ import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferram
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 import { polaridade } from '../_shared/sentimento.ts'
 import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'sugeridor_acoes'
 const AGENTE_VERIFICADOR = 'verificador_acoes'
@@ -534,7 +534,7 @@ Deno.serve(async (req: Request) => {
     if (!params) return json({ error: 'Agente desativado pelo administrador' }, 503)
     const paramsVerificador = await paramsDoAgente(db, AGENTE_VERIFICADOR, { max_tokens: 600 })
 
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), restauranteId)
 
     // Perfil, documentos de treinamento E as anotações do assistente. As
     // memórias entram porque é nelas que fica o que o dono já tentou, o que ele

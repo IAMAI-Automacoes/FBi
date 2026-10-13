@@ -22,7 +22,7 @@
  * Agentes. Sem Deno nem banco; testado em __testes__/publico.teste.ts, que
  * confere que os campos `{…}` batem com os do prompt de cliente.
  */
-import { montarPrompt, type Prompts } from './prompts.ts'
+import { montarPrompt, promptOverride, type Prompts } from './prompts.ts'
 import type { Publico } from './publico.ts'
 
 /** Vai em todo prompt que ESCREVE texto para o dono ler. */
@@ -561,5 +561,65 @@ export function promptPara(
   // Sem o irmão da equipe, usar o do cliente faria a IA tratar funcionário
   // como cliente em silêncio. Melhor falhar alto.
   if (!padrao) throw new Error(`Falta o prompt da equipe para "${chave}" (prompts-equipe.ts).`)
-  return montarPrompt(prompts, chaveDoPrompt(chave, publico), padrao, vars)
+  if (prompts[CHAVE_DA_AREA] !== 'rh') return montarPrompt(prompts, chaveDoPrompt(chave, publico), padrao, vars)
+  // Conta da versão RH: o mesmo treinamento, falando de uma empresa. A troca é
+  // feita no TEXTO DO PROMPT, antes de entrarem os dados: o que o funcionário
+  // escreveu nunca é reescrito.
+  const base = promptOverride(prompts, chaveDoPrompt(chave, publico)) ?? padrao
+  return `${contextoDaEmpresa(prompts[CHAVE_DO_RAMO])}\n\n${montarPrompt({}, chave, paraEmpresa(base), vars)}`
+}
+
+// ── Versão RH: a conta é de uma empresa qualquer, não de um restaurante ──────
+// Os prompts acima foram escritos para a equipe de um restaurante. Na conta RH
+// (restaurantes.area = 'rh') o mesmo texto serve, trocando o negócio. Quem
+// carrega os prompts marca a conta com `comAreaDaConta`; `promptPara` lê daqui.
+
+/** Chaves reservadas no mapa de prompts (nenhum prompt editável começa com "__"). */
+export const CHAVE_DA_AREA = '__area'
+export const CHAVE_DO_RAMO = '__ramo'
+
+// deno-lint-ignore no-explicit-any
+type Banco = any
+
+/**
+ * Marca o mapa de prompts com a versão da conta. Nunca lança: se a consulta
+ * falhar, a IA segue com o texto de sempre em vez de parar a geração.
+ */
+export async function comAreaDaConta(db: Banco, prompts: Prompts, restauranteId: unknown): Promise<Prompts> {
+  try {
+    const id = Number(restauranteId)
+    if (!Number.isFinite(id)) return prompts
+    const { data } = await db.from('restaurantes').select('area, ramo').eq('id', id).maybeSingle()
+    if (data?.area !== 'rh') return prompts
+    return { ...prompts, [CHAVE_DA_AREA]: 'rh', [CHAVE_DO_RAMO]: String(data.ramo ?? '').trim() }
+  } catch {
+    return prompts
+  }
+}
+
+/** O texto de um prompt da equipe, trocando "restaurante" por "empresa" com o artigo certo. */
+export function paraEmpresa(texto: string): string {
+  // Os campos {…} são preenchidos pelo código: o nome deles nunca muda.
+  return texto.split(/(\{\w+\})/).map((parte, i) => (i % 2 ? parte : trocarNegocio(parte))).join('')
+}
+
+function trocarNegocio(texto: string): string {
+  const M = (s: string, ref: string) => (ref[0] === ref[0].toUpperCase() ? s[0].toUpperCase() + s.slice(1) : s)
+  return texto
+    .replace(/\b(deste|neste|este) restaurante\b/gi, (m, d: string) => M({ deste: 'desta', neste: 'nesta', este: 'esta' }[d.toLowerCase()] + ' empresa', m))
+    .replace(/\b(do|no|ao|pelo|um|dum|num|o|seu|nosso|todo) restaurante\b/gi, (m, d: string) =>
+      M({ do: 'da', no: 'na', ao: 'à', pelo: 'pela', um: 'uma', dum: 'duma', num: 'numa', o: 'a', seu: 'sua', nosso: 'nossa', todo: 'toda' }[d.toLowerCase()] + ' empresa', m))
+    .replace(/\b(dos|nos|aos|pelos|os|muitos|outros) restaurantes\b/gi, (m, d: string) =>
+      M({ dos: 'das', nos: 'nas', aos: 'às', pelos: 'pelas', os: 'as', muitos: 'muitas', outros: 'outras' }[d.toLowerCase()] + ' empresas', m))
+    .replace(/\brestaurantes\b/g, 'empresas').replace(/\bRestaurantes\b/g, 'Empresas')
+    .replace(/\brestaurante\b/g, 'empresa').replace(/\bRestaurante\b/g, 'Empresa').replace(/\bRESTAURANTE\b/g, 'EMPRESA')
+}
+
+/** O aviso que vai na frente de todo prompt da equipe na conta RH. */
+export function contextoDaEmpresa(ramo?: string): string {
+  const r = String(ramo ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return [
+    `CONTEXTO DA CONTA: esta e uma EMPRESA${r ? ` do ramo "${r}"` : ''}, e NAO um restaurante.`,
+    'Quem escreve sao funcionarios dela. Se algum exemplo abaixo falar de cozinha, salao, garcom, cliente na mesa ou gorjeta, entenda como ilustracao: aplique o mesmo raciocinio ao trabalho desta empresa e nunca escreva essas palavras na resposta se elas nao estiverem no que o funcionario disse.',
+  ].join('\n')
 }

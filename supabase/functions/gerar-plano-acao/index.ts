@@ -3,7 +3,7 @@ import { planoParaPrompt } from '../_shared/texto-plano.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { publicoDe } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, buscarConhecimento, tomDoAssistente } from '../_shared/perfil.ts'
@@ -125,7 +125,7 @@ Deno.serve(async (req: Request) => {
       ? `## Boas práticas de referência (use para embasar o plano)\n${conhecimento}`
       : ''
 
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), acao.restaurante_id)
     const prompt = promptPara(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
       tom: tomDoAssistente(restaurante?.mascote_config),
       perfil: blocoPerfil(restaurante),

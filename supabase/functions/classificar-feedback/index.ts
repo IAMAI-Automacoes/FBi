@@ -30,7 +30,7 @@ import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { ehNegativo, ehPositivo, ehSugestao } from '../_shared/sentimento.ts'
 import { publicoDe } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'classificador_feedback'
 
@@ -171,7 +171,7 @@ Deno.serve(async (req: Request) => {
       ? existentes.map((t: any) => `- id:${t.id} | ${t.rotulo} (${t.tipo})`).join('\n')
       : '(nenhum tema ainda)'
 
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), fb.restaurante_id)
     const prompt = promptPara(prompts, 'ef_classificar_feedback', PROMPT_PADRAO, {
       temas: lista,
       texto,

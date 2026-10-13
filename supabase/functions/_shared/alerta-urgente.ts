@@ -41,7 +41,7 @@ import { chamarIA, ErroCota } from './openrouter.ts'
 import { paramsDoAgente } from './params.ts'
 import { carregarPrompts } from './prompts.ts'
 import { avaliarGravidade } from './gravidade.ts'
-import { promptPara } from './prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from './prompts-equipe.ts'
 import type { Publico } from './publico.ts'
 import { configUazapi, enviarTexto } from './uazapi.ts'
 import { mensagemDoAlertaDaEquipe } from './equipe.ts'
@@ -339,7 +339,7 @@ async function confirmarComIa(
   if (!params) return { urgente: true, resumo: '', motivo: 'agente desativado; valendo o lexico' }
 
   try {
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), restauranteId)
     const prompt = promptPara(prompts, 'ef_triagem_urgencia', PROMPT, {
       original,
       trecho,

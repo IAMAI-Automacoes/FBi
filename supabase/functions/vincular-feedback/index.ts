@@ -63,7 +63,7 @@ import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { talvezAlertarDono } from '../_shared/alerta-urgente.ts'
 import { polaridade } from '../_shared/sentimento.ts'
 import { publicoDe, type Publico } from '../_shared/publico.ts'
-import { promptPara } from '../_shared/prompts-equipe.ts'
+import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'vinculador_feedback'
 const AGENTE_ABSORCAO = 'absorvedor_insight'
@@ -440,7 +440,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- 4. Com candidatos: uma chamada de IA (ação tem preferência) ----
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), fb.restaurante_id)
     const params = await paramsDoAgente(db, AGENTE, { max_tokens: 400 })
     if (!params) return await reservaOuLivre('agente desativado')
 
@@ -602,7 +602,7 @@ async function absorverNoInsight(db: Db, fb: any, insightId: string, texto: stri
         .map((t: string) => `- "${t.slice(0, 300)}"`)
     }
 
-    const prompts = await carregarPrompts(db)
+    const prompts = await comAreaDaConta(db, await carregarPrompts(db), fb.restaurante_id)
     const prompt = promptPara(prompts, 'ef_absorver_insight', PROMPT_ABSORCAO, {
       titulo: insight.titulo ?? '(sem titulo)',
       descricao: insight.descricao ?? '(sem descricao)',
