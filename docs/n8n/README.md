@@ -82,6 +82,10 @@ O funcionário fala com o **mesmo WhatsApp** do restaurante. Quem é da equipe �
 
 **Para o cliente nada muda.** Depois do buffer, o nó **Quem escreveu?** pergunta ao banco se aquele telefone é da equipe (`equipe_quem_e`). Não é, ou a consulta falhou: segue o caminho de sempre. É: segue o ramo de baixo.
 
+**Conta só de RH (versão RH do EasyFeed).** A conta pode ser de uma empresa que só ouve a equipe (`restaurantes.area = 'rh'`). O workflow é o mesmo; o que muda vem de `equipe_quem_e`: `ignorar` (a conta é só de RH e o número não é de funcionário), `so_rh` e `ramo`. O nó **É para ignorar?**, logo depois do **Junta quem escreveu**, para o fluxo do número de fora: não responde, não marca como lida e não registra, só limpa o buffer (**Limpa o buffer do ignorado**). Se a consulta falhar numa conta de RH, também para: lá não existe cliente. Para o funcionário de uma conta só de RH, a IA que separa o feedback em pontos recebe na frente das mensagens o aviso de que é uma empresa, com o ramo, e a Helena diz "da empresa" quando a conta não tem nome. A conta do admin, que usa as duas versões no mesmo número, nunca é "só de RH": nela o número de fora continua sendo cliente.
+
+O arquivo do repositório é o **export do n8n** com as mudanças por cima (por isso traz `id`, `versionId` e os valores que o n8n omite quando são o padrão). Quem aplica a versão RH num export novo é `wf_versao_rh.py` (em `docs/n8n/ferramentas/`).
+
 O ramo da equipe:
 
 1. **Analisa a equipe**: mesmo prompt dos clientes, com as 12 categorias da equipe (Liderança e gestão, Salário e benefícios, Escala e horários…) e o campo `sensivel` (relato de assédio, discriminação, ameaça, risco ou algo ilegal).

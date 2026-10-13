@@ -3,17 +3,17 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Feedback Restaurante\nRecebe as mensagens que os clientes mandam para o WhatsApp de feedback do restaurante (webhook **easyfeed** da instância na uazapi).\n\n1. **Filtra**: só TEXTO ou ÁUDIO, de cliente, em conversa individual.\n2. **Acha o restaurante pelo token da instância** e confere onboarding, assinatura ativa e conta não excluída.\n3. **Junta as mensagens em sequência** (buffer de 20 s por restaurante + cliente).\n4. **A IA classifica**: feedback / pergunta sobre o restaurante / outro, e separa o feedback em pontos (Positivo, Negativo, Neutro, Sugestão).\n5. **Feedback** → grava e a **Helena** agradece com uma mensagem pronta sorteada conforme o sentimento, (a IA só completa pedaços como \"a pizza fria\"); as mensagens do cliente ficam lidas assim que são juntadas, e antes de cada resposta aparece \"digitando...\" por um tempo sorteado. Ela se apresenta só na primeira resposta do dia para cada pessoa. **Pergunta completa sobre o restaurante** → indica o número de contato das Configurações (só o número, sem link). **Pergunta incompleta** (\"tenho uma dúvida\") → não responde. **Duas coisas ou mais juntas** (feedback + pergunta, feedback + PARAR…) → **uma mensagem para cada coisa**, cada uma respondendo (citando) no WhatsApp a mensagem do cliente de que fala, na ordem em que ele escreveu. **Qualquer outra coisa** → não responde.\n\nNeutro aparece no painel mas não gera insight; Sugestão gera insight como ponto a melhorar.\n\n6. **PARAR**: mensagem com cara de \"parar de receber\" passa por uma IA que lê a conversa recente. Se for mesmo o pedido, o cliente para de receber **só as atualizações das ações** (o resto continua igual) e recebe só \"Pronto, não vou mais te mandar essas novidades.\".\n\n7. **Equipe**: se quem escreveu é um **funcionário** cadastrado na página Equipe, a mensagem segue o ramo de baixo (análise da equipe, sem telefone gravado e com a pergunta do anonimato por botão). O cliente não passa por ele.",
-        "height": 420,
+        "content": "## Feedback Restaurante\nRecebe as mensagens que os clientes mandam para o WhatsApp de feedback do restaurante (webhook **easyfeed** da instância na uazapi).\n\n1. **Filtra**: só TEXTO ou ÁUDIO, de cliente, em conversa individual.\n2. **Acha o restaurante pelo token da instância** e confere onboarding, assinatura ativa e conta não excluída.\n3. **Junta as mensagens em sequência** (buffer de 20 s por restaurante + cliente).\n4. **A IA classifica**: feedback / pergunta sobre o restaurante / outro, e separa o feedback em pontos (Positivo, Negativo, Neutro, Sugestão).\n5. **Feedback** → grava e a **Helena** agradece com uma mensagem pronta sorteada conforme o sentimento, (a IA só completa pedaços como \"a pizza fria\"); as mensagens do cliente ficam lidas assim que são juntadas, e antes de cada resposta aparece \"digitando...\" por um tempo sorteado. Ela se apresenta só na primeira resposta do dia para cada pessoa. **Pergunta completa sobre o restaurante** → indica o número de contato das Configurações (só o número, sem link). **Pergunta incompleta** (\"tenho uma dúvida\") → não responde. **Duas coisas ou mais juntas** (feedback + pergunta, feedback + PARAR…) → **uma mensagem para cada coisa**, cada uma respondendo (citando) no WhatsApp a mensagem do cliente de que fala, na ordem em que ele escreveu. **Qualquer outra coisa** → não responde.\n\nNeutro aparece no painel mas não gera insight; Sugestão gera insight como ponto a melhorar.\n\n6. **PARAR**: mensagem com cara de \"parar de receber\" passa por uma IA que lê a conversa recente. Se for mesmo o pedido, o cliente para de receber **só as atualizações das ações** (o resto continua igual) e recebe só \"Pronto, não vou mais te mandar essas novidades.\".\n\n7. **Equipe**: se quem escreveu é um **funcionário** cadastrado na página Equipe, a mensagem segue o ramo de baixo (análise da equipe, sem telefone gravado e com a pergunta do anonimato por botão). O cliente não passa por ele.\n\n8. **Conta só de RH** (versão RH do EasyFeed: uma empresa que só ouve a equipe): quem não é funcionário cadastrado é **ignorado em silêncio** (**É para ignorar?**): não responde, não marca como lida e não registra. A conta do admin, que usa as duas versões no mesmo número, continua atendendo cliente e funcionário.",
+        "height": 480,
         "width": 1360
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -60,
-        -680
+        -3392,
+        788
       ],
-      "id": "4c38166a-9654-49b0-beaa-32a13f03aab5",
+      "id": "1e84d38f-3aa5-4710-8258-64de73499397",
       "name": "Nota - Visão geral"
     },
     {
@@ -26,10 +26,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -60,
-        -220
+        -3392,
+        1296
       ],
-      "id": "8aebd90a-7617-4810-882d-50cb1d2c3d8e",
+      "id": "4e647530-baa9-48f0-baef-d23acf265185",
       "name": "Nota - Entrada"
     },
     {
@@ -42,15 +42,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1120,
-        -440
+        -2208,
+        1088
       ],
-      "id": "6792ddbc-757f-48ff-9399-0c5ef0fa67e3",
+      "id": "ec7436a6-3634-4212-8ef4-e99e5fcfe5d2",
       "name": "Nota - Áudio"
     },
     {
       "parameters": {
-        "content": "## 3. Buffer de mensagens\nCada mensagem espera 20 s. Só a ÚLTIMA da conversa segue e junta todas; as anteriores param. Apaga só o que juntou (uma mensagem que chegue no meio não se perde). Repetidas da uazapi contam uma vez. Sobras com mais de 10 min são limpas.",
+        "content": "## 3. Buffer de mensagens\nCada mensagem espera 20 s. Só a ÚLTIMA da conversa segue e junta todas; as anteriores param. Apaga só o que juntou (uma mensagem que chegue no meio não se perde). Repetidas da uazapi contam uma vez. Sobras com mais de 10 min são limpas.\n**É para ignorar?**: conta só de RH e número que não é de funcionário param aqui (só limpa o buffer).",
         "height": 560,
         "width": 1540,
         "color": 3
@@ -58,10 +58,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2160,
-        -220
+        -1168,
+        1296
       ],
-      "id": "eddd32a8-83ec-48df-85a5-ded1b3b3d28e",
+      "id": "8e7fb1a8-25e7-4bac-a26f-e0c032af3477",
       "name": "Nota - Buffer"
     },
     {
@@ -74,10 +74,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3720,
-        -220
+        400,
+        1296
       ],
-      "id": "60b60ead-9835-42cf-9d2b-b09169eb0794",
+      "id": "1c842780-bdae-49dc-be82-b826e7700148",
       "name": "Nota - IA"
     },
     {
@@ -90,10 +90,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3660,
-        440
+        336,
+        1968
       ],
-      "id": "a4e4060f-5d2e-4609-8579-a51834316aeb",
+      "id": "ca6712dc-6740-4ea4-b70f-01921ddde3a7",
       "name": "Nota - Apresentação"
     },
     {
@@ -106,10 +106,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4660,
-        -440
+        1344,
+        1088
       ],
-      "id": "5c9e7329-b037-443b-8f1e-33617b59c403",
+      "id": "aff8e2b6-e915-41a7-89fb-b9b756f43075",
       "name": "Nota - Grava e responde"
     },
     {
@@ -122,10 +122,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3440,
-        -1200
+        112,
+        320
       ],
-      "id": "98e53b1f-1f34-42af-8f7d-9f1628cd48cd",
+      "id": "525ba701-a4d3-4471-99fe-797e89883ed3",
       "name": "Nota - PARAR"
     },
     {
@@ -137,10 +137,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        0,
-        0
+        -3328,
+        1520
       ],
-      "id": "e4827b38-ea28-4923-bcfb-6e3ff944baf2",
+      "id": "536602d5-d1cc-4477-bb8b-992a40368d7a",
       "name": "Recebe mensagem",
       "webhookId": "97408caf-b261-4434-9601-0c1a99650276"
     },
@@ -151,10 +151,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
-        0
+        -3104,
+        1520
       ],
-      "id": "63333b55-4478-4936-9dfb-7d85f080667c",
+      "id": "b0aad3c6-124b-463a-b07c-0413535ddb7c",
       "name": "Lê a mensagem"
     },
     {
@@ -175,32 +175,32 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        440,
-        0
+        -2896,
+        1520
       ],
-      "id": "55834037-4a1d-4d48-8600-cd16c04b0649",
+      "id": "2a2b7990-c35e-40f2-88ef-33774792d425",
       "name": "Acha o restaurante",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
-        "jsCode": "// A conta pode receber feedback agora? O restaurante foi achado pelo token\n// da instância. Precisa: onboarding completo, assinatura ativa e conta não excluída.\nconst r = $input.first().json;\nif (!r.id || r.excluida_em || r.onboarding_completo !== true || r.assinatura_status !== 'ativa') return [];\n\nreturn [{\n  json: {\n    ...$('Lê a mensagem').first().json,\n    restauranteId: r.id,\n    nomeRestaurante: String(r.nome_restaurante || '').trim(),\n    // Número de contato/suporte das Configurações (só dígitos) — nulo = não indicar.\n    telefoneContato: String(r.telefone_contato || '').replace(/\\D/g, '') || null,\n  },\n}];"
+        "jsCode": "// A conta pode receber feedback agora? O restaurante foi achado pelo token\n// da instância. Precisa: onboarding completo, assinatura ativa e conta não excluída.\nconst r = $input.first().json;\nif (!r.id || r.excluida_em || r.onboarding_completo !== true || r.assinatura_status !== 'ativa') return [];\n\nreturn [{\n  json: {\n    ...$('Lê a mensagem').first().json,\n    restauranteId: r.id,\n    nomeRestaurante: String(r.nome_restaurante || '').trim(),\n    // A versão do EasyFeed da conta: 'restaurante' ou 'rh' (empresa que só ouve a equipe).\n    area: String(r.area || ''),\n    // Número de contato/suporte das Configurações (só dígitos) — nulo = não indicar.\n    telefoneContato: String(r.telefone_contato || '').replace(/\\D/g, '') || null,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        0
+        -2672,
+        1520
       ],
-      "id": "bd14984f-22b0-441b-b76f-2a5a8dfd252e",
+      "id": "b570ea8d-9d58-4958-af55-a3c41220ce70",
       "name": "Restaurante ativo?"
     },
     {
@@ -231,10 +231,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1100,
-        0
+        -2224,
+        1520
       ],
-      "id": "7bcf66ab-193e-493c-9f45-ad15be94a636",
+      "id": "a561aff9-6c8f-4104-aedc-41085b130195",
       "name": "É áudio?"
     },
     {
@@ -260,10 +260,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
-        -200
+        -2016,
+        1328
       ],
-      "id": "8b7fed01-99a4-41da-92da-384c9d4c403e",
+      "id": "dd9a85f4-b0fa-4678-a84f-905652925944",
       "name": "Baixa o áudio",
       "retryOnFail": true,
       "maxTries": 2,
@@ -282,10 +282,10 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [
-        1540,
-        -200
+        -1792,
+        1328
       ],
-      "id": "46e0a19b-17c0-4058-ba44-3fdf2498a87a",
+      "id": "0fab1768-ad4c-4aed-b40b-3ba68c480321",
       "name": "Converte o áudio",
       "onError": "continueRegularOutput"
     },
@@ -300,20 +300,20 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1760,
-        -200
+        -1568,
+        1328
       ],
-      "id": "a612c70c-9ae8-49e7-a36f-cdd639903a07",
+      "id": "ab1f7ad9-f4ea-4779-83bd-029391a928ae",
       "name": "Transcreve o áudio",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
       "credentials": {
         "openAiApi": {
           "id": "dsjoB8htGVIa9D5e",
           "name": "OpenAi"
         }
       },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 2000,
       "onError": "continueRegularOutput"
     },
     {
@@ -323,10 +323,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1980,
-        -200
+        -1344,
+        1328
       ],
-      "id": "2c14555d-6c5d-46da-9f09-e57a8c3a37ac",
+      "id": "5d0dcad8-92ee-4f33-8c3b-79d77e666292",
       "name": "Texto do áudio"
     },
     {
@@ -352,33 +352,32 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2200,
-        0
+        -1136,
+        1520
       ],
-      "id": "c3d51c47-0651-49bb-9080-024c63e19f81",
+      "id": "19b91390-64e1-407f-b81c-d2ab1c7c305e",
       "name": "Guarda no buffer",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
-        "amount": 20,
-        "unit": "seconds"
+        "amount": 20
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        2420,
-        0
+        -912,
+        1520
       ],
-      "id": "6be790b1-c8c3-4418-83db-a2a711d096ec",
+      "id": "f205654d-760e-446e-9a72-9bd0901de082",
       "name": "Espera 20 segundos",
       "webhookId": "9dce655e-cf84-461d-a931-03f44a11b160"
     },
@@ -400,20 +399,20 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2640,
-        0
+        -688,
+        1520
       ],
-      "id": "d1df5b70-27c3-47f6-9520-9d568a0a7144",
+      "id": "853e656e-8a3d-48ab-841b-395a2578ab21",
       "name": "Lê o buffer",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
@@ -422,10 +421,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2860,
-        0
+        -560,
+        1520
       ],
-      "id": "548be3a4-8687-49c1-bf3e-d5cc29120da0",
+      "id": "0c356f56-4c50-437a-b9fd-45e93f7d742f",
       "name": "Sou a última mensagem?"
     },
     {
@@ -451,22 +450,22 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        3520,
-        0
+        192,
+        1520
       ],
-      "id": "cb50bd05-5a7e-4df7-8f13-0c74c15a3fa7",
+      "id": "e6f8c1e6-9f04-49fb-9433-8eec7231ef58",
       "name": "Limpa o buffer",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
       },
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -486,10 +485,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        3520,
-        220
+        192,
+        1744
       ],
-      "id": "b54af59c-69b1-4153-ba7a-d39b6ee0be73",
+      "id": "7a1c63fc-f4fc-4587-b931-cb51c8d40901",
       "name": "Limpa buffer antigo",
       "credentials": {
         "supabaseApi": {
@@ -532,23 +531,23 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        3660,
-        220
+        336,
+        1744
       ],
-      "id": "7288588b-4959-4bca-98b7-de6faaaa873a",
+      "id": "0a86fb92-0a3b-441a-a43b-42726b6f24f8",
       "name": "Já respondeu hoje?",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
       },
-      "executeOnce": true,
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -560,15 +559,16 @@
               "message": "Você analisa mensagens que clientes mandaram para o WhatsApp de FEEDBACK de um restaurante. Mensagens que a mesma pessoa mandou em sequência chegam juntas, cada uma começando com o número dela entre colchetes ([1], [2], ...); uma mensagem pode ter mais de uma linha. O número não faz parte do que o cliente escreveu: nunca copie ele para os campos de texto. Sua tarefa tem três partes: (1) dizer o que a mensagem é, (2) se houver feedback, dividi-lo em \"pontos\" classificados e (3) se houver feedback, separar uns pedaços curtos que completam a resposta pronta. Você NÃO escreve a resposta ao cliente.\n\nPARTE 1 — O QUE É A MENSAGEM (campo \"tipo\")\n- \"feedback\": a pessoa conta como foi a experiência ou dá opinião sobre o restaurante — elogio, crítica, comentário morno ou sugestão de melhoria. Basta UM trecho de feedback para o tipo ser \"feedback\", mesmo que o resto seja saudação ou pergunta.\n- \"pergunta_restaurante\": não há feedback, mas a pessoa faz uma pergunta ou pedido COMPLETO sobre outro assunto do restaurante — dá para saber exatamente o que ela quer: horário, endereço, reserva, cardápio, preços, delivery, um pedido, eventos, vagas de emprego, parcerias, objeto esquecido, nota fiscal, cobrança, falar com o gerente, etc.\n- \"outro\": todo o resto, quando não há feedback nem pergunta completa sobre o restaurante: saudação sozinha (\"oi\", \"bom dia\", \"quero dar uma opinião\", \"posso fazer uma sugestão?\" sem dizer qual), agradecimento ou confirmação (\"obrigado\", \"ok\", \"beleza\", \"👍\"), emojis, mensagem sem sentido, assunto sem relação com o restaurante (política, futebol, propaganda, corrente, pergunta geral, conversa pessoal, perguntas sobre quem está respondendo), ou pergunta INCOMPLETA, em que não dá para saber o que a pessoa quer (\"tenho uma dúvida\", \"queria saber uma coisa\", \"posso perguntar algo?\", \"é sobre o restaurante\", \"vocês têm\" sem dizer o quê). Pedido para parar de receber mensagens ou novidades do restaurante (\"PARAR\", \"não quero mais receber\", \"como faço para não receber mais?\") também é \"outro\", mesmo em forma de pergunta: outra parte do sistema cuida disso.\n\nCampo \"tem_pergunta_restaurante\": true quando, além do feedback, a pessoa TAMBÉM faz uma pergunta ou pedido COMPLETO sobre o restaurante que não é feedback (ex.: \"A comida estava ótima! Vocês abrem domingo?\"). Se o tipo for \"pergunta_restaurante\", é true. Pergunta incompleta (\"A comida estava ótima! Queria perguntar uma coisa\") é false. Nos outros casos, false.\nCampo \"assunto_pergunta\": quando tem_pergunta_restaurante for true, o assunto da pergunta em poucas palavras (sempre preenchido — se você não consegue dizer o assunto, a pergunta está incompleta e tem_pergunta_restaurante é false), em minúsculas, para completar a frase \"não consigo te ajudar com ___ por aqui\" (ex.: \"o horário de funcionamento\", \"reservas\", \"o seu pedido\", \"vagas de emprego\", \"o reembolso\"). Nos outros casos, \"\".\nCampo \"mensagem_pergunta\": quando tem_pergunta_restaurante for true, o número da mensagem ([1], [2]...) em que está a pergunta. Nos outros casos, 0.\n\nAtenção:\n- Crítica com pedido junto (\"A pizza veio fria, vocês vão me reembolsar?\") tem feedback (pizza fria) E pergunta (reembolso).\n- Pergunta retórica ou desabafo dentro de uma crítica (\"como pode demorar tanto?\") NÃO é pergunta sobre o restaurante — é parte do feedback.\n\nPARTE 2 — OS PONTOS (só quando há feedback; senão \"pontos\": [])\nUm ponto é uma unidade de feedback que merece ser registrada separadamente. Existem 3 cenários:\n\nCENÁRIO A — Assunto único: 1 item.\nEntrada: [1] Oi, a comida tava muito ruim\nPontos: [{\"feedback_original\": \"A comida tava muito ruim\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida ruim\", \"mensagem\": 1}]\n\nCENÁRIO B — Assuntos diferentes: 1 item por assunto.\nEntrada: [1] A comida estava ótima, mas o atendimento demorou muito\nPontos: [{\"feedback_original\": \"A comida estava ótima\", \"categoria\": \"Comida\", \"sentimento\": \"Positivo\", \"resumo\": \"Comida ótima\", \"mensagem\": 1}, {\"feedback_original\": \"O atendimento demorou muito\", \"categoria\": \"Tempo de Espera\", \"sentimento\": \"Negativo\", \"resumo\": \"Demora no atendimento\", \"mensagem\": 1}]\n\nCENÁRIO C — Mesmo assunto, observações distintas: 1 item por observação, com a MESMA categoria.\nEntrada: [1] A comida veio salgada e fria\nPontos: [{\"feedback_original\": \"A comida veio salgada\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida salgada\", \"mensagem\": 1}, {\"feedback_original\": \"A comida veio fria\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Comida fria\", \"mensagem\": 1}]\n\nREGRA DE AGRUPAMENTO: antes de gerar os itens, releia o texto inteiro e junte tudo que é do mesmo ponto, mesmo que o cliente tenha falado dele em partes ou mensagens separadas. Nunca crie dois itens sobre o mesmo ponto só porque ele apareceu duas vezes.\nEntrada:\n[1] A comida estava ótima.\n[2] O atendimento foi péssimo, o garçom demorou muito.\n[3] Mas olha, a comida realmente estava deliciosa, recomendo o prato do dia.\nPontos: [{\"feedback_original\": \"A comida estava ótima e deliciosa, recomendo o prato do dia\", \"categoria\": \"Comida\", \"sentimento\": \"Positivo\", \"resumo\": \"Comida ótima e deliciosa\", \"mensagem\": 1}, {\"feedback_original\": \"O atendimento foi péssimo, o garçom demorou muito\", \"categoria\": \"Atendimento\", \"sentimento\": \"Negativo\", \"resumo\": \"Atendimento péssimo\", \"mensagem\": 2}]\n\nDESAMBIGUAÇÃO DE CATEGORIA:\n- \"A comida demorou para chegar\" → o problema é o TEMPO: \"Tempo de Espera\" (não \"Comida\").\n- \"A comida veio fria/salgada/sem tempero\" → \"Comida\".\n- \"O garçom demorou para anotar o pedido\" ou \"Demorou para trazer a conta\" → \"Tempo de Espera\".\n- \"O garçom foi grosseiro/atencioso/prestativo\" → \"Atendimento\".\n- \"Trouxeram o prato errado\" → \"Outros\" (a menos que o cliente também fale do sabor; aí gera um segundo item em \"Comida\").\n- Regra geral: reclamou de QUANTO TEMPO levou → \"Tempo de Espera\"; de COMO a coisa foi feita ou veio → a categoria específica.\n\nSENTIMENTO DE CADA PONTO — use SOMENTE um destes 4 valores, escritos exatamente assim:\n- \"Positivo\": elogio, algo que deu certo (mesmo dito sem entusiasmo).\n- \"Negativo\": crítica, problema, algo que deu errado. FATO RELATADO COM CALMA TAMBÉM É NEGATIVO: \"vi uma barata perto da cozinha\" (Higiene), \"sentamos numa mesa que balançava\" (Ambiente). Pergunte-se: \"se isso fosse resolvido, o cliente ficaria mais satisfeito?\" Se sim, é Negativo.\n- \"Neutro\": avaliação morna, sem pender para elogio nem crítica (\"o ambiente foi razoável\", \"a comida é ok\", \"achei mediano\").\n- \"Sugestão\": proposta de melhoria ou de algo novo, SEM relatar uma falha (\"podiam ter opção vegana\", \"seria bom ter mais tomadas\", \"sugiro música ao vivo às sextas\"). Se a pessoa relata um problema e sugere a solução óbvia (\"o banheiro estava sujo, deviam limpar mais\"), o ponto é \"Negativo\" — o problema é o que importa.\n\nNEUTRO NÃO É SUGESTÃO — a diferença é se a pessoa PROPÕE alguma coisa:\n- \"Neutro\" é uma opinião morna sobre algo que já existe ou já aconteceu. Nunca propõe nada.\n- \"Sugestão\" sempre propõe uma mudança ou algo novo (\"podiam\", \"deviam ter\", \"seria bom\", \"sugiro\", \"que tal\").\nExemplos lado a lado:\n- \"O cardápio é ok\" → Neutro.\n- \"O cardápio podia ter mais opções\" → Sugestão.\n- \"O ambiente é ok, seria legal ter música ao vivo\" → DOIS pontos: \"O ambiente é ok\" (Neutro) e \"Seria legal ter música ao vivo\" (Sugestão).\n\nNÃO VIRA PONTO (descarte):\n- Informação incidental, que não avalia nada (\"sentamos perto da janela\", \"viemos comemorar aniversário\", \"pedimos o combo executivo\").\n- Saudações, agradecimentos e as perguntas/pedidos da Parte 1.\nSe sobrar só isso, \"pontos\" fica [].\n\nCAMPOS DE CADA PONTO:\n- \"feedback_original\": uma frase COMPLETA e compreensível sozinha, reescrevendo só o trecho daquele ponto. Nunca um fragmento cortado (\"mas salgada\" está errado; o certo é \"A comida veio salgada\"). Se o mesmo ponto apareceu em partes separadas, una numa frase só. É PROIBIDO inventar fatos, opiniões ou detalhes; mantenha o vocabulário do cliente. Se não der para separar os pontos com clareza, use o texto original completo.\n- \"categoria\": SOMENTE uma destas, escrita exatamente assim: \"Comida\", \"Bebidas\", \"Atendimento\", \"Ambiente\", \"Limpeza\", \"Preço\", \"Tempo de Espera\", \"Reserva\", \"Estacionamento\", \"Acessibilidade\", \"Música/Som\", \"Cardápio/Variedade\", \"Higiene\", \"Outros\". Nunca invente outra.\n- \"sentimento\": \"Positivo\", \"Negativo\", \"Neutro\" ou \"Sugestão\".\n- \"resumo\": etiqueta curta de 3 a 5 palavras, estilo rótulo (\"Comida fria\", \"Ambiente ótimo\", \"Opção vegana no cardápio\"). Nunca \"Cliente reclamou de...\", \"Cliente elogiou...\".\n- \"mensagem\": o número da mensagem ([1], [2]...) em que esse ponto aparece. Se aparece em mais de uma, o número da primeira.\n\nPARTE 3 — PEDAÇOS PARA A RESPOSTA (só quando o tipo for \"feedback\"; nos outros casos, todos \"\")\nA resposta ao cliente é uma mensagem pronta. Você só devolve pedaços curtos que completam essa mensagem. Cada pedaço: em minúsculas, começando com artigo (\"a\", \"o\", \"as\", \"os\"), de 2 a 6 palavras, sem pontuação, com as palavras do cliente e sem inventar nada. Não achou? Deixe \"\".\n- \"elogio\": a principal coisa que o cliente elogiou, para completar \"que bom que você gostou de ___\" (\"a comida\", \"o atendimento do garçom\", \"o petit gâteau\", \"a música ao vivo\").\n- \"problema\": a principal coisa que deu errado, para completar \"sinto muito por ___\" (\"a pizza fria\", \"a demora no atendimento\", \"o banheiro sujo\", \"a mesa bamba\").\n- \"ideia\": a principal sugestão, para completar \"obrigada pela ideia de ___\" (\"a opção vegana\", \"a música ao vivo\", \"as tomadas nas mesas\").\n\nMAIS EXEMPLOS (mensagens do cliente → resultado completo):\n[1] A pizza veio fria mas o garçom foi um amor. Podiam ter música ao vivo\n→ {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"A pizza veio fria\", \"categoria\": \"Comida\", \"sentimento\": \"Negativo\", \"resumo\": \"Pizza fria\", \"mensagem\": 1}, {\"feedback_original\": \"O garçom foi um amor\", \"categoria\": \"Atendimento\", \"sentimento\": \"Positivo\", \"resumo\": \"Garçom atencioso\", \"mensagem\": 1}, {\"feedback_original\": \"Podiam ter música ao vivo\", \"categoria\": \"Música/Som\", \"sentimento\": \"Sugestão\", \"resumo\": \"Música ao vivo\", \"mensagem\": 1}], \"elogio\": \"o garçom\", \"problema\": \"a pizza fria\", \"ideia\": \"a música ao vivo\"}\n[1] Oi\n[2] A comida estava ótima!\n[3] Vocês fazem reserva pra sábado?\n→ {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": true, \"assunto_pergunta\": \"reservas\", \"mensagem_pergunta\": 3, \"pontos\": [{\"feedback_original\": \"A comida estava ótima\", \"categoria\": \"Comida\", \"sentimento\": \"Positivo\", \"resumo\": \"Comida ótima\", \"mensagem\": 2}], \"elogio\": \"a comida\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Bom dia\n→ {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Obrigado!\n→ {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Quem ganhou o jogo ontem?\n→ {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] PARAR\n→ {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Oi, tenho uma dúvida\n→ {\"tipo\": \"outro\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Vocês abrem domingo?\n→ {\"tipo\": \"pergunta_restaurante\", \"tem_pergunta_restaurante\": true, \"assunto_pergunta\": \"o horário de funcionamento\", \"mensagem_pergunta\": 1, \"pontos\": [], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] O ambiente foi razoável\n→ {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"O ambiente foi razoável\", \"categoria\": \"Ambiente\", \"sentimento\": \"Neutro\", \"resumo\": \"Ambiente razoável\", \"mensagem\": 1}], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"\"}\n[1] Podiam colocar opção sem glúten no cardápio\n→ {\"tipo\": \"feedback\", \"tem_pergunta_restaurante\": false, \"assunto_pergunta\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"Podiam colocar opção sem glúten no cardápio\", \"categoria\": \"Cardápio/Variedade\", \"sentimento\": \"Sugestão\", \"resumo\": \"Opção sem glúten\", \"mensagem\": 1}], \"elogio\": \"\", \"problema\": \"\", \"ideia\": \"a opção sem glúten\"}\n\nFORMATO DE SAÍDA (obrigatório): responda SOMENTE com um objeto JSON válido, sem markdown, sem crases e sem texto antes ou depois, exatamente com estas chaves:\n{\"tipo\": \"feedback | pergunta_restaurante | outro\", \"tem_pergunta_restaurante\": true ou false, \"assunto_pergunta\": \"...\", \"mensagem_pergunta\": número, \"pontos\": [{\"feedback_original\": \"...\", \"categoria\": \"...\", \"sentimento\": \"...\", \"resumo\": \"...\", \"mensagem\": número}], \"elogio\": \"...\", \"problema\": \"...\", \"ideia\": \"...\"}"
             }
           ]
-        }
+        },
+        "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        4080,
-        0
+        752,
+        1520
       ],
-      "id": "e827c6a8-febd-44f5-b6bb-75940535adbf",
+      "id": "2cc01c49-e718-4e84-8900-6ffebdee8213",
       "name": "Analisa a mensagem",
       "executeOnce": true,
       "retryOnFail": true,
@@ -583,18 +583,18 @@
           "mode": "list",
           "cachedResultName": "gpt-4.1-mini"
         },
+        "builtInTools": {},
         "options": {
-          "temperature": 0.1,
-          "responseFormat": "json_object"
+          "temperature": 0.1
         }
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        4080,
-        220
+        752,
+        1744
       ],
-      "id": "86f276be-e545-4652-bee1-f7f4e064ef83",
+      "id": "0f919e1f-a075-454c-a431-680c6b5dd928",
       "name": "Modelo de análise",
       "credentials": {
         "openAiApi": {
@@ -610,10 +610,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        0
+        992,
+        1520
       ],
-      "id": "8b2f0c50-30cf-47ac-abc6-00643cf21455",
+      "id": "ea9ba78b-1cc7-42bd-98e2-ffbe6f9c32f0",
       "name": "Monta a resposta"
     },
     {
@@ -644,10 +644,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4520,
-        0
+        1200,
+        1520
       ],
-      "id": "4dee09b2-829f-4e03-aa34-a472a9ce5e02",
+      "id": "319c0caa-f3b3-4a60-9adb-65511d30fe2d",
       "name": "É feedback?"
     },
     {
@@ -677,20 +677,20 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        4720,
-        -180
+        1392,
+        1344
       ],
-      "id": "9039f28c-b91a-4ba8-8e80-0448f2544fe7",
+      "id": "be988438-7ffd-43d5-a4ab-e74c816ba4de",
       "name": "Salva a mensagem",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
@@ -699,10 +699,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4940,
-        -180
+        1616,
+        1344
       ],
-      "id": "90503912-71e5-4e2f-b7e6-59333490efc2",
+      "id": "b4e2a267-3d20-4859-a0ab-3503c0e59031",
       "name": "Separa os pontos"
     },
     {
@@ -744,20 +744,20 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        5160,
-        -180
+        1840,
+        1344
       ],
-      "id": "67c67c15-3522-4e8c-b63a-ea56d3eb8495",
+      "id": "e3036a74-7153-4bbb-a064-6bdc56d4adf5",
       "name": "Salva os pontos",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
@@ -787,10 +787,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        5400,
-        0
+        2080,
+        1520
       ],
-      "id": "781b809f-0595-44e4-bd1e-042a8ff29ba5",
+      "id": "de5de374-57e6-4815-b758-a9c8562e5163",
       "name": "Tem resposta?",
       "executeOnce": true
     },
@@ -801,24 +801,23 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5620,
-        0
+        2304,
+        1520
       ],
-      "id": "106a04f2-8267-4e30-aa37-eceddd94facf",
+      "id": "adf9925e-88d9-4558-9fe4-e0df1eab13fb",
       "name": "Uma resposta por mensagem"
     },
     {
       "parameters": {
-        "batchSize": 1,
         "options": {}
       },
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        5840,
-        0
+        2512,
+        1520
       ],
-      "id": "a4349b0d-3470-4dff-9368-d25ca859dcbd",
+      "id": "e982804a-2e1a-4ae2-8330-8f8be5833331",
       "name": "Uma de cada vez"
     },
     {
@@ -844,10 +843,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6060,
-        -20
+        2736,
+        1504
       ],
-      "id": "a38e629c-cebe-4a76-aab4-ee6eca845e41",
+      "id": "ff0007b6-a0e1-4d9e-8c4e-d4dd8cf3cf61",
       "name": "Envia a resposta"
     },
     {
@@ -860,10 +859,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3440,
-        -1580
+        112,
+        -64
       ],
-      "id": "ac169268-458c-436e-ab8c-2718fc25e9e9",
+      "id": "4d422d96-a958-4b03-8c81-cef8f6823929",
       "name": "Nota - Lida"
     },
     {
@@ -889,10 +888,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3520,
-        -1400
+        192,
+        128
       ],
-      "id": "30793fe5-e24d-43c4-8de0-2462ec0a3d3a",
+      "id": "957d9d5c-79fc-4e42-928d-fbc72d522d09",
       "name": "Marca como lida",
       "retryOnFail": true,
       "maxTries": 2,
@@ -906,10 +905,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3520,
-        -860
+        192,
+        656
       ],
-      "id": "78166ef2-5891-406a-b336-cb83f5364703",
+      "id": "8f9f7b08-a71b-4a18-9c4f-306a62a9b937",
       "name": "Pediu para parar?"
     },
     {
@@ -928,20 +927,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3740,
-        -860
+        416,
+        656
       ],
-      "id": "00846137-64b8-4410-8808-9fb604f1019b",
+      "id": "0cbf9313-bad1-4df6-8859-0449d4eb69c1",
       "name": "Conversa recente",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
       },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 2000,
       "onError": "continueRegularOutput"
     },
     {
@@ -951,10 +950,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4180,
-        -860
+        864,
+        656
       ],
-      "id": "416d1b60-ef94-4c5b-8660-31a305ef1e40",
+      "id": "c9cadeb4-9e61-462c-96d4-303adb3127c9",
       "name": "Monta o contexto"
     },
     {
@@ -967,15 +966,16 @@
               "message": "Você confere se um cliente de restaurante pediu para PARAR de receber as atualizações que o restaurante manda pelo WhatsApp. Essas atualizações são mensagens contando o que o restaurante mudou depois de um feedback do cliente; no fim delas, de vez em quando, o restaurante avisa: \"se não quiser mais receber, responda PARAR\".\n\nVocê recebe a mensagem nova do cliente, a conversa recente com o restaurante e a última atualização mandada. Leia tudo com cuidado antes de decidir.\n\nÉ PEDIDO PARA PARAR (\"parar\": true):\n- \"PARAR\", \"parar\", \"Pare\", \"stop\", \"sair\", \"cancelar\" sozinhos, principalmente logo depois de uma atualização ou do aviso \"responda PARAR\".\n- \"para de me mandar mensagem\", \"não quero mais receber\", \"não me mande mais isso\", \"me tira da lista\", \"chega de mensagem\", \"cancelar essas mensagens\", \"não precisa mais me avisar\".\n- Pergunta de como parar (\"como faço para não receber mais?\"): também é pedido.\n\nNÃO É PEDIDO (\"parar\": false):\n- \"para\" como preposição ou em outra ideia: \"fui lá para comemorar\", \"o garçom não parava de falar\", \"parei o carro na frente\", \"a música não para nunca\".\n- Reclamação sobre o restaurante que usa a palavra: \"o barulho não parou a noite toda\", \"parem de colocar tanta cebola\".\n- Pedido para parar outra coisa que não as mensagens do restaurante.\n- Mensagem ambígua, em que dá para entender de mais de um jeito.\n\nNa dúvida, \"parar\": false. Marcar errado faz o cliente perder as novidades que ele queria receber.\n\n\"certeza\": \"alta\" quando não há dúvida nenhuma; \"media\" ou \"baixa\" quando dá para entender de outro jeito.\n\"motivo\": uma frase curta explicando a decisão.\n\nFORMATO DE SAÍDA (obrigatório): responda SOMENTE com um objeto JSON válido, sem markdown e sem texto antes ou depois:\n{\"parar\": true ou false, \"certeza\": \"alta | media | baixa\", \"motivo\": \"...\"}"
             }
           ]
-        }
+        },
+        "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        4400,
-        -860
+        1072,
+        656
       ],
-      "id": "c861250d-c31e-4888-9e7d-fcc75309ac87",
+      "id": "2fe08fce-4f44-4cd5-a916-b6df1c440a79",
       "name": "Decide se é para parar",
       "retryOnFail": true,
       "maxTries": 2,
@@ -990,18 +990,18 @@
           "mode": "list",
           "cachedResultName": "gpt-4.1-mini"
         },
+        "builtInTools": {},
         "options": {
-          "temperature": 0,
-          "responseFormat": "json_object"
+          "temperature": 0
         }
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        4400,
-        -660
+        1072,
+        864
       ],
-      "id": "53bdc057-d24f-441a-9849-4f7d1de5425d",
+      "id": "b9c31a3d-3916-4731-808c-de082723923c",
       "name": "Modelo do parar",
       "credentials": {
         "openAiApi": {
@@ -1017,10 +1017,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4640,
-        -860
+        1312,
+        656
       ],
-      "id": "ec4c119d-b3dd-468f-a3cf-4c25051135a6",
+      "id": "d873bad1-020c-4e91-b4df-e89124b78c06",
       "name": "É para parar?"
     },
     {
@@ -1039,20 +1039,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4860,
-        -860
+        1536,
+        656
       ],
-      "id": "c2a50faa-4faa-4724-8723-94a7e5598652",
+      "id": "1de00a7f-7293-404e-ae4e-da93a98e762e",
       "name": "Marca para não receber",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
       },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
       "onError": "continueRegularOutput"
     },
     {
@@ -1083,10 +1083,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        880,
-        0
+        -2448,
+        1520
       ],
-      "id": "0370480d-1484-44b7-8d3b-a6905392ae3c",
+      "id": "bb29d4b5-6943-435e-9bbb-db285b2d62d2",
       "name": "É clique no botão?"
     },
     {
@@ -1105,34 +1105,34 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3080,
-        0
+        -368,
+        1520
       ],
-      "id": "fb598160-b9fd-4187-b869-14c6e3273d69",
+      "id": "080e1ab3-d8b2-4d0d-b26d-37c33b21f35f",
       "name": "Quem escreveu?",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "alwaysOutputData": true,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
       },
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1500,
-      "alwaysOutputData": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Quem escreveu é da equipe do restaurante? (função equipe_quem_e)\n// Para o cliente nada muda: este nó só acrescenta `equipe` (nulo) e `escolha`\n// (nula) ao que o \"Sou a última mensagem?\" montou. Se a consulta falhar, trata\n// como cliente: o fluxo de sempre não pode parar por causa da equipe.\nconst base = $('Sou a última mensagem?').first().json;\nconst q = $input.first().json || {};\nconst equipe = q.ok === true && q.funcionario_id\n  ? {\n      funcionarioId: q.funcionario_id,\n      nome: String(q.nome || ''),\n      podeEscolher: q.pode_escolher === true,\n      aguardandoEscolha: q.aguardando_escolha === true,\n    }\n  : null;\n\n// A pessoa respondeu POR ESCRITO à pergunta do anonimato? (o botão pode não\n// aparecer em todo celular). Só vale quando a mensagem inteira é a resposta.\nlet escolha = null;\nif (equipe && (equipe.podeEscolher || equipe.aguardandoEscolha)) {\n  const t = String(base.textoCompleto || '')\n    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\b(por favor|pfv|pf|obrigad[oa]|valeu|vlw|ok|ta bom|blz|beleza)\\b/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\n  const MOSTRAR = [\n    /^(pode |podem |quero |sim )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?( sim)?$/,\n    /^com (o )?(meu )?nome$/,\n    /^nao (precisa|quero) (ser |ficar )?(anonim[oa]|anonimato)$/,\n    /^pode (falar|dizer|colocar|por|botar) (o )?(meu )?nome$/,\n  ];\n  const ANONIMO = [\n    /^(eu )?(quero |prefiro |pode |deixa |sim )?(ficar |ser |fica |deixa |como |em |no )*(anonim[oa]|anonimato|anonimamente)( mesmo| sim)?$/,\n    /^sem (o )?(meu )?nome$/,\n    /^nao (quero |pode |precisa )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?$/,\n  ];\n  if (t && t.split(' ').length <= 8) {\n    if (MOSTRAR.some((p) => p.test(t))) escolha = 'identificado';\n    else if (ANONIMO.some((p) => p.test(t))) escolha = 'anonimo';\n    // \"Quer que sua resposta fique anônima?\" → \"sim\" / \"não\" soltos só valem\n    // enquanto a pergunta está no ar.\n    else if (equipe.aguardandoEscolha && /^(sim|s|quero|quero sim|sim quero|isso|claro)$/.test(t)) escolha = 'anonimo';\n    else if (equipe.aguardandoEscolha && /^(nao|n|nao precisa|nao quero)$/.test(t)) escolha = 'identificado';\n  }\n}\n\nreturn [{ json: { ...base, equipe, escolha } }];"
+        "jsCode": "// Quem escreveu é da equipe? (função equipe_quem_e)\n// Para o cliente nada muda: este nó só acrescenta `equipe` (nulo) e `escolha`\n// (nula) ao que o \"Sou a última mensagem?\" montou. Se a consulta falhar, trata\n// como cliente: o fluxo de sempre não pode parar por causa da equipe.\n//\n// Conta SÓ de RH (versão RH do EasyFeed: uma empresa que só ouve a equipe):\n// não existe conversa de cliente. Quem não é funcionário cadastrado é ignorado\n// em silêncio (o \"É para ignorar?\" para o fluxo). A conta do admin, que usa\n// as duas versões no mesmo número, nunca é \"só de RH\": nela o número de fora\n// é cliente do restaurante.\nconst base = $('Sou a última mensagem?').first().json;\nconst q = $input.first().json || {};\nconst equipe = q.ok === true && q.funcionario_id\n  ? {\n      funcionarioId: q.funcionario_id,\n      nome: String(q.nome || ''),\n      podeEscolher: q.pode_escolher === true,\n      aguardandoEscolha: q.aguardando_escolha === true,\n    }\n  : null;\n\nconst soRh = q.ok === true && q.so_rh === true;\n// A consulta falhou numa conta de RH: sem saber quem é, não trata como\n// cliente de restaurante (seria responder e gravar o que não é). Para.\nconst semResposta = q.ok !== true && base.area === 'rh';\nconst ignorar = !equipe && ((q.ok === true && q.ignorar === true) || semResposta);\n// Só na conta de RH: o aviso que vai na frente das mensagens para a IA que\n// separa o feedback em pontos (o treinamento dela fala de restaurante).\nconst ramo = String(q.ramo || '').replace(/\\s+/g, ' ').trim().slice(0, 80);\nconst contextoIA = soRh\n  ? 'CONTEXTO: quem escreve trabalha em uma EMPRESA' + (ramo ? ' do ramo \"' + ramo + '\"' : '')\n    + ', que NÃO é um restaurante. Onde as instruções falarem de restaurante, cozinha, salão ou garçom, entenda como a empresa e o trabalho dela. Use as mesmas categorias e o mesmo formato.\\n\\nMENSAGENS:\\n'\n  : '';\n\n// A pessoa respondeu POR ESCRITO à pergunta do anonimato? (o botão pode não\n// aparecer em todo celular). Só vale quando a mensagem inteira é a resposta.\nlet escolha = null;\nif (equipe && (equipe.podeEscolher || equipe.aguardandoEscolha)) {\n  const t = String(base.textoCompleto || '')\n    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\b(por favor|pfv|pf|obrigad[oa]|valeu|vlw|ok|ta bom|blz|beleza)\\b/g, ' ')\n    .replace(/\\s+/g, ' ').trim();\n  const MOSTRAR = [\n    /^(pode |podem |quero |sim )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?( sim)?$/,\n    /^com (o )?(meu )?nome$/,\n    /^nao (precisa|quero) (ser |ficar )?(anonim[oa]|anonimato)$/,\n    /^pode (falar|dizer|colocar|por|botar) (o )?(meu )?nome$/,\n  ];\n  const ANONIMO = [\n    /^(eu )?(quero |prefiro |pode |deixa |sim )?(ficar |ser |fica |deixa |como |em |no )*(anonim[oa]|anonimato|anonimamente)( mesmo| sim)?$/,\n    /^sem (o )?(meu )?nome$/,\n    /^nao (quero |pode |precisa )?(mostrar|mostra|aparecer|identificar)( (o )?meu nome)?$/,\n  ];\n  if (t && t.split(' ').length <= 8) {\n    if (MOSTRAR.some((p) => p.test(t))) escolha = 'identificado';\n    else if (ANONIMO.some((p) => p.test(t))) escolha = 'anonimo';\n    // \"Quer que sua resposta fique anônima?\" → \"sim\" / \"não\" soltos só valem\n    // enquanto a pergunta está no ar.\n    else if (equipe.aguardandoEscolha && /^(sim|s|quero|quero sim|sim quero|isso|claro)$/.test(t)) escolha = 'anonimo';\n    else if (equipe.aguardandoEscolha && /^(nao|n|nao precisa|nao quero)$/.test(t)) escolha = 'identificado';\n  }\n}\n\nreturn [{ json: { ...base, equipe, escolha, soRh, ignorar, contextoIA } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3300,
-        0
+        -176,
+        1520
       ],
-      "id": "388d5c65-98c5-45ad-9f7b-0e32460f8a3b",
+      "id": "116171b6-8cda-46da-adfe-5f6d51c262c4",
       "name": "Junta quem escreveu"
     },
     {
@@ -1163,10 +1163,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3860,
-        0
+        544,
+        1520
       ],
-      "id": "97c7e8d4-741e-494d-af36-07d4b4c50f24",
+      "id": "c6629e91-737b-42fa-99e1-659634fa95a3",
       "name": "É da equipe?"
     },
     {
@@ -1197,31 +1197,32 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4080,
-        1000
+        752,
+        2528
       ],
-      "id": "8499dd1c-0233-4a86-b1b3-69764368c386",
+      "id": "bad09109-197f-4cf9-990c-f6ac0c2f0b1a",
       "name": "Respondeu a pergunta?"
     },
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $('Sou a última mensagem?').first().json.textoParaIA }}",
+        "text": "={{ ($('Junta quem escreveu').first().json.contextoIA || '') + $('Sou a última mensagem?').first().json.textoParaIA }}",
         "messages": {
           "messageValues": [
             {
               "message": "Você analisa mensagens que FUNCIONÁRIOS de um restaurante mandaram para o WhatsApp do próprio restaurante, contando como é trabalhar lá. O restaurante pediu essa opinião para melhorar o dia a dia da equipe. Mensagens que a mesma pessoa mandou em sequência chegam juntas, cada uma começando com o número dela entre colchetes ([1], [2], ...); uma mensagem pode ter mais de uma linha. O número não faz parte do que a pessoa escreveu: nunca copie ele para os campos de texto. Sua tarefa tem três partes: (1) dizer o que a mensagem é, (2) se houver feedback, dividi-lo em \"pontos\" classificados e (3) dizer se há relato grave. Você NÃO escreve a resposta ao funcionário.\n\nPARTE 1 — O QUE É A MENSAGEM (campo \"tipo\")\n- \"feedback\": a pessoa conta como é trabalhar no restaurante ou dá opinião sobre o trabalho — elogio, crítica, comentário morno ou sugestão de melhoria. Basta UM trecho de feedback para o tipo ser \"feedback\", mesmo que o resto seja saudação ou pergunta.\n- \"pergunta\": não há feedback, mas a pessoa faz uma pergunta ou pedido COMPLETO para este canal — dá para saber exatamente o que ela quer: se a resposta é anônima, quem vai ler, quem está falando, ou um pedido do dia a dia (trocar a folga, holerite, quando sai o pagamento, atestado, falar com o gerente).\n- \"outro\": todo o resto, quando não há feedback nem pergunta completa: saudação sozinha (\"oi\", \"bom dia\", \"posso falar uma coisa?\" sem dizer qual), agradecimento ou confirmação (\"obrigado\", \"ok\", \"beleza\", \"👍\"), emojis, mensagem sem sentido, assunto sem relação com o trabalho, ou pergunta INCOMPLETA (\"tenho uma dúvida\", \"queria saber uma coisa\"). Pedido para parar de receber mensagens (\"PARAR\", \"não quero mais receber\") também é \"outro\", mesmo em forma de pergunta: outra parte do sistema cuida disso. Resposta solta à pergunta do anonimato (\"anônimo\", \"pode mostrar meu nome\", \"sim\", \"não\") também é \"outro\".\n\nCampo \"tem_pergunta\": true quando, além do feedback, a pessoa TAMBÉM faz uma pergunta ou pedido COMPLETO (ex.: \"O clima aqui é ótimo! Isso é anônimo?\"). Se o tipo for \"pergunta\", é true. Pergunta incompleta é false. Nos outros casos, false.\nCampo \"pergunta_sobre\": quando tem_pergunta for true, um destes valores: \"anonimato\" (quer saber se é anônimo, quem vai ver, se o chefe vai saber quem falou), \"quem_e\" (quer saber quem está falando ou o que é esta conversa) ou \"outro\" (qualquer outro pedido ou pergunta). Nos outros casos, \"\".\nCampo \"mensagem_pergunta\": quando tem_pergunta for true, o número da mensagem ([1], [2]...) em que está a pergunta. Nos outros casos, 0.\n\nAtenção:\n- Reclamação em forma de pergunta (\"como pode atrasar o salário todo mês?\") NÃO é pergunta: é parte do feedback.\n- Crítica com pedido junto (\"a escala sai em cima da hora, dá pra me trocar no sábado?\") tem feedback (escala em cima da hora) E pergunta (trocar no sábado, \"outro\").\n\nPARTE 2 — OS PONTOS (só quando há feedback; senão \"pontos\": [])\nUm ponto é uma unidade de feedback que merece ser registrada separadamente. Existem 3 cenários:\n\nCENÁRIO A — Assunto único: 1 item.\nEntrada: [1] Oi, o salário atrasa todo mês\nPontos: [{\"feedback_original\": \"O salário atrasa todo mês\", \"categoria\": \"Salário e benefícios\", \"sentimento\": \"Negativo\", \"resumo\": \"Salário atrasado\", \"mensagem\": 1}]\n\nCENÁRIO B — Assuntos diferentes: 1 item por assunto.\nEntrada: [1] A equipe é muito unida, mas a escala sai em cima da hora\nPontos: [{\"feedback_original\": \"A equipe é muito unida\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Equipe unida\", \"mensagem\": 1}, {\"feedback_original\": \"A escala sai em cima da hora\", \"categoria\": \"Escala e horários\", \"sentimento\": \"Negativo\", \"resumo\": \"Escala em cima da hora\", \"mensagem\": 1}]\n\nCENÁRIO C — Mesmo assunto, observações distintas: 1 item por observação, com a MESMA categoria.\nEntrada: [1] A fritadeira vive quebrada e falta uniforme\nPontos: [{\"feedback_original\": \"A fritadeira vive quebrada\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Negativo\", \"resumo\": \"Fritadeira quebrada\", \"mensagem\": 1}, {\"feedback_original\": \"Falta uniforme\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Negativo\", \"resumo\": \"Falta de uniforme\", \"mensagem\": 1}]\n\nREGRA DE AGRUPAMENTO: antes de gerar os itens, releia o texto inteiro e junte tudo que é do mesmo ponto, mesmo que a pessoa tenha falado dele em partes ou mensagens separadas. Nunca crie dois itens sobre o mesmo ponto só porque ele apareceu duas vezes.\nEntrada:\n[1] O pessoal da cozinha é muito parceiro.\n[2] O gerente fala alto com a gente na frente dos clientes.\n[3] Mas a equipe mesmo é ótima, um ajuda o outro.\nPontos: [{\"feedback_original\": \"O pessoal da cozinha é muito parceiro, a equipe é ótima e um ajuda o outro\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Equipe parceira\", \"mensagem\": 1}, {\"feedback_original\": \"O gerente fala alto com a gente na frente dos clientes\", \"categoria\": \"Liderança e gestão\", \"sentimento\": \"Negativo\", \"resumo\": \"Gerente fala alto\", \"mensagem\": 2}]\n\nDESAMBIGUAÇÃO DE CATEGORIA:\n- \"O gerente grita\", \"a chefia não escuta\", \"cobram sem explicar\" → \"Liderança e gestão\".\n- \"O salário atrasa\", \"o vale não cobre a passagem\", \"não pagam hora extra\" → \"Salário e benefícios\".\n- \"A escala sai em cima da hora\", \"fecho e abro no dia seguinte\", \"nunca folgo no domingo\" → \"Escala e horários\".\n- \"Somos poucos para o movimento\", \"faço o trabalho de dois\" → \"Carga de trabalho\".\n- \"A equipe é unida\", \"tem panelinha\", \"muita fofoca\" → \"Clima e colegas\".\n- \"O forno vive quebrado\", \"o vestiário não tem armário\", \"falta uniforme\" → \"Estrutura e equipamentos\".\n- \"Ninguém me ensinou a função\", \"queria crescer aqui dentro\" → \"Treinamento e crescimento\".\n- \"Ninguém agradece\", \"o chefe elogiou a equipe na reunião\" → \"Reconhecimento\".\n- \"Ninguém avisa das mudanças\", \"fico sabendo pelos outros\" → \"Comunicação\".\n- \"O chão da cozinha é liso\", \"não tem luva\", \"trabalho com dor nas costas\" → \"Segurança e saúde\".\n- \"Cliente grosseiro\", \"o cliente desconta na gente quando a casa lota\" → \"Clientes\".\n- Regra geral: reclamou de quem MANDA → \"Liderança e gestão\"; dos COLEGAS → \"Clima e colegas\"; de DINHEIRO → \"Salário e benefícios\"; de HORÁRIO ou FOLGA → \"Escala e horários\"; de QUANTIDADE de trabalho → \"Carga de trabalho\".\n\nSENTIMENTO DE CADA PONTO — use SOMENTE um destes 4 valores, escritos exatamente assim:\n- \"Positivo\": elogio, algo que dá certo (mesmo dito sem entusiasmo).\n- \"Negativo\": crítica, problema, algo que dá errado. FATO RELATADO COM CALMA TAMBÉM É NEGATIVO: \"a gente almoça em pé\", \"o ponto fecha antes de eu terminar\". Pergunte-se: \"se isso fosse resolvido, a pessoa trabalharia melhor?\" Se sim, é Negativo.\n- \"Neutro\": avaliação morna, sem pender para elogio nem crítica (\"é um trabalho normal\", \"o salário é ok\", \"tranquilo\").\n- \"Sugestão\": proposta de melhoria ou de algo novo, SEM relatar uma falha (\"podiam ter uma sala de descanso\", \"seria bom ter treinamento de vinhos\", \"sugiro reunião no começo do turno\"). Se a pessoa relata um problema e sugere a solução óbvia (\"a escala sai tarde, deviam mandar antes\"), o ponto é \"Negativo\" — o problema é o que importa.\n\nNEUTRO NÃO É SUGESTÃO — a diferença é se a pessoa PROPÕE alguma coisa:\n- \"O salário é ok\" → Neutro.\n- \"Podiam pagar adicional de domingo\" → Sugestão.\n- \"O ambiente é tranquilo, seria legal ter um armário pra cada um\" → DOIS pontos: \"O ambiente é tranquilo\" (Neutro) e \"Seria legal ter um armário pra cada um\" (Sugestão).\n\nNÃO VIRA PONTO (descarte):\n- Informação incidental, que não avalia nada (\"trabalho aí há dois anos\", \"sou do turno da noite\", \"entrei em março\").\n- Saudações, agradecimentos e as perguntas/pedidos da Parte 1.\nSe sobrar só isso, \"pontos\" fica [].\n\nCAMPOS DE CADA PONTO:\n- \"feedback_original\": uma frase COMPLETA e compreensível sozinha, reescrevendo só o trecho daquele ponto. Nunca um fragmento cortado (\"mas atrasa\" está errado; o certo é \"O salário atrasa\"). Se o mesmo ponto apareceu em partes separadas, una numa frase só. É PROIBIDO inventar fatos, opiniões ou detalhes; mantenha o vocabulário da pessoa. Se não der para separar os pontos com clareza, use o texto original completo.\n- \"categoria\": SOMENTE uma destas, escrita exatamente assim: \"Liderança e gestão\", \"Salário e benefícios\", \"Escala e horários\", \"Carga de trabalho\", \"Clima e colegas\", \"Estrutura e equipamentos\", \"Treinamento e crescimento\", \"Reconhecimento\", \"Comunicação\", \"Segurança e saúde\", \"Clientes\", \"Outros\". Nunca invente outra.\n- \"sentimento\": \"Positivo\", \"Negativo\", \"Neutro\" ou \"Sugestão\".\n- \"resumo\": etiqueta curta de 3 a 5 palavras, estilo rótulo (\"Salário atrasado\", \"Equipe unida\", \"Sala de descanso\"). Nunca \"Funcionário reclamou de...\". Sem nome de pessoa.\n- \"mensagem\": o número da mensagem ([1], [2]...) em que esse ponto aparece. Se aparece em mais de uma, o número da primeira.\n\nPARTE 3 — RELATO GRAVE (campo \"sensivel\")\ntrue quando a pessoa relata assédio (moral ou sexual), discriminação, humilhação, ameaça, agressão, risco sério à segurança ou à saúde, ou algo ilegal (trabalho sem registro, desconto indevido, obrigar a trabalhar doente). Nos outros casos, false. Sem feedback, false.\n\nMAIS EXEMPLOS (mensagens do funcionário → resultado completo):\n[1] O salário atrasa mas o pessoal é gente boa. Podiam ter armário pra guardar as coisas\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"O salário atrasa\", \"categoria\": \"Salário e benefícios\", \"sentimento\": \"Negativo\", \"resumo\": \"Salário atrasado\", \"mensagem\": 1}, {\"feedback_original\": \"O pessoal é gente boa\", \"categoria\": \"Clima e colegas\", \"sentimento\": \"Positivo\", \"resumo\": \"Colegas gente boa\", \"mensagem\": 1}, {\"feedback_original\": \"Podiam ter armário pra guardar as coisas\", \"categoria\": \"Estrutura e equipamentos\", \"sentimento\": \"Sugestão\", \"resumo\": \"Armário para a equipe\", \"mensagem\": 1}], \"sensivel\": false}\n[1] Oi\n[2] Gosto muito de trabalhar aí\n[3] Mas isso aqui é anônimo?\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": true, \"pergunta_sobre\": \"anonimato\", \"mensagem_pergunta\": 3, \"pontos\": [{\"feedback_original\": \"Gosto muito de trabalhar aí\", \"categoria\": \"Outros\", \"sentimento\": \"Positivo\", \"resumo\": \"Gosta do trabalho\", \"mensagem\": 2}], \"sensivel\": false}\n[1] O gerente fica me chamando de burra na frente de todo mundo\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"O gerente fica me chamando de burra na frente de todo mundo\", \"categoria\": \"Liderança e gestão\", \"sentimento\": \"Negativo\", \"resumo\": \"Gerente humilha a equipe\", \"mensagem\": 1}], \"sensivel\": true}\n[1] Bom dia\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Obrigado!\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] PARAR\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Anônimo\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Tenho uma dúvida\n→ {\"tipo\": \"outro\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [], \"sensivel\": false}\n[1] Quem é você?\n→ {\"tipo\": \"pergunta\", \"tem_pergunta\": true, \"pergunta_sobre\": \"quem_e\", \"mensagem_pergunta\": 1, \"pontos\": [], \"sensivel\": false}\n[1] Quando sai o pagamento?\n→ {\"tipo\": \"pergunta\", \"tem_pergunta\": true, \"pergunta_sobre\": \"outro\", \"mensagem_pergunta\": 1, \"pontos\": [], \"sensivel\": false}\n[1] É um trabalho normal\n→ {\"tipo\": \"feedback\", \"tem_pergunta\": false, \"pergunta_sobre\": \"\", \"mensagem_pergunta\": 0, \"pontos\": [{\"feedback_original\": \"É um trabalho normal\", \"categoria\": \"Outros\", \"sentimento\": \"Neutro\", \"resumo\": \"Trabalho normal\", \"mensagem\": 1}], \"sensivel\": false}\n\nFORMATO DE SAÍDA (obrigatório): responda SOMENTE com um objeto JSON válido, sem markdown, sem crases e sem texto antes ou depois, exatamente com estas chaves:\n{\"tipo\": \"feedback | pergunta | outro\", \"tem_pergunta\": true ou false, \"pergunta_sobre\": \"anonimato | quem_e | outro, ou vazio\", \"mensagem_pergunta\": número, \"pontos\": [{\"feedback_original\": \"...\", \"categoria\": \"...\", \"sentimento\": \"...\", \"resumo\": \"...\", \"mensagem\": número}], \"sensivel\": true ou false}"
             }
           ]
-        }
+        },
+        "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        4320,
-        1000
+        992,
+        2528
       ],
-      "id": "0a4f3ac8-5ccc-47ef-be73-0415f07c024b",
+      "id": "c44ac796-3ac8-4bcf-9d16-82457207f8aa",
       "name": "Analisa a equipe",
       "executeOnce": true,
       "retryOnFail": true,
@@ -1236,18 +1237,18 @@
           "mode": "list",
           "cachedResultName": "gpt-4.1-mini"
         },
+        "builtInTools": {},
         "options": {
-          "temperature": 0.1,
-          "responseFormat": "json_object"
+          "temperature": 0.1
         }
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        4320,
-        1220
+        992,
+        2736
       ],
-      "id": "4fed9c98-813d-4bbe-9b27-7928370a4176",
+      "id": "1bccc438-ebc7-4652-b4f4-6728b6bd004f",
       "name": "Modelo da equipe",
       "credentials": {
         "openAiApi": {
@@ -1258,15 +1259,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Valida o que a IA devolveu sobre a mensagem de um FUNCIONÁRIO e decide o que\n// gravar e o que responder. Mesma lógica do \"Monta a resposta\" dos clientes:\n//   - Feedback (há pelo menos um ponto)  -> grava (sem telefone). O texto de\n//     agradecimento só sai no PRIMEIRO feedback da pessoa; nos seguintes, só\n//     o botão. Relato grave sempre ganha a mensagem de apoio.\n//   - Pergunta para este canal            -> responde com texto pronto.\n//   - PARAR marcado pelo caminho do PARAR -> \"Pronto, não vou mais te mandar\n//     essas mensagens.\" (só isso).\n//   - Qualquer outra coisa                -> não responde.\n// A pergunta do anonimato (o botão) sai depois, no \"Respostas da equipe\".\nconst base = $('Sou a última mensagem?').first().json;\nconst mensagens = Array.isArray(base.mensagens) ? base.mensagens : [];\nconst numero = (v) => {\n  const n = Number(v);\n  return Number.isInteger(n) && n >= 1 && n <= mensagens.length ? n : 0;\n};\n\nconst CATEGORIAS = ['Liderança e gestão', 'Salário e benefícios', 'Escala e horários', 'Carga de trabalho', 'Clima e colegas', 'Estrutura e equipamentos', 'Treinamento e crescimento', 'Reconhecimento', 'Comunicação', 'Segurança e saúde', 'Clientes', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA vira objeto.\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry {\n  r = JSON.parse(bruto);\n} catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) {\n    try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n  }\n}\nif (!r || typeof r !== 'object' || Array.isArray(r)) {\n  throw new Error('A IA devolveu algo fora do formato: ' + bruto.slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista da equipe e um dos 4 sentimentos.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst semNumero = (s) => String(s || '').replace(/^\\s*\\[\\d+\\]\\s*/, '').trim();\nconst pontos = [];\nlet msgFeedback = 0;\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = semNumero(p.feedback_original);\n  const resumo = semNumero(p.resumo);\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n  const n = numero(p.mensagem);\n  if (n && (!msgFeedback || n < msgFeedback)) msgFeedback = n;\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem dos clientes).\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\n// Relato grave (assédio, discriminação, ameaça, risco): fica anônimo se a\n// pessoa não responder a pergunta, e a resposta indica onde pedir ajuda.\nconst sensivel = ehFeedback && r.sensivel === true;\nconst sobreBruto = semAcento(r.pergunta_sobre);\nconst sobre = sobreBruto === 'anonimato' ? 'anonimato' : sobreBruto === 'quem_e' ? 'quem_e' : 'outro';\nconst temPergunta = semAcento(r.tipo) === 'pergunta' || r.tem_pergunta === true;\n\n// 4. Os textos: mensagens prontas, do jeito da Helena.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst restaurante = String(base.nomeRestaurante || '').trim();\nconst FEMININOS = ['pizzaria', 'cantina', 'churrascaria', 'padaria', 'lanchonete', 'casa', 'hamburgueria',\n  'sorveteria', 'cafeteria', 'confeitaria', 'trattoria', 'osteria', 'esfiharia', 'pastelaria', 'tapiocaria',\n  'creperia', 'doceria', 'adega', 'choperia', 'chopperia', 'cervejaria', 'peixaria', 'petiscaria', 'galeteria',\n  'marmitaria', 'cozinha', 'tasca', 'taberna', 'bodega', 'panificadora', 'sanduicheria', 'temakeria',\n  'pamonharia', 'brasa', 'vila', 'toca', 'esquina', 'fazenda', 'quinta', 'barraca', 'tenda', 'cabana'];\nconst primeiraPalavra = semAcento(restaurante.split(/\\s+/)[0] || '');\nconst doRestaurante = restaurante\n  ? (FEMININOS.includes(primeiraPalavra) ? 'da ' : 'do ') + restaurante\n  : 'do restaurante';\n\n// Ela se apresenta só na primeira resposta do dia (o pedido de opinião que\n// saiu hoje já conta: o \"Já respondeu hoje?\" acha ele). A frase vai separada:\n// o \"Respostas da equipe\" põe no começo da primeira mensagem que sair.\nconst apresentar = !$('Já respondeu hoje?').first().json.id;\nconst APRESENTACAO = [\n  'Oi! Aqui é a Helena, ' + doRestaurante + '.',\n  'Oi, tudo bem? Aqui é a Helena, ' + doRestaurante + '.',\n  'Olá! Sou a Helena, ' + doRestaurante + '.',\n];\n\n// Agradecimento por escrito só no PRIMEIRO feedback da pessoa (quem sabe qual\n// é o primeiro é o banco, depois de gravar): ela fica sabendo que pode falar\n// quando quiser. Nos seguintes sai só o botão do anonimato.\nconst BOAS_VINDAS = [\n  'Obrigada por contar!\\nPor aqui você pode falar do trabalho sempre que quiser: o que vai bem, o que incomoda, uma ideia.\\nTudo o que chega é lido pela gestão.',\n  'Recebi, obrigada!\\nSempre que quiser falar de alguma coisa do trabalho, é só mandar por aqui, não precisa esperar eu perguntar.\\nA gestão lê tudo o que chega.',\n  'Obrigada pela resposta!\\nEsse canal fica aberto: quando tiver um elogio, uma reclamação ou uma ideia sobre o trabalho, manda aqui.\\nTudo é lido pela gestão.',\n];\nconst RELATO_GRAVE = 'Obrigada por confiar em contar isso.\\nÉ um assunto sério e já está registrado.\\n\\nSe precisar de ajuda agora, o Ligue 180 e o Disque 100 atendem de graça, 24 horas.';\nconst RESPONDE_PERGUNTA = {\n  anonimato: 'Você que escolhe!\\nDepois que você mandar sua opinião, eu pergunto se quer que ela fique anônima. Se ficar, no sistema do restaurante aparece o que você disse, sem o seu nome.',\n  quem_e: 'Sou a Helena, do atendimento ' + doRestaurante + '.\\nPor aqui eu recebo o que a equipe quiser contar sobre o trabalho.',\n  outro: 'Por aqui eu só recebo a opinião da equipe sobre o trabalho, então com isso eu não consigo te ajudar.\\nO melhor é falar direto com a gerência.',\n};\n\n// 5. O que sai: uma mensagem para cada coisa, na ordem em que a pessoa escreveu.\n// O caminho do PARAR roda antes (fica acima no canvas). Marcou agora?\nlet parar = null;\ntry {\n  const marcado = $('Marca para não receber').first().json;\n  if (marcado && marcado.marcou === true) parar = { n: numero($('Pediu para parar?').first().json.ordem) };\n} catch (e) {\n  parar = null;\n}\n\nconst saidas = [];\nif (ehFeedback) {\n  // Relato grave sempre ganha a mensagem de apoio, seja o primeiro ou não.\n  saidas.push(sensivel\n    ? { tipo: 'feedback', n: msgFeedback, texto: RELATO_GRAVE }\n    : { tipo: 'feedback', n: msgFeedback, texto: sortear(BOAS_VINDAS), soNaPrimeira: true });\n}\n// Pergunta sobre \"como parar\" já é o próprio PARAR: não ganha outra resposta.\n// \"Sou a Helena\" depois de \"Aqui é a Helena\" ficaria repetido.\nif (temPergunta && !parar) {\n  saidas.push({ tipo: 'pergunta', n: numero(r.mensagem_pergunta), texto: RESPONDE_PERGUNTA[sobre], semApresentacao: sobre === 'quem_e' });\n}\n// A confirmação do PARAR nunca leva a apresentação.\nif (parar) saidas.push({ tipo: 'parar', n: parar.n, texto: 'Pronto, não vou mais te mandar essas mensagens.', semApresentacao: true });\n\nconst POSICAO = { feedback: 0, pergunta: 1, parar: 2 };\nconst chave = (s) => s.n || (s.tipo === 'feedback' ? 0 : mensagens.length + 1);\nsaidas.sort((a, b) => chave(a) - chave(b) || POSICAO[a.tipo] - POSICAO[b.tipo]);\n\nconst citada = (n) => {\n  const m = mensagens[(n || (mensagens.length === 1 ? 1 : 0)) - 1];\n  return m && m.id ? String(m.id) : '';\n};\nconst respostas = saidas.map((s) => ({\n  tipo: s.tipo,\n  texto: s.texto,\n  replyid: citada(s.n),\n  soNaPrimeira: s.soNaPrimeira === true,\n  semApresentacao: s.semApresentacao === true,\n}));\nconst apresentacao = apresentar ? sortear(APRESENTACAO) : '';\n// Como a conversa fica quando é o primeiro feedback da pessoa (para conferir).\nconst textos = respostas.map((x) => x.texto);\nif (apresentacao && respostas.length && !respostas[0].semApresentacao) textos[0] = apresentacao + '\\n\\n' + textos[0];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    textoCompleto: base.textoCompleto,\n    ehFeedback,\n    sentimentoGeral,\n    pontos,\n    sensivel,\n    apresentacao,\n    // A mensagem que o botão cita quando nenhum texto sai antes dele.\n    citaFeedback: ehFeedback ? citada(msgFeedback) : '',\n    respostas,\n    resposta: textos.join('\\n\\n'),\n  },\n}];"
+        "jsCode": "// Valida o que a IA devolveu sobre a mensagem de um FUNCIONÁRIO e decide o que\n// gravar e o que responder. Mesma lógica do \"Monta a resposta\" dos clientes:\n//   - Feedback (há pelo menos um ponto)  -> grava (sem telefone). O texto de\n//     agradecimento só sai no PRIMEIRO feedback da pessoa; nos seguintes, só\n//     o botão. Relato grave sempre ganha a mensagem de apoio.\n//   - Pergunta para este canal            -> responde com texto pronto.\n//   - PARAR marcado pelo caminho do PARAR -> \"Pronto, não vou mais te mandar\n//     essas mensagens.\" (só isso).\n//   - Qualquer outra coisa                -> não responde.\n// A pergunta do anonimato (o botão) sai depois, no \"Respostas da equipe\".\nconst base = $('Sou a última mensagem?').first().json;\nconst mensagens = Array.isArray(base.mensagens) ? base.mensagens : [];\nconst numero = (v) => {\n  const n = Number(v);\n  return Number.isInteger(n) && n >= 1 && n <= mensagens.length ? n : 0;\n};\n\nconst CATEGORIAS = ['Liderança e gestão', 'Salário e benefícios', 'Escala e horários', 'Carga de trabalho', 'Clima e colegas', 'Estrutura e equipamentos', 'Treinamento e crescimento', 'Reconhecimento', 'Comunicação', 'Segurança e saúde', 'Clientes', 'Outros'];\nconst semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n\n// 1. A resposta da IA vira objeto.\nconst bruto = String($input.first().json.text || '');\nlet r = null;\ntry {\n  r = JSON.parse(bruto);\n} catch (e) {\n  const achado = bruto.match(/\\{[\\s\\S]*\\}/);\n  if (achado) {\n    try { r = JSON.parse(achado[0]); } catch (e2) { r = null; }\n  }\n}\nif (!r || typeof r !== 'object' || Array.isArray(r)) {\n  throw new Error('A IA devolveu algo fora do formato: ' + bruto.slice(0, 300));\n}\n\n// 2. Pontos válidos: categoria da lista da equipe e um dos 4 sentimentos.\nconst sentimentoDoPonto = (valor) => {\n  const v = semAcento(valor);\n  if (v.includes('negativ')) return 'Negativo';\n  if (v.includes('sugest')) return 'Sugestão';\n  if (v.includes('positiv')) return 'Positivo';\n  if (v.includes('neutr')) return 'Neutro';\n  return null;\n};\nconst semNumero = (s) => String(s || '').replace(/^\\s*\\[\\d+\\]\\s*/, '').trim();\nconst pontos = [];\nlet msgFeedback = 0;\nfor (const p of Array.isArray(r.pontos) ? r.pontos : []) {\n  if (!p || typeof p !== 'object') continue;\n  const sentimento = sentimentoDoPonto(p.sentimento);\n  if (!sentimento) continue;\n  const categoria = CATEGORIAS.find((c) => semAcento(c) === semAcento(p.categoria)) || 'Outros';\n  const texto = semNumero(p.feedback_original);\n  const resumo = semNumero(p.resumo);\n  if (!texto && !resumo) continue;\n  pontos.push({\n    texto_original: (texto || resumo).slice(0, 1000),\n    categoria,\n    sentimento,\n    resumo: (resumo || texto).slice(0, 120),\n  });\n  const n = numero(p.mensagem);\n  if (n && (!msgFeedback || n < msgFeedback)) msgFeedback = n;\n}\n\n// 3. Sentimento da mensagem inteira (mesma ordem dos clientes).\nconst tem = (s) => pontos.some((p) => p.sentimento === s);\nlet sentimentoGeral = null;\nif (pontos.length) {\n  if (tem('Positivo') && tem('Negativo')) sentimentoGeral = 'Positivo e Negativo';\n  else if (tem('Negativo')) sentimentoGeral = 'Negativo';\n  else if (tem('Positivo')) sentimentoGeral = 'Positivo';\n  else if (tem('Sugestão')) sentimentoGeral = 'Sugestão';\n  else sentimentoGeral = 'Neutro';\n}\nconst ehFeedback = pontos.length > 0;\n// Relato grave (assédio, discriminação, ameaça, risco): fica anônimo se a\n// pessoa não responder a pergunta, e a resposta indica onde pedir ajuda.\nconst sensivel = ehFeedback && r.sensivel === true;\nconst sobreBruto = semAcento(r.pergunta_sobre);\nconst sobre = sobreBruto === 'anonimato' ? 'anonimato' : sobreBruto === 'quem_e' ? 'quem_e' : 'outro';\nconst temPergunta = semAcento(r.tipo) === 'pergunta' || r.tem_pergunta === true;\n\n// 4. Os textos: mensagens prontas, do jeito da Helena.\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst restaurante = String(base.nomeRestaurante || '').trim();\nconst FEMININOS = ['pizzaria', 'cantina', 'churrascaria', 'padaria', 'lanchonete', 'casa', 'hamburgueria',\n  'sorveteria', 'cafeteria', 'confeitaria', 'trattoria', 'osteria', 'esfiharia', 'pastelaria', 'tapiocaria',\n  'creperia', 'doceria', 'adega', 'choperia', 'chopperia', 'cervejaria', 'peixaria', 'petiscaria', 'galeteria',\n  'marmitaria', 'cozinha', 'tasca', 'taberna', 'bodega', 'panificadora', 'sanduicheria', 'temakeria',\n  'pamonharia', 'brasa', 'vila', 'toca', 'esquina', 'fazenda', 'quinta', 'barraca', 'tenda', 'cabana',\n  // Versão RH: a conta pode ser de qualquer empresa.\n  'empresa', 'loja', 'clinica', 'farmacia', 'drogaria', 'escola', 'creche', 'faculdade', 'universidade', 'academia',\n  'oficina', 'imobiliaria', 'construtora', 'incorporadora', 'transportadora', 'distribuidora', 'agencia', 'industria',\n  'fabrica', 'metalurgica', 'grafica', 'editora', 'produtora', 'consultoria', 'corretora', 'seguradora', 'otica',\n  'livraria', 'papelaria', 'barbearia', 'boutique', 'pousada', 'lavanderia', 'floricultura', 'mercearia',\n  'cooperativa', 'associacao', 'fundacao', 'autoescola', 'startup'];\n// Conta só de RH: é uma empresa, não um restaurante.\nlet soRh = false;\ntry { soRh = $('Junta quem escreveu').first().json.soRh === true; } catch (e) { soRh = false; }\nconst primeiraPalavra = semAcento(restaurante.split(/\\s+/)[0] || '');\nconst doRestaurante = restaurante\n  ? (FEMININOS.includes(primeiraPalavra) ? 'da ' : 'do ') + restaurante\n  : (soRh ? 'da empresa' : 'do restaurante');\n\n// Ela se apresenta só na primeira resposta do dia (o pedido de opinião que\n// saiu hoje já conta: o \"Já respondeu hoje?\" acha ele). A frase vai separada:\n// o \"Respostas da equipe\" põe no começo da primeira mensagem que sair.\nconst apresentar = !$('Já respondeu hoje?').first().json.id;\nconst APRESENTACAO = [\n  'Oi! Aqui é a Helena, ' + doRestaurante + '.',\n  'Oi, tudo bem? Aqui é a Helena, ' + doRestaurante + '.',\n  'Olá! Sou a Helena, ' + doRestaurante + '.',\n];\n\n// Agradecimento por escrito só no PRIMEIRO feedback da pessoa (quem sabe qual\n// é o primeiro é o banco, depois de gravar): ela fica sabendo que pode falar\n// quando quiser. Nos seguintes sai só o botão do anonimato.\nconst BOAS_VINDAS = [\n  'Obrigada por contar!\\nPor aqui você pode falar do trabalho sempre que quiser: o que vai bem, o que incomoda, uma ideia.\\nTudo o que chega é lido pela gestão.',\n  'Recebi, obrigada!\\nSempre que quiser falar de alguma coisa do trabalho, é só mandar por aqui, não precisa esperar eu perguntar.\\nA gestão lê tudo o que chega.',\n  'Obrigada pela resposta!\\nEsse canal fica aberto: quando tiver um elogio, uma reclamação ou uma ideia sobre o trabalho, manda aqui.\\nTudo é lido pela gestão.',\n];\nconst RELATO_GRAVE = 'Obrigada por confiar em contar isso.\\nÉ um assunto sério e já está registrado.\\n\\nSe precisar de ajuda agora, o Ligue 180 e o Disque 100 atendem de graça, 24 horas.';\nconst RESPONDE_PERGUNTA = {\n  anonimato: 'Você que escolhe!\\nDepois que você mandar sua opinião, eu pergunto se quer que ela fique anônima. Se ficar, no sistema aparece o que você disse, sem o seu nome.',\n  quem_e: 'Sou a Helena, do atendimento ' + doRestaurante + '.\\nPor aqui eu recebo o que a equipe quiser contar sobre o trabalho.',\n  outro: 'Por aqui eu só recebo a opinião da equipe sobre o trabalho, então com isso eu não consigo te ajudar.\\nO melhor é falar direto com a gerência.',\n};\n\n// 5. O que sai: uma mensagem para cada coisa, na ordem em que a pessoa escreveu.\n// O caminho do PARAR roda antes (fica acima no canvas). Marcou agora?\nlet parar = null;\ntry {\n  const marcado = $('Marca para não receber').first().json;\n  if (marcado && marcado.marcou === true) parar = { n: numero($('Pediu para parar?').first().json.ordem) };\n} catch (e) {\n  parar = null;\n}\n\nconst saidas = [];\nif (ehFeedback) {\n  // Relato grave sempre ganha a mensagem de apoio, seja o primeiro ou não.\n  saidas.push(sensivel\n    ? { tipo: 'feedback', n: msgFeedback, texto: RELATO_GRAVE }\n    : { tipo: 'feedback', n: msgFeedback, texto: sortear(BOAS_VINDAS), soNaPrimeira: true });\n}\n// Pergunta sobre \"como parar\" já é o próprio PARAR: não ganha outra resposta.\n// \"Sou a Helena\" depois de \"Aqui é a Helena\" ficaria repetido.\nif (temPergunta && !parar) {\n  saidas.push({ tipo: 'pergunta', n: numero(r.mensagem_pergunta), texto: RESPONDE_PERGUNTA[sobre], semApresentacao: sobre === 'quem_e' });\n}\n// A confirmação do PARAR nunca leva a apresentação.\nif (parar) saidas.push({ tipo: 'parar', n: parar.n, texto: 'Pronto, não vou mais te mandar essas mensagens.', semApresentacao: true });\n\nconst POSICAO = { feedback: 0, pergunta: 1, parar: 2 };\nconst chave = (s) => s.n || (s.tipo === 'feedback' ? 0 : mensagens.length + 1);\nsaidas.sort((a, b) => chave(a) - chave(b) || POSICAO[a.tipo] - POSICAO[b.tipo]);\n\nconst citada = (n) => {\n  const m = mensagens[(n || (mensagens.length === 1 ? 1 : 0)) - 1];\n  return m && m.id ? String(m.id) : '';\n};\nconst respostas = saidas.map((s) => ({\n  tipo: s.tipo,\n  texto: s.texto,\n  replyid: citada(s.n),\n  soNaPrimeira: s.soNaPrimeira === true,\n  semApresentacao: s.semApresentacao === true,\n}));\nconst apresentacao = apresentar ? sortear(APRESENTACAO) : '';\n// Como a conversa fica quando é o primeiro feedback da pessoa (para conferir).\nconst textos = respostas.map((x) => x.texto);\nif (apresentacao && respostas.length && !respostas[0].semApresentacao) textos[0] = apresentacao + '\\n\\n' + textos[0];\n\nreturn [{\n  json: {\n    restauranteId: base.restauranteId,\n    telefone: base.telefone,\n    baseUrl: base.baseUrl,\n    token: base.token,\n    textoCompleto: base.textoCompleto,\n    ehFeedback,\n    sentimentoGeral,\n    pontos,\n    sensivel,\n    apresentacao,\n    // A mensagem que o botão cita quando nenhum texto sai antes dele.\n    citaFeedback: ehFeedback ? citada(msgFeedback) : '',\n    respostas,\n    resposta: textos.join('\\n\\n'),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4560,
-        1000
+        1232,
+        2528
       ],
-      "id": "1bf0451e-7f0f-431d-b242-59abdb489374",
+      "id": "2fc0b4b0-1d53-4f6e-aa24-0064ddc9a1af",
       "name": "Monta a resposta da equipe"
     },
     {
@@ -1297,10 +1298,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4780,
-        1000
+        1456,
+        2528
       ],
-      "id": "45c13e41-078f-45a7-9793-79b0d1d1c182",
+      "id": "da910791-d373-4799-aab1-386c4e32bf43",
       "name": "É feedback da equipe?"
     },
     {
@@ -1319,32 +1320,32 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        5000,
-        880
+        1680,
+        2400
       ],
-      "id": "4891f47d-d69b-45d2-8b62-f9e63e2f6c78",
+      "id": "da352899-07fc-46b0-8a83-1a82c07208b4",
       "name": "Grava o feedback da equipe",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
-        "jsCode": "// O que sai para o funcionário depois de gravar: as mensagens de texto (se\n// houver), já na ordem, e a pergunta do anonimato (o botão), que vai por último.\n//   - Primeiro feedback da pessoa -> boas-vindas e o botão.\n//   - Nos seguintes               -> só o botão.\n//   - Relato grave                -> a mensagem de apoio e o botão, sempre.\nconst m = $('Monta a resposta da equipe').first().json;\nlet gravado = null;\ntry { gravado = $('Grava o feedback da equipe').first().json; } catch (e) { gravado = null; }\nconst gravou = !!(gravado && gravado.ok === true);\nconst primeiro = gravou && gravado.primeiro === true;\n\nlet saidas = Array.isArray(m.respostas) ? m.respostas : [];\n// Era feedback e não foi gravado (a pessoa saiu do cadastro no meio do\n// caminho): não responde o que não guardou.\nif (m.ehFeedback && !gravou) saidas = saidas.filter((x) => x.tipo !== 'feedback');\nif (!primeiro) saidas = saidas.filter((x) => x.soNaPrimeira !== true);\n\n// A Helena se apresenta no começo da primeira mensagem que sobrou.\nconst digitando = (t) => Math.min(12000, Math.max(3000,\n  Math.round(t.length * (35 + Math.random() * 25)) + 1000 + Math.floor(Math.random() * 2000)));\nconst textos = saidas.map((s, i) => {\n  const texto = i === 0 && m.apresentacao && s.semApresentacao !== true ? m.apresentacao + '\\n\\n' + s.texto : s.texto;\n  return { texto, replyid: s.replyid, digitandoMs: digitando(texto) };\n});\n\n// A pergunta sai em todo feedback gravado. O banco só diz que não quando já\n// há uma pergunta no ar feita há poucos minutos (várias mensagens seguidas).\nconst perguntar = gravou && gravado.perguntar_identidade === true;\nlet pergunta = null;\nif (perguntar) {\n  const horas = Number(gravado.prazo_horas) > 0 ? Number(gravado.prazo_horas) : 24;\n  const prazo = horas % 24 === 0 && horas > 24 ? (horas / 24) + ' dias' : horas + ' horas';\n  const sensivel = gravado.sensivel === true;\n  // Relato grave nunca ganha o nome sozinho: sem resposta, fica anônimo. A\n  // pergunta explica para que serve o nome, para a pessoa decidir sabendo.\n  const explica = sensivel\n    ? 'Quer que esse relato fique anônimo?\\nCom o seu nome, a gestão consegue te procurar e ajudar.\\nSem o nome, ela vê o que aconteceu, mas não sabe quem contou.'\n    : (primeiro ? '' : 'Anotado, obrigada!\\n')\n      + 'Quer que essa resposta fique anônima?\\nSe ficar, no sistema do restaurante aparece o que você disse, mas não o seu nome.';\n  const rodape = sensivel ? 'Sem resposta, fica anônimo.' : 'Sem resposta em ' + prazo + ', aparece com o seu nome.';\n  pergunta = {\n    texto: explica + '\\n\\nSe os botões não aparecerem, é só responder ANÔNIMO ou MOSTRAR.',\n    botoes: ['Ficar anônimo|equipe_anonimo', 'Mostrar meu nome|equipe_mostrar'],\n    rodape,\n    // Se o envio com botão falhar, a mesma pergunta vai como texto.\n    textoSemBotao: explica + '\\n\\nResponda ANÔNIMO ou MOSTRAR.\\n' + rodape,\n    // Sem texto antes, o botão cita a mensagem da pessoa.\n    replyid: textos.length ? '' : String(m.citaFeedback || ''),\n    digitandoMs: 2500 + Math.floor(Math.random() * 2500),\n  };\n}\n\nif (!textos.length && !pergunta) return [];\n// Só o botão: um item sem texto, que o \"Tem mensagem?\" leva direto à pergunta.\nif (!textos.length) return [{ json: { temTexto: false, perguntar, pergunta } }];\nreturn textos.map((x) => ({\n  json: { temTexto: true, texto: x.texto, replyid: x.replyid, digitandoMs: x.digitandoMs, perguntar, pergunta },\n}));"
+        "jsCode": "// O que sai para o funcionário depois de gravar: as mensagens de texto (se\n// houver), já na ordem, e a pergunta do anonimato (o botão), que vai por último.\n//   - Primeiro feedback da pessoa -> boas-vindas e o botão.\n//   - Nos seguintes               -> só o botão.\n//   - Relato grave                -> a mensagem de apoio e o botão, sempre.\nconst m = $('Monta a resposta da equipe').first().json;\nlet gravado = null;\ntry { gravado = $('Grava o feedback da equipe').first().json; } catch (e) { gravado = null; }\nconst gravou = !!(gravado && gravado.ok === true);\nconst primeiro = gravou && gravado.primeiro === true;\n\nlet saidas = Array.isArray(m.respostas) ? m.respostas : [];\n// Era feedback e não foi gravado (a pessoa saiu do cadastro no meio do\n// caminho): não responde o que não guardou.\nif (m.ehFeedback && !gravou) saidas = saidas.filter((x) => x.tipo !== 'feedback');\nif (!primeiro) saidas = saidas.filter((x) => x.soNaPrimeira !== true);\n\n// A Helena se apresenta no começo da primeira mensagem que sobrou.\nconst digitando = (t) => Math.min(12000, Math.max(3000,\n  Math.round(t.length * (35 + Math.random() * 25)) + 1000 + Math.floor(Math.random() * 2000)));\nconst textos = saidas.map((s, i) => {\n  const texto = i === 0 && m.apresentacao && s.semApresentacao !== true ? m.apresentacao + '\\n\\n' + s.texto : s.texto;\n  return { texto, replyid: s.replyid, digitandoMs: digitando(texto) };\n});\n\n// A pergunta sai em todo feedback gravado. O banco só diz que não quando já\n// há uma pergunta no ar feita há poucos minutos (várias mensagens seguidas).\nconst perguntar = gravou && gravado.perguntar_identidade === true;\nlet pergunta = null;\nif (perguntar) {\n  const horas = Number(gravado.prazo_horas) > 0 ? Number(gravado.prazo_horas) : 24;\n  const prazo = horas % 24 === 0 && horas > 24 ? (horas / 24) + ' dias' : horas + ' horas';\n  const sensivel = gravado.sensivel === true;\n  // Relato grave nunca ganha o nome sozinho: sem resposta, fica anônimo. A\n  // pergunta explica para que serve o nome, para a pessoa decidir sabendo.\n  const explica = sensivel\n    ? 'Quer que esse relato fique anônimo?\\nCom o seu nome, a gestão consegue te procurar e ajudar.\\nSem o nome, ela vê o que aconteceu, mas não sabe quem contou.'\n    : (primeiro ? '' : 'Anotado, obrigada!\\n')\n      + 'Quer que essa resposta fique anônima?\\nSe ficar, no sistema aparece o que você disse, mas não o seu nome.';\n  const rodape = sensivel ? 'Sem resposta, fica anônimo.' : 'Sem resposta em ' + prazo + ', aparece com o seu nome.';\n  pergunta = {\n    texto: explica + '\\n\\nSe os botões não aparecerem, é só responder ANÔNIMO ou MOSTRAR.',\n    botoes: ['Ficar anônimo|equipe_anonimo', 'Mostrar meu nome|equipe_mostrar'],\n    rodape,\n    // Se o envio com botão falhar, a mesma pergunta vai como texto.\n    textoSemBotao: explica + '\\n\\nResponda ANÔNIMO ou MOSTRAR.\\n' + rodape,\n    // Sem texto antes, o botão cita a mensagem da pessoa.\n    replyid: textos.length ? '' : String(m.citaFeedback || ''),\n    digitandoMs: 2500 + Math.floor(Math.random() * 2500),\n  };\n}\n\nif (!textos.length && !pergunta) return [];\n// Só o botão: um item sem texto, que o \"Tem mensagem?\" leva direto à pergunta.\nif (!textos.length) return [{ json: { temTexto: false, perguntar, pergunta } }];\nreturn textos.map((x) => ({\n  json: { temTexto: true, texto: x.texto, replyid: x.replyid, digitandoMs: x.digitandoMs, perguntar, pergunta },\n}));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5240,
-        1000
+        1920,
+        2528
       ],
-      "id": "590a4a73-a0b8-47e7-b293-104bb0ce743b",
+      "id": "e2a38c63-16b0-476e-ba0e-6897afb53ad8",
       "name": "Respostas da equipe"
     },
     {
@@ -1375,24 +1376,23 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        5460,
-        1000
+        2144,
+        2528
       ],
-      "id": "5630146f-56e6-467b-86f5-f384e3bc3465",
+      "id": "9489ab1b-8d19-4602-9443-176d4df34fa9",
       "name": "Tem mensagem?"
     },
     {
       "parameters": {
-        "batchSize": 1,
         "options": {}
       },
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        5680,
-        1000
+        2352,
+        2528
       ],
-      "id": "7a6f6c3d-64e4-437d-a270-768c7b3ae232",
+      "id": "76432f64-329d-4b99-92ae-8cd0939d84d8",
       "name": "Uma de cada vez (equipe)"
     },
     {
@@ -1418,10 +1418,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        5900,
-        1020
+        2576,
+        2544
       ],
-      "id": "05aff91a-4609-4722-a3a5-ca47acb21d60",
+      "id": "66ba6b3f-8cd0-40c4-a826-aba8ddc70a1c",
       "name": "Envia à equipe"
     },
     {
@@ -1452,10 +1452,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        6120,
-        860
+        2800,
+        2384
       ],
-      "id": "f44cb386-b4b9-4e8d-b9a1-2f2ee5a7a053",
+      "id": "07009cd3-9b36-4fad-8185-3ba6db7876bc",
       "name": "Vai perguntar?",
       "executeOnce": true
     },
@@ -1482,10 +1482,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6340,
-        860
+        3024,
+        2384
       ],
-      "id": "b2ce9637-86e1-4ead-a927-1976e3becf8c",
+      "id": "ffb813d5-b299-48ef-9b84-6fe9bb018bdb",
       "name": "Manda o botão",
       "onError": "continueErrorOutput"
     },
@@ -1512,10 +1512,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6560,
-        1040
+        3232,
+        2560
       ],
-      "id": "0f4a5a65-e36b-4dfa-aa20-2cc3551ec935",
+      "id": "16989973-3bb1-4b28-8d1a-c33c05a7f4c0",
       "name": "Pergunta por escrito"
     },
     {
@@ -1534,21 +1534,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        6780,
-        860
+        3456,
+        2384
       ],
-      "id": "b0af2bb4-e620-472d-bf24-3b1b401e8dc0",
+      "id": "35d52418-1043-4430-a7e2-9ec7a38bad8e",
       "name": "Começa o prazo",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "executeOnce": true,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
@@ -1557,10 +1557,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        1640
+        992,
+        3168
       ],
-      "id": "881a3237-52b7-42c4-aee5-c6a2f04f2eed",
+      "id": "59c21ef5-002b-42f1-82bc-58c0cf096040",
       "name": "Prepara a escolha"
     },
     {
@@ -1579,32 +1579,32 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4540,
-        1640
+        1216,
+        3168
       ],
-      "id": "3e3adc9d-e16e-45c4-a3bb-4431595e8492",
+      "id": "fa6e2e09-52d9-4fa6-a994-c3a613220adb",
       "name": "Registra a escolha",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "credentials": {
         "supabaseApi": {
           "id": "J3N40FgVQE4DIL2U",
           "name": "Feedback Restaurante"
         }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+      }
     },
     {
       "parameters": {
-        "jsCode": "// Confirma a escolha para a pessoa. Só quando mudou alguma coisa: clique\n// repetido, o mesmo evento entregue duas vezes ou quem não tem nada a escolher\n// ficam em silêncio.\nconst p = $('Prepara a escolha').first().json;\nconst r = $input.first().json || {};\nif (r.ok !== true || !(Number(r.mudou) > 0)) return [];\n\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst ANONIMO = [\n  'Combinado!\\nNo sistema do restaurante sua resposta aparece sem o seu nome.',\n  'Pronto, ficou anônimo.\\nNo sistema aparece o que você disse, sem o seu nome.',\n  'Tá certo!\\nSua resposta fica sem o seu nome no sistema do restaurante.',\n];\nconst MOSTRAR = [\n  'Combinado, vai com o seu nome.\\nObrigada por confiar!',\n  'Pronto, sua resposta aparece com o seu nome.\\nObrigada!',\n  'Tá certo, obrigada!\\nVai com o seu nome.',\n];\nconst texto = sortear(p.escolha === 'anonimo' ? ANONIMO : MOSTRAR);\n\nreturn [{\n  json: {\n    telefone: p.telefone,\n    baseUrl: p.baseUrl,\n    token: p.token,\n    texto,\n    digitandoMs: 2500 + Math.floor(Math.random() * 3000),\n  },\n}];"
+        "jsCode": "// Confirma a escolha para a pessoa. Só quando mudou alguma coisa: clique\n// repetido, o mesmo evento entregue duas vezes ou quem não tem nada a escolher\n// ficam em silêncio.\nconst p = $('Prepara a escolha').first().json;\nconst r = $input.first().json || {};\nif (r.ok !== true || !(Number(r.mudou) > 0)) return [];\n\nconst sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];\nconst ANONIMO = [\n  'Combinado!\\nNo sistema sua resposta aparece sem o seu nome.',\n  'Pronto, ficou anônimo.\\nNo sistema aparece o que você disse, sem o seu nome.',\n  'Tá certo!\\nSua resposta fica sem o seu nome no sistema.',\n];\nconst MOSTRAR = [\n  'Combinado, vai com o seu nome.\\nObrigada por confiar!',\n  'Pronto, sua resposta aparece com o seu nome.\\nObrigada!',\n  'Tá certo, obrigada!\\nVai com o seu nome.',\n];\nconst texto = sortear(p.escolha === 'anonimo' ? ANONIMO : MOSTRAR);\n\nreturn [{\n  json: {\n    telefone: p.telefone,\n    baseUrl: p.baseUrl,\n    token: p.token,\n    texto,\n    digitandoMs: 2500 + Math.floor(Math.random() * 3000),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4760,
-        1640
+        1440,
+        3168
       ],
-      "id": "e35951eb-2a0a-4800-8570-3223f4329881",
+      "id": "409fc9ee-2cba-4c42-b92f-92a0a79b1d47",
       "name": "Confirma a escolha"
     },
     {
@@ -1630,15 +1630,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4980,
-        1640
+        1664,
+        3168
       ],
-      "id": "c1d0905c-0bf4-45d9-b677-2cac66390c46",
+      "id": "7d6b6988-58dd-4152-bcfb-996786e87627",
       "name": "Envia a confirmação"
     },
     {
       "parameters": {
-        "content": "## 7. Equipe (feedback dos funcionários)\nQuem escreve pode ser **cliente** ou **funcionário** (cadastrado na página **Equipe** do sistema). O nó **Quem escreveu?** pergunta ao banco (`equipe_quem_e`); se a consulta falhar, segue como cliente.\n**Funcionário** vem por aqui, com a mesma lógica dos clientes: a IA separa em pontos (categorias da equipe) e diz se há **relato grave**; **Grava o feedback da equipe** salva pela função `equipe_registrar_feedback` (sem telefone, marcado como `equipe`). Texto de agradecimento só no **primeiro** feedback da pessoa (boas-vindas: ela pode falar quando quiser); nos seguintes sai **só o botão** (**Tem mensagem?** pula o envio de texto). Relato grave sempre ganha a mensagem de apoio.\n**Anonimato:** em todo feedback sai a pergunta com dois **botões** (**Manda o botão**, `/send/menu`). Se o botão falhar, a mesma pergunta vai **por escrito**. **Começa o prazo** marca a hora: sem resposta no prazo, o nome aparece (relato grave fica anônimo). Enquanto isso, e para sempre se a pessoa pedir anonimato, a conversa não aparece na tela WhatsApp do sistema.\nO **PARAR** do funcionário usa o mesmo caminho de cima (funções `equipe_contexto_parar` e `equipe_parar`): ele deixa de receber os pedidos de opinião.",
+        "content": "## 7. Equipe (feedback dos funcionários)\nQuem escreve pode ser **cliente** ou **funcionário** (cadastrado na página **Equipe** do sistema). O nó **Quem escreveu?** pergunta ao banco (`equipe_quem_e`); se a consulta falhar, segue como cliente (numa conta de RH, para: lá não existe cliente). Na **conta só de RH** a IA recebe o aviso de que é uma empresa, com o ramo, e a Helena diz \"da empresa\" quando a conta não tem nome.\n**Funcionário** vem por aqui, com a mesma lógica dos clientes: a IA separa em pontos (categorias da equipe) e diz se há **relato grave**; **Grava o feedback da equipe** salva pela função `equipe_registrar_feedback` (sem telefone, marcado como `equipe`). Texto de agradecimento só no **primeiro** feedback da pessoa (boas-vindas: ela pode falar quando quiser); nos seguintes sai **só o botão** (**Tem mensagem?** pula o envio de texto). Relato grave sempre ganha a mensagem de apoio.\n**Anonimato:** em todo feedback sai a pergunta com dois **botões** (**Manda o botão**, `/send/menu`). Se o botão falhar, a mesma pergunta vai **por escrito**. **Começa o prazo** marca a hora: sem resposta no prazo, o nome aparece (relato grave fica anônimo). Enquanto isso, e para sempre se a pessoa pedir anonimato, a conversa não aparece na tela WhatsApp do sistema.\nO **PARAR** do funcionário usa o mesmo caminho de cima (funções `equipe_contexto_parar` e `equipe_parar`): ele deixa de receber os pedidos de opinião.",
         "height": 660,
         "width": 3000,
         "color": 4
@@ -1646,10 +1646,10 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4020,
-        740
+        704,
+        2256
       ],
-      "id": "7d011453-df6f-4cfb-a4c4-5fabf88d5d92",
+      "id": "bdee1e03-b575-44e9-82e0-959032efd475",
       "name": "Nota - Equipe"
     },
     {
@@ -1662,13 +1662,87 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4260,
-        1440
+        944,
+        2960
       ],
-      "id": "3685007f-f9fe-4cc7-8544-655b484356da",
+      "id": "3ddadbea-b151-4154-b0d1-1cf1617e5325",
       "name": "Nota - Escolha"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b7ce383c-5c2f-4744-868b-9374c48e5f32",
+              "leftValue": "={{ $json.ignorar === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        1520
+      ],
+      "id": "3ab1d149-aec4-409e-a66c-125a0ccc62e9",
+      "name": "É para ignorar?"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "message_buffer",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "remote_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.remoteId }}"
+            },
+            {
+              "keyName": "id",
+              "condition": "lte",
+              "keyValue": "={{ $json.ateId }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1744
+      ],
+      "id": "8456e1f1-7efa-45fe-97be-baee25b0b606",
+      "name": "Limpa o buffer do ignorado",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "J3N40FgVQE4DIL2U",
+          "name": "Feedback Restaurante"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
+  "pinData": {},
   "connections": {
     "Recebe mensagem": {
       "main": [
@@ -1853,22 +1927,7 @@
       "main": [
         [
           {
-            "node": "Limpa o buffer",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Limpa buffer antigo",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Marca como lida",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Pediu para parar?",
+            "node": "É para ignorar?",
             "type": "main",
             "index": 0
           }
@@ -2320,13 +2379,52 @@
           }
         ]
       ]
+    },
+    "É para ignorar?": {
+      "main": [
+        [
+          {
+            "node": "Limpa o buffer do ignorado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Limpa o buffer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Limpa buffer antigo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Marca como lida",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pediu para parar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "timeSavedMode": "fixed",
-    "callerPolicy": "workflowsFromSameOwner",
-    "availableInMCP": true
-  }
+    "availableInMCP": false
+  },
+  "versionId": "7f0a0b5c-7622-48ff-afcb-940a169975da",
+  "meta": {
+    "instanceId": "1fd5703bd49fca8416829dfa288b4ae31bdbbee0d8080761f1711f00909210ca"
+  },
+  "nodeGroups": [],
+  "id": "Mb8eqcZO0BRNsYoO",
+  "tags": []
 }

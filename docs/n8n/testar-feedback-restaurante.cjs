@@ -17,8 +17,10 @@ const nos = wf.nodes.filter((n) => n.type !== 'n8n-nodes-base.stickyNote')
 const porNome = (nome) => nos.find((n) => n.name === nome)
 const nomes = new Set(nos.map((n) => n.name))
 ok('nomes únicos', nomes.size === nos.length)
-ok('arquivo só com o necessário (name, nodes, connections, settings)',
-  JSON.stringify(Object.keys(wf).sort()) === JSON.stringify(['connections', 'name', 'nodes', 'settings']))
+// O arquivo é o export do n8n (com as mudanças por cima): além do necessário
+// ele traz id, versionId, meta… e tira os valores que já são o padrão do n8n.
+ok('arquivo tem o necessário (name, nodes, connections, settings)', ['connections', 'name', 'nodes', 'settings'].every((k) => k in wf))
+const padraoOu = (v, padrao) => v === undefined || v === padrao
 const entradas = new Map()
 for (const [de, tipos] of Object.entries(wf.connections)) {
   ok(`origem existe: ${de}`, nomes.has(de))
@@ -40,11 +42,15 @@ for (const n of nos.filter((n) => n.parameters.operation === 'delete')) {
 // Configurações que precisam estar exatamente assim
 const wh = porNome('Recebe mensagem')
 ok('webhook continua em /easyfeed (POST)', wh.parameters.path === 'easyfeed' && wh.parameters.httpMethod === 'POST')
-ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && porNome('Espera 20 segundos').parameters.unit === 'seconds')
+ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && padraoOu(porNome('Espera 20 segundos').parameters.unit, 'seconds'))
 ok('restaurante é achado pelo token', JSON.stringify(porNome('Acha o restaurante').parameters).includes('whatsapp_token'))
 ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já respondeu hoje?,Limpa o buffer,Quem escreveu?')
 ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a equipe,Analisa a mensagem,Começa o prazo,Já respondeu hoje?,Tem resposta?,Vai perguntar?')
-ok('modelo: só temperatura e formato JSON', JSON.stringify(porNome('Modelo de análise').parameters.options) === '{"temperature":0.1,"responseFormat":"json_object"}')
+const opcoesDoModelo = (nome, temperatura) => {
+  const o = porNome(nome).parameters.options || {}
+  return o.temperature === temperatura && padraoOu(o.responseFormat, 'json_object') && Object.keys(o).every((k) => k === 'temperature' || k === 'responseFormat')
+}
+ok('modelo: só a temperatura (e o formato JSON, quando o n8n guarda)', opcoesDoModelo('Modelo de análise', 0.1))
 const jaFalou = JSON.stringify(porNome('Já respondeu hoje?').parameters)
 ok('apresentação: procura resposta do número para esse telefone desde o início do dia (horário de Brasília)',
   jaFalou.includes('mensagens_whatsapp') && jaFalou.includes('"por_api"') && jaFalou.includes('"telefone"') && jaFalou.includes('"restaurante_id"')
@@ -247,15 +253,19 @@ const destinos = (de, saida = 0, tipo = 'main') => (wf.connections[de]?.[tipo]?.
 for (const nome of ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'Modelo do parar', 'É para parar?', 'Marca para não receber']) ok(`PARAR: nó existe: ${nome}`, !!porNome(nome))
 // Depois do buffer vem "Quem escreveu?" (cliente ou equipe); é do "Junta quem escreveu" que os ramos saem.
 const SAIDA_DO_BUFFER = 'Junta quem escreveu'
+// Entre o "Junta quem escreveu" e os ramos fica o "É para ignorar?": a saída
+// "não" (1) é o fluxo de sempre; a "sim" (0) é a conta só de RH com número de fora.
+const DESVIO = 'É para ignorar?'
+const ramos = () => destinos(DESVIO, 1)
 ok('depois do buffer: pergunta quem escreveu e só então abre os ramos', destinos('Sou a última mensagem?').join() === 'Quem escreveu?' && destinos('Quem escreveu?').join() === SAIDA_DO_BUFFER)
-ok('PARAR: sai da mensagem juntada, junto com a resposta normal', destinos(SAIDA_DO_BUFFER).includes('Pediu para parar?') && destinos(SAIDA_DO_BUFFER).includes('Limpa o buffer'))
+ok('PARAR: sai da mensagem juntada, junto com a resposta normal', ramos().includes('Pediu para parar?') && ramos().includes('Limpa o buffer'))
 ok('PARAR: roda antes da resposta normal (fica acima no canvas, executionOrder v1)', wf.settings.executionOrder === 'v1'
   && porNome('Pediu para parar?').position[1] < porNome('Limpa o buffer').position[1] && porNome('Pediu para parar?').position[1] < porNome('Limpa buffer antigo').position[1])
 const caminho = ['Pediu para parar?', 'Conversa recente', 'Monta o contexto', 'Decide se é para parar', 'É para parar?', 'Marca para não receber']
 ok('PARAR: caminho na ordem certa', caminho.slice(0, -1).every((de, i) => destinos(de).join() === caminho[i + 1]))
 ok('PARAR: o caminho só marca, não manda nada (a confirmação sai junto das outras respostas)', !wf.connections['Marca para não receber'])
 ok('PARAR: a IA do parar usa o próprio modelo (temperatura 0, JSON)', destinos('Modelo do parar', 0, 'ai_languageModel').join() === 'Decide se é para parar'
-  && JSON.stringify(porNome('Modelo do parar').parameters.options) === '{"temperature":0,"responseFormat":"json_object"}')
+  && opcoesDoModelo('Modelo do parar', 0))
 ok('PARAR: nenhum nó que chama fora trava o fluxo (falhou, segue)', ['Conversa recente', 'Decide se é para parar', 'Marca para não receber'].every((n) => porNome(n).onError === 'continueRegularOutput'))
 // O endereço é uma expressão: função do cliente, ou a da equipe quando quem escreveu é funcionário.
 const urlDe = (nome, json) => new Function('$json', 'return (' + porNome(nome).parameters.url.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')(json)
@@ -374,7 +384,7 @@ ok('pergunta de verdade + PARAR: as duas respostas', o.respostas.length === 2 &&
 ok('envio: uma resposta por item, no laço "Uma de cada vez"', destinos('Tem resposta?').join() === 'Uma resposta por mensagem'
   && destinos('Uma resposta por mensagem').join() === 'Uma de cada vez' && destinos('Uma de cada vez', 1).join() === 'Envia a resposta'
   && destinos('Envia a resposta').join() === 'Uma de cada vez' && destinos('Uma de cada vez', 0).length === 0)
-ok('laço de um em um', porNome('Uma de cada vez').type === 'n8n-nodes-base.splitInBatches' && porNome('Uma de cada vez').parameters.batchSize === 1)
+ok('laço de um em um', porNome('Uma de cada vez').type === 'n8n-nodes-base.splitInBatches' && padraoOu(porNome('Uma de cada vez').parameters.batchSize, 1))
 const varias = montaCom({ tipo: 'feedback', tem_pergunta_restaurante: true, assunto_pergunta: 'reservas', mensagem_pergunta: 3, pontos: [Pn('Positivo', 2)] }, tres)
 r = roda('Uma resposta por mensagem', {}, { 'Monta a resposta': varias })
 ok('um item por resposta, na ordem', r.length === 2 && r[0].json.texto === varias.respostas[0].texto && r[1].json.replyid === 'c')
@@ -392,8 +402,8 @@ ok('envio sem mensagem para citar: vai sem replyid', !('replyid' in env))
 
 // Lida
 const lida = porNome('Marca como lida')
-ok('lida: sai da mensagem juntada e roda antes de tudo (mais acima no canvas)', destinos(SAIDA_DO_BUFFER).includes('Marca como lida')
-  && destinos(SAIDA_DO_BUFFER).every((n) => n === 'Marca como lida' || porNome(n).position[1] > lida.position[1]))
+ok('lida: sai da mensagem juntada e roda antes de tudo (mais acima no canvas)', ramos().includes('Marca como lida')
+  && ramos().every((n) => n === 'Marca como lida' || porNome(n).position[1] > lida.position[1]))
 ok('lida: marca todas as mensagens juntadas (/message/markread) e não trava o fluxo', lida.parameters.url.endsWith('/message/markread') && lida.onError === 'continueRegularOutput'
   && new Function('$json', 'return (' + lida.parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')({ ids: ['a', 'b'] }) === '{"id":["a","b"]}')
 
@@ -417,7 +427,30 @@ ok('a consulta de quem escreveu nunca trava o fluxo do cliente (falhou, segue; v
 const junta = (q, b = juntada) => roda('Junta quem escreveu', q, { 'Sou a última mensagem?': b })[0].json
 o = junta({ ok: true, funcionario_id: null })
 ok('cliente: mesmos campos da mensagem juntada, mais equipe e escolha nulas', o.equipe === null && o.escolha === null && o.textoCompleto === juntada.textoCompleto && o.ateId === juntada.ateId && o.remoteId === juntada.remoteId
-  && JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...Object.keys(juntada), 'equipe', 'escolha'].sort()))
+  && JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...Object.keys(juntada), 'equipe', 'escolha', 'soRh', 'ignorar', 'contextoIA'].sort())
+  && o.soRh === false && o.ignorar === false && o.contextoIA === '')
+
+// ── Conta só de RH (versão RH do EasyFeed) ──────────────────────────────────
+ok('desvio: depois de juntar vem "É para ignorar?", e é dele que saem os ramos de sempre', destinos(SAIDA_DO_BUFFER).join() === DESVIO
+  && ramos().slice().sort().join() === 'Limpa buffer antigo,Limpa o buffer,Marca como lida,Pediu para parar?')
+ok('desvio: ignorado só limpa o buffer e acaba (não marca como lida, não analisa, não responde)', destinos(DESVIO, 0).join() === 'Limpa o buffer do ignorado'
+  && !wf.connections['Limpa o buffer do ignorado'] && porNome('Limpa o buffer do ignorado').parameters.operation === 'delete'
+  && JSON.stringify(porNome('Limpa o buffer do ignorado').parameters.filters) === JSON.stringify(porNome('Limpa o buffer').parameters.filters)
+  && porNome('Limpa o buffer do ignorado').onError === 'continueRegularOutput')
+ok('desvio: a condição é o campo ignorar', JSON.stringify(porNome(DESVIO).parameters.conditions.conditions.map((c) => c.leftValue)) === '["={{ $json.ignorar === true }}"]')
+o = junta({ ok: true, funcionario_id: null, ignorar: true, so_rh: true })
+ok('conta só de RH, número de fora: ignorar', o.ignorar === true && o.soRh === true && o.equipe === null)
+o = junta({ ok: true, funcionario_id: 3, nome: 'Ana', ignorar: false, so_rh: true, ramo: '  Comércio   e varejo ', pode_escolher: false, aguardando_escolha: false })
+ok('conta só de RH, funcionário: segue o ramo da equipe e a IA recebe o aviso com o ramo', o.ignorar === false && o.soRh === true && o.equipe.funcionarioId === 3
+  && o.contextoIA.startsWith('CONTEXTO: quem escreve trabalha em uma EMPRESA do ramo "Comércio e varejo", que NÃO é um restaurante.') && o.contextoIA.endsWith('MENSAGENS:\n'))
+ok('conta só de RH sem ramo: o aviso não deixa aspas vazias', !junta({ ok: true, funcionario_id: 3, nome: 'Ana', so_rh: true }).contextoIA.includes('""'))
+o = junta({ ok: true, funcionario_id: null, ignorar: false, so_rh: false })
+ok('conta do admin (as duas versões) ou restaurante, número de fora: é cliente, segue', o.ignorar === false && o.soRh === false && o.contextoIA === '')
+o = junta({ ok: true, funcionario_id: 3, nome: 'Ana', ignorar: true, so_rh: true })
+ok('funcionário nunca é ignorado, mesmo que o banco diga', o.ignorar === false && !!o.equipe)
+ok('consulta falhou numa conta de RH: para (lá não existe cliente)', junta({ error: { message: 'timeout' } }, { ...juntada, area: 'rh' }).ignorar === true && junta({}, { ...juntada, area: 'rh' }).ignorar === true)
+ok('consulta falhou num restaurante: segue como cliente, como sempre', junta({ error: { message: 'timeout' } }, { ...juntada, area: 'restaurante' }).ignorar === false && junta({}, juntada).ignorar === false)
+ok('a versão da conta entra junto com o restaurante', porNome('Restaurante ativo?').parameters.jsCode.includes("area: String(r.area || '')"))
 ok('consulta falhou (erro do banco): trata como cliente', junta({ error: { message: 'timeout' } }).equipe === null && junta({}).equipe === null)
 const FUNC = { ok: true, funcionario_id: 3, nome: 'Ana Paula', pode_escolher: false, aguardando_escolha: false }
 o = junta(FUNC)
@@ -488,7 +521,9 @@ const CATS_EQUIPE = ['Liderança e gestão', 'Salário e benefícios', 'Escala e
 ok('prompt da equipe: mesma estrutura do cliente (tipo, pontos, cenários, agrupamento) com as categorias da equipe', ['PARTE 1', 'PARTE 2', 'CENÁRIO A', 'CENÁRIO B', 'CENÁRIO C', 'REGRA DE AGRUPAMENTO', 'NEUTRO NÃO É SUGESTÃO', 'FORMATO DE SAÍDA']
   .every((p) => promptEquipe.includes(p)) && CATS_EQUIPE.every((c) => promptEquipe.includes(`"${c}"`)) && !/"Comida"|"Tempo de Espera"/.test(promptEquipe))
 ok('prompt da equipe: relato grave, PARAR e a resposta do anonimato como "outro"', promptEquipe.includes('"sensivel"') && promptEquipe.includes('[1] PARAR\n→ {"tipo": "outro"') && promptEquipe.includes('[1] Anônimo\n→ {"tipo": "outro"'))
-ok('a IA da equipe recebe as mensagens numeradas e tem o próprio modelo', porNome('Analisa a equipe').parameters.text === porNome('Analisa a mensagem').parameters.text
+ok('a IA da equipe recebe as mensagens numeradas (com o aviso de empresa na frente, na conta só de RH) e tem o próprio modelo',
+  porNome('Analisa a mensagem').parameters.text === "={{ $('Sou a última mensagem?').first().json.textoParaIA }}"
+  && porNome('Analisa a equipe').parameters.text === "={{ ($('Junta quem escreveu').first().json.contextoIA || '') + $('Sou a última mensagem?').first().json.textoParaIA }}"
   && destinos('Modelo da equipe', 0, 'ai_languageModel').join() === 'Analisa a equipe' && destinos('Modelo de análise', 0, 'ai_languageModel').join() === 'Analisa a mensagem')
 
 // Monta a resposta da equipe
@@ -610,7 +645,12 @@ ok('nada a responder: o ramo para', respostasEq(montaEq({ tipo: 'outro', pontos:
 // O envio da equipe
 ok('equipe: respostas uma de cada vez; a pergunta só depois de todas', destinos('Respostas da equipe').join() === 'Tem mensagem?' && destinos('Tem mensagem?', 0).join() === 'Uma de cada vez (equipe)'
   && destinos('Uma de cada vez (equipe)', 1).join() === 'Envia à equipe' && destinos('Envia à equipe').join() === 'Uma de cada vez (equipe)' && destinos('Uma de cada vez (equipe)', 0).join() === 'Vai perguntar?'
-  && porNome('Uma de cada vez (equipe)').parameters.batchSize === 1)
+  && padraoOu(porNome('Uma de cada vez (equipe)').parameters.batchSize, 1))
+// Textos da Helena para a equipe: servem para restaurante e para empresa.
+const codigosDaEquipe = ['Monta a resposta da equipe', 'Respostas da equipe', 'Confirma a escolha'].map((n) => porNome(n).parameters.jsCode).join('\n')
+ok('equipe: nenhuma frase pronta diz "no sistema do restaurante"', !/sistema do restaurante/i.test(codigosDaEquipe))
+ok('equipe: sem nome, a conta só de RH vira "da empresa"; empresa no feminino ganha "da"', porNome('Monta a resposta da equipe').parameters.jsCode.includes("(soRh ? 'da empresa' : 'do restaurante')")
+  && ["'loja'", "'clinica'", "'empresa'"].every((p) => porNome('Monta a resposta da equipe').parameters.jsCode.includes(p)))
 ok('"Tem mensagem?": sem texto (do segundo feedback em diante) vai direto para a pergunta', destinos('Tem mensagem?', 1).join() === 'Vai perguntar?'
   && seVale('Tem mensagem?', { temTexto: true }) === true && seVale('Tem mensagem?', { temTexto: false, perguntar: true }) === false)
 const exprCom = (expr, $json, outros) => new Function('$', '$json', 'return (' + expr.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')((n) => ({ first: () => ({ json: outros[n] ?? {} }) }), $json)
