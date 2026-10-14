@@ -23,13 +23,16 @@ import { acaoEquipe, buscarConvites, buscarEnvios, buscarFuncionarios, type Prev
    Por enquanto só o admin da plataforma vê (menu, rotas, a função `equipe` com
    SO_ADMIN e `equipe_liberada()` no banco). */
 
-type Aba = 'funcionarios' | 'envios'
+// A ordem das abas foi invertida a pedido do Raver (14/10/2026): os pedidos de
+// feedback vêm primeiro, o cadastro depois.
+type Aba = 'envios' | 'funcionarios'
 
 export default function Equipe() {
   const { usuario } = useAuth()
   const restauranteId = usuario?.restaurante_id ?? null
   const [carregando, setCarregando] = useState(true)
-  const [aba, setAba] = useState<Aba>('funcionarios')
+  // Abre nos pedidos; sem ninguém cadastrado ainda, abre no cadastro (sem gente não há a quem pedir).
+  const [aba, setAba] = useState<Aba | null>(null)
   const [pedindo, setPedindo] = useState(false)
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([])
   const [envios, setEnvios] = useState<Envio[]>([])
@@ -44,6 +47,7 @@ export default function Equipe() {
       setFuncionarios(f)
       setEnvios(e)
       setConvites(c)
+      setAba((atual) => atual ?? (f.length ? 'envios' : 'funcionarios'))
     } catch {
       toast.error('Não foi possível carregar a equipe.')
     } finally {
@@ -95,17 +99,17 @@ export default function Equipe() {
         </p>
       )}
 
-      <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
+      <Tabs value={aba ?? 'envios'} onValueChange={(v) => setAba(v as Aba)}>
         <TabsList className="mb-4 max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="funcionarios">Cadastro{funcionarios.length ? ` (${funcionarios.length})` : ''}</TabsTrigger>
           <TabsTrigger value="envios">Pedidos de feedback{envios.length ? ` (${envios.length})` : ''}</TabsTrigger>
+          <TabsTrigger value="funcionarios">Cadastro{funcionarios.length ? ` (${funcionarios.length})` : ''}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="funcionarios">
           <AbaFuncionarios restauranteId={restauranteId} funcionarios={funcionarios} onMudou={carregar} />
         </TabsContent>
         <TabsContent value="envios">
-          <AbaEnvios envios={envios} convites={convites} onPedir={() => setPedindo(true)} onMudou={carregar} />
+          <AbaEnvios envios={envios} convites={convites} funcionarios={funcionarios} onPedir={() => setPedindo(true)} onMudou={carregar} />
         </TabsContent>
       </Tabs>
 

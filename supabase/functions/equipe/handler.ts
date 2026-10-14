@@ -13,8 +13,9 @@
 //   cancelar_envio → { envio_id }: tira da fila o que ainda não saiu
 //   rascunho_aviso → { acao_id }: o texto que a IA sugere para contar à equipe que a ação foi concluída
 //   criar_aviso    → { acao_id, texto }: põe o aviso (já revisado) na fila, para a equipe toda
-//   auto_ler       → como está o pedido automático
-//   auto_salvar    → { ativo, cada_dias, dia_do_mes?, pergunta }: liga, desliga ou muda o pedido automático
+//   regras_ler     → as regras de pedido automático da conta (pode ter várias)
+//   regra_salvar   → { id?, nome, ativo, cada_dias, dia_do_mes?, pergunta, funcionarios[] }: cria (sem id) ou muda uma regra
+//   regra_apagar   → { id }: apaga a regra (os pedidos que ela já criou continuam)
 // Só a rotina do banco (x-cron-secret), de minuto em minuto:
 //   tick → cria o pedido automático que venceu e manda a próxima mensagem da fila
 
@@ -44,11 +45,26 @@ export interface ConviteLinha { id: number; envio_id: number; restaurante_id: nu
 export interface EnvioLinha { id: number; restaurante_id: number; pergunta: string; status: string }
 /** Uma ação do quadro da EQUIPE. `sensivel`: nasceu de um relato grave (não é para anunciar sem pensar). */
 export interface AcaoLinha { id: number; restaurante_id: number; titulo: string; plano: string; categoria: string; sensivel: boolean }
-export interface AutomaticoLinha {
-  restaurante_id: number; ativo: boolean; cada_dias: number; pergunta: string
+/** Uma regra de pedido automático. A conta pode ter várias (até MAX_REGRAS). */
+export interface RegraLinha {
+  id: number; restaurante_id: number; nome: string; ativo: boolean; cada_dias: number; pergunta: string
   /** Só no mensal: o dia do mês em que o pedido sai (1 = começo do mês). */
   dia_do_mes: number | null
+  /** Quem recebe: os funcionários escolhidos na regra, um a um (ids). */
+  funcionarios: number[]
   proximo_em: string | null; ultimo_em: string | null; ultimo_erro: string | null
+}
+export const MAX_REGRAS = 20
+
+/** A regra como a tela recebe. */
+export function regraParaTela(r: RegraLinha) {
+  return {
+    id: r.id, nome: r.nome, ativo: r.ativo, cada_dias: r.cada_dias,
+    // Sempre um número para a tela: sem dia gravado, o começo do mês.
+    dia_do_mes: r.dia_do_mes ?? 1,
+    pergunta: r.pergunta, funcionarios: r.funcionarios,
+    proximo_em: r.ativo ? r.proximo_em : null, ultimo_em: r.ultimo_em, ultimo_erro: r.ultimo_erro,
+  }
 }
 
 export interface DepsEquipe {
@@ -74,7 +90,7 @@ export interface DepsEquipe {
     funcionarios: (restauranteId: number) => Promise<FuncionarioLinha[]>
     funcionario: (id: number) => Promise<FuncionarioLinha | null>
     envioAberto: (restauranteId: number) => Promise<boolean>
-    criarEnvio: (linha: { restaurante_id: number; pergunta: string; criado_por: string; tipo?: 'pedido' | 'aviso'; acao_id?: number }) => Promise<number>
+    criarEnvio: (linha: { restaurante_id: number; pergunta: string; criado_por: string; tipo?: 'pedido' | 'aviso'; acao_id?: number; regra_id?: number }) => Promise<number>
     criarConvites: (linhas: Record<string, unknown>[]) => Promise<void>
     envio: (id: number) => Promise<EnvioLinha | null>
     atualizarEnvio: (id: number, campos: Record<string, unknown>) => Promise<void>
@@ -95,10 +111,13 @@ export interface DepsEquipe {
     acaoDaEquipe: (id: number) => Promise<AcaoLinha | null>
     /** Quando a equipe já foi avisada desta ação (aviso não cancelado), ou null. */
     avisoDaAcao: (acaoId: number) => Promise<string | null>
-    automatico: (restauranteId: number) => Promise<AutomaticoLinha | null>
-    salvarAutomatico: (restauranteId: number, campos: Record<string, unknown>) => Promise<void>
-    /** Os pedidos automáticos ligados cuja hora chegou. */
-    automaticosVencidos: (ate: string) => Promise<AutomaticoLinha[]>
+    /** As regras de pedido automático da conta, da mais antiga para a mais nova. */
+    regras: (restauranteId: number) => Promise<RegraLinha[]>
+    /** Cria (id nulo) ou muda uma regra da conta; devolve o id. */
+    salvarRegra: (restauranteId: number, id: number | null, campos: Record<string, unknown>) => Promise<number>
+    apagarRegra: (restauranteId: number, id: number) => Promise<void>
+    /** As regras ligadas cuja hora chegou (de qualquer conta). */
+    regrasVencidas: (ate: string) => Promise<RegraLinha[]>
     /** Quando saiu o último PEDIDO de feedback do restaurante (null = nunca). */
     ultimoPedidoEm: (restauranteId: number) => Promise<string | null>
     nomeDoRestaurante: (restauranteId: number) => Promise<string>
@@ -125,6 +144,9 @@ const RECUSAS = {
   ja_avisou: [409, 'A equipe já foi avisada desta ação.'],
   frequencia_invalida: [400, 'Escolha toda semana, a cada 15 dias ou todo mês.'],
   dia_invalido: [400, 'Escolha um dia do mês de 1 a 31.'],
+  regra_nao_encontrada: [404, 'Essa regra não existe mais.'],
+  regras_demais: [400, `Dá para ter até ${MAX_REGRAS} regras.`],
+  sem_pessoas: [400, 'Escolha pelo menos uma pessoa para receber.'],
   falhou: [500, 'Não foi possível agora. Tente de novo.'],
 } as const
 
@@ -188,23 +210,26 @@ const podeReceber = (f: FuncionarioLinha) => f.ativo && !f.opt_out_em
 export async function criarPedidosAutomaticos(deps: DepsEquipe): Promise<number> {
   const agora = deps.agora()
   let criados = 0
-  for (const a of await deps.db.automaticosVencidos(iso(agora))) {
+  for (const a of await deps.db.regrasVencidas(iso(agora))) {
     const rid = a.restaurante_id
+    const salvar = (campos: Record<string, unknown>) => deps.db.salvarRegra(rid, a.id, campos)
     // Outro envio saindo: espera a vez (tenta de novo no próximo minuto).
     if (await deps.db.envioAberto(rid)) continue
     // Sem WhatsApp: tenta de novo amanhã cedo, e a tela mostra por quê.
     if (!(await deps.whatsapp.conectado(rid).catch(() => false))) {
-      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximaManha(agora)), ultimo_erro: 'O WhatsApp do restaurante estava desconectado.' })
+      await salvar({ proximo_em: iso(proximaManha(agora)), ultimo_erro: 'O WhatsApp estava desconectado.' })
       continue
     }
-    const podem = (await deps.db.funcionarios(rid)).filter(podeReceber)
+    // Só as pessoas escolhidas na regra, e delas só quem pode receber agora.
+    const escolhidos = new Set((a.funcionarios ?? []).map(Number))
+    const podem = (await deps.db.funcionarios(rid)).filter((f) => escolhidos.has(f.id) && podeReceber(f))
     if (!podem.length) {
-      await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_erro: 'Nenhum funcionário ativo para receber.' })
+      await salvar({ proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_erro: 'Ninguém desta regra pode receber agora (desativado ou pediu PARAR).' })
       continue
     }
     const pergunta = validarPergunta(a.pergunta) ?? PERGUNTA_PADRAO
     const restaurante = await deps.db.nomeDoRestaurante(rid)
-    const envioId = await deps.db.criarEnvio({ restaurante_id: rid, pergunta, criado_por: 'automatico', tipo: 'pedido' })
+    const envioId = await deps.db.criarEnvio({ restaurante_id: rid, pergunta, criado_por: 'automatico', tipo: 'pedido', regra_id: a.id })
     await deps.db.criarConvites(podem.map((f) => ({
       envio_id: envioId,
       restaurante_id: rid,
@@ -212,7 +237,7 @@ export async function criarPedidosAutomaticos(deps: DepsEquipe): Promise<number>
       telefone: f.telefone,
       texto: montarConvite({ nome: f.nome, restaurante, pergunta, sorteio: deps.sorteio }),
     })))
-    await deps.db.salvarAutomatico(rid, { proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_em: iso(agora), ultimo_erro: null })
+    await salvar({ proximo_em: iso(proximoPedido(agora, a.cada_dias, a.dia_do_mes)), ultimo_em: iso(agora), ultimo_erro: null })
     criados++
   }
   return criados
@@ -346,11 +371,26 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
       return { status: 200, corpo: { ok: true, envio_id: envioId, convites: podem.length, no_horario: janelaDeEnvio(deps.agora()) } }
     }
 
-    // ── Pedido automático ──
-    if (acao === 'auto_ler' || acao === 'auto_salvar') {
-      const atual = await deps.db.automatico(restauranteId)
-      if (acao === 'auto_salvar') {
-        const ativo = corpo.ativo === true
+    // ── Regras de pedido automático (pode ter várias) ──
+    if (acao === 'regras_ler') {
+      const regras = await deps.db.regras(restauranteId)
+      return { status: 200, corpo: { ok: true, regras: regras.map(regraParaTela), max: MAX_REGRAS, pergunta_padrao: PERGUNTA_PADRAO } }
+    }
+    if (acao === 'regra_apagar') {
+      const id = Number(corpo.id)
+      if (!(await deps.db.regras(restauranteId)).some((r) => r.id === id)) return recusa('regra_nao_encontrada')
+      await deps.db.apagarRegra(restauranteId, id)
+      return { status: 200, corpo: { ok: true } }
+    }
+    if (acao === 'regra_salvar') {
+      const todas = await deps.db.regras(restauranteId)
+      const id = corpo.id == null || corpo.id === '' ? null : Number(corpo.id)
+      const atual = id == null ? null : todas.find((r) => r.id === id) ?? null
+      if (id != null && !atual) return recusa('regra_nao_encontrada')
+      if (id == null && todas.length >= MAX_REGRAS) return recusa('regras_demais')
+      {
+        // Regra nova nasce ligada; na que existe, vale o que a tela mandou.
+        const ativo = corpo.ativo !== false
         const cada = Number(corpo.cada_dias)
         if (!frequenciaValida(cada)) return recusa('frequencia_invalida')
         const pergunta = validarPergunta(corpo.pergunta)
@@ -362,37 +402,31 @@ export async function tratarEquipe(corpo: Record<string, unknown>, deps: DepsEqu
           dia = corpo.dia_do_mes == null ? 1 : diaDoMesValido(corpo.dia_do_mes)
           if (dia == null) return recusa('dia_invalido')
         }
-        // Mexeu só na pergunta: a data combinada continua. Ligou agora, mudou a
-        // frequência ou o dia: recalcula.
+        // Quem recebe: só funcionários desta conta, sem repetir.
+        const daConta = new Set((await deps.db.funcionarios(restauranteId)).map((f) => f.id))
+        const pedidos = Array.isArray(corpo.funcionarios) ? corpo.funcionarios : []
+        const funcionarios = [...new Set(pedidos.map(Number))].filter((n) => daConta.has(n))
+        if (!funcionarios.length) return recusa('sem_pessoas')
+        const nome = String(corpo.nome ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
+        // Mexeu só na pergunta, no nome ou nas pessoas: a data combinada
+        // continua. Ligou agora, mudou a frequência ou o dia: recalcula,
+        // respeitando o último pedido que ESTA regra mandou.
         const manter = ativo && atual?.ativo === true && atual.cada_dias === cada && (atual.dia_do_mes ?? null) === dia
           && !!atual.proximo_em && new Date(atual.proximo_em).getTime() > deps.agora()
-        const ultimo = await deps.db.ultimoPedidoEm(restauranteId)
         const proximo = !ativo
           ? null
           : manter
             ? atual!.proximo_em
-            : iso(primeiroPedidoAutomatico(deps.agora(), cada, ultimo ? new Date(ultimo).getTime() : null, dia))
-        await deps.db.salvarAutomatico(restauranteId, {
-          ativo, cada_dias: cada, dia_do_mes: dia, pergunta, proximo_em: proximo, ultimo_erro: null, atualizado_por: quem.email.toLowerCase(),
-        })
+            : iso(primeiroPedidoAutomatico(deps.agora(), cada, atual?.ultimo_em ? new Date(atual.ultimo_em).getTime() : null, dia))
+        const campos = { nome, ativo, cada_dias: cada, dia_do_mes: dia, pergunta, funcionarios, proximo_em: proximo, ultimo_erro: null, atualizado_por: quem.email.toLowerCase() }
+        const novoId = await deps.db.salvarRegra(restauranteId, id, campos)
         return {
           status: 200,
-          corpo: { ok: true, ativo, cada_dias: cada, dia_do_mes: dia ?? 1, pergunta, proximo_em: proximo, ultimo_em: atual?.ultimo_em ?? null, ultimo_erro: null },
+          corpo: {
+            ok: true,
+            regra: regraParaTela({ id: novoId, restaurante_id: restauranteId, ...campos, ultimo_em: atual?.ultimo_em ?? null }),
+          },
         }
-      }
-      return {
-        status: 200,
-        corpo: {
-          ok: true,
-          ativo: atual?.ativo === true,
-          cada_dias: atual?.cada_dias ?? MENSAL,
-          // Sempre um número para a tela: sem nada gravado, o começo do mês.
-          dia_do_mes: atual?.dia_do_mes ?? 1,
-          pergunta: atual?.pergunta || PERGUNTA_PADRAO,
-          proximo_em: atual?.ativo ? atual.proximo_em : null,
-          ultimo_em: atual?.ultimo_em ?? null,
-          ultimo_erro: atual?.ultimo_erro ?? null,
-        },
       }
     }
 

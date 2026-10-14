@@ -5,7 +5,8 @@
 import {
   AVISO_MAX, AVISO_MIN, avisoDoDiaDoMes, contasDoEnvio, DIA_COMECO_DO_MES, DIA_ESPECIFICO_SUGERIDO, diaDoMesDe, DIAS_ESPECIFICOS, formatarAteQuando, fraseDeRespostas,
   fraseDoPrazo, FREQUENCIAS, lerListaColada, MENSAL, PERGUNTA_MAX, PERGUNTA_MIN,
-  podeReceber, resumoDaFrequencia, resumoDosPedidos, ROTULO_FREQUENCIA, situacaoDoFuncionario, type ConviteAnonimo,
+  NOME_DA_REGRA_MAX, pessoasDaRegra, podeReceber, quantasRecebem, resumoDaFrequencia, resumoDasPessoas, resumoDosPedidos, ROTULO_FREQUENCIA, situacaoDoFuncionario,
+  tituloDaRegra, type ConviteAnonimo,
 } from '../equipe.ts'
 import * as servidor from '../../../supabase/functions/_shared/equipe.ts'
 import { caminhoDoPublico, ehRotaDaEquipe, levaOPublico, TABELAS_COM_PUBLICO } from '../publico-rota.ts'
@@ -93,6 +94,24 @@ ok('o público só vai nas chamadas ao banco', levaOPublico('https://x.supabase.
   && !levaOPublico('https://x.supabase.co/functions/v1/gerar-insights') && !levaOPublico('https://x.supabase.co/auth/v1/token') && !levaOPublico('https://x.supabase.co/storage/v1/object/a'))
 ok('as cinco tabelas do motor têm público (e as duas de ligação acompanham)', ['feedbacks_originais', 'feedbacks_restaurante', 'feedback_temas', 'insights', 'acoes_operacionais', 'insight_feedback', 'feedback_acao']
   .every((x) => TABELAS_COM_PUBLICO.has(x)) && !TABELAS_COM_PUBLICO.has('equipe_funcionarios') && !TABELAS_COM_PUBLICO.has('mensagens_whatsapp'))
+
+// Regras de pedido automático
+const GENTE = [
+  { id: 1, nome: 'Ana Paula Souza', ativo: true, opt_out_em: null },
+  { id: 2, nome: 'Bruno', ativo: true, opt_out_em: null },
+  { id: 3, nome: 'Caio Lima', ativo: false, opt_out_em: null },
+  { id: 4, nome: 'Duda', ativo: true, opt_out_em: '2026-10-01T00:00:00Z' },
+  { id: 5, nome: 'Edu', ativo: true, opt_out_em: null },
+]
+ok('título da regra: o nome dado ou a frequência', tituloDaRegra({ nome: '  Cozinha,   toda semana ', cada_dias: 7, dia_do_mes: 1 }) === 'Cozinha, toda semana'
+  && tituloDaRegra({ nome: '', cada_dias: 30, dia_do_mes: 15 }) === 'Todo mês, no dia 15' && tituloDaRegra({ nome: ' ', cada_dias: 14, dia_do_mes: 1 }) === 'A cada 15 dias')
+ok('nome da regra: até 60 letras, igual ao banco e à função', NOME_DA_REGRA_MAX === 60)
+ok('pessoas da regra: só quem ainda está no cadastro, na ordem do cadastro', pessoasDaRegra([5, 1, 99], GENTE).map((f) => f.id).join() === '1,5')
+ok('resumo das pessoas: um, dois, três e "mais N", só com nome e sobrenome', resumoDasPessoas([1], GENTE) === 'Ana Paula'
+  && resumoDasPessoas([1, 2], GENTE) === 'Ana Paula e Bruno' && resumoDasPessoas([1, 2, 3], GENTE) === 'Ana Paula, Bruno e Caio Lima'
+  && resumoDasPessoas([1, 2, 3, 4, 5], GENTE) === 'Ana Paula, Bruno e mais 3')
+ok('resumo das pessoas: todas removidas do cadastro', resumoDasPessoas([98, 99], GENTE).startsWith('Ninguém') && resumoDasPessoas([], GENTE).startsWith('Ninguém'))
+ok('quantas recebem hoje: tira desativado e quem pediu PARAR', quantasRecebem([1, 2, 3, 4, 5], GENTE) === 3 && quantasRecebem([3, 4], GENTE) === 0 && quantasRecebem([], GENTE) === 0)
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nequipe (tela): tudo certo')
 process.exit(falhas ? 1 : 0)

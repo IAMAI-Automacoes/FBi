@@ -14,7 +14,16 @@ import { chamarIA } from '../_shared/openrouter.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { negocioDaArea, NOME_GENERICO_DA_EMPRESA, PROMPT_AVISO, SCHEMA_AVISO } from '../_shared/equipe.ts'
-import { tratarEquipe } from './handler.ts'
+import { tratarEquipe, type RegraLinha } from './handler.ts'
+
+const COLUNAS_DA_REGRA = 'id, restaurante_id, nome, ativo, cada_dias, dia_do_mes, pergunta, funcionarios, proximo_em, ultimo_em, ultimo_erro'
+// deno-lint-ignore no-explicit-any
+const lerRegra = (r: any): RegraLinha => ({
+  ...r,
+  id: Number(r.id),
+  restaurante_id: Number(r.restaurante_id),
+  funcionarios: (Array.isArray(r.funcionarios) ? r.funcionarios : []).map(Number),
+})
 
 /** O agente que rascunha o aviso de ação concluída (Admin → Agentes). */
 const AGENTE_AVISO = 'aviso_equipe'
@@ -142,25 +151,32 @@ Deno.serve(async (req: Request) => {
           .neq('status', 'cancelado').order('criado_em', { ascending: false }).limit(1)
         return data?.[0]?.criado_em ?? null
       },
-      automatico: async (restauranteId) => {
-        const { data } = await db.from('equipe_automatico')
-          .select('restaurante_id, ativo, cada_dias, dia_do_mes, pergunta, proximo_em, ultimo_em, ultimo_erro').eq('restaurante_id', restauranteId).maybeSingle()
-        return data ? { ...data, restaurante_id: Number(data.restaurante_id) } : null
+      regras: async (restauranteId) => {
+        const { data, error } = await db.from('equipe_regras_pedido').select(COLUNAS_DA_REGRA)
+          .eq('restaurante_id', restauranteId).order('criado_em').order('id')
+        if (error) throw error
+        return (data ?? []).map(lerRegra)
       },
-      salvarAutomatico: async (restauranteId, campos) => {
-        const { data: existe } = await db.from('equipe_automatico').select('restaurante_id').eq('restaurante_id', restauranteId).maybeSingle()
+      salvarRegra: async (restauranteId, id, campos) => {
         const linha = { ...campos, atualizado_em: new Date().toISOString() }
-        const { error } = existe
-          ? await db.from('equipe_automatico').update(linha).eq('restaurante_id', restauranteId)
-          : await db.from('equipe_automatico').insert({ restaurante_id: restauranteId, ...linha })
+        if (id == null) {
+          const { data, error } = await db.from('equipe_regras_pedido').insert({ restaurante_id: restauranteId, ...linha }).select('id').single()
+          if (error) throw error
+          return Number(data.id)
+        }
+        const { error } = await db.from('equipe_regras_pedido').update(linha).eq('id', id).eq('restaurante_id', restauranteId)
+        if (error) throw error
+        return id
+      },
+      apagarRegra: async (restauranteId, id) => {
+        const { error } = await db.from('equipe_regras_pedido').delete().eq('id', id).eq('restaurante_id', restauranteId)
         if (error) throw error
       },
-      automaticosVencidos: async (ate) => {
-        const { data, error } = await db.from('equipe_automatico')
-          .select('restaurante_id, ativo, cada_dias, dia_do_mes, pergunta, proximo_em, ultimo_em, ultimo_erro')
+      regrasVencidas: async (ate) => {
+        const { data, error } = await db.from('equipe_regras_pedido').select(COLUNAS_DA_REGRA)
           .eq('ativo', true).lte('proximo_em', ate).order('proximo_em').limit(5)
         if (error) throw error
-        return (data ?? []).map((a: { restaurante_id: number }) => ({ ...a, restaurante_id: Number(a.restaurante_id) }))
+        return (data ?? []).map(lerRegra)
       },
       ultimoPedidoEm: async (restauranteId) => {
         const { data } = await db.from('equipe_envios').select('criado_em').eq('restaurante_id', restauranteId).eq('tipo', 'pedido')

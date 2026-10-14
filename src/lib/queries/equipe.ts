@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
-import type { ConviteAnonimo, Envio, Frequencia, Funcionario, StatusConvite, StatusEnvio, TipoEnvio } from '@/lib/equipe'
+import type { ConviteAnonimo, Envio, Funcionario, RegraDePedido, StatusConvite, StatusEnvio, TipoEnvio } from '@/lib/equipe'
 
 /* Feedback da equipe: o restaurante cadastra os funcionários e pede feedback
    pelo WhatsApp dele (o mesmo dos clientes). Os pedidos (envios e convites)
@@ -69,12 +69,13 @@ export async function buscarGarconsComNumero(restauranteId: number): Promise<{ n
 
 export async function buscarEnvios(restauranteId: number): Promise<Envio[]> {
   const { data, error } = await supabase.from('equipe_envios')
-    .select('id, restaurante_id, pergunta, status, tipo, acao_id, criado_por, criado_em, concluido_em')
+    .select('id, restaurante_id, pergunta, status, tipo, acao_id, regra_id, criado_por, criado_em, concluido_em')
     .eq('restaurante_id', restauranteId).order('criado_em', { ascending: false }).limit(100)
   if (error) throw error
   return (data ?? []).map((e) => ({
     ...e, id: Number(e.id), restaurante_id: Number(e.restaurante_id), status: e.status as StatusEnvio,
     tipo: (e.tipo === 'aviso' ? 'aviso' : 'pedido') as TipoEnvio, acao_id: e.acao_id == null ? null : Number(e.acao_id),
+    regra_id: e.regra_id == null ? null : Number(e.regra_id),
   }))
 }
 
@@ -108,16 +109,12 @@ export interface RascunhoAviso {
   fecho: string
   whatsapp_conectado: boolean
 }
-/** O pedido automático (ações "auto_ler" e "auto_salvar"). */
-export interface PedidoAutomaticoConfig {
-  ativo: boolean
-  cada_dias: Frequencia
-  /** Só vale no mensal: o dia do mês em que sai (1 = começo do mês). */
-  dia_do_mes: number
-  pergunta: string
-  proximo_em: string | null
-  ultimo_em: string | null
-  ultimo_erro: string | null
+/** As regras de pedido automático da conta (ação "regras_ler"). */
+export interface RegrasDaConta {
+  regras: RegraDePedido[]
+  /** Quantas regras a conta pode ter. */
+  max: number
+  pergunta_padrao: string
 }
 export type RespostaEquipe<T = Record<string, unknown>> = { ok: boolean; motivo?: string; error?: string } & Partial<T>
 

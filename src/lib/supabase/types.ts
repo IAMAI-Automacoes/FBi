@@ -1124,6 +1124,7 @@ export type Database = {
           criado_por: string
           id: number
           pergunta: string
+          regra_id: number | null
           restaurante_id: number
           status: string
           tipo: string
@@ -1135,6 +1136,7 @@ export type Database = {
           criado_por?: string
           id?: never
           pergunta: string
+          regra_id?: number | null
           restaurante_id: number
           status?: string
           tipo?: string
@@ -1146,6 +1148,7 @@ export type Database = {
           criado_por?: string
           id?: never
           pergunta?: string
+          regra_id?: number | null
           restaurante_id?: number
           status?: string
           tipo?: string
@@ -1156,6 +1159,13 @@ export type Database = {
             columns: ["acao_id"]
             isOneToOne: false
             referencedRelation: "acoes_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipe_envios_regra_id_fkey"
+            columns: ["regra_id"]
+            isOneToOne: false
+            referencedRelation: "equipe_regras_pedido"
             referencedColumns: ["id"]
           },
           {
@@ -1207,6 +1217,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "equipe_funcionarios_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipe_regras_pedido: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          cada_dias: number
+          criado_em: string
+          dia_do_mes: number | null
+          funcionarios: number[]
+          id: number
+          nome: string
+          pergunta: string
+          proximo_em: string | null
+          restaurante_id: number
+          ultimo_em: string | null
+          ultimo_erro: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cada_dias: number
+          criado_em?: string
+          dia_do_mes?: number | null
+          funcionarios?: number[]
+          id?: never
+          nome?: string
+          pergunta: string
+          proximo_em?: string | null
+          restaurante_id: number
+          ultimo_em?: string | null
+          ultimo_erro?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cada_dias?: number
+          criado_em?: string
+          dia_do_mes?: number | null
+          funcionarios?: number[]
+          id?: never
+          nome?: string
+          pergunta?: string
+          proximo_em?: string | null
+          restaurante_id?: number
+          ultimo_em?: string | null
+          ultimo_erro?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipe_regras_pedido_restaurante_id_fkey"
             columns: ["restaurante_id"]
             isOneToOne: false
             referencedRelation: "restaurantes"

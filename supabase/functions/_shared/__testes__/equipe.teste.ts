@@ -10,7 +10,7 @@ import {
 } from '../equipe.ts'
 import {
   criarPedidosAutomaticos, podeUsarAEquipe, rodarTick, tratarEquipe,
-  type AcaoLinha, type AutomaticoLinha, type ConviteLinha, type DepsEquipe, type FuncionarioLinha,
+  type AcaoLinha, type ConviteLinha, type RegraLinha, type DepsEquipe, type FuncionarioLinha,
 } from '../../equipe/handler.ts'
 
 let falhas = 0
@@ -57,7 +57,7 @@ function cenario(p: {
   enviar?: () => { ok: boolean; incerto: boolean; messageId: string | null; erro: string | null }
   /** O valor de EQUIPE_PRAZO_IDENTIDADE_HORAS na configuração. */
   prazo?: unknown
-  acoes?: AcaoLinha[]; automaticos?: AutomaticoLinha[]
+  acoes?: AcaoLinha[]; automaticos?: RegraLinha[]
   /** O que a IA do aviso devolve; função que lança = IA fora do ar. */
   rascunho?: string | null | (() => string | null)
 } = {}) {
@@ -73,7 +73,7 @@ function cenario(p: {
   const segundoPlano: Promise<unknown>[] = []
   const agora = p.agora ?? AGORA
   const acoes: AcaoLinha[] = p.acoes ?? []
-  const automaticos: AutomaticoLinha[] = p.automaticos ?? []
+  const automaticos: RegraLinha[] = p.automaticos ?? []
   const pedidosDeRascunho = { n: 0 }
   const deps: DepsEquipe = {
     quemPede: async () => (p.login === false ? null : { restauranteId: 11, nomeRestaurante: 'Camelo', email: 'dono@camelo.com', ehAdmin: p.admin !== false, area: p.area ?? 'restaurante' }),
@@ -98,13 +98,23 @@ function cenario(p: {
       prazoIdentidade: async () => p.prazo ?? null,
       acaoDaEquipe: async (id) => acoes.find((a) => a.id === id) ?? null,
       avisoDaAcao: async (acaoId) => envios.find((e) => e.tipo === 'aviso' && e.acao_id === acaoId && e.status !== 'cancelado')?.criado_em ?? null,
-      automatico: async (rid) => automaticos.find((a) => a.restaurante_id === rid) ?? null,
-      salvarAutomatico: async (rid, campos) => {
-        const a = automaticos.find((x) => x.restaurante_id === rid)
+      regras: async (rid) => automaticos.filter((a) => a.restaurante_id === rid),
+      salvarRegra: async (rid, id, campos) => {
+        if (id == null) {
+          const nova = { id: Math.max(0, ...automaticos.map((a) => a.id)) + 1, restaurante_id: rid, nome: '', ativo: true, cada_dias: 30, dia_do_mes: null, pergunta: '',
+            funcionarios: [], proximo_em: null, ultimo_em: null, ultimo_erro: null, ...campos } as RegraLinha
+          automaticos.push(nova)
+          return nova.id
+        }
+        const a = automaticos.find((x) => x.id === id && x.restaurante_id === rid)
         if (a) Object.assign(a, campos)
-        else automaticos.push({ restaurante_id: rid, ativo: false, cada_dias: 30, dia_do_mes: null, pergunta: '', proximo_em: null, ultimo_em: null, ultimo_erro: null, ...campos } as AutomaticoLinha)
+        return id
       },
-      automaticosVencidos: async (ate) => automaticos.filter((a) => a.ativo && !!a.proximo_em && a.proximo_em <= ate),
+      apagarRegra: async (rid, id) => {
+        const k = automaticos.findIndex((x) => x.id === id && x.restaurante_id === rid)
+        if (k >= 0) automaticos.splice(k, 1)
+      },
+      regrasVencidas: async (ate) => automaticos.filter((a) => a.ativo && !!a.proximo_em && a.proximo_em <= ate),
       ultimoPedidoEm: async (rid) => envios.filter((e) => e.restaurante_id === rid && (e.tipo ?? 'pedido') === 'pedido' && e.status !== 'cancelado')
         .map((e) => e.criado_em ?? null).filter(Boolean).sort().pop() ?? null,
       nomeDoRestaurante: async () => 'Camelo',
@@ -332,44 +342,57 @@ ok('ao ligar (semanal e quinzenal): sem pedido anterior, o primeiro sai amanhã 
 ok('ao ligar: com pedido recente, espera a frequência a partir dele (não manda dois em seguida)', new Date(primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-10-10T15:00:00Z'))).toISOString() === '2026-10-17T13:00:00.000Z'
   && primeiroPedidoAutomatico(AGORA, 7, Date.parse('2026-09-01T15:00:00Z')) === proximaManha(AGORA))
 
-c = cenario()
-r = await tratarEquipe({ acao: 'auto_ler' }, c.deps)
-ok('automático nunca configurado: desligado, todo mês no começo do mês, com a pergunta padrão', r.status === 200 && r.corpo.ativo === false && r.corpo.cada_dias === 30
-  && r.corpo.dia_do_mes === 1 && r.corpo.pergunta === PERGUNTA_PADRAO && r.corpo.proximo_em === null)
-{
-  const m = cenario()
-  let rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, pergunta: PERGUNTA_PADRAO }, m.deps)
-  ok('ligar o mensal sem dizer o dia: começo do mês', rm.status === 200 && rm.corpo.dia_do_mes === 1 && rm.corpo.proximo_em === '2026-11-02T13:00:00.000Z' && m.automaticos[0].dia_do_mes === 1, rm.corpo)
-  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO }, m.deps)
-  ok('mudar o dia do mensal: recalcula para o dia escolhido', rm.corpo.dia_do_mes === 20 && rm.corpo.proximo_em === '2026-10-20T13:00:00.000Z' && m.automaticos[0].dia_do_mes === 20)
-  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 20, pergunta: 'O que mais atrapalha o seu dia de trabalho?' }, m.deps)
-  ok('mensal, mudou só a pergunta: a data combinada continua', rm.corpo.proximo_em === '2026-10-20T13:00:00.000Z')
-  rm = await tratarEquipe({ acao: 'auto_ler' }, m.deps)
-  ok('ler o mensal: devolve o dia escolhido', rm.corpo.cada_dias === 30 && rm.corpo.dia_do_mes === 20)
-  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 30, dia_do_mes: 40, pergunta: PERGUNTA_PADRAO }, m.deps)
-  ok('dia do mês inválido: recusa', rm.status === 400 && rm.corpo.motivo === 'dia_invalido')
-  rm = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO }, m.deps)
-  ok('semanal: o dia do mês não vale (fica vazio)', rm.status === 200 && m.automaticos[0].dia_do_mes === null && rm.corpo.proximo_em === '2026-10-13T13:00:00.000Z')
-}
-r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 14, pergunta: 'O que mais atrapalha o seu dia de trabalho?' }, c.deps)
-ok('ligar o automático: guarda a frequência e a pergunta, e marca o primeiro para amanhã cedo', r.status === 200 && r.corpo.ativo === true && r.corpo.proximo_em === '2026-10-13T13:00:00.000Z'
-  && c.automaticos[0].cada_dias === 14 && c.automaticos[0].pergunta === 'O que mais atrapalha o seu dia de trabalho?' && c.envios.length === 0, r.corpo)
-r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 14, pergunta: 'Tem alguma coisa que poderia melhorar por aqui?' }, c.deps)
-ok('mudar só a pergunta: a data combinada continua', r.corpo.proximo_em === '2026-10-13T13:00:00.000Z' && c.automaticos[0].pergunta.startsWith('Tem alguma coisa'))
-r = await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, c.deps)
-ok('mudar a frequência: recalcula', r.corpo.cada_dias === 7 && r.corpo.proximo_em === '2026-10-13T13:00:00.000Z')
-r = await tratarEquipe({ acao: 'auto_salvar', ativo: false, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, c.deps)
-ok('desligar: sem próxima data', r.corpo.ativo === false && r.corpo.proximo_em === null && c.automaticos[0].proximo_em === null)
-ok('frequência ou pergunta inválida: recusa', (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 10, pergunta: PERGUNTA_PADRAO }, c.deps)).corpo.motivo === 'frequencia_invalida'
-  && (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: 'oi' }, c.deps)).corpo.motivo === 'pergunta_invalida')
-ok('automático: quem não é admin da plataforma não mexe', (await tratarEquipe({ acao: 'auto_salvar', ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO }, cenario({ admin: false }).deps)).status === 403)
-
-const AUTO = (extra: Partial<AutomaticoLinha> = {}): AutomaticoLinha => ({
-  restaurante_id: 11, ativo: true, cada_dias: 7, dia_do_mes: null, pergunta: 'O que mais atrapalha o seu dia de trabalho?', proximo_em: new Date(AGORA - 60_000).toISOString(), ultimo_em: null, ultimo_erro: null, ...extra,
+const AUTO = (extra: Partial<RegraLinha> = {}): RegraLinha => ({
+  id: 1, restaurante_id: 11, nome: '', ativo: true, cada_dias: 7, dia_do_mes: null, pergunta: 'O que mais atrapalha o seu dia de trabalho?', funcionarios: [1, 2, 3, 4],
+  proximo_em: new Date(AGORA - 60_000).toISOString(), ultimo_em: null, ultimo_erro: null, ...extra,
 })
+
+// ── Regras de pedido automático (pode ter várias) ────────────────────────────
+c = cenario()
+r = await tratarEquipe({ acao: 'regras_ler' }, c.deps)
+ok('nenhuma regra ainda: lista vazia, com o limite e a pergunta padrão', r.status === 200 && Array.isArray(r.corpo.regras) && r.corpo.regras.length === 0
+  && r.corpo.max === 20 && r.corpo.pergunta_padrao === PERGUNTA_PADRAO)
+r = await tratarEquipe({ acao: 'regra_salvar', nome: '  Equipe   toda ', cada_dias: 14, pergunta: 'O que mais atrapalha o seu dia de trabalho?', funcionarios: [1, 2, 2, 999] }, c.deps)
+ok('criar regra: nasce ligada, só com gente da conta e sem repetir, e o primeiro sai amanhã cedo', r.status === 200 && r.corpo.regra.id === 1 && r.corpo.regra.ativo === true
+  && r.corpo.regra.nome === 'Equipe toda' && JSON.stringify(r.corpo.regra.funcionarios) === '[1,2]' && r.corpo.regra.proximo_em === '2026-10-13T13:00:00.000Z'
+  && c.automaticos.length === 1 && c.envios.length === 0, r.corpo)
+r = await tratarEquipe({ acao: 'regra_salvar', nome: 'Só a Ana', cada_dias: 30, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, c.deps)
+ok('segunda regra: convive com a primeira, cada uma com a sua data', r.status === 200 && r.corpo.regra.id === 2 && r.corpo.regra.proximo_em === '2026-10-20T13:00:00.000Z'
+  && c.automaticos.length === 2)
+r = await tratarEquipe({ acao: 'regras_ler' }, c.deps)
+ok('ler: as duas regras, na ordem em que foram criadas, com o dia do mensal', r.corpo.regras.map((x: { id: number }) => x.id).join() === '1,2' && r.corpo.regras[1].dia_do_mes === 20
+  && r.corpo.regras[0].dia_do_mes === 1)
+r = await tratarEquipe({ acao: 'regra_salvar', id: 1, nome: 'Equipe toda', ativo: true, cada_dias: 14, pergunta: 'Tem alguma coisa que poderia melhorar por aqui?', funcionarios: [1, 2] }, c.deps)
+ok('mudar só a pergunta: a data combinada continua', r.corpo.regra.proximo_em === '2026-10-13T13:00:00.000Z' && c.automaticos[0].pergunta.startsWith('Tem alguma coisa'))
+r = await tratarEquipe({ acao: 'regra_salvar', id: 1, ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [2] }, c.deps)
+ok('mudar a frequência e as pessoas: recalcula a data e troca quem recebe', r.corpo.regra.cada_dias === 7 && r.corpo.regra.proximo_em === '2026-10-13T13:00:00.000Z'
+  && JSON.stringify(c.automaticos[0].funcionarios) === '[2]')
+r = await tratarEquipe({ acao: 'regra_salvar', id: 2, ativo: false, cada_dias: 30, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, c.deps)
+ok('desligar uma regra: ela fica sem data, e a outra continua', r.corpo.regra.ativo === false && r.corpo.regra.proximo_em === null && c.automaticos[1].proximo_em === null
+  && c.automaticos[0].proximo_em !== null)
+ok('regra sem ninguém, só com gente de fora ou sem a lista: recusa', (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [] }, c.deps)).corpo.motivo === 'sem_pessoas'
+  && (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [999] }, c.deps)).corpo.motivo === 'sem_pessoas'
+  && (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: PERGUNTA_PADRAO }, c.deps)).corpo.motivo === 'sem_pessoas')
+ok('frequência, dia ou pergunta inválida: recusa', (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 10, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, c.deps)).corpo.motivo === 'frequencia_invalida'
+  && (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: 'oi', funcionarios: [1] }, c.deps)).corpo.motivo === 'pergunta_invalida'
+  && (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 30, dia_do_mes: 40, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, c.deps)).corpo.motivo === 'dia_invalido')
+r = await tratarEquipe({ acao: 'regra_salvar', id: 1, ativo: true, cada_dias: 7, dia_do_mes: 20, pergunta: PERGUNTA_PADRAO, funcionarios: [2] }, c.deps)
+ok('semanal: o dia do mês não vale (fica vazio)', r.status === 200 && c.automaticos[0].dia_do_mes === null)
+ok('mexer ou apagar regra que não existe: recusa', (await tratarEquipe({ acao: 'regra_salvar', id: 77, cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, c.deps)).corpo.motivo === 'regra_nao_encontrada'
+  && (await tratarEquipe({ acao: 'regra_apagar', id: 77 }, c.deps)).corpo.motivo === 'regra_nao_encontrada')
+r = await tratarEquipe({ acao: 'regra_apagar', id: 2 }, c.deps)
+ok('apagar uma regra: só ela sai', r.status === 200 && c.automaticos.map((x) => x.id).join() === '1')
+{
+  const cheia = cenario({ automaticos: Array.from({ length: 20 }, (_, k) => AUTO({ id: k + 1 })) })
+  ok('limite de regras: a 21ª é recusada', (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, cheia.deps)).corpo.motivo === 'regras_demais'
+    && (await tratarEquipe({ acao: 'regra_salvar', id: 3, ativo: true, cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, cheia.deps)).status === 200)
+}
+ok('regras: conta de restaurante que não é admin não mexe', (await tratarEquipe({ acao: 'regra_salvar', cada_dias: 7, pergunta: PERGUNTA_PADRAO, funcionarios: [1] }, cenario({ admin: false }).deps)).status === 403)
+
 c = cenario({ automaticos: [AUTO()] })
 let criados = await criarPedidosAutomaticos(c.deps)
 ok('data vencida: cria o pedido para quem pode receber e marca o próximo', criados === 1 && c.envios.length === 1 && c.envios[0].criado_por === 'automatico' && c.envios[0].tipo === 'pedido'
+  && (c.envios[0] as { regra_id?: number }).regra_id === 1
   && c.convites.length === 2 && c.convites[0].texto.includes('O que mais atrapalha o seu dia de trabalho?') && c.convites[0].texto.includes(FRASE_COMO_RESPONDER)
   && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && c.automaticos[0].ultimo_em === new Date(AGORA).toISOString() && c.automaticos[0].ultimo_erro === null, c.automaticos)
 criados = await criarPedidosAutomaticos(c.deps)
@@ -391,7 +414,16 @@ await criarPedidosAutomaticos(c.deps)
 ok('WhatsApp desconectado: não cria, tenta amanhã cedo e diz por quê', c.envios.length === 0 && c.automaticos[0].proximo_em === '2026-10-13T13:00:00.000Z' && /desconectado/.test(String(c.automaticos[0].ultimo_erro)))
 c = cenario({ automaticos: [AUTO()], funcionarios: [] })
 await criarPedidosAutomaticos(c.deps)
-ok('sem ninguém para receber: pula para a próxima data e diz por quê', c.envios.length === 0 && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && /Nenhum funcionário/.test(String(c.automaticos[0].ultimo_erro)))
+ok('sem ninguém para receber: pula para a próxima data e diz por quê', c.envios.length === 0 && c.automaticos[0].proximo_em === '2026-10-19T13:00:00.000Z' && /Ninguém desta regra/.test(String(c.automaticos[0].ultimo_erro)))
+c = cenario({ automaticos: [AUTO({ funcionarios: [1] })] })
+await criarPedidosAutomaticos(c.deps)
+ok('regra só para a Ana: o pedido sai só para ela', c.envios.length === 1 && c.convites.length === 1 && c.convites[0].texto.includes('Ana'))
+c = cenario({ automaticos: [AUTO({ funcionarios: [3, 4] })] })
+await criarPedidosAutomaticos(c.deps)
+ok('regra só com quem está desativado ou pediu PARAR: não manda e diz por quê', c.envios.length === 0 && /Ninguém desta regra/.test(String(c.automaticos[0].ultimo_erro)))
+c = cenario({ automaticos: [AUTO({ id: 1, funcionarios: [1] }), AUTO({ id: 2, funcionarios: [2] })] })
+ok('duas regras vencidas ao mesmo tempo: uma de cada vez (a outra espera o envio aberto)', (await criarPedidosAutomaticos(c.deps)) === 1 && c.envios.length === 1
+  && c.automaticos[1].proximo_em === new Date(AGORA - 60_000).toISOString())
 c = comFila()
 c.automaticos.push(AUTO())
 await criarPedidosAutomaticos(c.deps)

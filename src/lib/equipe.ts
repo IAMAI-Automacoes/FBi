@@ -40,9 +40,29 @@ export interface Envio {
   acao_id: number | null
   /** E-mail de quem criou, ou 'automatico'. */
   criado_por: string
+  /** Pedido automático: a regra que criou (nulo = feito à mão, ou a regra foi apagada). */
+  regra_id: number | null
   criado_em: string
   concluido_em: string | null
 }
+
+/** Uma regra de pedido automático, como a função equipe devolve (regras_ler, regra_salvar). */
+export interface RegraDePedido {
+  id: number
+  /** Um nome curto que o dono deu; vazio = a tela mostra a frequência. */
+  nome: string
+  ativo: boolean
+  cada_dias: Frequencia
+  /** Só vale no mensal: o dia do mês (1 = começo do mês). */
+  dia_do_mes: number
+  pergunta: string
+  /** Quem recebe: os funcionários escolhidos, um a um. */
+  funcionarios: number[]
+  proximo_em: string | null
+  ultimo_em: string | null
+  ultimo_erro: string | null
+}
+export const NOME_DA_REGRA_MAX = 60
 
 /** De quanto em quanto tempo o pedido automático sai (dias). */
 export const FREQUENCIAS = [7, 14, 30] as const
@@ -211,4 +231,32 @@ export function resumoDosPedidos(envios: Pick<Envio, 'id' | 'tipo' | 'status' | 
 export function fraseDeRespostas(c: ContasDoEnvio): string {
   if (!c.enviados) return c.naFila ? 'Ainda saindo' : 'Ninguém recebeu'
   return `${c.responderam} de ${c.enviados} ${c.responderam === 1 ? 'respondeu' : 'responderam'} (${Math.round(c.taxa * 100)}%)`
+}
+
+// ── Regras de pedido automático ──────────────────────────────────────────────
+
+/** O título da regra: o nome que o dono deu ou, sem nome, a frequência ("Todo mês, no dia 15"). */
+export function tituloDaRegra(r: Pick<RegraDePedido, 'nome' | 'cada_dias' | 'dia_do_mes'>): string {
+  return r.nome.replace(/\s+/g, ' ').trim() || resumoDaFrequencia(r.cada_dias, r.dia_do_mes)
+}
+
+/** As pessoas da regra que ainda estão cadastradas, na ordem do cadastro. */
+export function pessoasDaRegra<F extends Pick<Funcionario, 'id'>>(ids: readonly number[], funcionarios: readonly F[]): F[] {
+  const na = new Set(ids)
+  return funcionarios.filter((f) => na.has(f.id))
+}
+
+/** "Ana Paula", "Ana Paula e Bruno", "Ana Paula, Bruno e mais 3", ou "Ninguém (as pessoas foram removidas)". */
+export function resumoDasPessoas(ids: readonly number[], funcionarios: readonly Pick<Funcionario, 'id' | 'nome'>[]): string {
+  const nomes = pessoasDaRegra(ids, funcionarios).map((f) => f.nome.trim().split(/\s+/).slice(0, 2).join(' '))
+  if (!nomes.length) return 'Ninguém (as pessoas foram removidas do cadastro)'
+  if (nomes.length === 1) return nomes[0]
+  if (nomes.length === 2) return `${nomes[0]} e ${nomes[1]}`
+  if (nomes.length === 3) return `${nomes[0]}, ${nomes[1]} e ${nomes[2]}`
+  return `${nomes[0]}, ${nomes[1]} e mais ${nomes.length - 2}`
+}
+
+/** Quantas pessoas da regra recebem de fato hoje (ativas e sem PARAR). */
+export function quantasRecebem(ids: readonly number[], funcionarios: readonly Pick<Funcionario, 'id' | 'ativo' | 'opt_out_em'>[]): number {
+  return pessoasDaRegra(ids, funcionarios).filter(podeReceber).length
 }
