@@ -14,10 +14,13 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { WhatsappIcon } from '@/components/WhatsappIcon'
+import { TrocaDeVersao } from '@/components/TrocaDeVersao'
+import { useAuth } from '@/hooks/use-auth'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
+import { abaDaVersao, abasDaVersao, type AbaAdmin } from '@/lib/admin-versoes'
 
-export type AbaAdmin =
-  | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'videos' | 'pagamentos' | 'cupons'
-  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
+export type { AbaAdmin }
 
 export const ABAS_ADMIN: { key: AbaAdmin; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'suporte', label: 'Suporte', icon: LifeBuoy },
@@ -42,9 +45,15 @@ export const LARGURA_MENU_ADMIN = '12.5rem'
 
 /* Menu lateral do Painel Admin — o mesmo componente e o mesmo jeito do menu do
    cliente (AppSidebar): fixo à esquerda no computador e gaveta no celular,
-   aberta pelo botão de menu da barra do topo (`TopoAdminCelular`). */
+   aberta pelo botão de menu da barra do topo (`TopoAdminCelular`).
+   Segue a versão da conta do admin (Restaurante | RH, a troca fica no topo):
+   o que só existe numa versão some da outra (lib/admin-versoes.ts). */
 export function MenuAdmin({ aba, onTrocar }: { aba: AbaAdmin; onTrocar: (aba: AbaAdmin) => void }) {
   const { isMobile, setOpenMobile } = useSidebar()
+  const { usuario } = useAuth()
+  const { area } = useArea()
+  const daVersao = abasDaVersao(area)
+  const abas = ABAS_ADMIN.filter((a) => daVersao.includes(a.key))
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-border bg-white text-sidebar-foreground">
@@ -53,13 +62,26 @@ export function MenuAdmin({ aba, onTrocar }: { aba: AbaAdmin; onTrocar: (aba: Ab
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 ring-1 ring-amber-200">
             <ShieldCheck className="h-5 w-5 text-amber-500" />
           </div>
-          <span className="text-[15px] font-semibold leading-tight text-gray-800">Painel Admin</span>
+          <div className="min-w-0">
+            <span className="block text-[15px] font-semibold leading-tight text-gray-800">Painel Admin</span>
+            <span className="block text-[11.5px] leading-tight text-gray-500">Versão {DEFINICOES[area].nome}</span>
+          </div>
         </div>
+        {/* A versão da conta do admin decide o que o painel mostra; ao trocar,
+            volta para a mesma aba (se ela existir na outra versão). */}
+        {usuario?.restaurante_id && (
+          <TrocaDeVersao
+            restauranteId={usuario.restaurante_id}
+            area={area}
+            destino={(nova) => `/admin?aba=${abaDaVersao(aba, nova)}`}
+            className="mb-0 mt-3"
+          />
+        )}
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-1">
         <SidebarMenu className="gap-0.5">
-          {ABAS_ADMIN.map((item) => {
+          {abas.map((item) => {
             const ativa = aba === item.key
             return (
               <SidebarMenuItem key={item.key}>

@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { buscarRestaurantesWhatsapp, type RestauranteWhatsappAdmin } from '@/lib/queries/admin'
+import { daVersao } from '@/lib/admin-versoes'
+import { useArea } from '@/lib/area'
 import { formatarTelefone, normalizarBusca } from '@/lib/whatsapp/formatacao'
 import { TelaWhatsapp } from '@/components/whatsapp/TelaWhatsapp'
 import { WhatsappDesconectado } from '@/components/whatsapp/WhatsappDesconectado'
@@ -14,6 +16,7 @@ import { Avatar, WA } from '@/components/whatsapp/pecas'
  * Painel do admin, aba WhatsApp: escolhe um restaurante e vê a tela
  * WhatsApp dele exatamente como o dono vê — só leitura (TelaWhatsapp
  * modo 'admin': não marca como lida, sem sino, fixar ou "Enviar mensagem").
+ * A lista tem só as contas da versão do painel (Restaurante ou RH).
  *
  * A escolha fica na URL (?restaurante=<id>: recarregar mantém) e no aparelho
  * (o último escolhido abre sozinho ao voltar para a aba).
@@ -45,6 +48,8 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
   /** No topo com um restaurante escolhido (celular): só o botão "Trocar". */
   compacto?: boolean
 }) {
+  const { ehRh, Negocio } = useArea()
+  const nomeDoTipo = ehRh ? 'empresa' : 'restaurante'
   return (
     <Popover open={aberto} onOpenChange={aoMudarAberto}>
       <PopoverTrigger asChild>
@@ -52,14 +57,14 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
           type="button"
           role="combobox"
           aria-expanded={aberto}
-          aria-label={escolhido ? 'Trocar restaurante' : 'Escolher restaurante'}
+          aria-label={escolhido ? `Trocar ${nomeDoTipo}` : `Escolher ${nomeDoTipo}`}
           className={cn(
             'flex shrink-0 items-center gap-2 rounded-full border border-gray-300 bg-white text-[13.5px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50',
             compacto ? 'px-3 py-1.5' : 'w-full max-w-sm justify-between px-4 py-2.5',
           )}
         >
           <span className="truncate">
-            {escolhido ? (<><span className="sm:hidden">Trocar</span><span className="hidden sm:inline">Trocar restaurante</span></>) : 'Escolher restaurante'}
+            {escolhido ? (<><span className="sm:hidden">Trocar</span><span className="hidden sm:inline">Trocar {nomeDoTipo}</span></>) : `Escolher ${nomeDoTipo}`}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" />
         </button>
@@ -68,7 +73,7 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
         <Command filter={filtrarRestaurante}>
           <CommandInput placeholder="Pesquisar nome, e-mail ou número" />
           <CommandList className="max-h-[min(380px,60vh)]">
-            <CommandEmpty>Nenhum restaurante com isso.</CommandEmpty>
+            <CommandEmpty>{ehRh ? 'Nenhuma empresa com isso.' : 'Nenhum restaurante com isso.'}</CommandEmpty>
             <CommandGroup>
               {lista.map((r) => (
                 <CommandItem
@@ -81,7 +86,7 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
                   <Avatar nome={r.nome} foto={r.logo_url} tamanho={36} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-gray-900">
-                      {r.nome || `Restaurante ${r.id}`}
+                      {r.nome || `${Negocio} ${r.id}`}
                       {r.excluida_em && <span className="ml-1.5 text-[11px] font-normal text-red-500">(excluída)</span>}
                     </p>
                     <p className="truncate text-[12px] text-gray-500">
@@ -103,6 +108,7 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
 }
 
 export function PainelWhatsappAdmin() {
+  const { area, ehRh, Negocio } = useArea()
   const [params, setParams] = useSearchParams()
   const idUrl = Number(params.get('restaurante')) || null
   const [lista, setLista] = useState<RestauranteWhatsappAdmin[] | null>(null)
@@ -112,10 +118,10 @@ export function PainelWhatsappAdmin() {
   useEffect(() => {
     let ativo = true
     buscarRestaurantesWhatsapp()
-      .then((l) => { if (ativo) setLista(l) })
+      .then((l) => { if (ativo) setLista(daVersao(l, area, (r) => r.area)) })
       .catch(() => { if (ativo) setErro(true) })
     return () => { ativo = false }
-  }, [])
+  }, [area])
 
   // Voltou para a aba sem ?restaurante=: abre o último escolhido neste aparelho.
   useEffect(() => {
@@ -138,7 +144,7 @@ export function PainelWhatsappAdmin() {
     : null), [escolhido])
 
   if (erro) {
-    return <p className="m-auto px-6 text-center text-sm text-gray-500">Não consegui carregar os restaurantes. Recarregue a página.</p>
+    return <p className="m-auto px-6 text-center text-sm text-gray-500">Não consegui carregar {ehRh ? 'as empresas' : 'os restaurantes'}. Recarregue a página.</p>
   }
   if (!lista) {
     return <div className="m-auto"><Loader2 className="h-6 w-6 animate-spin" style={{ color: WA.TEAL }} /></div>
@@ -150,9 +156,9 @@ export function PainelWhatsappAdmin() {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-[#F0F2F5] px-6 text-center">
         <Eye className="h-10 w-10 text-[#128C7E] opacity-80" />
         <div>
-          <p className="text-[18px] font-semibold text-gray-800">Escolha um restaurante</p>
+          <p className="text-[18px] font-semibold text-gray-800">{ehRh ? 'Escolha uma empresa' : 'Escolha um restaurante'}</p>
           <p className="mt-1 max-w-sm text-[13.5px] text-gray-500">
-            Você vê a tela WhatsApp dele exatamente como o dono vê — só leitura.
+            Você vê a tela WhatsApp {ehRh ? 'dela' : 'dele'} exatamente como o dono vê — só leitura.
           </p>
         </div>
         <EscolherRestaurante lista={lista} escolhido={null} aoEscolher={escolher} aberto={aberto} aoMudarAberto={setAberto} />
@@ -166,7 +172,7 @@ export function PainelWhatsappAdmin() {
       <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
         <Avatar nome={escolhido.nome} foto={escolhido.logo_url} tamanho={44} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold text-gray-900">{escolhido.nome || `Restaurante ${escolhido.id}`}</p>
+          <p className="truncate text-[15px] font-semibold text-gray-900">{escolhido.nome || `${Negocio} ${escolhido.id}`}</p>
           {/* No celular, o número desce para a linha de baixo em vez de ser cortado. */}
           <p className="flex flex-wrap gap-x-1.5 text-[12.5px] leading-snug text-gray-500">
             <span className="max-w-full truncate">{escolhido.email || 'sem e-mail'}</span>

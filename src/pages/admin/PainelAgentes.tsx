@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { CATALOGO_AGENTES, COMO_FUNCIONA, AgenteInfo, BlocoPrompt } from '@/lib/ia/catalogo-agentes'
+import { COMO_FUNCIONA, AgenteInfo, BlocoPrompt } from '@/lib/ia/catalogo-agentes'
+import { agentesDaVersao, type AgenteDaVersao } from '@/lib/ia/agentes-da-versao'
+import { ROTULO_DO_ALCANCE, type Alcance } from '@/lib/admin-versoes'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
 import { promptOverride, salvarPromptEditavel, placeholdersDe, dadoAtivo, salvarConfigObj } from '@/lib/ia/prompt-store'
 import {
   configDoAgente,
@@ -22,8 +26,22 @@ import {
   Info, Cpu, Plus, Check, Trash2, Sliders, Server, MonitorSmartphone, Globe,
 } from 'lucide-react'
 
+// ── Onde um agente ou um prompt vale (Restaurante, RH ou as duas) ──────────
+const COR_DO_ALCANCE: Record<Alcance, string> = {
+  as_duas: 'text-sky-700 bg-sky-100',
+  restaurante: 'text-orange-700 bg-orange-100',
+  rh: 'text-teal-700 bg-teal-100',
+}
+function SeloDoAlcance({ alcance }: { alcance: Alcance }) {
+  return (
+    <span className={cn('text-[10px] font-medium rounded px-1.5 py-0.5 shrink-0', COR_DO_ALCANCE[alcance])}>
+      {ROTULO_DO_ALCANCE[alcance]}
+    </span>
+  )
+}
+
 // ── Editor de um bloco de prompt ─────────────────────────────────────────────
-function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
+function BlocoEditor({ bloco }: { bloco: BlocoPrompt & { alcance?: Alcance } }) {
   const { toast } = useToast()
   const valorAtual = (bloco.chave && promptOverride(bloco.chave)) || bloco.conteudo
   const [texto, setTexto] = useState(valorAtual)
@@ -73,8 +91,9 @@ function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
     <div className="rounded-lg border border-gray-200 overflow-hidden">
       <div className="flex items-start justify-between gap-3 px-3.5 py-2.5 bg-gray-50/70 border-b border-gray-300">
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-gray-800 flex items-center gap-1.5">
+          <p className="text-[13px] font-semibold text-gray-800 flex flex-wrap items-center gap-1.5">
             {bloco.titulo}
+            {bloco.alcance && <SeloDoAlcance alcance={bloco.alcance} />}
             {bloco.editavel
               ? sobrescrito && <span className="text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">editado</span>
               : <span className="text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1.5 py-0.5 inline-flex items-center gap-1"><Lock className="h-2.5 w-2.5" /> referência</span>}
@@ -121,21 +140,27 @@ function BlocoEditor({ bloco }: { bloco: BlocoPrompt }) {
 }
 
 // ── Interruptores de dados do assistente principal ──────────────────────────
-const DADOS_ASSISTENTE: { id: string; label: string }[] = [
-  { id: 'perfil', label: 'Perfil do restaurante' },
+// Um interruptor só para as duas versões; `rh` é o nome dele na versão RH
+// (null = não existe lá, e some da tela).
+const DADOS_ASSISTENTE: { id: string; label: string; rh?: string | null }[] = [
+  { id: 'perfil', label: 'Perfil do restaurante', rh: 'Perfil da empresa' },
   { id: 'perfil_notas', label: 'Notas pessoais do dono' },
   { id: 'kpis', label: 'Números do período (satisfação, volume)' },
-  { id: 'categorias', label: 'Satisfação por categoria' },
-  { id: 'garcons', label: 'Garçons cadastrados' },
+  { id: 'categorias', label: 'Satisfação por categoria', rh: 'Satisfação por categoria da equipe' },
+  { id: 'garcons', label: 'Garçons cadastrados', rh: null },
   { id: 'insights', label: 'Insights ativos' },
   { id: 'acoes', label: 'Ações em aberto' },
-  { id: 'feedbacks', label: 'Avaliações recentes dos clientes' },
+  { id: 'feedbacks', label: 'Avaliações recentes dos clientes', rh: 'Feedbacks recentes dos funcionários' },
   { id: 'memoria', label: 'Memória de longo prazo (anotações)' },
-  { id: 'conhecimento', label: 'Materiais de treinamento (busca)' },
+  { id: 'conhecimento', label: 'Materiais de treinamento (busca)', rh: 'Materiais de treinamento do RH (busca)' },
 ]
 
 function ToggleDadosAssistente() {
   const { toast } = useToast()
+  const { ehRh } = useArea()
+  const dados = DADOS_ASSISTENTE
+    .map((d) => ({ id: d.id, label: ehRh && d.rh !== undefined ? d.rh : d.label }))
+    .filter((d): d is { id: string; label: string } => d.label !== null)
   const [estado, setEstado] = useState<Record<string, boolean>>(() => {
     const o: Record<string, boolean> = {}
     for (const d of DADOS_ASSISTENTE) o[d.id] = dadoAtivo('assistente_dados', d.id)
@@ -156,14 +181,14 @@ function ToggleDadosAssistente() {
     <div className="space-y-2">
       <p className="text-[13px] font-semibold text-gray-700 flex items-center gap-1.5"><Database className="h-3.5 w-3.5" /> Dados que este agente recebe</p>
       <div className="rounded-lg border border-gray-200 divide-y">
-        {DADOS_ASSISTENTE.map((d) => (
+        {dados.map((d) => (
           <div key={d.id} className="flex items-center justify-between px-3.5 py-2.5">
             <span className="text-sm text-gray-800">{d.label}</span>
             <Switch checked={estado[d.id] ?? true} disabled={ocupado === d.id} onCheckedChange={() => alternar(d.id)} />
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-gray-400">Desligar um dado o tira do contexto que a IA recebe — vale para todos os restaurantes.</p>
+      <p className="text-[11px] text-gray-400">Desligar um dado o tira do contexto que a IA recebe — vale para as duas versões, em todas as contas.</p>
     </div>
   )
 }
@@ -307,7 +332,7 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
             <label className="text-[12.5px] font-medium text-gray-700">Limite de tokens</label>
             <Input type="number" min={1} value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)}
               placeholder={String(agente.params.max_tokens ?? 'padrão')} className="h-8 mt-1" />
-            <p className="text-[11px] text-gray-400 mt-0.5">Afeta o custo e conta no crédito do restaurante.</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Afeta o custo e conta no crédito de IA de cada conta.</p>
           </div>
           <div>
             <label className="text-[12.5px] font-medium text-gray-700">top_p</label>
@@ -427,7 +452,7 @@ function EditorParams({ agente, modelos }: { agente: AgenteInfo; modelos: Modelo
 }
 
 // ── Detalhe de um agente (tela dedicada) ─────────────────────────────────────
-function AgenteDetalhe({ agente, onVoltar, modelos }: { agente: AgenteInfo; onVoltar: () => void; modelos: ModeloIA[] }) {
+function AgenteDetalhe({ agente, onVoltar, modelos }: { agente: AgenteDaVersao; onVoltar: () => void; modelos: ModeloIA[] }) {
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       <button onClick={onVoltar} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
@@ -450,6 +475,7 @@ function AgenteDetalhe({ agente, onVoltar, modelos }: { agente: AgenteInfo; onVo
               {agente.camada === 'servidor' ? <Server className="h-2.5 w-2.5" /> : <MonitorSmartphone className="h-2.5 w-2.5" />}
               {agente.camada === 'servidor' ? 'Roda no servidor' : 'Roda no navegador'}
             </span>
+            <SeloDoAlcance alcance={agente.alcance} />
             <code className="text-[10.5px] font-mono text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
               {agente.arquivo}
             </code>
@@ -459,6 +485,11 @@ function AgenteDetalhe({ agente, onVoltar, modelos }: { agente: AgenteInfo; onVo
               ? 'As alterações valem na próxima execução da edge function.'
               : 'As alterações valem quando a página for recarregada.'}
           </p>
+          {agente.alcance === 'as_duas' && (
+            <p className="text-[11px] text-gray-500 mt-1">
+              Modelo, temperatura e ligado/desligado deste agente valem para as duas versões. Cada prompt abaixo diz onde vale.
+            </p>
+          )}
         </div>
       </div>
 
@@ -490,7 +521,7 @@ function AgenteDetalhe({ agente, onVoltar, modelos }: { agente: AgenteInfo; onVo
       {agente.blocos.length > 0 && (
         <div className="space-y-3">
           <p className="text-[13px] font-semibold text-gray-700">System prompt</p>
-          {agente.blocos.map((b, i) => <BlocoEditor key={i} bloco={b} />)}
+          {agente.blocos.map((b, i) => <BlocoEditor key={b.chave ?? i} bloco={b} />)}
         </div>
       )}
     </div>
@@ -610,17 +641,21 @@ type Vista = { t: 'lista' } | { t: 'agente'; id: string } | { t: 'modelo' } | { 
 export function PainelAgentes() {
   const [vista, setVista] = useState<Vista>({ t: 'lista' })
   const [modelos, setModelos] = useState<ModeloIA[]>([])
+  // Os agentes da versão do painel (lib/admin-versoes.ts): os que só trabalham
+  // na outra somem, e cada um mostra o prompt que esta versão usa.
+  const { area, ehRh } = useArea()
+  const agentes = useMemo(() => agentesDaVersao(area), [area])
+  const agenteAberto = vista.t === 'agente' ? agentes.find((a) => a.id === vista.id) : undefined
 
   // Carregado no painel para o seletor "modelo deste agente" ter as opções.
   useEffect(() => {
     listarModelos().then(setModelos).catch(() => setModelos([]))
   }, [])
 
-  if (vista.t === 'agente') {
-    const agente = CATALOGO_AGENTES.find((a) => a.id === vista.id)!
+  if (agenteAberto) {
     return (
       <div className="flex-1 overflow-y-auto sem-barra p-6">
-        <AgenteDetalhe agente={agente} onVoltar={() => setVista({ t: 'lista' })} modelos={modelos} />
+        <AgenteDetalhe agente={agenteAberto} onVoltar={() => setVista({ t: 'lista' })} modelos={modelos} />
       </div>
     )
   }
@@ -639,7 +674,7 @@ export function PainelAgentes() {
     <div className="flex-1 overflow-y-auto sem-barra p-6">
       <div className="max-w-4xl mx-auto space-y-5">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Agentes de IA</h2>
+          <h2 className="text-xl font-bold text-gray-900">Agentes de IA <span className="text-base font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
           <p className="text-sm text-gray-600 mt-1">
             Todos os agentes do sistema. Clique num agente para ver e editar o que ele acessa, sua
             memória, o system prompt real e os parâmetros de inferência.
@@ -647,6 +682,12 @@ export function PainelAgentes() {
           <p className="text-[12px] text-gray-500 mt-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
             Criar e remover agente é mudança de código: um agente não é só um prompt, é também o
             ponto onde ele é chamado. Aqui você edita os que existem.
+          </p>
+          <p className="text-[12px] text-gray-600 mt-2 bg-sky-50/70 border border-sky-100 rounded-lg px-3 py-2">
+            {ehRh
+              ? 'Versão RH: os agentes que leem os feedbacks mostram o prompt da equipe, que é o que as contas RH usam. '
+              : 'Versão Restaurante: os agentes que leem os feedbacks mostram o prompt dos clientes. O da equipe fica na versão RH. '}
+            Modelo, temperatura e ligado/desligado são os mesmos nas duas versões. Para ver a outra, troque a versão no topo do menu.
           </p>
         </div>
 
@@ -686,7 +727,7 @@ export function PainelAgentes() {
         </div>
 
         <div className="space-y-2.5">
-          {CATALOGO_AGENTES.map((a) => (
+          {agentes.map((a) => (
             <button
               key={a.id}
               onClick={() => setVista({ t: 'agente', id: a.id })}
@@ -702,6 +743,7 @@ export function PainelAgentes() {
                   )}>
                     {a.camada}
                   </span>
+                  {a.alcance !== 'as_duas' && <SeloDoAlcance alcance={a.alcance} />}
                 </p>
                 <p className="text-[12.5px] text-gray-600 mt-0.5 leading-snug line-clamp-2">{a.papel}</p>
                 <code className="text-[10.5px] font-mono text-gray-400 mt-1 block truncate">{a.arquivo}</code>

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import type { Area } from '@/lib/areas'
 
 export interface DocumentoIA {
   id: string
@@ -203,12 +204,17 @@ export async function removerDocumento(id: string): Promise<void> {
 // São documentos com restaurante_id = NULL / escopo = 'global', compartilhados
 // com TODOS os restaurantes pela busca da IA. Gerenciados na tela do painel admin.
 
-/** Lista só os documentos globais (material de referência da plataforma). */
-export async function listarDocumentosGlobais(): Promise<DocumentoIA[]> {
+/**
+ * Lista só os documentos globais (material de referência da plataforma) de uma
+ * versão do EasyFeed: cada versão tem a sua base, e a IA de uma conta só
+ * consulta a da versão dela (buscar_conhecimento*, no banco).
+ */
+export async function listarDocumentosGlobais(area: Area): Promise<DocumentoIA[]> {
   const { data, error } = await supabase
     .from('documentos_ia')
     .select('*')
     .eq('escopo', 'global')
+    .eq('area', area)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data || []) as DocumentoIA[]
@@ -221,7 +227,9 @@ export async function listarDocumentosGlobais(): Promise<DocumentoIA[]> {
  */
 export async function indexarDocumentoGlobal(
   entrada: { titulo: string; descricao?: string; texto: string; origem?: string; url?: string },
-  onProgresso?: (feito: number, total: number) => void,
+  onProgresso: ((feito: number, total: number) => void) | undefined,
+  /** De que versão é o material (a base do restaurante ou a do RH). */
+  area: Area,
 ): Promise<DocumentoIA> {
   const trechos = dividirEmTrechos(entrada.texto)
   if (!trechos.length) throw new Error('Não foi possível extrair texto suficiente.')
@@ -235,6 +243,7 @@ export async function indexarDocumentoGlobal(
       origem: entrada.origem || 'texto',
       url: entrada.url || null,
       escopo: 'global',
+      area,
       status: 'pendente',
     })
     .select()

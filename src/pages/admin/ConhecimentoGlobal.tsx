@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
 import {
   listarDocumentosGlobais, indexarDocumentoGlobal, removerDocumento,
   buscarConteudoDocumento, extrairTextoDeUrl, extrairTextoDePdf, DocumentoIA,
@@ -18,13 +20,19 @@ import {
 
 /**
  * Base de conhecimento GLOBAL da plataforma. É o material padrão que a IA
- * consulta para TODOS os restaurantes (escopo='global', restaurante_id=null).
- * Só admins da plataforma abrem esta tela; os restaurantes NÃO veem estes
+ * consulta para TODAS as contas (escopo='global', restaurante_id=null).
+ * Só admins da plataforma abrem esta tela; os clientes NÃO veem estes
  * documentos nas próprias Configurações.
+ *
+ * Cada versão do EasyFeed tem a sua base (documentos_ia.area): a tela mostra e
+ * grava a da versão do painel, e a IA de uma conta só consulta a da versão dela.
  */
 export function ConhecimentoGlobal() {
   const { confirmar, dialogo } = useConfirmacao()
   const { toast } = useToast()
+  const { area, ehRh } = useArea()
+  const nomeDaVersao = DEFINICOES[area].nome
+  const quemConsulta = ehRh ? 'todas as contas RH' : 'todos os restaurantes'
   const [docs, setDocs] = useState<DocumentoIA[]>([])
   const [carregando, setCarregando] = useState(true)
   const [processando, setProcessando] = useState(false)
@@ -39,11 +47,11 @@ export function ConhecimentoGlobal() {
 
   const carregar = async () => {
     try {
-      setDocs(await listarDocumentosGlobais())
+      setDocs(await listarDocumentosGlobais(area))
     } catch { /* silencioso */ }
     setCarregando(false)
   }
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, [area]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const abrirVisualizacao = async (doc: DocumentoIA) => {
     setVendo(doc)
@@ -59,8 +67,8 @@ export function ConhecimentoGlobal() {
     setProcessando(true)
     setProgresso({ feito: 0, total: 0 })
     try {
-      await indexarDocumentoGlobal(entrada, (feito, total) => setProgresso({ feito, total }))
-      toast({ title: 'Material adicionado', description: 'A IA de todos os restaurantes já pode consultar este conteúdo.' })
+      await indexarDocumentoGlobal(entrada, (feito, total) => setProgresso({ feito, total }), area)
+      toast({ title: 'Material adicionado', description: `A IA de ${quemConsulta} já pode consultar este conteúdo.` })
       setUrl(''); setTexto(''); setTituloTexto('')
       await carregar()
     } catch (e: any) {
@@ -110,7 +118,7 @@ export function ConhecimentoGlobal() {
   const excluir = async (doc: DocumentoIA) => {
     const ok = await confirmar({
       titulo: `Remover "${doc.titulo}"?`,
-      descricao: 'Afeta a IA de todos os restaurantes.',
+      descricao: `Afeta a IA de ${quemConsulta}.`,
       confirmar: 'Remover',
       destrutivo: true,
     })
@@ -136,12 +144,24 @@ export function ConhecimentoGlobal() {
         <div>
           <div className="flex items-center gap-2">
             <Globe className="w-5 h-5 text-[#1D4ED8]" />
-            <h2 className="text-lg font-semibold text-gray-800">Base de conhecimento global</h2>
+            <h2 className="text-lg font-semibold text-gray-800">Base de conhecimento <span className="font-normal text-gray-400">· versão {nomeDaVersao}</span></h2>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
-            Material padrão da plataforma — boas práticas de atendimento, feedback, operação de
-            restaurante. A IA de <strong>todos</strong> os restaurantes consulta este conteúdo por
-            padrão, e ele <strong>não</strong> aparece nas Configurações de cada cliente.
+          {ehRh ? (
+            <p className="text-sm text-gray-500 mt-1">
+              Material padrão da versão RH — gestão de pessoas, feedback com a equipe, clima,
+              liderança, regras de trabalho. A IA de <strong>todas</strong> as contas RH consulta este
+              conteúdo por padrão (a dos restaurantes, não), e ele <strong>não</strong> aparece nas
+              Configurações de cada cliente.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 mt-1">
+              Material padrão da plataforma — boas práticas de atendimento, feedback, operação de
+              restaurante. A IA de <strong>todos</strong> os restaurantes consulta este conteúdo por
+              padrão (a das contas RH, não), e ele <strong>não</strong> aparece nas Configurações de cada cliente.
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-1.5">
+            Cada versão tem a sua base. Para ver a {ehRh ? 'do Restaurante' : 'do RH'}, troque a versão no topo do menu.
           </p>
         </div>
 
@@ -159,7 +179,7 @@ export function ConhecimentoGlobal() {
                 <Label htmlFor="g-titulo">Título</Label>
                 <Input
                   id="g-titulo" value={tituloTexto} onChange={(e) => setTituloTexto(e.target.value)}
-                  placeholder="Ex: Como responder a uma reclamação de demora" disabled={processando}
+                  placeholder={ehRh ? 'Ex: Como dar retorno à equipe depois de uma pesquisa de clima' : 'Ex: Como responder a uma reclamação de demora'} disabled={processando}
                 />
               </div>
               <div className="space-y-2">
@@ -175,7 +195,7 @@ export function ConhecimentoGlobal() {
                 onClick={() => indexar({ titulo: tituloTexto || 'Material', texto })}
                 disabled={processando || texto.trim().length < 200}
               >
-                Adicionar à base global
+                Adicionar à base {ehRh ? 'do RH' : 'do Restaurante'}
               </Button>
               {texto.trim().length > 0 && texto.trim().length < 200 && (
                 <p className="text-xs text-amber-600">Escreva um pouco mais (mínimo ~200 caracteres).</p>
@@ -230,13 +250,15 @@ export function ConhecimentoGlobal() {
         {/* Lista */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
           <h3 className="text-sm font-semibold mb-3 text-gray-700">
-            Materiais na base global {docs.length > 0 && <span className="text-gray-400 font-normal">· {docs.length}</span>}
+            Materiais nesta base {docs.length > 0 && <span className="text-gray-400 font-normal">· {docs.length}</span>}
           </h3>
           {carregando ? (
             <p className="text-sm text-gray-500">Carregando…</p>
           ) : docs.length === 0 ? (
             <p className="text-sm text-gray-500">
-              Nenhum material global ainda. Adicione a cartilha de boas práticas ou procedimentos padrão.
+              {ehRh
+                ? 'Nenhum material do RH ainda. Adicione guias de gestão de pessoas, feedback com a equipe e clima.'
+                : 'Nenhum material global ainda. Adicione a cartilha de boas práticas ou procedimentos padrão.'}
             </p>
           ) : (
             <ul className="divide-y rounded-lg border">

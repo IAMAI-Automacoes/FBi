@@ -19,6 +19,9 @@ import {
 } from '@/components/ui/select'
 import { usePlatformAdmin } from '@/hooks/use-platform-admin'
 import { useAuth } from '@/hooks/use-auth'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
+import { abaDaVersao, abasDaVersao, daVersao, versaoDaConta } from '@/lib/admin-versoes'
 import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
@@ -1174,17 +1177,28 @@ export default function Admin() {
     (window.matchMedia?.('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true) &&
     (paramApp === 'mensagens' || appLembrado === 'mensagens')
+  // O painel segue a versão da conta do admin (Restaurante | RH, troca no topo
+  // do menu): o que só existe numa versão some da outra, e o que é de uma
+  // conta mostra só as contas da versão na tela (lib/admin-versoes.ts).
+  const { area, negocio } = useArea()
   // ?restaurante=<id>: aba WhatsApp com aquele restaurante (recarregar mantém).
-  // ?aba=contas: volta da conta de um cliente ("Voltar para minha conta").
+  // ?aba=<aba>: volta da conta de um cliente ("Voltar para minha conta", aba
+  // Contas) ou da troca de versão (a mesma aba, se existir na versão nova).
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const q = new URLSearchParams(location.search)
     if (q.has('restaurante')) return 'whatsapp'
-    const aba = q.get('aba')
-    return aba === 'contas' ? aba : 'suporte'
+    return abaDaVersao(q.get('aba'), area)
   })
+  // A versão chega com a conta, às vezes depois do primeiro desenho: aba que
+  // não existe nela volta para o Suporte.
+  useEffect(() => {
+    if (!abasDaVersao(area).includes(activeTab)) setActiveTab('suporte')
+  }, [area, activeTab])
   const trocarAba = (tab: Tab) => {
     // Saindo da aba WhatsApp: os parâmetros dela (?restaurante=, ?chat=…) saem da URL.
-    if (activeTab === 'whatsapp' && tab !== 'whatsapp' && location.search) navigate('/admin', { replace: true })
+    // O ?aba= também sai: recarregar fica na aba em que você está.
+    const q = new URLSearchParams(location.search)
+    if ((activeTab === 'whatsapp' && tab !== 'whatsapp' && location.search) || (q.has('aba') && tab !== activeTab)) navigate('/admin', { replace: true })
     setActiveTab(tab)
   }
   // A página não rola no celular: o topo (Painel Admin, abas e a barra verde
@@ -1202,15 +1216,21 @@ export default function Admin() {
   // Silenciar/fixar do suporte (por admin): sino do topo = tudo; menu de cada
   // conversa = só ela (chave = usuario_id do cliente). Fixadas vão para o topo.
   const prefsSuporte = usePreferencias('suporte_admin')
+  // Suporte da versão na tela: só as conversas das contas dela (quem ainda não
+  // tem conta aparece nas duas). O contador do sino continua somando tudo.
+  const sugestoesDaVersao = useMemo(
+    () => sugestoes.filter((s) => !s.perfil || versaoDaConta(s.perfil.area) === area),
+    [sugestoes, area],
+  )
   const sugestoesOrdenadas = useMemo(() => {
     const fix = (s: SugestaoAdmin) => prefsSuporte.fixadaEm(s.usuario_id)
-    return sugestoes.slice().sort((a, b) => {
+    return sugestoesDaVersao.slice().sort((a, b) => {
       const fa = fix(a), fb = fix(b)
       if (!!fa !== !!fb) return fa ? -1 : 1
       if (fa && fb && fa !== fb) return fa > fb ? -1 : 1
       return 0 // sem fixar: mantém a ordem que já vinha (por atividade)
     })
-  }, [sugestoes, prefsSuporte.fixadaEm])
+  }, [sugestoesDaVersao, prefsSuporte.fixadaEm])
 
   // ── Pagamentos ──
   const [divisoes, setDivisoes] = useState<DivisaoReceita[]>([])
@@ -1611,7 +1631,13 @@ export default function Admin() {
   }
 
   const totalPct = divisoes.filter((d) => d.ativo && d.tipo === 'porcentagem').reduce((a, d) => a + d.valor, 0)
+  // Busca na lista inteira: a notificação de uma conversa da outra versão ainda abre ela.
   const selectedConv = sugestoes.find((s) => s.id === selectedId) ?? null
+  // Não lidas das contas da outra versão: o aviso no topo da lista diz quantas.
+  const outraVersao = area === 'rh' ? 'restaurante' : 'rh'
+  const naoLidasDaOutra = sugestoes
+    .filter((s) => s.perfil && versaoDaConta(s.perfil.area) === outraVersao)
+    .reduce((n, s) => n + unreadCount(s), 0)
 
   if (loadingAdmin || !isAdmin) return null
 
@@ -1647,9 +1673,15 @@ export default function Admin() {
                   <BotaoSino claro silenciado={prefsSuporte.tudoSilenciado} aoAlternar={prefsSuporte.alternarTudo} rotulo="notificações do suporte" />
                 </div>
               </div>
+              {naoLidasDaOutra > 0 && (
+                <p className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[12px] leading-snug text-amber-800">
+                  {naoLidasDaOutra === 1 ? '1 mensagem não lida' : `${naoLidasDaOutra} mensagens não lidas`} de contas {DEFINICOES[outraVersao].nome}.
+                  Troque a versão no topo do menu para ver.
+                </p>
+              )}
               {loadingSugestoes ? (
                 <p className="text-center py-8 text-sm text-gray-400">Carregando…</p>
-              ) : sugestoes.length === 0 ? (
+              ) : sugestoesOrdenadas.length === 0 ? (
                 <p className="text-center py-8 text-sm text-gray-400">Nenhuma mensagem.</p>
               ) : (
                 <div className="overflow-y-auto flex-1">
@@ -1708,7 +1740,10 @@ export default function Admin() {
         {/* ── CONTAS ── */}
         {activeTab === 'contas' && (() => {
           const busca = buscaConta.trim().toLowerCase()
-          const contasBusca = contas.filter((c) =>
+          // Só as contas da versão na tela; o cartão das versões (convite do RH e
+          // troca de versão de uma conta) continua vendo todas.
+          const contasDaVersao = daVersao(contas, area, (c) => c.area)
+          const contasBusca = contasDaVersao.filter((c) =>
             !busca || [c.nome, c.nome_restaurante, c.email].some((v) => (v ?? '').toLowerCase().includes(busca)),
           )
           // Vendedor paga (com cupom) como qualquer conta; aqui ele só ganha um rótulo.
@@ -1728,7 +1763,9 @@ export default function Admin() {
           return (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
-              <h2 className="mb-4 text-base font-semibold text-gray-800">Contas</h2>
+              <h2 className="mb-4 text-base font-semibold text-gray-800">
+                Contas <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span>
+              </h2>
 
               {/* As versões do EasyFeed: convite do RH e troca de versão de uma conta. */}
               <PainelVersoes contas={contas} aoMudar={loadContas} />
@@ -1739,7 +1776,7 @@ export default function Admin() {
                 <input
                   value={buscaConta}
                   onChange={(e) => setBuscaConta(e.target.value)}
-                  placeholder="Buscar por nome, restaurante ou email…"
+                  placeholder={`Buscar por nome, ${negocio} ou email…`}
                   className="w-full h-9 pl-9 pr-3 text-[13px] bg-white border border-gray-200 rounded-lg outline-none focus:border-[#1D4ED8]"
                 />
               </div>
@@ -1771,7 +1808,7 @@ export default function Admin() {
                 <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
               ) : contasFiltradas.length === 0 ? (
                 <p className="text-center py-10 text-sm text-gray-400">
-                  {contas.length === 0 ? 'Nenhuma conta ainda.' : 'Nenhuma conta neste filtro.'}
+                  {contasDaVersao.length === 0 ? `Nenhuma conta ${DEFINICOES[area].nome} ainda.` : 'Nenhuma conta neste filtro.'}
                 </p>
               ) : (
                 <CrudTable>

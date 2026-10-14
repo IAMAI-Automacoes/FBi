@@ -33,10 +33,8 @@ import { supabase } from '@/lib/supabase/client'
 import { listarConversas } from '@/lib/queries/whatsapp'
 import { WhatsappIcon } from './WhatsappIcon'
 import { useArea } from '@/lib/area'
-import { AREAS, DEFINICOES, inicioDa, itemAtivoDoMenu, MENU_DO_RH, type Area } from '@/lib/areas'
-import { definirAreaDaConta } from '@/lib/queries/areas'
-import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { itemAtivoDoMenu, MENU_DO_RH } from '@/lib/areas'
+import { TrocaDeVersao } from './TrocaDeVersao'
 
 const navigation = [
   { name: 'Visão Geral', href: '/', icon: LayoutDashboard, modulo: 'visao_geral' },
@@ -78,49 +76,6 @@ const ICONE_DO_RH: Record<string, { icon: IconeDoMenu; modulo: string }> = {
   '/descontos': { icon: BadgePercent, modulo: 'visao_geral' },
 }
 const navegacaoDoRh: ItemDaBarra[] = MENU_DO_RH.map((i) => ({ name: i.nome, href: i.href, soAdmin: i.soAdmin, ...ICONE_DO_RH[i.href] }))
-
-/**
- * Só para o admin da plataforma: a conta dele usa as DUAS versões no mesmo
- * número, e este botão troca a que está na tela. Nada muda de lugar no banco
- * (feedback de cliente continua de cliente, de funcionário continua da equipe);
- * muda o que a conta vê: menu, páginas, palavras e as conversas do WhatsApp.
- */
-function TrocaDeVersao({ restauranteId, area }: { restauranteId: number; area: Area }) {
-  const [trocando, setTrocando] = useState<Area | null>(null)
-  const trocar = async (nova: Area) => {
-    if (nova === area || trocando) return
-    setTrocando(nova)
-    try {
-      await definirAreaDaConta(restauranteId, nova)
-      // Recarrega: o app inteiro relê a conta já na outra versão.
-      window.location.assign(inicioDa(nova))
-    } catch {
-      toast.error('Não foi possível trocar de versão.')
-      setTrocando(null)
-    }
-  }
-  return (
-    <div role="group" aria-label="Versão do EasyFeed na tela" className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 group-data-[collapsible=icon]:hidden">
-      {AREAS.map((a) => (
-        <button
-          key={a}
-          type="button"
-          onClick={() => trocar(a)}
-          disabled={!!trocando}
-          aria-pressed={area === a}
-          title={area === a ? `Você está na versão ${DEFINICOES[a].nome}` : `Trocar para a versão ${DEFINICOES[a].nome}`}
-          className={cn(
-            'h-7 rounded-md text-[12px] font-semibold transition-colors',
-            area === a ? 'bg-white text-[#1D4ED8] shadow-sm' : 'text-gray-500 hover:text-gray-900',
-            trocando === a && 'opacity-60',
-          )}
-        >
-          {trocando === a ? 'Trocando…' : DEFINICOES[a].nome}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function AppSidebar() {
   const location = useLocation()

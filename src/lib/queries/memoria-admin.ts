@@ -6,6 +6,8 @@ const db = supabase as any
 export interface RestauranteRef {
   id: number
   nome_restaurante: string | null
+  /** A versão do EasyFeed da conta (o painel só lista as da versão na tela). */
+  area: string | null
 }
 
 export interface FatoMemoriaAdmin {
@@ -19,7 +21,7 @@ export interface FatoMemoriaAdmin {
 export async function listarRestaurantesRef(): Promise<RestauranteRef[]> {
   const { data, error } = await db
     .from('restaurantes')
-    .select('id, nome_restaurante')
+    .select('id, nome_restaurante, area')
     .order('nome_restaurante', { ascending: true })
   if (error) throw new Error(error.message)
   return (data || []) as RestauranteRef[]

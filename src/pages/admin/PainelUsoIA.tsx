@@ -6,6 +6,8 @@ import {
   buscarUsoPorRestaurante, buscarUsoPorAgente, definirLimiteCredito,
 } from '@/lib/queries/uso-ia'
 import { DollarSign, Loader2, Bot, Store } from 'lucide-react'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
 
 type PorRestaurante = Awaited<ReturnType<typeof buscarUsoPorRestaurante>>
 type PorAgente = Awaited<ReturnType<typeof buscarUsoPorAgente>>
@@ -13,13 +15,15 @@ type PorAgente = Awaited<ReturnType<typeof buscarUsoPorAgente>>
 const dinheiro = (v: number) => `US$ ${v.toFixed(4)}`
 
 /**
- * Consumo de IA por restaurante e por agente.
+ * Consumo de IA por restaurante e por agente, só das contas da versão do
+ * painel (Restaurante ou RH). O uso das rotinas sem conta aparece nas duas.
  *
  * Antes o custo só existia agregado no painel do OpenRouter, sem como atribuir
  * gasto a um cliente nem detectar abuso.
  */
 export function PainelUsoIA() {
   const { toast } = useToast()
+  const { area, ehRh } = useArea()
   const [restaurantes, setRestaurantes] = useState<PorRestaurante>([])
   const [agentes, setAgentes] = useState<PorAgente>([])
   const [carregando, setCarregando] = useState(true)
@@ -31,8 +35,8 @@ export function PainelUsoIA() {
     setCarregando(true)
     try {
       const [r, a] = await Promise.all([
-        buscarUsoPorRestaurante(janela),
-        buscarUsoPorAgente(janela),
+        buscarUsoPorRestaurante(janela, area),
+        buscarUsoPorAgente(janela, area),
       ])
       setRestaurantes(r)
       setAgentes(a)
@@ -43,7 +47,7 @@ export function PainelUsoIA() {
     }
   }
 
-  useEffect(() => { carregar(dias) }, [dias])
+  useEffect(() => { carregar(dias) }, [dias, area]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const salvarLimite = async (id: number) => {
     const valor = Number(limites[id])
@@ -71,8 +75,9 @@ export function PainelUsoIA() {
           <DollarSign className="h-5 w-5 text-primary" /> Uso de IA
         </h2>
         <p className="text-sm text-gray-600 mt-1">
-          Custo real cobrado pelo OpenRouter, registrado a cada chamada. Cada restaurante tem um
-          teto por ciclo mensal; ao atingi-lo, o chat para de responder até a renovação.
+          Custo real cobrado pelo OpenRouter, registrado a cada chamada, das contas da versão{' '}
+          {DEFINICOES[area].nome}. Cada conta tem um teto por ciclo mensal; ao atingi-lo, o chat para
+          de responder até a renovação.
         </p>
       </div>
 
@@ -101,7 +106,7 @@ export function PainelUsoIA() {
         <>
           <div className="space-y-2">
             <p className="text-[13px] font-semibold text-gray-700 flex items-center gap-1.5">
-              <Store className="h-3.5 w-3.5" /> Por restaurante
+              <Store className="h-3.5 w-3.5" /> {ehRh ? 'Por empresa' : 'Por restaurante'}
             </p>
             <div className="rounded-xl border border-gray-200 bg-white divide-y">
               {restaurantes.length === 0 ? (
@@ -113,7 +118,7 @@ export function PainelUsoIA() {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-[14px] font-semibold text-gray-900 truncate">{r.nome}</p>
-                      <p className="text-[12px] text-gray-500">{r.chamadas} chamadas</p>
+                      <p className="text-[12px] text-gray-500">{r.chamadas === 1 ? '1 chamada' : `${r.chamadas} chamadas`}</p>
                     </div>
                     <span className="text-[13px] font-mono font-semibold text-gray-900 shrink-0">
                       {dinheiro(r.gasto)}
@@ -157,7 +162,7 @@ export function PainelUsoIA() {
                 <div key={a.agente} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-[13.5px] font-medium text-gray-900 font-mono truncate">{a.agente}</p>
-                    <p className="text-[12px] text-gray-500">{a.chamadas} chamadas</p>
+                    <p className="text-[12px] text-gray-500">{a.chamadas === 1 ? '1 chamada' : `${a.chamadas} chamadas`}</p>
                   </div>
                   <span className="text-[13px] font-mono text-gray-700 shrink-0">{dinheiro(a.gasto)}</span>
                 </div>

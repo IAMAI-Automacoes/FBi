@@ -26,6 +26,8 @@ export interface PerfilRestaurante {
   tipo_culinaria: string | null
   numero_mesas: number | null
   detalhes: string | null
+  /** A versão do EasyFeed da conta ('restaurante' | 'rh'; nulo = ainda não escolheu). */
+  area: string | null
 }
 
 export interface SugestaoAdmin {
@@ -75,7 +77,7 @@ export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
   // de `usuarios`. Une-se pelo id do auth (usuario_id da sugestão).
   const { data: restaurantes } = await supabase
     .from('restaurantes')
-    .select('auth_user_id, nome_restaurante, logo_url, numero_whatsapp, tipo_culinaria, numero_mesas, detalhes')
+    .select('auth_user_id, nome_restaurante, logo_url, numero_whatsapp, tipo_culinaria, numero_mesas, detalhes, area')
     .in('auth_user_id', usuarioIds)
 
   const { data: pessoas } = await supabase
@@ -100,6 +102,7 @@ export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
         tipo_culinaria: r.tipo_culinaria ?? null,
         numero_mesas: r.numero_mesas ?? null,
         detalhes: r.detalhes ?? null,
+        area: r.area ?? null,
       }
     }
   }
@@ -573,12 +576,14 @@ export interface RestauranteWhatsappAdmin {
   /** WhatsApp conectado de verdade (conferido com a uazapi; ver whatsapp_conectado). */
   conectado: boolean
   excluida_em: string | null
+  /** A versão do EasyFeed da conta (o painel só lista as da versão na tela). */
+  area: string | null
 }
 
 export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappAdmin[]> {
   const { data, error } = await supabase
     .from('restaurantes')
-    .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, whatsapp_conectado, excluida_em')
+    .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, whatsapp_conectado, excluida_em, area')
     .order('nome_restaurante', { ascending: true })
   if (error) throw error
   return ((data ?? []) as any[]).map((r) => ({
@@ -591,6 +596,7 @@ export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappA
     temInstancia: !!r.whatsapp_token,
     conectado: r.whatsapp_conectado === true,
     excluida_em: r.excluida_em ?? null,
+    area: r.area ?? null,
   }))
 }
 

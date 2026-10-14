@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
+import { versaoDaConta } from '@/lib/admin-versoes'
+import type { Area } from '@/lib/areas'
 
 // As tabelas e RPCs de uso não estão nos tipos gerados; acesso destipado.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,21 +51,38 @@ export async function buscarUsoCiclo(): Promise<UsoCiclo | null> {
   }
 }
 
-/** Consumo por restaurante, para o painel de admin. */
-export async function buscarUsoPorRestaurante(dias = 30): Promise<
-  Array<{ restaurante_id: number | null; nome: string; gasto: number; chamadas: number }>
-> {
+/**
+ * As linhas de uso do período, só das contas da versão pedida. O uso sem conta
+ * (rotinas agendadas) aparece nas duas: não é de nenhuma.
+ */
+async function linhasDeUso(dias: number, colunas: string, area?: Area): Promise<any[]> {
   const desde = new Date()
   desde.setDate(desde.getDate() - dias)
-
   const { data, error } = await db
     .from('uso_ia')
-    .select('restaurante_id, custo_usd')
+    .select(colunas)
     .gte('created_at', desde.toISOString())
   if (error) throw new Error(error.message)
+  const linhas = (data || []) as any[]
+  if (!area) return linhas
+  const ids = [...new Set(linhas.map((l) => l.restaurante_id).filter((id) => id != null))]
+  const daVersao = new Set<number>()
+  if (ids.length) {
+    const { data: rest, error: erroRest } = await db.from('restaurantes').select('id, area').in('id', ids)
+    if (erroRest) throw new Error(erroRest.message)
+    for (const r of rest || []) if (versaoDaConta(r.area) === area) daVersao.add(r.id)
+  }
+  return linhas.filter((l) => l.restaurante_id == null || daVersao.has(l.restaurante_id))
+}
+
+/** Consumo por restaurante, para o painel de admin (só as contas da versão, se pedida). */
+export async function buscarUsoPorRestaurante(dias = 30, area?: Area): Promise<
+  Array<{ restaurante_id: number | null; nome: string; gasto: number; chamadas: number }>
+> {
+  const data = await linhasDeUso(dias, 'restaurante_id, custo_usd', area)
 
   const porId = new Map<number | null, { gasto: number; chamadas: number }>()
-  for (const linha of data || []) {
+  for (const linha of data) {
     const atual = porId.get(linha.restaurante_id) ?? { gasto: 0, chamadas: 0 }
     atual.gasto += Number(linha.custo_usd || 0)
     atual.chamadas += 1
@@ -80,27 +99,20 @@ export async function buscarUsoPorRestaurante(dias = 30): Promise<
   return [...porId.entries()]
     .map(([id, v]) => ({
       restaurante_id: id,
-      nome: id == null ? 'Sem restaurante (cron)' : (nomes.get(id) ?? `#${id}`),
+      nome: id == null ? 'Sem conta (rotinas agendadas)' : (nomes.get(id) ?? `#${id}`),
       ...v,
     }))
     .sort((a, b) => b.gasto - a.gasto)
 }
 
-/** Consumo por agente, para saber onde o custo se concentra. */
-export async function buscarUsoPorAgente(dias = 30): Promise<
+/** Consumo por agente, para saber onde o custo se concentra (só as contas da versão, se pedida). */
+export async function buscarUsoPorAgente(dias = 30, area?: Area): Promise<
   Array<{ agente: string; gasto: number; chamadas: number }>
 > {
-  const desde = new Date()
-  desde.setDate(desde.getDate() - dias)
-
-  const { data, error } = await db
-    .from('uso_ia')
-    .select('agente_id, origem, custo_usd')
-    .gte('created_at', desde.toISOString())
-  if (error) throw new Error(error.message)
+  const data = await linhasDeUso(dias, 'restaurante_id, agente_id, origem, custo_usd', area)
 
   const mapa = new Map<string, { gasto: number; chamadas: number }>()
-  for (const linha of data || []) {
+  for (const linha of data) {
     const chave = linha.agente_id || linha.origem || 'desconhecido'
     const atual = mapa.get(chave) ?? { gasto: 0, chamadas: 0 }
     atual.gasto += Number(linha.custo_usd || 0)

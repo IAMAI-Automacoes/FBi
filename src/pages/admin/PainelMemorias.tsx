@@ -11,6 +11,8 @@ import {
   adicionarFato, editarFato, apagarFato,
 } from '@/lib/queries/memoria-admin'
 import { Brain, Plus, Save, Trash2, Loader2, Pencil, X } from 'lucide-react'
+import { daVersao } from '@/lib/admin-versoes'
+import { useArea } from '@/lib/area'
 
 function FatoItem({ fato, onSalvar, onApagar }: {
   fato: FatoMemoriaAdmin
@@ -60,6 +62,8 @@ function FatoItem({ fato, onSalvar, onApagar }: {
 
 export function PainelMemorias() {
   const { toast } = useToast()
+  // Só as contas da versão do painel (Restaurante ou RH).
+  const { area, ehRh, Negocio } = useArea()
   const [restaurantes, setRestaurantes] = useState<RestauranteRef[]>([])
   const [restauranteId, setRestauranteId] = useState<number | null>(null)
   const [fatos, setFatos] = useState<FatoMemoriaAdmin[]>([])
@@ -70,12 +74,13 @@ export function PainelMemorias() {
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
-    listarRestaurantesRef().then((r) => {
+    listarRestaurantesRef().then((todos) => {
+      const r = daVersao(todos, area, (x) => x.area)
       setRestaurantes(r)
       if (r.length && restauranteId === null) setRestauranteId(r[0].id)
     }).catch((e) => toast({ title: e.message, variant: 'destructive' }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [area])
 
   const carregarFatos = async (id: number) => {
     setCarregando(true)
@@ -101,18 +106,18 @@ export function PainelMemorias() {
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Brain className="h-5 w-5 text-primary" /> Memória da IA</h2>
         <p className="text-sm text-gray-600 mt-1">
-          Os fatos que a IA aprendeu sobre cada restaurante (memória de longo prazo). Você pode
+          Os fatos que a IA aprendeu sobre cada {ehRh ? 'empresa' : 'restaurante'} (memória de longo prazo). Você pode
           editar, apagar ou adicionar fatos — a IA passa a usar isso nas próximas conversas.
         </p>
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-600 shrink-0">Restaurante:</span>
+        <span className="text-sm text-gray-600 shrink-0">{Negocio}:</span>
         <Select value={restauranteId != null ? String(restauranteId) : undefined} onValueChange={(v) => setRestauranteId(Number(v))}>
           <SelectTrigger className="max-w-xs"><SelectValue placeholder="Escolha…" /></SelectTrigger>
           <SelectContent>
             {restaurantes.map((r) => (
-              <SelectItem key={r.id} value={String(r.id)}>{r.nome_restaurante || `Restaurante ${r.id}`}</SelectItem>
+              <SelectItem key={r.id} value={String(r.id)}>{r.nome_restaurante || `${Negocio} ${r.id}`}</SelectItem>
             ))}
           </SelectContent>
         </Select>

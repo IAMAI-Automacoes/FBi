@@ -857,6 +857,7 @@ export type Database = {
       }
       documentos_ia: {
         Row: {
+          area: string
           arquivo_url: string | null
           created_at: string
           descricao: string | null
@@ -871,6 +872,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          area?: string
           arquivo_url?: string | null
           created_at?: string
           descricao?: string | null
@@ -885,6 +887,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          area?: string
           arquivo_url?: string | null
           created_at?: string
           descricao?: string | null
@@ -4259,6 +4262,8 @@ export type Database = {
         Args: { p_restaurante_id: number }
         Returns: undefined
       }
+      area_da_conta: { Args: { p_restaurante_id: number }; Returns: string }
+      area_da_conta_logada: { Args: never; Returns: string }
       area_eh_admin: { Args: never; Returns: boolean }
       area_opcoes: { Args: { p_convite?: string }; Returns: Json }
       area_rh_permitida: { Args: { p_convite: string }; Returns: boolean }
