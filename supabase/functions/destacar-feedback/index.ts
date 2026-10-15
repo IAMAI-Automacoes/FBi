@@ -28,6 +28,7 @@
 // **, a resposta tem que bater EXATAMENTE com o texto original — senão o
 // destaque é descartado (o feedback continua aparecendo normal, sem negrito).
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { podeMexerNaConta, quemChamaOMotor } from '../_shared/quem-chama.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -208,15 +209,28 @@ Deno.serve(async (req: Request) => {
   if (!original_id && !lote) return json({ error: 'informe original_id ou lote' }, 400)
 
   const db = conectar()
+  // Quem pode chamar: o banco (gatilho/rotina com o segredo), o próprio
+  // servidor, ou o dono/admin da conta logado. A chave pública sozinha não
+  // passa (ver _shared/quem-chama.ts e a migration 20261024000000).
+  const quem = await quemChamaOMotor(req, db)
+  if (quem.ok === false) return json({ error: quem.erro }, quem.status)
 
   // O LOTE responde só no fim: quem o chama é um cron ou uma pessoa, e os dois
-  // querem saber quantos saíram. Sem pressa de relógio no meio.
+  // querem saber quantos saíram. Sem pressa de relógio no meio. O lote passa
+  // por todas as contas: só o servidor ou o admin.
   if (lote) {
+    if (quem.servico !== true && !quem.ehAdmin) return json({ error: 'Só o servidor ou o admin rodam o lote' }, 403)
     try {
       return json({ ok: true, ...(await destacarLote(db, Math.min(Number(lote) || 20, 200))) })
     } catch (e) {
       return json({ error: e instanceof Error ? e.message : String(e) }, 500)
     }
+  }
+
+  // Uma pessoa logada só destaca feedback da própria conta.
+  if (quem.servico !== true) {
+    const { data: dono } = await db.from('feedbacks_originais').select('restaurante_id').eq('id', original_id as string).maybeSingle()
+    if (!dono || !podeMexerNaConta(quem, (dono as { restaurante_id: number }).restaurante_id)) return json({ error: 'Sem acesso a esta conta' }, 403)
   }
 
   // O caminho do TRIGGER responde antes de trabalhar — ver o cabeçalho: o

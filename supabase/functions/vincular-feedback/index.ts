@@ -57,6 +57,7 @@
  */
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChamaOMotor } from '../_shared/quem-chama.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
@@ -244,6 +245,11 @@ Deno.serve(async (req: Request) => {
     if (!feedbackId) return json({ error: 'feedback_id é obrigatório' }, 400)
 
     const db: Db = clienteAdmin()
+    // Quem pode chamar: o banco (gatilho/rotina com o segredo), o próprio
+    // servidor, ou o dono/admin da conta logado. A chave pública sozinha não
+    // passa (ver _shared/quem-chama.ts e a migration 20261024000000).
+    const quem = await quemChamaOMotor(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
 
     const { data: fb } = await db
       .from('feedbacks_restaurante')
@@ -252,6 +258,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle()
 
     if (!fb) return json({ status: 'feedback_nao_encontrado' })
+    if (!podeMexerNaConta(quem, fb.restaurante_id)) return json({ error: 'Sem acesso a esta conta' }, 403)
     // Feedback da equipe só se liga a insight e ação da equipe (e o de cliente,
     // só aos de cliente): tudo abaixo busca dentro do mesmo público.
     const publico = publicoDe(fb.publico)

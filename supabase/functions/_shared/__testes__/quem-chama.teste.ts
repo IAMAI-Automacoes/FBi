@@ -2,7 +2,7 @@
  * Quem pode chamar as funções do motor (supabase/functions/_shared/quem-chama.ts).
  *   node --experimental-strip-types supabase/functions/_shared/__testes__/quem-chama.teste.ts
  */
-import { podeMexerNaConta, quemChama, type QuemChama } from '../quem-chama.ts'
+import { podeMexerNaConta, quemChama, quemChamaOMotor, veioDoBanco, type QuemChama } from '../quem-chama.ts'
 
 let falhas = 0
 function ok(nome: string, cond: boolean, detalhe?: unknown) {
@@ -63,6 +63,37 @@ q = await chama('token-sem-conta')
 ok('logado mas sem conta: não mexe em nenhuma', q.ok === true && q.servico === false && q.restauranteId === null && !podeMexerNaConta(q, 24) && !podeMexerNaConta(q, null))
 
 ok('"bearer" minúsculo e espaço sobrando também valem', (await quemChama(new Request('https://x.test/f', { headers: { Authorization: 'bearer   token-do-dono  ' } }), banco(), SERVICO)).ok === true)
+
+// ── O banco (gatilhos e rotinas) com o segredo ──────────────────────────────
+const SEGREDO = 'segredo-dos-gatilhos'
+const bancoComSegredo = (valor: string | null, quebrado = false) => {
+  const base = banco()
+  return {
+    ...base,
+    from: (tabela: string) => tabela === 'integracao_config'
+      ? { select: () => ({ eq: (_c: string, chave: string) => ({ maybeSingle: async () => {
+        if (quebrado) throw new Error('banco fora')
+        return { data: chave === 'PUSH_TRIGGER_SECRET' && valor != null ? { valor } : null }
+      } }) }) }
+      : base.from(tabela),
+  }
+}
+const doBanco = (segredo?: string, token = PUBLICA) => new Request('https://x.test/f', {
+  method: 'POST', headers: { Authorization: `Bearer ${token}`, ...(segredo != null ? { 'x-cron-secret': segredo } : {}) },
+})
+ok('banco com o segredo certo: passa como servidor', (await veioDoBanco(doBanco(SEGREDO), bancoComSegredo(SEGREDO))) === true)
+q = await quemChamaOMotor(doBanco(SEGREDO), bancoComSegredo(SEGREDO), SERVICO)
+ok('motor: o banco com o segredo mexe em qualquer conta', q.ok === true && q.servico === true && podeMexerNaConta(q, 999))
+ok('segredo errado não passa', (await veioDoBanco(doBanco('outro'), bancoComSegredo(SEGREDO))) === false)
+ok('sem o segredo não passa', (await veioDoBanco(doBanco(), bancoComSegredo(SEGREDO))) === false)
+ok('segredo vazio no banco não abre nada', (await veioDoBanco(doBanco(''), bancoComSegredo(''))) === false && (await veioDoBanco(doBanco('x'), bancoComSegredo(null))) === false)
+ok('banco fora do ar: não passa (e não quebra)', (await veioDoBanco(doBanco(SEGREDO), bancoComSegredo(SEGREDO, true))) === false)
+q = await quemChamaOMotor(doBanco('chute'), bancoComSegredo(SEGREDO), SERVICO)
+ok('motor: chave pública com segredo errado continua 401', q.ok === false && q.status === 401)
+q = await quemChamaOMotor(doBanco(undefined, 'token-do-dono'), bancoComSegredo(SEGREDO), SERVICO)
+ok('motor: o dono logado passa e só mexe na conta dele', q.ok === true && podeMexerNaConta(q, 24) && !podeMexerNaConta(q, 11))
+q = await quemChamaOMotor(doBanco(undefined, SERVICO), bancoComSegredo(SEGREDO), SERVICO)
+ok('motor: a chave de serviço continua passando', q.ok === true && q.servico === true)
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nquem chama as funções: tudo certo')
 process.exit(falhas ? 1 : 0)

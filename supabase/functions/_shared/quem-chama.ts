@@ -56,6 +56,33 @@ export async function quemChama(req: Request, admin: Banco, chaveDeServico = cha
   }
 }
 
+/**
+ * Os gatilhos e as rotinas do banco mandam `x-cron-secret` com o valor de
+ * `integracao_config.PUSH_TRIGGER_SECRET` (migration
+ * 20261024000000_motor_so_com_segredo.sql): é assim que o banco prova que é
+ * ele, já que a chave que ele manda no Authorization é a pública.
+ */
+export async function veioDoBanco(req: Request, admin: Banco): Promise<boolean> {
+  const recebido = (req.headers.get('x-cron-secret') ?? '').trim()
+  if (!recebido) return false
+  try {
+    const { data } = await admin.from('integracao_config').select('valor').eq('chave', 'PUSH_TRIGGER_SECRET').maybeSingle()
+    const esperado = String(data?.valor ?? '').trim()
+    return !!esperado && recebido === esperado
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Para as funções do motor (classificar, vincular, destacar, banner): o banco
+ * com o segredo conta como o próprio servidor; o resto passa por `quemChama`.
+ */
+export async function quemChamaOMotor(req: Request, admin: Banco, chaveDeServico = chaveDeServicoDoAmbiente()): Promise<QuemChama> {
+  if (await veioDoBanco(req, admin)) return { ok: true, servico: true }
+  return quemChama(req, admin, chaveDeServico)
+}
+
 /** Quem chamou pode mexer nos dados desta conta? */
 export function podeMexerNaConta(quem: QuemChama, restauranteId: unknown): boolean {
   if (quem.ok === false) return false

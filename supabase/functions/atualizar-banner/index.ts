@@ -1,5 +1,6 @@
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChamaOMotor } from '../_shared/quem-chama.ts'
 import { carregarPrompts, montarPrompt } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
@@ -37,9 +38,19 @@ Deno.serve(async (req: Request) => {
     const { restaurante_id: restauranteId, force = false, process_all: processAll = false } = body
 
     const db = clienteAdmin()
+    // Quem pode chamar: o banco (gatilho/rotina com o segredo), o próprio
+    // servidor, ou o dono/admin da conta logado. A chave pública sozinha não
+    // passa (ver _shared/quem-chama.ts e a migration 20261024000000).
+    // O dono atualiza o banner da própria conta (AiBanner.tsx); passar por
+    // todas as contas é só da rotina diária.
+    const quem = await quemChamaOMotor(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
+    const servidor = quem.servico === true || quem.ehAdmin
+    if (!servidor && !restauranteId) return json({ error: 'restaurante_id é obrigatório' }, 400)
+    if (restauranteId && !podeMexerNaConta(quem, restauranteId)) return json({ error: 'Sem acesso a esta conta' }, 403)
 
     let restaurantes: { id: number }[] = []
-    if (processAll) {
+    if (processAll && servidor) {
       const { data } = await db
         .from('restaurantes').select('id').eq('ativo', true).is('excluida_em', null)
       restaurantes = data || []

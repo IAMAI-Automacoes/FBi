@@ -25,6 +25,7 @@
 // aguenta.
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
+import { podeMexerNaConta, quemChamaOMotor } from '../_shared/quem-chama.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
@@ -123,6 +124,11 @@ Deno.serve(async (req: Request) => {
 
     // deno-lint-ignore no-explicit-any
     const db: any = clienteAdmin()
+    // Quem pode chamar: o banco (gatilho/rotina com o segredo), o próprio
+    // servidor, ou o dono/admin da conta logado. A chave pública sozinha não
+    // passa (ver _shared/quem-chama.ts e a migration 20261024000000).
+    const quem = await quemChamaOMotor(req, db)
+    if (quem.ok === false) return json({ error: quem.erro }, quem.status)
 
     const { data: fb } = await db
       .from('feedbacks_restaurante')
@@ -130,6 +136,7 @@ Deno.serve(async (req: Request) => {
       .eq('id', feedback_id)
       .single()
     if (!fb || !fb.restaurante_id) return json({ error: 'feedback não encontrado' }, 404)
+    if (!podeMexerNaConta(quem, fb.restaurante_id)) return json({ error: 'Sem acesso a esta conta' }, 403)
     // Cliente e equipe têm temas separados: o mesmo rótulo pode existir nos dois.
     const publico = publicoDe(fb.publico)
     if (fb.tema_id) {
