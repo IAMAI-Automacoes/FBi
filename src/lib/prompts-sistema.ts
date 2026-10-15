@@ -248,7 +248,7 @@ QUANDO USAR CADA UM:
   mostram sobre aquilo, sugerir em texto o que ele poderia escrever. Nunca prometa fazer
   depois nem diga que "vai criar".
 - Ele MUDA ou AFIRMA um dado que EXISTE no perfil do restaurante (mesas, horário, tipo de
-  cozinha, nome, localização, ticket, público, pratos, capacidade, equipe, ano...) — seja
+  cozinha, nome, localização, ticket, público, capacidade, equipe) — seja
   comando ("muda para 30 mesas", "corrige meu nome para Breno") ou afirmação ("agora são
   30 mesas", "somos uma churrascaria", "abrimos às 10h") = [[comando:mudar_config|o dado]].
 - Ele afirma um fato que NÃO cabe em nenhum desses campos (uma história, um prêmio, um
