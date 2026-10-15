@@ -5,6 +5,9 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
 import { Building2, Sparkles } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { PontoPendente } from '@/components/PontoPendente'
+import { camposFaltando, type CampoObrigatorio } from '@/lib/perfil-obrigatorio'
 
 export interface PerfilNegocioForm {
   tipo_culinaria: string
@@ -32,6 +35,19 @@ export function PerfilNegocioTab({
   onChange: (v: PerfilNegocioForm) => void
 }) {
   const set = (campo: keyof PerfilNegocioForm, v: string) => onChange({ ...value, [campo]: v })
+  const faltando = camposFaltando(value)
+  const vazio = (c: CampoObrigatorio) => faltando.includes(c)
+
+  /** Rótulo com o asterisco de obrigatório. A bolinha fica só no título do card. */
+  const rotulo = (id: CampoObrigatorio, texto: React.ReactNode, className?: string) => (
+    <Label htmlFor={id} className={cn('flex items-center gap-1.5', className)}>
+      {texto}
+      <span aria-hidden className="text-red-500">*</span>
+    </Label>
+  )
+  /** Campo vazio: borda e fundo amarelos, que somem ao digitar. */
+  const realce = (id: CampoObrigatorio) =>
+    vazio(id) && 'border-amber-400 bg-amber-50/70 focus-visible:ring-amber-400'
 
   const campo = (
     id: keyof PerfilNegocioForm,
@@ -40,28 +56,45 @@ export function PerfilNegocioTab({
     tipo: string = 'text',
   ) => (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      {rotulo(id, label)}
       <Input
         id={id}
         type={tipo}
+        required
         value={value[id] as string}
         onChange={(e) => set(id, e.target.value)}
         placeholder={placeholder}
+        className={cn(realce(id))}
       />
     </div>
   )
 
   return (
-    <Card className="shadow-subtle border-gray-200/75 rounded-xl overflow-hidden">
-      <CardHeader className="bg-white pb-6 border-b border-gray-300">
+    <Card
+      className={cn(
+        'shadow-subtle border-gray-200/75 rounded-xl overflow-hidden transition-shadow',
+        faltando.length > 0 && 'border-amber-300 ring-2 ring-amber-300/70 ring-offset-2',
+      )}
+    >
+      <CardHeader
+        className={cn('pb-6 border-b', faltando.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-300')}
+      >
         <CardTitle className="text-xl flex items-center gap-2">
           <Building2 className="w-5 h-5 text-primary" />
           Sobre o restaurante
+          {faltando.length > 0 && <PontoPendente titulo="Seção incompleta" className="ml-1" />}
         </CardTitle>
         <CardDescription className="text-sm mt-1">
-          Quanto mais você preencher, melhor o assistente de IA entende o seu negócio e mais
-          específicas ficam as respostas, os insights e os relatórios.
+          Os campos com <span className="text-red-500">*</span> são obrigatórios: é com eles que o
+          assistente de IA entende o seu negócio e deixa as ações e as respostas aos clientes do
+          jeito do seu restaurante.
         </CardDescription>
+        {faltando.length > 0 && (
+          <p className="text-sm font-medium text-amber-800 mt-2">
+            {faltando.length === 1 ? 'Falta 1 campo' : `Faltam ${faltando.length} campos`} — estão
+            marcados em amarelo abaixo.
+          </p>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-8 p-6 sm:p-8 bg-white">
@@ -76,9 +109,9 @@ export function PerfilNegocioTab({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="publico_alvo">Público que frequenta</Label>
+          {rotulo('publico_alvo', 'Público que frequenta')}
           <Textarea
-            id="publico_alvo" rows={3} className="resize-none"
+            id="publico_alvo" rows={3} required className={cn('resize-none', realce('publico_alvo'))}
             value={value.publico_alvo}
             onChange={(e) => set('publico_alvo', e.target.value)}
             placeholder="Ex: famílias no fim de semana, executivos no almoço durante a semana..."
@@ -86,17 +119,20 @@ export function PerfilNegocioTab({
         </div>
 
         <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.03] p-4">
-          <Label htmlFor="detalhes" className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            Conte tudo o que quiser sobre o restaurante
-          </Label>
+          {rotulo('detalhes', (
+            <>
+              <Sparkles className="w-4 h-4 text-primary" />
+              Conte tudo o que quiser sobre o restaurante
+            </>
+          ), 'gap-2')}
           <p className="text-xs text-muted-foreground">
-            Escreva livremente: história, o que te orgulha, o que te incomoda, como é a rotina, quem é
-            a equipe, o que já tentou e não deu certo, planos para o futuro. Nada aqui é obrigatório —
-            mas <b>quanto mais você contar, melhor a IA vai te ajudar</b>. Não existe resposta errada.
+            Escreva livremente: história, carro-chefe, o que te diferencia, o que te incomoda, como é
+            a rotina, o que já tentou e não deu certo, planos para o futuro. Algumas linhas já
+            ajudam — mas <b>quanto mais você contar, melhor a IA vai te ajudar</b>. Não existe
+            resposta errada.
           </p>
           <Textarea
-            id="detalhes" rows={8} className="resize-none bg-white"
+            id="detalhes" rows={8} required className={cn('resize-none', vazio('detalhes') ? realce('detalhes') : 'bg-white')}
             value={value.detalhes}
             onChange={(e) => set('detalhes', e.target.value)}
             placeholder="Ex: Abrimos em 2019 como uma cantina de bairro. Hoje o forte é o almoço executivo, mas queríamos crescer no jantar. A cozinha é enxuta, somos eu, minha esposa e três funcionários. O que mais me incomoda é a demora nos dias cheios..."

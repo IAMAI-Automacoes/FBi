@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { carregarPromptsEditaveis } from '@/lib/ia/prompt-store'
 import { carregarParamsAgentes } from '@/lib/ia/params'
+import { camposFaltando, perfilDaLinha } from '@/lib/perfil-obrigatorio'
 
 export interface MascoteConfig {
   nome: string
@@ -15,6 +16,8 @@ export interface RestauranteConfig {
   logoUrl: string | null
   mascote: MascoteConfig
   configInsights: any
+  /** Campos obrigatórios de "Sobre o restaurante" ainda vazios (o que está salvo). */
+  perfilFaltando: number
   loading: boolean
   refetch: () => Promise<void>
 }
@@ -42,6 +45,7 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [mascote, setMascote] = useState<MascoteConfig>(MASCOTE_PADRAO)
   const [configInsights, setConfigInsights] = useState<any>({})
+  const [perfilFaltando, setPerfilFaltando] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetchConfig = useCallback(async () => {
@@ -51,6 +55,7 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
       setLogoUrl(null)
       setMascote(MASCOTE_PADRAO)
       setConfigInsights({})
+      setPerfilFaltando(0)
       setLoading(false)
       return
     }
@@ -58,7 +63,7 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
     try {
       const { data, error } = await supabase
         .from('restaurantes')
-        .select('nome_restaurante, logo_url, mascote_config, config_insights')
+        .select('nome_restaurante, logo_url, mascote_config, config_insights, tipo_culinaria, numero_mesas, detalhes, perfil_restaurante')
         .eq('id', restauranteId)
         .single()
 
@@ -74,6 +79,7 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
           fotoUrl: mc.foto_url || null,
         })
         setConfigInsights((data.config_insights as any) || {})
+        setPerfilFaltando(camposFaltando(perfilDaLinha(data)).length)
       }
     } catch {
       // Mantém os padrões em caso de falha
@@ -93,7 +99,7 @@ export const RestauranteConfigProvider = ({ children }: { children: ReactNode })
 
   return (
     <RestauranteConfigContext.Provider
-      value={{ nomeRestaurante, logoUrl, mascote, configInsights, loading, refetch: fetchConfig }}
+      value={{ nomeRestaurante, logoUrl, mascote, configInsights, perfilFaltando, loading, refetch: fetchConfig }}
     >
       {children}
     </RestauranteConfigContext.Provider>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +19,8 @@ import { useArea } from '@/lib/area'
 import { inicioDa, lerSobreAEmpresa, numeroDeFuncionarios, SOBRE_A_EMPRESA_VAZIO, sobreAEmpresaNoPerfil, type SobreAEmpresa } from '@/lib/areas'
 import { SobreEmpresaTab } from './settings/SobreEmpresaTab'
 import { CategoriasTab } from './settings/CategoriasTab'
+import { PontoPendente } from '@/components/PontoPendente'
+import { camposFaltando } from '@/lib/perfil-obrigatorio'
 
 const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
@@ -45,6 +47,7 @@ export default function Settings() {
   // A versão da conta: no RH saem as seções que são só de restaurante e de cliente.
   const { area, ehRh, doNegocio } = useArea()
   const { toast } = useToast()
+  const { hash } = useLocation()
   const [activeSection, setActiveSection] = useState('restaurante')
   const isManualScroll = useRef(false)
 
@@ -275,6 +278,17 @@ export default function Settings() {
     }
   }
 
+  // Chegou por um link com âncora (ex.: o aviso de perfil incompleto do menu
+  // da conta leva a /configuracoes#perfil): rola até a seção quando ela existir.
+  useEffect(() => {
+    if (loading || carregandoDados || !hash) return
+    scrollTo(hash.slice(1))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao terminar de carregar
+  }, [loading, carregandoDados, hash])
+
+  // Pelo formulário, não pelo salvo: a bolinha some assim que o campo é preenchido.
+  const perfilFaltando = ehRh ? 0 : camposFaltando(perfil).length
+
   if (loading || carregandoDados) {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
@@ -351,7 +365,12 @@ export default function Settings() {
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
-                  {item.label}
+                  <span className="flex items-center justify-between gap-2">
+                    {item.label}
+                    {item.id === 'perfil' && perfilFaltando > 0 && (
+                      <PontoPendente titulo={`Faltam ${perfilFaltando} campos obrigatórios`} />
+                    )}
+                  </span>
                 </button>
               ))}
             </nav>
