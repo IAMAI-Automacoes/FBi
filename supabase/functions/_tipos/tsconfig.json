@@ -19,6 +19,7 @@
   "include": [
     "./deno.d.ts",
     "../_shared/*.ts",
+    "../_shared/asaas/*.ts",
     "../gerar-insights/*.ts",
     "../sugerir-acoes/*.ts",
     "../categorizar-acao/*.ts",
@@ -43,6 +44,10 @@
     "../destacar-feedback/*.ts",
     "../atualizar-banner/*.ts",
     "../conhecimento-ia/*.ts",
-    "../resgatar-cupom/*.ts"
+    "../resgatar-cupom/*.ts",
+    "../criar-cobranca/*.ts",
+    "../asaas-webhook/*.ts",
+    "../excluir-minha-conta/*.ts",
+    "../admin-excluir-conta/*.ts"
   ]
 }
