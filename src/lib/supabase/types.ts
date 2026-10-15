@@ -215,8 +215,6 @@ export type Database = {
           nome: string
           observacoes: string | null
           restaurante_id: number | null
-          stripe_account_id: string | null
-          stripe_connect_status: string
           telefone: string | null
           tipo_conta: string | null
         }
@@ -238,8 +236,6 @@ export type Database = {
           nome: string
           observacoes?: string | null
           restaurante_id?: number | null
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
           telefone?: string | null
           tipo_conta?: string | null
         }
@@ -261,8 +257,6 @@ export type Database = {
           nome?: string
           observacoes?: string | null
           restaurante_id?: number | null
-          stripe_account_id?: string | null
-          stripe_connect_status?: string
           telefone?: string | null
           tipo_conta?: string | null
         }
@@ -2709,6 +2703,33 @@ export type Database = {
           },
         ]
       }
+      planos_precos: {
+        Row: {
+          area: string
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          ciclo: string
+          total_centavos: number
+        }
+        Insert: {
+          area: string
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          ciclo: string
+          total_centavos: number
+        }
+        Update: {
+          area?: string
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          ciclo?: string
+          total_centavos?: number
+        }
+        Relationships: []
+      }
       platform_admins: {
         Row: {
           email: string
@@ -3142,8 +3163,6 @@ export type Database = {
           qr_textos_estilo: Json | null
           qr_titulo: string | null
           ramo: string | null
-          stripe_customer_id: string | null
-          stripe_subscription_id: string | null
           telefone_contato: string | null
           texto_banner: string | null
           tipo_culinaria: string | null
@@ -3203,8 +3222,6 @@ export type Database = {
           qr_textos_estilo?: Json | null
           qr_titulo?: string | null
           ramo?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
           telefone_contato?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
@@ -3264,8 +3281,6 @@ export type Database = {
           qr_textos_estilo?: Json | null
           qr_titulo?: string | null
           ramo?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
           telefone_contato?: string | null
           texto_banner?: string | null
           tipo_culinaria?: string | null
@@ -3397,393 +3412,6 @@ export type Database = {
           criado_em?: string
         }
         Relationships: []
-      }
-      stripe_assinaturas: {
-        Row: {
-          afiliado_id: string | null
-          cancel_at: string | null
-          cancel_at_period_end: boolean
-          canceled_at: string | null
-          ciclo: string | null
-          created_at: string
-          current_period_end: string | null
-          current_period_start: string | null
-          ended_at: string | null
-          id: string
-          metadata: Json
-          price_lookup_key: string | null
-          product_code: string
-          restaurante_id: number | null
-          status: string
-          stripe_customer_id: string
-          stripe_price_id: string | null
-          stripe_subscription_id: string
-          trial_end: string | null
-          ultimo_invoice_id: string | null
-          ultimo_invoice_status: string | null
-          updated_at: string
-        }
-        Insert: {
-          afiliado_id?: string | null
-          cancel_at?: string | null
-          cancel_at_period_end?: boolean
-          canceled_at?: string | null
-          ciclo?: string | null
-          created_at?: string
-          current_period_end?: string | null
-          current_period_start?: string | null
-          ended_at?: string | null
-          id?: string
-          metadata?: Json
-          price_lookup_key?: string | null
-          product_code?: string
-          restaurante_id?: number | null
-          status: string
-          stripe_customer_id: string
-          stripe_price_id?: string | null
-          stripe_subscription_id: string
-          trial_end?: string | null
-          ultimo_invoice_id?: string | null
-          ultimo_invoice_status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          afiliado_id?: string | null
-          cancel_at?: string | null
-          cancel_at_period_end?: boolean
-          canceled_at?: string | null
-          ciclo?: string | null
-          created_at?: string
-          current_period_end?: string | null
-          current_period_start?: string | null
-          ended_at?: string | null
-          id?: string
-          metadata?: Json
-          price_lookup_key?: string | null
-          product_code?: string
-          restaurante_id?: number | null
-          status?: string
-          stripe_customer_id?: string
-          stripe_price_id?: string | null
-          stripe_subscription_id?: string
-          trial_end?: string | null
-          ultimo_invoice_id?: string | null
-          ultimo_invoice_status?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_assinaturas_afiliado_id_fkey"
-            columns: ["afiliado_id"]
-            isOneToOne: false
-            referencedRelation: "afiliados"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_assinaturas_restaurante_id_fkey"
-            columns: ["restaurante_id"]
-            isOneToOne: false
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_assinaturas_stripe_customer_id_fkey"
-            columns: ["stripe_customer_id"]
-            isOneToOne: false
-            referencedRelation: "stripe_clientes"
-            referencedColumns: ["stripe_customer_id"]
-          },
-        ]
-      }
-      stripe_checkout_sessions: {
-        Row: {
-          ciclo: string | null
-          created_at: string
-          email_pagador: string | null
-          id: string
-          restaurante_id_origem: number | null
-          restaurante_id_vinculado: number | null
-          status: string
-          stripe_customer_id: string | null
-          stripe_session_id: string
-          stripe_subscription_id: string | null
-          updated_at: string
-          vinculada_em: string | null
-        }
-        Insert: {
-          ciclo?: string | null
-          created_at?: string
-          email_pagador?: string | null
-          id?: string
-          restaurante_id_origem?: number | null
-          restaurante_id_vinculado?: number | null
-          status?: string
-          stripe_customer_id?: string | null
-          stripe_session_id: string
-          stripe_subscription_id?: string | null
-          updated_at?: string
-          vinculada_em?: string | null
-        }
-        Update: {
-          ciclo?: string | null
-          created_at?: string
-          email_pagador?: string | null
-          id?: string
-          restaurante_id_origem?: number | null
-          restaurante_id_vinculado?: number | null
-          status?: string
-          stripe_customer_id?: string | null
-          stripe_session_id?: string
-          stripe_subscription_id?: string | null
-          updated_at?: string
-          vinculada_em?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_checkout_sessions_restaurante_id_origem_fkey"
-            columns: ["restaurante_id_origem"]
-            isOneToOne: false
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_checkout_sessions_restaurante_id_vinculado_fkey"
-            columns: ["restaurante_id_vinculado"]
-            isOneToOne: false
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      stripe_clientes: {
-        Row: {
-          created_at: string
-          email: string | null
-          id: string
-          nome: string | null
-          product_code: string
-          restaurante_id: number | null
-          stripe_customer_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          nome?: string | null
-          product_code?: string
-          restaurante_id?: number | null
-          stripe_customer_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          id?: string
-          nome?: string | null
-          product_code?: string
-          restaurante_id?: number | null
-          stripe_customer_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_clientes_restaurante_id_fkey"
-            columns: ["restaurante_id"]
-            isOneToOne: true
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      stripe_eventos_webhook: {
-        Row: {
-          api_version: string | null
-          erro: string | null
-          event_id: string
-          payload: Json | null
-          processado_em: string | null
-          recebido_em: string
-          status: string
-          tipo: string
-        }
-        Insert: {
-          api_version?: string | null
-          erro?: string | null
-          event_id: string
-          payload?: Json | null
-          processado_em?: string | null
-          recebido_em?: string
-          status?: string
-          tipo: string
-        }
-        Update: {
-          api_version?: string | null
-          erro?: string | null
-          event_id?: string
-          payload?: Json | null
-          processado_em?: string | null
-          recebido_em?: string
-          status?: string
-          tipo?: string
-        }
-        Relationships: []
-      }
-      stripe_faturas: {
-        Row: {
-          billing_reason: string | null
-          created_at: string
-          hosted_invoice_url: string | null
-          id: string
-          invoice_pdf: string | null
-          moeda: string
-          numero: string | null
-          pago_centavos: number
-          pago_em: string | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          restaurante_id: number | null
-          status: string
-          stripe_charge_id: string | null
-          stripe_customer_id: string | null
-          stripe_invoice_id: string
-          stripe_subscription_id: string | null
-          total_centavos: number
-          updated_at: string
-        }
-        Insert: {
-          billing_reason?: string | null
-          created_at?: string
-          hosted_invoice_url?: string | null
-          id?: string
-          invoice_pdf?: string | null
-          moeda?: string
-          numero?: string | null
-          pago_centavos?: number
-          pago_em?: string | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          restaurante_id?: number | null
-          status: string
-          stripe_charge_id?: string | null
-          stripe_customer_id?: string | null
-          stripe_invoice_id: string
-          stripe_subscription_id?: string | null
-          total_centavos?: number
-          updated_at?: string
-        }
-        Update: {
-          billing_reason?: string | null
-          created_at?: string
-          hosted_invoice_url?: string | null
-          id?: string
-          invoice_pdf?: string | null
-          moeda?: string
-          numero?: string | null
-          pago_centavos?: number
-          pago_em?: string | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          restaurante_id?: number | null
-          status?: string
-          stripe_charge_id?: string | null
-          stripe_customer_id?: string | null
-          stripe_invoice_id?: string
-          stripe_subscription_id?: string | null
-          total_centavos?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_faturas_restaurante_id_fkey"
-            columns: ["restaurante_id"]
-            isOneToOne: false
-            referencedRelation: "restaurantes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      stripe_repasses: {
-        Row: {
-          afiliado_id: string | null
-          base_centavos: number
-          created_at: string
-          descricao: string
-          destino_tipo: string
-          divisao_id: string | null
-          erro: string | null
-          fatura_id: string
-          id: string
-          metodo: string
-          pago_em: string | null
-          pago_por: string | null
-          regra: string
-          status: string
-          stripe_transfer_id: string | null
-          updated_at: string
-          valor_centavos: number
-        }
-        Insert: {
-          afiliado_id?: string | null
-          base_centavos: number
-          created_at?: string
-          descricao: string
-          destino_tipo: string
-          divisao_id?: string | null
-          erro?: string | null
-          fatura_id: string
-          id?: string
-          metodo: string
-          pago_em?: string | null
-          pago_por?: string | null
-          regra: string
-          status?: string
-          stripe_transfer_id?: string | null
-          updated_at?: string
-          valor_centavos: number
-        }
-        Update: {
-          afiliado_id?: string | null
-          base_centavos?: number
-          created_at?: string
-          descricao?: string
-          destino_tipo?: string
-          divisao_id?: string | null
-          erro?: string | null
-          fatura_id?: string
-          id?: string
-          metodo?: string
-          pago_em?: string | null
-          pago_por?: string | null
-          regra?: string
-          status?: string
-          stripe_transfer_id?: string | null
-          updated_at?: string
-          valor_centavos?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stripe_repasses_afiliado_id_fkey"
-            columns: ["afiliado_id"]
-            isOneToOne: false
-            referencedRelation: "afiliados"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_repasses_divisao_id_fkey"
-            columns: ["divisao_id"]
-            isOneToOne: false
-            referencedRelation: "divisao_receita"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stripe_repasses_fatura_id_fkey"
-            columns: ["fatura_id"]
-            isOneToOne: false
-            referencedRelation: "stripe_faturas"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       sugestoes_plataforma: {
         Row: {
@@ -4438,10 +4066,6 @@ export type Database = {
         }[]
       }
       afiliados_numeros: { Args: { p_area: string }; Returns: Json }
-      aplicar_assinatura_stripe: {
-        Args: { p_restaurante_id: number }
-        Returns: undefined
-      }
       area_da_conta: { Args: { p_restaurante_id: number }; Returns: string }
       area_da_conta_logada: { Args: never; Returns: string }
       area_eh_admin: { Args: never; Returns: boolean }
@@ -4713,10 +4337,6 @@ export type Database = {
           fixada_em: string
         }[]
       }
-      gerar_repasses_da_fatura: {
-        Args: { p_fatura_id: string }
-        Returns: number
-      }
       get_user_restaurante_id: { Args: never; Returns: number }
       google_apagar_token: {
         Args: { p_restaurante_id: number }
@@ -4807,7 +4427,6 @@ export type Database = {
       janela_demo_atual: { Args: never; Returns: number }
       jsonb_de_texto: { Args: { p_texto: string }; Returns: Json }
       limpar_contas_abandonadas: { Args: never; Returns: number }
-      limpar_payload_eventos_stripe: { Args: never; Returns: number }
       meu_acesso: {
         Args: never
         Returns: {

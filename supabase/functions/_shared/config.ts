@@ -1,19 +1,18 @@
 /**
- * Configuração NÃO secreta da integração Stripe.
+ * Configuração NÃO secreta das integrações (URL do site e afins).
  *
  * Segue o padrão da casa: `integracao_config` (chave/valor) é onde o projeto
  * já guarda URLs e ids de integração (uazapi, push). Lê de lá primeiro e cai
  * na variável de ambiente se a chave não existir ou estiver vazia — assim
- * dá para trocar o id do portal ou a URL do site pelo painel/SQL, sem deploy.
+ * dá para trocar a URL do site pelo painel/SQL, sem deploy.
  *
- * Segredos (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) NÃO passam por aqui:
- * ficam só em `supabase secrets`.
+ * Segredos NÃO passam por aqui: ficam só em `supabase secrets`.
  */
 
 // deno-lint-ignore no-explicit-any
 type Db = any
 
-export type ChaveConfig = 'SITE_URL' | 'STRIPE_PORTAL_CONFIGURATION_ID'
+export type ChaveConfig = 'SITE_URL'
 
 export async function configuracao(db: Db, chave: ChaveConfig): Promise<string | null> {
   try {
@@ -28,7 +27,7 @@ export async function configuracao(db: Db, chave: ChaveConfig): Promise<string |
 }
 
 /** URL pública do site, sem barra no fim. Lança se não houver: sem ela não
-    existe success_url, e uma sessão sem retorno é venda perdida. */
+    há link de volta (e-mails, OAuth, recuperação de senha). */
 export async function siteUrl(db: Db): Promise<string> {
   const url = (await configuracao(db, 'SITE_URL'))?.replace(/\/+$/, '')
   if (!url || !/^https?:\/\//.test(url)) throw new Error('SITE_URL não configurada (integracao_config ou secret)')

@@ -1,90 +1,47 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { ArrowRight, Check, Loader2, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
 import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
-import { ErroStripe, limparSessaoCheckout, vincularCompra } from '@/lib/queries/stripe'
+/* Retorno do pagamento — fecha a trilha Conta → Pagamento → Acesso.
 
-/* Retorno do pagamento — fecha a trilha Pagamento → Conta → Acesso.
-
-   Duas origens chegam aqui com `?sessao=cs_...`:
-   - LANDING: pagou sem conta, criou a conta, e agora o servidor precisa LIGAR
-     a assinatura à conta (`vincular-compra`, que confere tudo no Stripe);
-   - APP: já tinha conta; o webhook liga sozinho (metadata veio do JWT). Chamar
-     `vincular-compra` aqui também é inofensivo: idempotente para a mesma conta.
-
-   O webhook costuma chegar DEPOIS do redirect, então `assinatura_status` pode
-   estar defasado: faz polling curto até virar 'ativa', e é honesto quando o
-   pagamento ainda está em processamento (boleto/Pix). */
-type Estado = 'verificando' | 'ativa' | 'pendente' | 'email_diferente' | 'erro'
+   A confirmação do pagamento chega ao servidor pelo webhook do provedor, que
+   costuma chegar DEPOIS do redirect: `assinatura_status` pode estar defasado.
+   Faz polling até virar 'ativa' (Pix/boleto podem levar alguns minutos). */
+type Estado = 'verificando' | 'ativa' | 'erro'
 
 const POLL_MS = 3000
-/** Cartão confirma em segundos; boleto/Pix podem levar minutos. */
-const LIMITE_MS = 90_000
-const LIMITE_PENDENTE_MS = 10 * 60_000
+/** Cartão confirma em segundos; Pix/boleto podem levar minutos. */
+const LIMITE_MS = 10 * 60_000
 
 export default function CheckoutSucesso() {
   const { usuario, logout, refetchUsuario } = useAuth()
-  const navigate = useNavigate()
-  const [params] = useSearchParams()
-  const sessao = params.get('sessao')
   const [estado, setEstado] = useState<Estado>(usuario?.assinatura_status === 'ativa' ? 'ativa' : 'verificando')
   const [mensagem, setMensagem] = useState<string | null>(null)
   const inicio = useRef(Date.now())
-  const vinculou = useRef(false)
 
   useEffect(() => {
-    if (usuario?.assinatura_status === 'ativa') {
-      setEstado('ativa')
-      limparSessaoCheckout()
-    }
+    if (usuario?.assinatura_status === 'ativa') setEstado('ativa')
   }, [usuario?.assinatura_status])
 
   useEffect(() => {
-    if (estado === 'ativa' || estado === 'email_diferente' || estado === 'erro') return
+    if (estado !== 'verificando') return
     let vivo = true
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const passo = async () => {
       if (!vivo) return
       try {
-        if (sessao && !vinculou.current) {
-          const r = await vincularCompra(sessao)
-          vinculou.current = true
-          if (r.ok) {
-            await refetchUsuario()
-            if (vivo) setEstado('ativa')
-            limparSessaoCheckout()
-            return
-          }
-        } else {
-          await refetchUsuario()
-        }
-      } catch (e) {
-        if (!vivo) return
-        const erro = e instanceof ErroStripe ? e : null
-        if (erro?.corpo?.email_diferente) {
-          setEstado('email_diferente')
-          setMensagem(erro.message)
-          return
-        }
-        if (erro?.corpo?.pendente) {
-          vinculou.current = false // tenta de novo quando o pagamento confirmar
-          setEstado('pendente')
-        } else if (erro && (erro.status === 404 || erro.status === 410 || erro.status === 409)) {
-          setEstado('erro')
-          setMensagem(erro.message)
-          return
-        }
-        // Rede/500: cai no polling abaixo e tenta de novo.
-        vinculou.current = false
+        await refetchUsuario()
+      } catch {
+        // Rede: tenta de novo no próximo passo.
       }
-      if (Date.now() - inicio.current > (estado === 'pendente' ? LIMITE_PENDENTE_MS : LIMITE_MS)) {
+      if (Date.now() - inicio.current > LIMITE_MS) {
         if (vivo) {
           setEstado('erro')
-          setMensagem('O pagamento foi recebido, mas a liberação está demorando mais que o normal.')
+          setMensagem('O pagamento ainda não foi confirmado. Se você já pagou, a liberação pode levar alguns minutos.')
         }
         return
       }
@@ -95,13 +52,7 @@ export default function CheckoutSucesso() {
       vivo = false
       if (timer) clearTimeout(timer)
     }
-    // `estado` entra para reiniciar o ciclo quando muda para 'pendente'.
-  }, [sessao, estado, refetchUsuario])
-
-  const sairECriarComEmailCerto = async () => {
-    await logout()
-    navigate(sessao ? `/cadastro?sessao=${encodeURIComponent(sessao)}` : '/cadastro', { replace: true })
-  }
+  }, [estado, refetchUsuario])
 
   return (
     <div
@@ -197,7 +148,7 @@ export default function CheckoutSucesso() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </>
-          ) : estado === 'verificando' || estado === 'pendente' ? (
+          ) : estado === 'verificando' ? (
             <>
               <div
                 className="mx-auto flex items-center justify-center"
@@ -206,44 +157,28 @@ export default function CheckoutSucesso() {
                 <Loader2 className="h-7 w-7 animate-spin" />
               </div>
               <h1 style={{ fontSize: 'clamp(22px, 3vw, 27px)', fontWeight: 700, letterSpacing: '-0.025em', color: cores.tinta, marginBottom: '10px' }}>
-                {estado === 'pendente' ? 'Pagamento em processamento' : 'Liberando seu acesso'}
+                Liberando seu acesso
               </h1>
               <p style={{ fontSize: '14.5px', lineHeight: 1.6, color: cores.corpoSuave }}>
-                {estado === 'pendente'
-                  ? 'Recebemos seu pedido. Boleto e Pix levam alguns instantes para confirmar; esta tela libera o acesso sozinha quando isso acontecer.'
-                  : 'Pagamento recebido. Estamos ligando a assinatura à sua conta — leva só alguns segundos.'}
+                Estamos confirmando o pagamento. Cartão leva alguns segundos; Pix e boleto podem levar
+                alguns minutos. Esta tela libera o acesso sozinha quando isso acontecer.
               </p>
             </>
           ) : (
             <>
               <h1 style={{ fontSize: 'clamp(22px, 3vw, 27px)', fontWeight: 700, letterSpacing: '-0.025em', color: cores.tinta, marginBottom: '10px' }}>
-                {estado === 'email_diferente' ? 'E-mail diferente do pagamento' : 'Não conseguimos liberar o acesso'}
+                Não conseguimos liberar o acesso
               </h1>
               <p style={{ fontSize: '14.5px', lineHeight: 1.6, color: cores.corpoSuave, marginBottom: '24px' }}>
                 {mensagem ?? 'Algo deu errado ao ligar o pagamento à sua conta.'}
-                {estado === 'email_diferente' && (
-                  <> A assinatura fica ligada ao e-mail informado no pagamento, por segurança.</>
-                )}
               </p>
-              {estado === 'email_diferente' ? (
-                <button
-                  type="button"
-                  onClick={sairECriarComEmailCerto}
-                  className="flex items-center justify-center"
-                  style={{ gap: '8px', height: '54px', width: '100%', fontSize: '15px', fontWeight: 600, color: '#FFFFFF', backgroundColor: cores.azul, border: 'none', borderRadius: '13px', cursor: 'pointer', boxShadow: '0 12px 30px rgba(37,99,235,0.30)' }}
-                >
-                  Criar conta com o e-mail do pagamento
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <Link
-                  to="/assinatura"
-                  className="flex items-center justify-center"
-                  style={{ gap: '8px', height: '54px', width: '100%', fontSize: '15px', fontWeight: 600, color: '#FFFFFF', backgroundColor: cores.azul, borderRadius: '13px', textDecoration: 'none', boxShadow: '0 12px 30px rgba(37,99,235,0.30)' }}
-                >
-                  Ver minha assinatura
-                </Link>
-              )}
+              <Link
+                to="/assinatura"
+                className="flex items-center justify-center"
+                style={{ gap: '8px', height: '54px', width: '100%', fontSize: '15px', fontWeight: 600, color: '#FFFFFF', backgroundColor: cores.azul, borderRadius: '13px', textDecoration: 'none', boxShadow: '0 12px 30px rgba(37,99,235,0.30)' }}
+              >
+                Ver minha assinatura
+              </Link>
               <a
                 href="https://wa.me/5511952138636"
                 target="_blank"

@@ -4,7 +4,7 @@ import { conviteDoEndereco, type ConviteDeArea } from '@/lib/areas'
    A pessoa chega pelo link, cria e-mail e senha (às vezes confirma o e-mail em
    outra aba, às vezes paga antes) e só depois cai na tela de escolha: o convite
    precisa sobreviver a esse caminho. Mesmo desenho do código de indicação
-   (`lerCodigoIndicacao` em queries/stripe.ts). Quem confere o código é o banco. */
+   (`lerCodigoIndicacao` em lib/indicacao.ts). Quem confere o código é o banco. */
 
 const CHAVE = 'easyfeed_convite_area'
 const DIAS = 30

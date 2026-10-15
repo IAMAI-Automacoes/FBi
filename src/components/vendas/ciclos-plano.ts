@@ -1,12 +1,10 @@
 /* Definição dos ciclos de cobrança.
 
-   NENHUM valor monetário aqui. Preço é lido do Stripe por lookup_key
-   (`easyfeed_mensal` / `easyfeed_semestral` / `easyfeed_anual`) pela edge
-   function `get-prices` — ver `hooks/use-precos.ts`. Trocar preço = script
-   `scripts/stripe/trocar-preco.ts`, sem deploy. O client nunca envia price ID:
-   o checkout recebe só o ciclo e resolve o price no servidor. */
+   NENHUM valor monetário aqui. Preço é lido da tabela `planos_precos` (um
+   por software e ciclo, editável pelo admin) — ver `hooks/use-precos.ts`.
+   O client nunca envia valor: o pagamento recebe só o ciclo. */
 
-import type { PrecoPublico } from '@/lib/queries/stripe'
+import type { PrecoPublico } from '@/lib/queries/cobranca'
 
 export type Ciclo = 'mensal' | 'semestral' | 'anual'
 
@@ -62,7 +60,7 @@ export function buscarCiclo(id: Ciclo): DefinicaoCiclo {
   return CICLOS.find((c) => c.id === id) ?? CICLOS[0]
 }
 
-/** Ciclo + preço vindo do Stripe, já formatado para a tela. */
+/** Ciclo + preço vindo do banco, já formatado para a tela. */
 export interface PlanoCiclo extends DefinicaoCiclo {
   /** "147" — número grande do card (sem "R$", que vai separado). */
   mensalEquivalente: string

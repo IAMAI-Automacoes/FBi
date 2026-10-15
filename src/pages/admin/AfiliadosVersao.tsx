@@ -110,8 +110,7 @@ export function TrazerDoOutroSoftware({ area, aoTrazer }: { area: Area; aoTrazer
         ocupados.add(codigo)
         await criarAfiliado({
           area, codigo, nome: a.nome, email: a.email, telefone: a.telefone, comissao_tipo: a.comissao_tipo, comissao_valor: a.comissao_valor,
-          // A conta do Stripe Connect não vem junto: o afiliado conecta de novo neste software.
-          stripe_account_id: null, cpf_cnpj: a.cpf_cnpj, chave_pix: a.chave_pix, codigo_banco: a.codigo_banco, banco: a.banco,
+          cpf_cnpj: a.cpf_cnpj, chave_pix: a.chave_pix, codigo_banco: a.codigo_banco, banco: a.banco,
           agencia: a.agencia, conta: a.conta, tipo_conta: a.tipo_conta, observacoes: a.observacoes, ativo: a.ativo,
         })
       }

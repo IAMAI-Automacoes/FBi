@@ -14,8 +14,8 @@
 // marcado como vendedor: é o cupom do vendedor, e o nome é fácil de adivinhar.
 //
 // Estava publicada só no painel do Supabase, sem fonte no repositório. Este
-// arquivo partiu do que estava rodando (versão 16, com a conferência da
-// assinatura do Stripe), trazido para cá para que um deploy geral não a apague.
+// arquivo partiu do que estava rodando (versão 16), trazido para cá para que
+// um deploy geral não a apague.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { cupomDaArea, oQueOCupomDa } from '../_shared/cupom.ts'
 
@@ -81,22 +81,8 @@ Deno.serve(async (req: Request) => {
     // O que o cupom dá: acesso, desconto guardado, ou os dois.
     const da = oQueOCupomDa(cupom)
 
-    // Assinatura do Stripe que ainda cobra (ativa ou com pagamento atrasado,
-    // que o Stripe segue retentando): cupom por cima deixaria o cliente com
-    // acesso grátis enquanto o cartão continua sendo cobrado — ou, no atraso,
-    // com acesso liberado sem nunca vencer. Regulariza pelo pagamento.
-    const { data: cobrando } = await admin
-      .from('stripe_assinaturas')
-      .select('status')
-      .eq('restaurante_id', rest.id)
-      .in('status', ['active', 'trialing', 'past_due', 'unpaid'])
-      .limit(1)
-    if (da.acesso && cobrando?.length) {
-      return json(
-        { error: 'Sua conta já tem uma assinatura pelo cartão. Regularize o pagamento em vez de usar um cupom.' },
-        409,
-      )
-    }
+    // TODO(asaas): com a cobrança recorrente, recusar cupom de acesso para quem
+    // tem assinatura que ainda cobra (acesso grátis com o cartão sendo cobrado).
 
     // Cupom de vendedor: só para email marcado como vendedor.
     if (cupom.somente_vendedores === true) {
@@ -143,16 +129,12 @@ Deno.serve(async (req: Request) => {
 
     if (da.acesso) {
       // Libera o acesso (service_role passa pelo trigger de proteção).
-      // `stripe_subscription_id` sai: a assinatura antiga do Stripe (já
-      // encerrada, conferido acima) deixa de reger a conta. Sem isso o cron de
-      // expiração pula a conta (acha que é do Stripe) e o cupom nunca vence.
       const { data: upd, error: updErr } = await admin
         .from('restaurantes')
         .update({
           assinatura_status: 'ativa',
           assinatura_expira_em: expira,
           assinatura_cancelada_em: null,
-          stripe_subscription_id: null,
         })
         .eq('id', rest.id)
         .select('id')

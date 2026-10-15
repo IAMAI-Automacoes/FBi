@@ -9,11 +9,12 @@ import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { resgatarCupom } from '@/lib/queries/cupom'
 import { textoDoDesconto } from '@/lib/cupons'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout } from '@/lib/queries/stripe'
+import { criarCheckout } from '@/lib/queries/cobranca'
 
-/* Confirmação do plano antes de mandar para o Stripe, para quem JÁ tem conta e
-   ainda não tem plano. Rota protegida: quem chega aqui está autenticado.
-   O caminho da landing (sem conta) não passa por aqui — vai direto ao Stripe. */
+/* Confirmação do plano antes de ir para o pagamento. Rota protegida: quem
+   chega aqui está autenticado (a landing manda criar a conta antes). Enquanto
+   não houver meio de pagamento online, `criarCheckout` recusa com a mensagem
+   do WhatsApp; o cupom de acesso continua funcionando. */
 export default function Checkout() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -21,7 +22,7 @@ export default function Checkout() {
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  // Cupom de acesso — libera sem depender do Stripe (o resgate é no servidor)
+  // Cupom de acesso — libera sem depender do pagamento (o resgate é no servidor)
   const [cupom, setCupom] = useState('')
   const [aplicandoCupom, setAplicandoCupom] = useState(false)
   const [erroCupom, setErroCupom] = useState<string | null>(null)
@@ -63,8 +64,6 @@ export default function Checkout() {
     setEnviando(true)
     setErro(null)
     try {
-      // A função lê o JWT: grava o restaurante na metadata da sessão e o
-      // webhook vincula a assinatura sozinho. Volta em /checkout/sucesso.
       const url = await criarCheckout(ciclo)
       window.location.assign(url)
     } catch (e) {
@@ -136,7 +135,7 @@ export default function Checkout() {
         </Link>
 
         {/* Fora do card: dentro competiria com a pílula do plano e o h1. */}
-        <EtapasCompra etapa={1} marginBottom={20} />
+        <EtapasCompra etapa={2} marginBottom={20} />
 
         <div
           style={{
@@ -228,7 +227,7 @@ export default function Checkout() {
               </div>
             ) : (
               <p style={{ fontSize: '13.5px', color: '#B91C1C' }}>
-                O valor exato aparece na tela de pagamento do Stripe.
+                O valor exato aparece na tela de pagamento.
               </p>
             )}
           </div>
@@ -286,10 +285,10 @@ export default function Checkout() {
             className="text-center"
             style={{ fontSize: '12.5px', color: cores.corpoSuave, margin: '10px 0 22px' }}
           >
-            Pagamento processado pelo Stripe · cancele quando quiser
+            Pagamento seguro · cancele quando quiser
           </p>
 
-          {/* Cupom de acesso — funciona mesmo sem o Stripe configurado */}
+          {/* Cupom de acesso — funciona mesmo sem o pagamento online */}
           <div
             style={{
               background: cores.superficie,

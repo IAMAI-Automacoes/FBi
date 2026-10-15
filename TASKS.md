@@ -198,7 +198,10 @@
 
 ---
 
-## Sessão 11 — Landing Page de Vendas + Checkout Stripe ✅ (código) / ⏳ (configuração)
+## Sessão 11 — Landing Page de Vendas + Checkout Stripe 🗑️ REMOVIDO
+
+> **15/10/2026:** o Stripe foi removido por completo (código, funções, tabelas,
+> secrets). A cobrança vai para o Asaas. O texto abaixo fica só como histórico.
 
 **Objetivo:** Visitante converte em assinante pagante. Fluxo **pay-first**: landing → Stripe Checkout → cria a conta na volta → vínculo seguro no servidor → onboarding. Documentação completa (modelo de dados, Dashboard, descritor, e-mails, testes): **`docs/stripe/README.md`**.
 

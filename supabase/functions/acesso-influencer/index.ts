@@ -7,7 +7,7 @@
 
 import { json, preflight } from '../_shared/cors.ts'
 import { clienteAdmin } from '../_shared/auth.ts'
-import { siteUrl } from '../_shared/stripe/config.ts'
+import { siteUrl } from '../_shared/config.ts'
 import { acessoInfluencer } from './handler.ts'
 
 async function sha256(texto: string): Promise<string> {

@@ -86,7 +86,7 @@ export default function Privacidade() {
           <Lista itens={[
             'nome, e-mail, telefone e dados de acesso à conta;',
             'dados do restaurante: nome, endereço, logo, configurações, informações que você cadastra sobre o negócio e sobre a equipe (como garçons);',
-            'dados de assinatura e pagamento. O pagamento é processado pela Stripe: não guardamos o número do seu cartão.',
+            'dados de assinatura e pagamento. O pagamento é processado por uma empresa de pagamentos: não guardamos o número do seu cartão.',
           ]} />
           <p><b>Dos clientes do restaurante:</b></p>
           <Lista itens={[
@@ -144,7 +144,7 @@ export default function Privacidade() {
             'hospedagem, banco de dados e armazenamento de arquivos (Supabase) e servidores de automação;',
             'serviços de envio e recebimento de mensagens do WhatsApp;',
             'provedores de inteligência artificial que analisam os feedbacks (como a OpenAI), sem uso dos dados do Google;',
-            'processamento de pagamentos (Stripe);',
+            'processamento de pagamentos;',
             'serviços de notificação do navegador.',
           ]} />
           <p>

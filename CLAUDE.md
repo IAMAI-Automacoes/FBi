@@ -127,22 +127,15 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
-| `get-prices` | Preços atuais do Stripe por lookup_key (pública, cache 5 min) |
-| `create-checkout-session` | Abre o Stripe Checkout (landing sem conta ou usuário logado) |
-| `stripe-webhook` | Eventos do Stripe → tabelas `stripe_*` → `restaurantes` (idempotente) |
-| `consultar-compra` | Estado de uma Checkout Session para o cadastro pós-pagamento |
-| `vincular-compra` | Liga assinatura paga à conta (confere tudo no Stripe) |
-| `create-portal-session` | Customer Portal (trocar ciclo, cartão, cancelar) |
-| `cancelar-assinatura` | Cancela no Stripe (`cancel_at_period_end`) ou no legado |
-| `conectar-afiliado` | (admin) cria a conta Stripe Connect do afiliado e devolve o link de cadastro |
+| `cancelar-assinatura` | Cancela o acesso por data (cupom/liberação manual) |
 
-**Stripe:** ver `docs/stripe/README.md`. Preço NUNCA fixo em código/banco — só
-lookup_key (`easyfeed_mensal|semestral|anual`); trocar preço = `scripts/stripe/trocar-preco.ts`.
-Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (+ `STRIPE_CONNECT_WEBHOOK_SECRET` para o
-endpoint de contas conectadas). Config não secreta em `integracao_config`: `SITE_URL`,
-`STRIPE_PORTAL_CONFIGURATION_ID`. Tabelas `stripe_*`: assinaturas, faturas, checkout_sessions,
-eventos_webhook (payload apagado após 90 dias), repasses (livro-razão: sócios por Pix via
-`divisao_receita`; afiliados por Connect via `afiliados.stripe_account_id`).
+**Cobrança:** o Stripe foi removido (15/10/2026) e a cobrança vai para o Asaas
+(plano em andamento). Até lá não há pagamento online: `criarCheckout`
+(`src/lib/queries/cobranca.ts`) recusa com a mensagem do WhatsApp, e o acesso
+é liberado por cupom ou pelo admin. Preços na tabela `planos_precos` (por
+software e ciclo, editável pelo admin) — NUNCA valor fixo no código.
+`SITE_URL` (config não secreta) fica em `integracao_config`, lida por
+`_shared/config.ts`.
 
 **NOTA:** Não existe `analyze-message` — está implementado como `chamar-ia`.
 

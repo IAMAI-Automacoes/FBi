@@ -13,8 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIniciais } from '@/lib/iniciais'
 import { excluirMinhaConta } from '@/lib/queries/conta'
-import { abrirPortal } from '@/lib/queries/stripe'
-import { FaturasRecentes } from '@/components/conta/FaturasRecentes'
 import { ImageCropper } from '@/components/ImageCropper'
 import { PainelCodigoDemo } from '@/components/demo/PainelCodigoDemo'
 
@@ -25,7 +23,6 @@ export default function MyAccount() {
   const [loading, setLoading] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
   const [cancelando, setCancelando] = useState(false)
-  const [abrindoPortal, setAbrindoPortal] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string>('')
   const [cropFile, setCropFile] = useState<File | null>(null)
@@ -199,20 +196,6 @@ export default function MyAccount() {
     } catch (e: any) {
       toast({ title: 'Não foi possível excluir', description: e.message, variant: 'destructive' })
       setExcluindo(false)
-    }
-  }
-
-  // Customer Portal do Stripe (configuração própria do EasyFeed): trocar
-  // ciclo, atualizar cartão, ver faturas, cancelar. Só existe para assinatura
-  // feita pelo Stripe — cupom/liberação manual não têm Customer.
-  const handleAbrirPortal = async () => {
-    setAbrindoPortal(true)
-    try {
-      const url = await abrirPortal()
-      window.location.assign(url)
-    } catch (e: any) {
-      toast({ title: 'Não foi possível abrir o portal', description: e.message, variant: 'destructive' })
-      setAbrindoPortal(false)
     }
   }
 
@@ -468,11 +451,6 @@ export default function MyAccount() {
                   )}
               </div>
               <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                {usuario.stripe_customer_id && (
-                  <Button variant="outline" onClick={handleAbrirPortal} disabled={abrindoPortal}>
-                    {abrindoPortal ? 'Abrindo…' : 'Gerenciar assinatura'}
-                  </Button>
-                )}
                 {(usuario.assinatura_status === 'ativa' ||
                   usuario.assinatura_status === 'inadimplente') &&
                   !usuario.assinatura_cancelada_em && (
@@ -487,9 +465,6 @@ export default function MyAccount() {
               </div>
             </div>
           </div>
-
-          {/* Histórico de cobranças (só assinatura pelo Stripe) */}
-          {usuario.stripe_customer_id && <FaturasRecentes />}
 
           {/* Zona de perigo — excluir a própria conta (reversível só pelo suporte) */}
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/40 p-5 sm:p-6">

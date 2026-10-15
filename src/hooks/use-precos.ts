@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { buscarPrecos } from '@/lib/queries/stripe'
+import { buscarPrecos } from '@/lib/queries/cobranca'
 import { montarPlano, type Ciclo, type PlanoCiclo } from '@/components/vendas/ciclos-plano'
 
-/* Preços atuais do Stripe, prontos para a tela.
+/* Preços atuais (tabela `planos_precos`), prontos para a tela.
 
-   Uma busca por montagem; o `get-prices` já cacheia (5 min no servidor e no
-   navegador via Cache-Control), então repetir a chamada entre páginas custa
-   quase nada. Enquanto carrega, `planos` é vazio e as telas mostram esqueleto
-   — nunca um valor fixo, que poderia estar errado. */
+   Uma busca por montagem. Enquanto carrega, `planos` é vazio e as telas
+   mostram esqueleto — nunca um valor fixo, que poderia estar errado. */
 
 export interface EstadoPrecos {
   planos: PlanoCiclo[]
@@ -17,7 +15,7 @@ export interface EstadoPrecos {
   recarregar: () => void
 }
 
-export function usePrecos(): EstadoPrecos {
+export function usePrecos(area: 'restaurante' | 'rh' = 'restaurante'): EstadoPrecos {
   const [planos, setPlanos] = useState<PlanoCiclo[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -27,10 +25,10 @@ export function usePrecos(): EstadoPrecos {
     let vivo = true
     setCarregando(true)
     setErro(null)
-    buscarPrecos()
-      .then((r) => {
+    buscarPrecos(area)
+      .then((precos) => {
         if (!vivo) return
-        setPlanos(r.precos.map(montarPlano))
+        setPlanos(precos.map(montarPlano))
       })
       .catch((e: Error) => {
         if (!vivo) return
@@ -42,7 +40,7 @@ export function usePrecos(): EstadoPrecos {
     return () => {
       vivo = false
     }
-  }, [tentativa])
+  }, [tentativa, area])
 
   return {
     planos,

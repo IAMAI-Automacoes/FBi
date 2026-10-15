@@ -5,8 +5,7 @@
  * Decisões do Raver (15/10/2026):
  *   - cada cupom é de UM software (Restaurante ou RH) e só vale para conta dele;
  *   - o cupom pode dar desconto em % ou em R$. O desconto fica guardado na conta
- *     e entra na cobrança quando o pagamento novo (Asaas) chegar: até lá, nada
- *     muda no Stripe;
+ *     e entra na cobrança quando o pagamento novo (Asaas) chegar;
  *   - o cupom escolhe o tipo de conta que cria: normal, vendedor ou admin. Só o
  *     de admin é obrigado a ter número de usos e data de validade (quem souber
  *     o código vira admin da plataforma).

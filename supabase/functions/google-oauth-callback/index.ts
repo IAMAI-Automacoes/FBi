@@ -8,7 +8,7 @@
 //   https://lixrcruilisncfhfhndo.supabase.co/functions/v1/google-oauth-callback
 
 import { clienteAdmin } from '../_shared/auth.ts'
-import { siteUrl } from '../_shared/stripe/config.ts'
+import { siteUrl } from '../_shared/config.ts'
 import {
   aplicarLocais, clienteGoogle, configGoogle, guardarToken, marcarAguardandoGoogle, sincronizarRestaurante,
 } from '../_shared/google-operacoes.ts'

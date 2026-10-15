@@ -1,21 +1,15 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
-import { stripe } from '../_shared/stripe/cliente.ts'
-import { sincronizarAssinatura } from '../_shared/stripe/sincronizar.ts'
 
 // Cancela a assinatura do restaurante do usuário logado. O dono não pode mexer
 // nos campos de assinatura (trigger bloqueia), então isso roda com service_role.
 //
-// Duas famílias de assinatura:
-//   - STRIPE (`stripe_subscription_id` preenchido): o cancelamento é pedido ao
-//     Stripe com `cancel_at_period_end: true` — o cliente mantém acesso até o
-//     fim do período pago, o Stripe não cobra mais, e o webhook
-//     (`customer.subscription.updated` agora, `deleted` no fim do período)
-//     atualiza o espelho e `restaurantes`. Cancelar só no nosso banco deixaria
-//     o Stripe cobrando um cliente que acha que cancelou.
-//   - LEGADO (cupom de acesso, liberação manual): regra antiga — se ainda tem
-//     data futura, mantém acesso até lá (o job de expiração encerra na data);
-//     se é infinita ou já vencida, encerra na hora.
+// Hoje só existe acesso por data (cupom de acesso, liberação manual): se ainda
+// tem data futura, mantém acesso até lá (o job de expiração encerra na data);
+// se é infinita ou já vencida, encerra na hora.
+//
+// TODO(asaas): com a cobrança recorrente, cancelar também no Asaas antes de
+// mexer aqui — cancelar só no nosso banco deixaria o cliente sendo cobrado.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,7 +45,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest, error: restErr } = await admin
       .from('restaurantes')
-      .select('id, assinatura_status, assinatura_expira_em, stripe_subscription_id')
+      .select('id, assinatura_status, assinatura_expira_em')
       .eq('auth_user_id', userData.user.id)
       .single()
     if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
@@ -60,20 +54,6 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Você não tem uma assinatura ativa para cancelar.' }, 400)
     }
 
-    // ── Stripe ──
-    if (rest.stripe_subscription_id) {
-      const sub = await stripe().subscriptions.update(rest.stripe_subscription_id, {
-        cancel_at_period_end: true,
-        cancellation_details: { comment: 'Cancelado pelo cliente no painel EasyFeed' },
-      })
-      // Não espera o webhook: atualiza o espelho e `restaurantes` agora, para a
-      // tela refletir na hora. O webhook, quando chegar, é idempotente.
-      await sincronizarAssinatura(admin, sub.id, Number(rest.id))
-      const fim = sub.items.data[0]?.current_period_end
-      return json({ modo: 'agendado', acesso_ate: fim ? new Date(fim * 1000).toISOString() : null })
-    }
-
-    // ── Legado ──
     const agora = new Date()
     const expira = rest.assinatura_expira_em ? new Date(rest.assinatura_expira_em) : null
     const temAcessoFuturo = expira !== null && expira.getTime() > agora.getTime()

@@ -262,11 +262,7 @@ export interface Afiliado {
   codigo: string
   comissao_tipo: 'porcentagem' | 'valor_fixo'
   comissao_valor: number
-  // Dados para payout via Stripe (Brasil)
-  stripe_account_id: string | null
-  /** nao_conectado | pendente | ativo | restrito — atualizado pelo servidor
-      (`conectar-afiliado` e webhook `account.updated`). Só leitura no painel. */
-  stripe_connect_status: string
+  // Dados para o pagamento da comissão
   cpf_cnpj: string | null
   chave_pix: string | null
   codigo_banco: string | null
@@ -303,9 +299,8 @@ export async function buscarCodigosDeAfiliado(): Promise<Set<string>> {
   return new Set((data ?? []).map((a) => String(a.codigo).toUpperCase()))
 }
 
-// `stripe_connect_status` nasce com o default do banco e só o servidor muda.
 export async function criarAfiliado(
-  input: Omit<Afiliado, 'id' | 'created_at' | 'stripe_connect_status' | 'restaurante_id'>,
+  input: Omit<Afiliado, 'id' | 'created_at' | 'restaurante_id'>,
 ): Promise<void> {
   const { error } = await supabase.from('afiliados').insert(input)
   if (error) throw error
@@ -427,7 +422,7 @@ export async function excluirCupon(id: number): Promise<void> {
 
 // ── Contas (assinatura) ───────────────────────────────────────────────────────
 // Enquanto o pagamento automático não existe, é por aqui que uma conta é
-// liberada. Depois o webhook do Stripe passa a escrever na mesma coluna.
+// liberada. Depois o webhook do pagamento passa a escrever na mesma coluna.
 //
 // Leitura de todas as contas: policy `admins_read_restaurantes`.
 // Escrita: policy `admins_update_restaurantes` + exceção no trigger

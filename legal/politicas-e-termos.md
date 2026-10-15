@@ -81,7 +81,7 @@
 ### TU-3. Assinatura, cobrança e renovação
 
 - **TU-3.1** A Plataforma é oferecida em plano único, com ciclos de cobrança mensal, semestral e anual. Os valores vigentes são os exibidos na página de planos e no checkout no momento da contratação.
-- **TU-3.2** O pagamento é processado pelo Stripe, por meio de página de checkout hospedada pelo próprio Stripe. O EasyFeed não recebe nem armazena o número completo do cartão; guarda apenas os identificadores de cliente e de assinatura fornecidos pelo Stripe.
+- **TU-3.2** O pagamento é processado por um processador de pagamentos (SUB-7), por meio de página de pagamento hospedada pelo próprio processador. O EasyFeed não recebe nem armazena o número completo do cartão; guarda apenas os identificadores de cliente e de cobrança fornecidos pelo processador.
 - **TU-3.3** A assinatura renova-se automaticamente ao fim de cada ciclo, pelo mesmo valor e ciclo, salvo cancelamento antes da data de renovação ou alteração de preço comunicada conforme TU-3.6.
 - **TU-3.4** Em caso de falha de pagamento na renovação, o acesso ao painel pode ser bloqueado até a regularização. A conta e os dados permanecem guardados (ver TU-10.4). Enquanto o acesso estiver bloqueado, o número de WhatsApp conectado é desconectado da Plataforma e precisa ser reconectado após a regularização.
 - **TU-3.5** O EasyFeed pode emitir cupons de acesso que liberam o uso por prazo determinado sem cobrança. Cupons são pessoais, não cumulativos e podem ter regras próprias (por exemplo, restritos a Vendedores).
@@ -95,7 +95,7 @@
 - **TU-4.3** Não há reembolso proporcional do período já iniciado, salvo o disposto em TU-4.4 e TU-4.5.
 - **TU-4.4** Quando aplicável o direito de arrependimento previsto no art. 49 do Código de Defesa do Consumidor, o Restaurante pode desistir da contratação em até 7 dias corridos contados do primeiro pagamento, com devolução integral do valor pago. {{POLITICA_ARREPENDIMENTO_B2B}}
 - **TU-4.5** Política de reembolso adicional: {{POLITICA_REEMBOLSO}}.
-- **TU-4.6** Reembolsos, quando devidos, são feitos pelo mesmo meio de pagamento, pelo Stripe, no prazo praticado pela operadora do cartão.
+- **TU-4.6** Reembolsos, quando devidos, são feitos pelo mesmo meio de pagamento, pelo processador de pagamentos, no prazo praticado pela operadora do cartão.
 
 ### TU-5. Obrigações do Restaurante
 
@@ -133,7 +133,7 @@
 
 ### TU-9. Disponibilidade, suporte e limitação de responsabilidade
 
-- **TU-9.1** O EasyFeed se esforça para manter a Plataforma disponível, mas não garante disponibilidade ininterrupta. Manutenções, falhas de suboperadores (Supabase, Stripe, OpenRouter, gateway de WhatsApp, n8n, Vercel) ou da própria Meta podem interromper o serviço.
+- **TU-9.1** O EasyFeed se esforça para manter a Plataforma disponível, mas não garante disponibilidade ininterrupta. Manutenções, falhas de suboperadores (Supabase, processador de pagamentos, OpenRouter, gateway de WhatsApp, n8n, Vercel) ou da própria Meta podem interromper o serviço.
 - **TU-9.2** Não há acordo de nível de serviço (SLA) na fase beta. {{SLA}}
 - **TU-9.3** O suporte é prestado por WhatsApp e e-mail ({{WHATSAPP_SUPORTE}} / {{EMAIL_SUPORTE}}) e pelo canal "Sugestões" do painel, em dias úteis, no horário {{HORARIO_SUPORTE}}.
 - **TU-9.4** Na extensão permitida pela lei, a responsabilidade total do EasyFeed perante o Restaurante, por qualquer causa, fica limitada ao valor pago pelo Restaurante nos 12 meses anteriores ao fato gerador.
@@ -191,12 +191,12 @@
 - **Equipe:** nome e telefone dos garçons cadastrados, regras de bonificação e registro de bônus pagos (ver MOD-EQUIPE).
 - **Assistente de IA:** mensagens do chat, imagens enviadas no chat, "memórias" que o assistente guarda sobre o restaurante, documentos e links enviados como base de conhecimento.
 - **Suporte:** mensagens, arquivos e reações trocados no canal "Sugestões" com a equipe do EasyFeed.
-- **Pagamento:** ciclo escolhido e cupons usados. Os dados do cartão são informados diretamente ao Stripe.
-- **Afiliados (quando aplicável):** nome, e-mail, telefone, CPF/CNPJ, dados bancários ou chave Pix, identificador de conta no Stripe (ver MOD-AFILIADOS).
+- **Pagamento:** ciclo escolhido e cupons usados. Os dados do cartão são informados diretamente ao processador de pagamentos.
+- **Afiliados (quando aplicável):** nome, e-mail, telefone, CPF/CNPJ, dados bancários ou chave Pix (ver MOD-AFILIADOS).
 
 #### PP-3.2 Dados gerados pelo uso
 
-- Status e histórico da assinatura (ativa, cancelada, inadimplente, sem assinatura), datas de expiração e cancelamento, identificadores de cliente e assinatura no Stripe.
+- Status e histórico da assinatura (ativa, cancelada, inadimplente, sem assinatura), datas de expiração e cancelamento, identificadores de cliente e de cobrança no processador de pagamentos.
 - Relatórios gerados, insights, ações, planos, histórico de mudança de status das ações, banners.
 - Consumo de IA por restaurante: modelo, tokens de entrada e saída, custo estimado, agente que consumiu.
 - Registro das alterações feitas pelo Assistente de IA nos dados (antes/depois, para reversão).
@@ -231,7 +231,7 @@
 
 ### PP-6. Transferência internacional
 
-- **PP-6.1** Parte dos suboperadores está fora do Brasil ou pode processar dados fora do Brasil (ver Parte E): OpenRouter e os provedores de modelos de IA (Estados Unidos), Stripe (Estados Unidos, com operação no Brasil), Google Fonts (Google LLC), Vercel (Estados Unidos, com distribuição global) e, conforme a região configurada, Supabase e n8n.
+- **PP-6.1** Parte dos suboperadores está fora do Brasil ou pode processar dados fora do Brasil (ver Parte E): OpenRouter e os provedores de modelos de IA (Estados Unidos), o processador de pagamentos (ver SUB-7), Google Fonts (Google LLC), Vercel (Estados Unidos, com distribuição global) e, conforme a região configurada, Supabase e n8n.
 - **PP-6.2** Essas transferências são feitas com base no art. 33 da LGPD e na Resolução CD/ANPD nº 19/2024, principalmente por meio de cláusulas contratuais padrão incorporadas aos contratos com os suboperadores, ou por ser a transferência necessária à execução do contrato com o Restaurante (art. 33, IX). A conferência dos instrumentos de cada suboperador está em PEND-4.
 - **PP-6.3** A região de hospedagem do banco de dados principal é {{REGIAO_SUPABASE}}. A do n8n é {{REGIAO_N8N}}. A do gateway de WhatsApp é {{REGIAO_UAZAPI}}.
 
@@ -319,15 +319,15 @@ Cada módulo descreve uma funcionalidade que trata dados pessoais. Os IDs dos m�
 
 ### MOD-PAGAMENTO — Assinatura e cobrança `[ATIVO]`
 
-- **Dados tratados:** ciclo do plano, status e datas da assinatura, identificadores de cliente e de assinatura no Stripe, cupons resgatados. Dados de cartão são coletados apenas pelo Stripe.
+- **Dados tratados:** ciclo do plano, status e datas da assinatura, identificadores de cliente e de cobrança no processador de pagamentos, cupons resgatados. Dados de cartão são coletados apenas pelo processador.
 - **Finalidade:** cobrar, renovar, bloquear por inadimplência, liberar por cupom, emitir nota fiscal.
 - **Base legal:** execução de contrato (art. 7º, V); obrigação legal fiscal (art. 7º, II).
-- **Suboperadores:** SUB-1 (Supabase), SUB-7 (Stripe).
-- **Observação de inventário:** a integração com o Stripe está prevista no código, mas ainda não publicada (checkout e webhook pendentes). Hoje a liberação ocorre por cupom de acesso ou manualmente pelo Administrador da Plataforma. Ver PEND-6.
+- **Suboperadores:** SUB-1 (Supabase), SUB-7 (processador de pagamentos).
+- **Observação de inventário:** o pagamento online ainda não está publicado (a integração com o processador está em implementação). Hoje a liberação ocorre por cupom de acesso ou manualmente pelo Administrador da Plataforma. Ver PEND-6.
 - **Cláusulas:**
   - **MOD-PAGAMENTO-TU-1** Aplicam-se TU-3 e TU-4.
-  - **MOD-PAGAMENTO-TU-2** O Restaurante autoriza o EasyFeed a consultar o Stripe sobre o status da assinatura e a atualizar o acesso ao painel com base nessa informação.
-  - **MOD-PAGAMENTO-PP-1** A página de checkout é do Stripe e segue a política de privacidade do Stripe.
+  - **MOD-PAGAMENTO-TU-2** O Restaurante autoriza o EasyFeed a consultar o processador de pagamentos sobre o status da assinatura e a atualizar o acesso ao painel com base nessa informação.
+  - **MOD-PAGAMENTO-PP-1** A página de pagamento é do processador e segue a política de privacidade dele.
 
 ### MOD-QR — QR code, cartaz e página do cliente `[ATIVO]`
 
@@ -447,10 +447,10 @@ Cada módulo descreve uma funcionalidade que trata dados pessoais. Os IDs dos m�
 
 ### MOD-AFILIADOS — Programa de afiliados e divisão de receita `[ATIVO — apenas administrativo]`
 
-- **Dados tratados:** nome, e-mail, telefone, CPF/CNPJ, banco, agência, conta, tipo de conta, chave Pix, identificador de conta no Stripe, código de afiliado, tipo e valor de comissão, observações; beneficiários de divisão de receita (nome, tipo, valor, chave Pix).
+- **Dados tratados:** nome, e-mail, telefone, CPF/CNPJ, banco, agência, conta, tipo de conta, chave Pix, código de afiliado, tipo e valor de comissão, observações; beneficiários de divisão de receita (nome, tipo, valor, chave Pix).
 - **Finalidade:** remunerar afiliados e parceiros pela indicação de clientes.
 - **Base legal:** execução de contrato com o afiliado (art. 7º, V); obrigação legal fiscal (art. 7º, II).
-- **Suboperadores:** SUB-1, SUB-7 (Stripe, quando houver repasse).
+- **Suboperadores:** SUB-1, SUB-7 (processador de pagamentos, quando houver repasse).
 - **Observação de inventário:** existe cadastro no painel administrativo, mas não há termos de afiliado nem página pública do programa (PEND-12).
 - **Cláusulas:**
   - **MOD-AFILIADOS-TU-1** Condições do programa de afiliados: {{TERMOS_AFILIADOS}}.
@@ -507,10 +507,10 @@ Lista derivada do código em 2026-09-28. Itens marcados "a confirmar" não puder
   - Dados enviados: endereço IP e cabeçalhos de requisição de quem acessa o site (logs de borda).
   - País: Estados Unidos, com distribuição global. Existe também configuração de contêiner (Dockerfile/nginx) no repositório; a hospedagem efetiva deve ser confirmada (PEND-4).
 
-- **SUB-7 — Stripe, Inc. / Stripe Brasil Soluções de Pagamento Ltda.**
+- **SUB-7 — Processador de pagamentos (a definir na publicação do pagamento online)**
   - Função: processamento de pagamentos e gestão de assinaturas.
-  - Dados enviados: e-mail, nome, dados de cartão (informados diretamente ao Stripe), identificadores de cliente e assinatura, valor e ciclo.
-  - País: Estados Unidos, com entidade no Brasil. Integração ainda não publicada (PEND-6).
+  - Dados enviados: e-mail, nome, dados de cartão (informados diretamente ao processador), identificadores de cliente e de cobrança, valor e ciclo.
+  - Integração ainda não publicada (PEND-6).
 
 - **SUB-8 — Google LLC (Google Fonts)**
   - Função: fornecimento de fontes tipográficas ao navegador.
@@ -587,13 +587,13 @@ Itens que exigem decisão do responsável pelo produto ou validação por advoga
 - **PEND-3 — Uso de dados para treinamento pelos provedores de IA.** O código não envia à OpenRouter parâmetros de roteamento por política de dados (por exemplo, preferência por provedores que não retêm ou não treinam com prompts). Verificar: (a) as configurações de privacidade da conta OpenRouter (retenção de logs, permissão de provedores que treinam com dados); (b) os termos da API do Google Gemini via OpenRouter quanto a retenção e treinamento; (c) o modelo do n8n (GPT ou outro) usado no fluxo de entrada e seus termos; (d) o provedor de transcrição. Decidir se será configurada preferência por provedores sem treinamento e ajustar MOD-IA-PP-1 e AC-4 conforme o resultado.
 - **PEND-4 — Instrumentos de transferência internacional e localização.** Confirmar: região do projeto Supabase; hospedagem do n8n (auto-hospedado, em que país, ou n8n Cloud); servidor do gateway UZAPI (país e razão social); hospedagem efetiva do frontend (Vercel ou contêiner próprio). Para cada suboperador fora do Brasil, obter e arquivar o instrumento (cláusulas contratuais padrão da ANPD incorporadas ao contrato, DPA do fornecedor ou outra hipótese do art. 33) e conferir aderência à Resolução CD/ANPD nº 19/2024.
 - **PEND-5 — Prazos de retenção não definidos.** Não há rotina de expurgo para: feedbacks e contatos de consumidores, registros de abertura de QR, mensagens enviadas, conversas do assistente, mensagens de suporte, consumo de IA, contas canceladas/excluídas. Definir os prazos dos placeholders `{{PRAZO_*}}` e implementar a exclusão ou anonimização correspondente. Garantir o mínimo de 6 meses para registros de acesso (Marco Civil, art. 15) e verificar se os logs de autenticação do Supabase cumprem esse mínimo (o plano do Supabase pode reter menos).
-- **PEND-6 — Fluxo de pagamento e momento da criação da conta.** O briefing descreve pagamento antes da criação da conta; o código implementa o inverso (conta criada primeiro, checkout depois), e o checkout do Stripe ainda não está publicado (função de criação de sessão e webhook pendentes). Definir o fluxo final e ajustar TU-1.2, TU-2 e TU-3. Definir também: política de reembolso (TU-4.5), aplicabilidade do art. 49 do CDC a assinantes pessoa jurídica (TU-4.4), prazo de aviso de reajuste (TU-3.6) e emissão de nota fiscal.
+- **PEND-6 — Fluxo de pagamento e momento da criação da conta.** O briefing descreve pagamento antes da criação da conta; o código implementa o inverso (conta criada primeiro, checkout depois), e o pagamento online ainda não está publicado. Definir o fluxo final e ajustar TU-1.2, TU-2 e TU-3. Definir também: política de reembolso (TU-4.5), aplicabilidade do art. 49 do CDC a assinantes pessoa jurídica (TU-4.4), prazo de aviso de reajuste (TU-3.6) e emissão de nota fiscal.
 - **PEND-7 — Hash de IP sem sal nas aberturas de QR.** O SHA-256 do IP sem sal permite reidentificação por força bruta do espaço de IPv4; tratar como dado pseudonimizado (não anônimo) e considerar sal secreto rotativo ou truncamento. Ajustar MOD-QR-PP-2 conforme a decisão técnica.
 - **PEND-8 — Fluxo de entrada no n8n (fora do repositório).** Confirmar e documentar: provedor e país da transcrição de áudio; modelo de IA usado na triagem e separação de pontos; se o áudio original é guardado e por quanto tempo; se o n8n guarda histórico de conversa (tabelas `n8n_chat_histories` e `message_buffer` existem no banco e são geridas pelo n8n); se há dados do consumidor em logs do n8n. Atualizar SUB-5 e SUB-10.
 - **PEND-9 — Credenciais do gateway visíveis ao próprio restaurante.** O token administrativo global e a URL do gateway são copiados para a linha de cada restaurante e legíveis pelo dono no painel (decisão consciente registrada no código). Avaliar risco e, se necessário, restringir as colunas. Não é cláusula, mas afeta PP-7.
 - **PEND-10 — Base legal do retorno ao cliente e do convite ao Google.** Escolher entre legítimo interesse (com teste de balanceamento documentado e opção fácil de descadastro) ou consentimento coletado no aviso do QR. A escolha altera AC-3, MOD-RETORNO e MOD-GOOGLE-REVIEW. Avaliar também a aderência às políticas comerciais do WhatsApp para mensagens iniciadas pela empresa.
 - **PEND-11 — Descadastro automático ("SAIR").** O descadastro depende hoje de marcação manual ou de configuração no n8n. Para sustentar o aviso AC-8, implementar o reconhecimento automático da palavra-chave ou ajustar o texto do aviso até lá.
-- **PEND-12 — Programa de afiliados.** Existe cadastro de afiliados com CPF/CNPJ e dados bancários no painel administrativo, sem termos de afiliação. Redigir contrato/termos de afiliado, definir base legal e retenção, e confirmar se o repasse usa Stripe Connect (há campo para conta Stripe).
+- **PEND-12 — Programa de afiliados.** Existe cadastro de afiliados com CPF/CNPJ e dados bancários no painel administrativo, sem termos de afiliação. Redigir contrato/termos de afiliado, definir base legal e retenção, e definir como o repasse é pago (Pix pelo processador de pagamentos).
 - **PEND-13 — Menores de idade.** Validar o texto AC-9 (adolescentes podem enviar; crianças não são alvo; exclusão a pedido do responsável) frente ao art. 14 da LGPD e ao ECA, considerando que o canal é o WhatsApp (que exige idade mínima própria) e que não há verificação de idade possível.
 - **PEND-14 — Dados de terceiros citados no feedback.** Validar AC-10 e definir procedimento para pedidos de garçons ou outros citados (anonimização do nome no texto do feedback, por exemplo). Avaliar se o Restaurante deve informar a equipe (aviso interno) sobre a possibilidade de citação nominal em feedbacks e nos insights.
 - **PEND-15 — Aceite dos Termos no cadastro.** O formulário de cadastro não tem caixa de aceite nem link para Termos e Política. Incluir aceite expresso (com registro de data/versão) antes da publicação. Não é cláusula, mas condiciona TU-1.2.

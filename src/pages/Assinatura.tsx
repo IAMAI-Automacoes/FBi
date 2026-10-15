@@ -7,7 +7,8 @@ import { useArea } from '@/lib/area'
 import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout, ErroStripe, guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/queries/stripe'
+import { criarCheckout, ErroCobranca } from '@/lib/queries/cobranca'
+import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
 import { registrarIndicacao } from '@/lib/queries/indicacoes'
 import { RECUSA_QUE_TRAVA } from '@/lib/indicacoes'
 import { Check, Loader2, LogOut } from 'lucide-react'
@@ -34,8 +35,8 @@ export default function Assinatura() {
     if (guardado) void registrarIndicacao(guardado)
   }, [])
 
-  // Usuário logado: a função lê o JWT, grava o restaurante na metadata e o
-  // webhook vincula sozinho. Volta em /checkout/sucesso.
+  // Usuário logado: abre o pagamento do plano. Enquanto não houver meio de
+  // pagamento online, a recusa traz a mensagem do WhatsApp.
   const assinar = async (ciclo: Ciclo) => {
     if (abrindo) return
     setAbrindo(ciclo)
@@ -57,7 +58,7 @@ export default function Assinatura() {
       const url = await criarCheckout(ciclo, { codigoAfiliado: codigo || undefined })
       window.location.assign(url)
     } catch (e) {
-      const invalido = e instanceof ErroStripe && Boolean(e.corpo?.codigo_afiliado_invalido)
+      const invalido = e instanceof ErroCobranca && Boolean(e.corpo?.codigo_afiliado_invalido)
       setErroCheckout(
         invalido ? 'Código de indicação inválido. Confira ou deixe em branco.'
         : e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.',
@@ -119,7 +120,7 @@ export default function Assinatura() {
             ativo (gate em RotaProtegida), então todo mundo aqui está comprando.
             `legenda={null}` porque o parágrafo logo abaixo já explica — duas
             frases explicativas empilhadas viram ruído. */}
-        <EtapasCompra etapa={1} alinhamento="centro" legenda={null} marginBottom={28} />
+        <EtapasCompra etapa={2} alinhamento="centro" legenda={null} marginBottom={28} />
 
         <div className="text-center" style={{ marginBottom: 'clamp(28px, 4vw, 40px)' }}>
           <h1 style={{ fontSize: 'clamp(26px, 3.6vw, 36px)', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.15, color: cores.tinta, marginBottom: '12px' }}>
@@ -161,8 +162,8 @@ export default function Assinatura() {
           />
         </div>
 
-        {/* Ciclos — cada card abre o Stripe Checkout já com o plano escolhido.
-            Valores vêm do Stripe (usePrecos); enquanto carregam, esqueleto. */}
+        {/* Ciclos — cada card abre o pagamento já com o plano escolhido.
+            Valores vêm do banco (usePrecos); enquanto carregam, esqueleto. */}
         <div className="grid gap-4 sm:grid-cols-3" style={{ marginBottom: '32px' }}>
           {CICLOS.map((c) => {
             const plano = porCiclo(c.id)

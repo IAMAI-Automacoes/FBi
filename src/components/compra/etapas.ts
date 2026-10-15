@@ -1,8 +1,8 @@
-/* Fonte única da verdade do fluxo de compra: Pagamento → Conta → Acesso.
+/* Fonte única da verdade do fluxo de compra: Conta → Pagamento → Acesso.
 
-   O pagamento vem PRIMEIRO (Stripe Checkout na landing); a conta é criada na
-   volta, já com a assinatura paga esperando o vínculo. Quem já tem conta sem
-   plano (/assinatura) entra na trilha pela etapa 1 do mesmo jeito.
+   A conta vem PRIMEIRO: a landing leva ao /checkout, que é rota protegida, e
+   quem não tem conta cria antes. Quem já tem conta sem plano (/assinatura)
+   entra na trilha pela etapa 2.
 
    Sem JSX e sem imports de React de propósito — assim dá para consultar o mapa
    em lógica de rota sem arrastar a árvore de componentes junto. */
@@ -21,13 +21,13 @@ export interface DefinicaoEtapa {
 export const ETAPAS_COMPRA: readonly DefinicaoEtapa[] = [
   {
     numero: 1,
-    rotulo: 'Pagamento',
-    legenda: 'Escolha o plano e confirme o pagamento.',
+    rotulo: 'Conta',
+    legenda: 'Crie sua conta. Em seguida você escolhe o plano e paga.',
   },
   {
     numero: 2,
-    rotulo: 'Conta',
-    legenda: 'Pagamento confirmado. Crie sua conta com o mesmo e-mail para liberar o acesso.',
+    rotulo: 'Pagamento',
+    legenda: 'Escolha o plano e confirme o pagamento.',
   },
   {
     numero: 3,
@@ -41,10 +41,10 @@ export const ETAPAS_COMPRA: readonly DefinicaoEtapa[] = [
    deixa de ser contínua. `/onboarding` mora aqui como documentação — a tela
    não renderiza a trilha, porque já tem uma barra própria de 4 passos. */
 const ETAPA_POR_ROTA: Record<string, EtapaCompra> = {
-  '/assinatura': 1,
-  '/checkout': 1,
-  '/login': 2,
-  '/cadastro': 2,
+  '/login': 1,
+  '/cadastro': 1,
+  '/assinatura': 2,
+  '/checkout': 2,
   '/checkout/sucesso': 3,
   '/onboarding': 3,
 }
@@ -58,8 +58,7 @@ export function etapaDaRota(pathname: string): EtapaCompra | null {
 /** A pessoa está no meio de uma compra?
     Recebe o destino pós-auth, que chega com query string (`/checkout?ciclo=anual`)
     — daí o corte antes de consultar o mapa. As próprias telas de auth não contam:
-    estar em /login não significa estar comprando (quem volta do Stripe com
-    `?sessao=` é tratado à parte, em Autenticacao). */
+    estar em /login não significa estar comprando. */
 export function ehRotaDeCompra(destino: string): boolean {
   const caminho = destino.split('?')[0]
   if (caminho === '/login' || caminho === '/cadastro') return false

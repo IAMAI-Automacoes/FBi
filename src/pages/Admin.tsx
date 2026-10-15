@@ -50,7 +50,6 @@ import {
   type ContaAdmin,
 } from '@/lib/queries/admin'
 import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
-import { conectarAfiliado, statusConnectAfiliado } from '@/lib/queries/stripe'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -1138,7 +1137,7 @@ const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
 const EMPTY_AFILIADO = {
   nome: '', email: '', telefone: '', codigo: '',
   comissao_tipo: 'porcentagem' as 'porcentagem' | 'valor_fixo', comissao_valor: '',
-  stripe_account_id: '', cpf_cnpj: '', chave_pix: '',
+  cpf_cnpj: '', chave_pix: '',
   codigo_banco: '', banco: '', agencia: '', conta: '', tipo_conta: 'corrente' as 'corrente' | 'poupanca',
   observacoes: '', ativo: true,
 }
@@ -1279,18 +1278,6 @@ export default function Admin() {
     if (paths.length === 0) return
     getSignedUrls(paths).then((urls) => setSignedUrls((p) => ({ ...p, ...urls }))).catch(console.error)
   }, [selectedId, sugestoes])
-
-  // Volta do cadastro Stripe Connect do afiliado (/admin?afiliado=ID&connect=retorno):
-  // relê o status no Stripe e abre a aba de afiliados.
-  useEffect(() => {
-    const q = new URLSearchParams(location.search)
-    const afId = q.get('afiliado')
-    if (!isAdmin || !afId || !q.get('connect')) return
-    statusConnectAfiliado(afId).catch((err) => console.error(err)).finally(() => {
-      setActiveTab('afiliados')
-      navigate('/admin', { replace: true })
-    })
-  }, [isAdmin, location.search, navigate])
 
   // Contas: carrega ao entrar na aba (junto da lista de vendedores, que é por email)
   const loadContas = useCallback(async () => {
@@ -1477,7 +1464,7 @@ export default function Admin() {
     setAfilForm({
       nome: a.nome, email: a.email ?? '', telefone: a.telefone ?? '', codigo: a.codigo,
       comissao_tipo: a.comissao_tipo, comissao_valor: String(a.comissao_valor),
-      stripe_account_id: a.stripe_account_id ?? '', cpf_cnpj: a.cpf_cnpj ?? '', chave_pix: a.chave_pix ?? '',
+      cpf_cnpj: a.cpf_cnpj ?? '', chave_pix: a.chave_pix ?? '',
       codigo_banco: a.codigo_banco ?? '', banco: a.banco ?? '', agencia: a.agencia ?? '',
       conta: a.conta ?? '', tipo_conta: (a.tipo_conta === 'poupanca' ? 'poupanca' : 'corrente'),
       observacoes: a.observacoes ?? '', ativo: a.ativo,
@@ -1492,7 +1479,7 @@ export default function Admin() {
         nome: afilForm.nome, email: afilForm.email || null, telefone: afilForm.telefone || null,
         codigo: afilForm.codigo.toUpperCase(), comissao_tipo: afilForm.comissao_tipo,
         comissao_valor: Number(afilForm.comissao_valor) || 0,
-        stripe_account_id: afilForm.stripe_account_id || null, cpf_cnpj: afilForm.cpf_cnpj || null,
+        cpf_cnpj: afilForm.cpf_cnpj || null,
         chave_pix: afilForm.chave_pix || null, codigo_banco: afilForm.codigo_banco || null,
         banco: afilForm.banco || null, agencia: afilForm.agencia || null, conta: afilForm.conta || null,
         tipo_conta: afilForm.tipo_conta || null,
@@ -1913,8 +1900,6 @@ export default function Admin() {
             {afilDetailId ? (
               <AfiliadoDetalhe
                 novo={afilDetailId === 'new'}
-                afiliado={afiliados.find((a) => a.id === afilDetailId) ?? null}
-                onConnectAtualizado={loadAfiliados}
                 form={afilForm}
                 setForm={setAfilForm}
                 saving={savingAfil}
@@ -2038,11 +2023,8 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
     </div>
   )
 }
-function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, saving, deleting, onSave, onBack, onDelete }: {
+function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack, onDelete }: {
   novo: boolean
-  /** Afiliado já salvo (null ao criar): dá o id e o status do Stripe Connect. */
-  afiliado: Afiliado | null
-  onConnectAtualizado: () => void
   form: AfilForm
   setForm: React.Dispatch<React.SetStateAction<AfilForm>>
   saving: boolean
@@ -2053,33 +2035,6 @@ function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, s
 }) {
   const set = (patch: Partial<AfilForm>) => setForm((p) => ({ ...p, ...patch }))
 
-  // Stripe Connect: o admin gera o link de cadastro e o afiliado preenche no
-  // Stripe. A conta e o status são gravados pelo servidor (conectar-afiliado).
-  const [connectBusy, setConnectBusy] = useState<'link' | 'status' | null>(null)
-  const [connectErro, setConnectErro] = useState<string | null>(null)
-  const [connectLink, setConnectLink] = useState<string | null>(null)
-  const connectStatus = afiliado?.stripe_connect_status ?? 'nao_conectado'
-  const gerarLinkConnect = async () => {
-    if (!afiliado) return
-    setConnectBusy('link'); setConnectErro(null)
-    try { setConnectLink(await conectarAfiliado(afiliado.id)); onConnectAtualizado() }
-    catch (e) { setConnectErro(e instanceof Error ? e.message : 'Falha ao gerar o link.') }
-    finally { setConnectBusy(null) }
-  }
-  const atualizarStatusConnect = async () => {
-    if (!afiliado) return
-    setConnectBusy('status'); setConnectErro(null)
-    try { await statusConnectAfiliado(afiliado.id); onConnectAtualizado() }
-    catch (e) { setConnectErro(e instanceof Error ? e.message : 'Falha ao consultar o Stripe.') }
-    finally { setConnectBusy(null) }
-  }
-  const ROTULO_CONNECT: Record<string, { texto: string; classe: string }> = {
-    nao_conectado: { texto: 'Não conectado', classe: 'bg-gray-100 text-gray-600' },
-    pendente: { texto: 'Cadastro pendente', classe: 'bg-amber-50 text-amber-700' },
-    ativo: { texto: 'Ativo — recebe automaticamente', classe: 'bg-emerald-50 text-emerald-700' },
-    restrito: { texto: 'Restrito — pendências no Stripe', classe: 'bg-red-50 text-red-700' },
-  }
-  const rotuloConnect = ROTULO_CONNECT[connectStatus] ?? ROTULO_CONNECT.nao_conectado
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -2136,46 +2091,11 @@ function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, s
           </div>
         </div>
 
-        {/* Pagamento via Stripe Connect */}
-        <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Pagamento automático (Stripe Connect)</p>
-          {novo ? (
-            <p className="text-[12px] text-gray-500">Salve o afiliado primeiro; depois gere o link de cadastro no Stripe.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={cn('text-[11px] font-semibold rounded-full px-2 py-0.5', rotuloConnect.classe)}>{rotuloConnect.texto}</span>
-                {form.stripe_account_id && <span className="font-mono text-[11px] text-gray-400">{form.stripe_account_id}</span>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={gerarLinkConnect} disabled={connectBusy !== null}>
-                  {connectBusy === 'link' ? 'Gerando…' : connectStatus === 'nao_conectado' ? 'Gerar link de cadastro' : 'Novo link de cadastro'}
-                </Button>
-                {connectStatus !== 'nao_conectado' && (
-                  <Button size="sm" variant="ghost" onClick={atualizarStatusConnect} disabled={connectBusy !== null}>
-                    {connectBusy === 'status' ? 'Consultando…' : 'Atualizar status'}
-                  </Button>
-                )}
-              </div>
-              {connectLink && (
-                <div className="rounded-md border border-gray-200 bg-gray-50 p-2.5">
-                  <p className="text-[11px] text-gray-500 mb-1">Envie este link ao afiliado (vale por pouco tempo; gere outro se expirar):</p>
-                  <a href={connectLink} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[#1D4ED8] break-all hover:underline">{connectLink}</a>
-                </div>
-              )}
-              {connectErro && <p className="text-[12px] text-red-600">{connectErro}</p>}
-              <p className="text-[11px] text-gray-400">
-                Com a conta ativa, a comissão de cada fatura paga é transferida sozinha. Sem ela, a comissão fica registrada para pagar por Pix.
-              </p>
-              <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
-            </div>
-          )}
-        </div>
-
         {/* Conta bancária (Brasil) */}
         <div>
           <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Conta bancária</p>
           <div className="space-y-3">
+            <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
             <Campo label="Chave PIX"><Input value={form.chave_pix} onChange={(e) => set({ chave_pix: e.target.value })} placeholder="CPF, e-mail, telefone…" className="mt-1" /></Campo>
             <div className="grid grid-cols-2 gap-3">
               <Campo label="Banco (nome)"><Input value={form.banco} onChange={(e) => set({ banco: e.target.value })} placeholder="Nubank" className="mt-1" /></Campo>
@@ -2194,7 +2114,6 @@ function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, s
                 </Select>
               </Campo>
             </div>
-            <p className="text-[11px] text-gray-400">O Stripe (Brasil) exige conta corrente no mesmo CPF/CNPJ do titular para receber os repasses.</p>
           </div>
         </div>
 

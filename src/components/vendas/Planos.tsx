@@ -1,37 +1,30 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Check, ChevronRight, Loader2, ShieldCheck } from 'lucide-react'
 import { ancora, cores, orbe, rotuloSecao, tituloSecao, TRANSICAO } from './tokens'
 import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from './ciclos-plano'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout, ErroStripe, guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/queries/stripe'
+import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
 
-/* Preços vêm do Stripe (get-prices) — nenhum valor fixo aqui. O botão abre o
-   Stripe Checkout direto: o pagamento vem antes da conta, e a conta é criada
-   na volta (/cadastro?sessao=...). */
+/* Preços vêm do banco (`planos_precos`) — nenhum valor fixo aqui. O botão leva
+   ao /checkout do plano: rota protegida, então quem não tem conta cria antes
+   (Conta → Pagamento → Acesso). O código de indicação fica guardado e vai
+   junto na compra. */
 export function Planos() {
   const [ciclo, setCiclo] = useState<Ciclo>('semestral')
   const { planos, carregando, erro, porCiclo, recarregar } = usePrecos()
   const atual = porCiclo(ciclo)
+  const navigate = useNavigate()
   const [abrindo, setAbrindo] = useState(false)
-  const [erroCheckout, setErroCheckout] = useState<string | null>(null)
   // Código do afiliado: vem do link `?ref=` (guardado 30 dias) ou é digitado.
+  // Quem confere é o servidor, na hora de pagar.
   const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
-  const [erroCodigo, setErroCodigo] = useState<string | null>(null)
 
-  const assinar = async () => {
+  const assinar = () => {
     if (abrindo || !atual) return
     setAbrindo(true)
-    setErroCheckout(null)
-    setErroCodigo(null)
-    try {
-      guardarCodigoIndicacao(codigo)
-      const url = await criarCheckout(ciclo, { codigoAfiliado: codigo || undefined })
-      window.location.assign(url)
-    } catch (e) {
-      if (e instanceof ErroStripe && e.corpo?.codigo_afiliado_invalido) setErroCodigo(e.message)
-      else setErroCheckout(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
-      setAbrindo(false)
-    }
+    guardarCodigoIndicacao(codigo)
+    navigate(`/checkout?ciclo=${ciclo}`)
   }
 
   return (
@@ -224,7 +217,7 @@ export function Planos() {
                 </button>
               </div>
             ) : (
-              // Esqueleto enquanto o Stripe responde: nunca um valor fixo.
+              // Esqueleto enquanto os preços carregam: nunca um valor fixo.
               <div aria-busy="true" style={{ marginBottom: '24px' }}>
                 <div style={{ height: '52px', width: '180px', borderRadius: '12px', background: cores.superficieAlt, marginBottom: '10px' }} />
                 <div style={{ height: '14px', width: '220px', borderRadius: '8px', background: cores.superficieAlt }} />
@@ -242,10 +235,7 @@ export function Planos() {
               <input
                 id="codigo-indicacao"
                 value={codigo}
-                onChange={(e) => {
-                  setCodigo(e.target.value.toUpperCase())
-                  setErroCodigo(null)
-                }}
+                onChange={(e) => setCodigo(e.target.value.toUpperCase())}
                 placeholder="Ex.: JOAO10"
                 maxLength={30}
                 disabled={abrindo}
@@ -259,23 +249,12 @@ export function Planos() {
                   letterSpacing: '0.04em',
                   color: cores.tinta,
                   background: cores.superficie,
-                  border: `1px solid ${erroCodigo ? '#EF4444' : cores.borda}`,
+                  border: `1px solid ${cores.borda}`,
                   borderRadius: '11px',
                   outline: 'none',
                 }}
               />
-              {erroCodigo && (
-                <p role="alert" style={{ fontSize: '12.5px', color: '#B91C1C', marginTop: '6px' }}>
-                  {erroCodigo}
-                </p>
-              )}
             </div>
-
-            {erroCheckout && (
-              <p role="alert" style={{ fontSize: '13px', color: '#B91C1C', marginBottom: '10px' }}>
-                {erroCheckout}
-              </p>
-            )}
 
             <button
               type="button"
@@ -318,14 +297,13 @@ export function Planos() {
               )}
             </button>
 
-            {/* Define a expectativa ANTES do clique: paga no Stripe, cria a
-                conta na volta. Avisar aqui sai mais barato do que explicar na
-                tela seguinte. */}
+            {/* Define a expectativa ANTES do clique: cria a conta, paga, usa.
+                Avisar aqui sai mais barato do que explicar na tela seguinte. */}
             <div
               className="flex items-center justify-center flex-wrap"
               style={{ gap: '6px', marginBottom: '8px' }}
             >
-              {['Pagamento', 'Conta', 'Acesso imediato'].map((etapa, i) => (
+              {['Conta', 'Pagamento', 'Acesso imediato'].map((etapa, i) => (
                 <span key={etapa} className="inline-flex items-center" style={{ gap: '6px' }}>
                   {i > 0 && (
                     <ChevronRight
@@ -350,7 +328,7 @@ export function Planos() {
               className="text-center"
               style={{ fontSize: '12.5px', color: cores.corpoSuave, marginBottom: '26px' }}
             >
-              Pagamento seguro via Stripe · cancele quando quiser
+              Pagamento seguro · cancele quando quiser
             </p>
 
             <div style={{ height: '1px', background: cores.borda, marginBottom: '22px' }} />
