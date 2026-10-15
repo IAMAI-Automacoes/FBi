@@ -37,16 +37,18 @@ export function nomeDoAssistente(mascoteConfig: unknown): string {
  * Bloco legível com tudo o que o dono preencheu em "Sobre o Restaurante".
  * Campos vazios somem em vez de virar "não informado", para não gastar contexto
  * nem sugerir à IA que existe um dado onde não existe.
+ *
+ * Só entram os campos que a tela ainda mostra. Estilo, serviços, pratos que
+ * mais saem, diferenciais, desafios e ano de abertura saíram da tela em
+ * 2026-10 e podem continuar gravados no jsonb de contas antigas, mas o dono
+ * não vê nem corrige mais esses valores, então não chegam à IA.
  */
 // deno-lint-ignore no-explicit-any
 export function blocoPerfil(r: any): string {
   const p = (r?.perfil_restaurante as Record<string, unknown>) || {}
-  const servicos = Array.isArray(p.servicos) && p.servicos.length ? p.servicos.join(', ') : ''
-
   const linhas = [
     r?.nome_restaurante ? `Nome: ${r.nome_restaurante}` : '',
     r?.tipo_culinaria ? `Tipo de cozinha: ${r.tipo_culinaria}` : '',
-    p.estilo ? `Estilo: ${p.estilo}` : '',
     p.localizacao ? `Localização: ${p.localizacao}` : '',
     r?.numero_mesas ? `Mesas: ${r.numero_mesas}` : '',
     p.capacidade_lugares ? `Capacidade: ${p.capacidade_lugares} lugares` : '',
@@ -54,13 +56,6 @@ export function blocoPerfil(r: any): string {
     p.faixa_preco ? `Ticket médio / faixa de preço: ${p.faixa_preco}` : '',
     p.horario_funcionamento ? `Horário de funcionamento: ${p.horario_funcionamento}` : '',
     p.publico_alvo ? `Público: ${p.publico_alvo}` : '',
-    p.pratos_destaque
-      ? `Pratos e bebidas que mais saem / carro-chefe / destaques (é tudo o mesmo campo): ${p.pratos_destaque}`
-      : '',
-    servicos ? `Serviços oferecidos: ${servicos}` : '',
-    p.diferenciais ? `Diferenciais: ${p.diferenciais}` : '',
-    p.desafios ? `Desafios atuais relatados pelo dono: ${p.desafios}` : '',
-    p.ano_abertura ? `Aberto desde: ${p.ano_abertura}` : '',
     r?.detalhes
       ? `\nTexto escrito PELO DONO sobre o restaurante (o "eu" abaixo é ele, não você — use como informação, nunca repita literalmente):\n"""\n${r.detalhes}\n"""`
       : '',

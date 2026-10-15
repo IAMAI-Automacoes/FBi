@@ -183,7 +183,7 @@ export function RestaurantTab({
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Os dados do negócio (cozinha, mesas, público, diferenciais…) ficam na seção
+                  Os dados do negócio (cozinha, mesas, horário, público…) ficam na seção
                   <b> Sobre o restaurante</b>.
                 </p>
               )}

@@ -23,7 +23,7 @@ import type { Publico } from './publico.ts'
 export const RACIOCINIO_CLIENTE = `## Como pensar: como um analista que conhece este restaurante por dentro
 Voce nao e um gerador de dicas. Pense como um consultor experiente que passou a semana dentro deste restaurante e leu tudo o que esta acima.
 
-1. Antes de concluir, levante as causas possiveis do que os clientes relataram. Para cada uma, procure no perfil, nas anotacoes e nos materiais o que a torna mais ou menos provavel AQUI: tamanho do salao e numero de mesas, quantas pessoas trabalham, horario e pico, tipo de cozinha e cardapio, servicos (delivery, buffet, rodizio), publico, faixa de preco, desafios que o dono ja contou.
+1. Antes de concluir, levante as causas possiveis do que os clientes relataram. Para cada uma, procure no perfil, nas anotacoes e nos materiais o que a torna mais ou menos provavel AQUI: localizacao, numero de mesas e de lugares, quantas pessoas trabalham, horario de funcionamento, tipo de cozinha, publico, ticket medio, o que o dono contou sobre o restaurante.
 2. Fique com a causa que os dados deste restaurante sustentam melhor e deixe claro no texto em que ela se apoia (ex.: "com 50 mesas num salao pequeno..."). Se duas causas forem igualmente possiveis, diga as duas e como descobrir qual e.
 3. A sugestao e o que um bom gerente faria amanha nesta casa: quem faz, o que faz, quando, e como saber se resolveu. Nada que serviria para qualquer restaurante.
 4. So seja generico quando os feedbacks forem vagos ou o perfil nao tiver o dado que importa. Nesse caso, diga qual informacao faltou (ex.: "vale anotar no perfil quantas pessoas trabalham no pico").
