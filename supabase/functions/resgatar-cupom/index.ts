@@ -81,8 +81,16 @@ Deno.serve(async (req: Request) => {
     // O que o cupom dá: acesso, desconto guardado, ou os dois.
     const da = oQueOCupomDa(cupom)
 
-    // TODO(asaas): com a cobrança recorrente, recusar cupom de acesso para quem
-    // tem assinatura que ainda cobra (acesso grátis com o cartão sendo cobrado).
+    // Cupom de acesso para quem tem cobrança vigente no Asaas (recorrente ativa
+    // ou atrasada, parcelado pago): seria acesso grátis por cima de um cartão
+    // que segue sendo cobrado. Cupom só de desconto continua valendo.
+    if (da.acesso) {
+      const { data: vigente, error: vigErr } = await admin.rpc('cobranca_vigente', { p_restaurante_id: rest.id })
+      if (vigErr) return json({ error: 'Não foi possível conferir sua assinatura. Tente de novo.' }, 500)
+      if (vigente === true) {
+        return json({ error: 'Sua assinatura paga já está em andamento. O cupom de acesso não vale junto com ela.' }, 409)
+      }
+    }
 
     // Cupom de vendedor: só para email marcado como vendedor.
     if (cupom.somente_vendedores === true) {
@@ -133,6 +141,7 @@ Deno.serve(async (req: Request) => {
         .from('restaurantes')
         .update({
           assinatura_status: 'ativa',
+          assinatura_origem: 'cupom',
           assinatura_expira_em: expira,
           assinatura_cancelada_em: null,
         })

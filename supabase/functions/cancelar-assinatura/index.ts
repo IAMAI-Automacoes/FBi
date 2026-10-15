@@ -4,12 +4,14 @@ import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 // Cancela a assinatura do restaurante do usuário logado. O dono não pode mexer
 // nos campos de assinatura (trigger bloqueia), então isso roda com service_role.
 //
-// Hoje só existe acesso por data (cupom de acesso, liberação manual): se ainda
-// tem data futura, mantém acesso até lá (o job de expiração encerra na data);
-// se é infinita ou já vencida, encerra na hora.
-//
-// TODO(asaas): com a cobrança recorrente, cancelar também no Asaas antes de
-// mexer aqui — cancelar só no nosso banco deixaria o cliente sendo cobrado.
+// - Recorrente do Asaas: remove a assinatura NO ASAAS PRIMEIRO (para de
+//   cobrar); se o Asaas falhar, nada muda aqui. O acesso continua até o fim do
+//   período pago; atrasada encerra na hora.
+// - Parcelado do Asaas: é pré-pago e não renova sozinho — nada a cancelar.
+// - Acesso por data (cupom, liberação manual): se ainda tem data futura, mantém
+//   até lá (o job de expiração encerra na data); se é infinita ou já vencida,
+//   encerra na hora.
+import { asaas, removerNoAsaas } from '../_shared/asaas/cliente.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,13 +47,49 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest, error: restErr } = await admin
       .from('restaurantes')
-      .select('id, assinatura_status, assinatura_expira_em')
+      .select('id, assinatura_status, assinatura_expira_em, assinatura_origem')
       .eq('auth_user_id', userData.user.id)
       .single()
     if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
 
     if (rest.assinatura_status !== 'ativa' && rest.assinatura_status !== 'inadimplente') {
       return json({ error: 'Você não tem uma assinatura ativa para cancelar.' }, 400)
+    }
+
+    if (rest.assinatura_origem === 'asaas_parcelado') {
+      const ate = rest.assinatura_expira_em
+        ? new Date(rest.assinatura_expira_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+        : null
+      return json({
+        error: `Seu plano já está pago${ate ? ` até ${ate}` : ''} e não renova sozinho: não há nada a cancelar.`,
+      }, 400)
+    }
+
+    if (rest.assinatura_origem === 'asaas_recorrente') {
+      const { data: assinaturas } = await admin
+        .from('cobranca_assinaturas')
+        .select('id, conta_id, asaas_id, status')
+        .eq('restaurante_id', rest.id)
+        .eq('modalidade', 'recorrente')
+        .in('status', ['ativa', 'atrasada'])
+      if (!assinaturas?.length) return json({ error: 'Não encontramos a assinatura para cancelar.' }, 409)
+
+      const agoraIso = new Date().toISOString()
+      for (const a of assinaturas) {
+        // Primeiro no Asaas: cancelar só aqui deixaria o cartão sendo cobrado.
+        if (a.asaas_id) await removerNoAsaas(asaas(a.conta_id), `/subscriptions/${a.asaas_id}`)
+        await admin
+          .from('cobranca_assinaturas')
+          .update({ status: 'cancelada', cancelada_em: agoraIso, atualizada_em: agoraIso })
+          .eq('id', a.id)
+      }
+      const { data: estado, error: aplErr } = await admin.rpc('cobranca_aplicar', { p_restaurante_id: rest.id })
+      if (aplErr) throw new Error(`cobranca_aplicar: ${aplErr.message}`)
+      if (estado === 'ativa') {
+        const { data: depois } = await admin.from('restaurantes').select('assinatura_expira_em').eq('id', rest.id).single()
+        return json({ modo: 'agendado', acesso_ate: depois?.assinatura_expira_em ?? null })
+      }
+      return json({ modo: 'encerrada' })
     }
 
     const agora = new Date()

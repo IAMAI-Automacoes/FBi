@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
       db,
       'id, auth_user_id, assinatura_status, area, nome_restaurante, email, excluida_em',
     )
-    if (!auth.ok) return json({ error: auth.erro }, auth.status)
+    if (auth.ok === false) return json({ error: auth.erro }, auth.status)
     const rest = auth.restaurante
     if (rest.linha.excluida_em) return json({ error: 'Conta excluída.' }, 403)
     const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')

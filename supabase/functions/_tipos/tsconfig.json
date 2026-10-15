@@ -46,8 +46,6 @@
     "../conhecimento-ia/*.ts",
     "../resgatar-cupom/*.ts",
     "../criar-cobranca/*.ts",
-    "../asaas-webhook/*.ts",
-    "../excluir-minha-conta/*.ts",
-    "../admin-excluir-conta/*.ts"
+    "../asaas-webhook/*.ts"
   ]
 }

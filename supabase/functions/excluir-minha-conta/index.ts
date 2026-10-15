@@ -7,11 +7,15 @@
 // pois o login continua existindo), mas os dados ficam no banco e o admin da
 // plataforma pode restaurar.
 //
+// Antes de tudo, encerra a cobrança no Asaas (assinatura recorrente removida;
+// parcelado já pago fica como está). Se isso falhar, a conta não é excluída.
+//
 // Ao excluir, também DERRUBA a instância do WhatsApp na uazapi (libera o slot
 // pago — conta bloqueada não deve segurar uma instância) e limpa o token. Se a
 // conta for restaurada depois, é só reconectar o WhatsApp.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
+import { encerrarCobrancas } from '../_shared/asaas/espelho.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,6 +83,24 @@ Deno.serve(async (req) => {
     if (await ehSessaoDemo(admin, authHeader.replace('Bearer ', ''))) {
       return json({ error: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
     }
+
+    // Antes de excluir, para de cobrar no Asaas. Se o Asaas falhar, a conta NÃO
+    // é excluída: excluir e seguir cobrando o cartão seria o pior dos mundos.
+    const { data: atual } = await admin
+      .from('restaurantes')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .is('excluida_em', null)
+      .maybeSingle()
+    if (atual?.id) {
+      try {
+        await encerrarCobrancas(admin, Number(atual.id))
+      } catch (e) {
+        console.error('[excluir-minha-conta] encerrar cobranças:', (e as Error).message)
+        return json({ error: 'Não conseguimos encerrar sua assinatura agora, então a conta não foi excluída. Tente de novo em instantes.' }, 502)
+      }
+    }
+
     const { data, error } = await admin
       .from('restaurantes')
       .update({ excluida_em: new Date().toISOString() })

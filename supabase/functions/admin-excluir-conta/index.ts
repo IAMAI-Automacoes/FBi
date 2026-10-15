@@ -1,11 +1,13 @@
 // Admin da plataforma exclui/restaura a conta de um restaurante (soft-delete).
 //
-// Ao EXCLUIR: marca `excluida_em`, derruba a instância do WhatsApp na uazapi
-// (libera o slot pago) e limpa o token. Ao RESTAURAR: só zera `excluida_em`
-// (a instância não volta — é só reconectar o WhatsApp depois).
+// Ao EXCLUIR: encerra a cobrança no Asaas (se falhar, não exclui), marca
+// `excluida_em`, derruba a instância do WhatsApp na uazapi (libera o slot pago)
+// e limpa o token. Ao RESTAURAR: só zera `excluida_em` (a instância não volta —
+// é só reconectar o WhatsApp depois; a assinatura também não volta).
 //
 // Só quem está em `platform_admins` (casado por email) pode chamar. verify_jwt=true.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { encerrarCobrancas } from '../_shared/asaas/espelho.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +86,14 @@ Deno.serve(async (req) => {
         .eq('id', restaurante_id)
       if (error) return json({ error: error.message }, 500)
       return json({ ok: true })
+    }
+
+    // Antes de excluir, para de cobrar no Asaas. Se falhar, não exclui.
+    try {
+      await encerrarCobrancas(admin, restaurante_id)
+    } catch (e) {
+      console.error('[admin-excluir-conta] encerrar cobranças:', (e as Error).message)
+      return json({ error: `A cobrança no Asaas não foi encerrada, então a conta não foi excluída: ${(e as Error).message}` }, 502)
     }
 
     // Excluir: marca a data e derruba a instância da uazapi.
