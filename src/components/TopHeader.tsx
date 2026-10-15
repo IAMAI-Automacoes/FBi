@@ -170,9 +170,11 @@ export function TopHeader() {
                       {getIniciais(usuario?.nome, 2)}
                     </AvatarFallback>
                   </Avatar>
-                  {/* Conta pendências, não campos: hoje a única é o perfil. */}
                   {perfilPendente && (
-                    <PontoPendente numero={1} titulo={avisoPerfil} className="absolute -top-1 -right-1 pointer-events-none" />
+                    <PontoPendente
+                      titulo={avisoPerfil}
+                      className="absolute -top-0.5 -right-0.5 pointer-events-none rounded-full ring-2 ring-white"
+                    />
                   )}
                 </button>
               </DropdownMenuTrigger>

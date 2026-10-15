@@ -38,12 +38,11 @@ export function PerfilNegocioTab({
   const faltando = camposFaltando(value)
   const vazio = (c: CampoObrigatorio) => faltando.includes(c)
 
-  /** Rótulo com o asterisco de obrigatório e, enquanto vazio, a bolinha. */
+  /** Rótulo com o asterisco de obrigatório. A bolinha fica só no título do card. */
   const rotulo = (id: CampoObrigatorio, texto: React.ReactNode, className?: string) => (
     <Label htmlFor={id} className={cn('flex items-center gap-1.5', className)}>
       {texto}
       <span aria-hidden className="text-red-500">*</span>
-      {vazio(id) && <PontoPendente suave titulo="Falta preencher" className="ml-0.5" />}
     </Label>
   )
   /** Campo vazio: borda e fundo amarelos, que somem ao digitar. */
