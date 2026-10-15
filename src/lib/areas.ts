@@ -146,7 +146,9 @@ export const inicioDa = (area: unknown): string => definicaoDa(area).inicio
 /** Por enquanto o RH é por convite: o link do admin traz `?area=rh&convite=CODIGO`. */
 export interface ConviteDeArea { area: Area; convite: string }
 
-const CONVITE_VALIDO = /^[A-Za-z0-9_-]{8,64}$/
+// De 6 letras para cima: o código de indicação de um afiliado do RH também vale como
+// convite (ex.: JOAO10; area_rh_permitida, no banco, confere de verdade).
+const CONVITE_VALIDO = /^[A-Za-z0-9_-]{6,64}$/
 
 /** Lê o convite do endereço ("?area=rh&convite=abc…"). Sem os dois, ou malformado, não é convite. */
 export function conviteDoEndereco(busca: string): ConviteDeArea | null {

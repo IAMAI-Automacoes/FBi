@@ -47,16 +47,6 @@ export interface SugestaoAdmin {
   reacoes: ReacaoAdmin[]
 }
 
-export interface DivisaoReceita {
-  id: string
-  nome: string
-  chave_pix: string | null
-  tipo: 'porcentagem' | 'valor_fixo'
-  valor: number
-  ativo: boolean
-  created_at: string
-}
-
 export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
   const { data: sugestoes, error } = await supabase
     .from('sugestoes_plataforma')
@@ -287,24 +277,35 @@ export interface Afiliado {
   observacoes: string | null
   ativo: boolean
   created_at: string
+  /** De qual software é o afiliado. */
+  area: 'restaurante' | 'rh'
+  /** Preenchido = é uma conta EasyFeed indicando (ganha a % como desconto na
+      própria mensalidade, depois do 2º mês pago do indicado). */
+  restaurante_id: number | null
 }
 
-/** Os afiliados de fora. O restaurante que indica outro também tem uma linha
-    em `afiliados` (restaurante_id preenchido, comissão 0), mas ele aparece em
-    "Indicação entre restaurantes" (PainelIndicacoes), não aqui. */
-export async function buscarAfiliados(): Promise<Afiliado[]> {
+/** Os afiliados de um software: os de fora (comissão em dinheiro) e as contas
+    EasyFeed que pegaram o link em Descontos → Indicações (desconto). */
+export async function buscarAfiliados(area: 'restaurante' | 'rh'): Promise<Afiliado[]> {
   const { data, error } = await supabase
     .from('afiliados')
     .select('*')
-    .is('restaurante_id', null)
+    .eq('area', area)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as Afiliado[]
 }
 
+/** Os códigos que já existem (o código é único em todos os softwares). */
+export async function buscarCodigosDeAfiliado(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('afiliados').select('codigo')
+  if (error) throw error
+  return new Set((data ?? []).map((a) => String(a.codigo).toUpperCase()))
+}
+
 // `stripe_connect_status` nasce com o default do banco e só o servidor muda.
 export async function criarAfiliado(
-  input: Omit<Afiliado, 'id' | 'created_at' | 'stripe_connect_status'>,
+  input: Omit<Afiliado, 'id' | 'created_at' | 'stripe_connect_status' | 'restaurante_id'>,
 ): Promise<void> {
   const { error } = await supabase.from('afiliados').insert(input)
   if (error) throw error
@@ -323,87 +324,15 @@ export async function excluirAfiliado(id: string): Promise<void> {
   if (error) throw error
 }
 
-// ── Repasses (livro-razão da divisão de receita) ─────────────────────────────
-//
-// Uma linha por (fatura paga × destinatário), criada pelo webhook do Stripe em
-// `invoice.paid` (função SQL `gerar_repasses_da_fatura`). Sócios/empresa
-// (`divisao_receita`) são pagos por Pix pela empresa e marcados aqui; afiliado
-// com Connect ativo recebe transferência automática (`metodo = stripe_connect`).
-
-export interface Repasse {
-  id: string
-  fatura_id: string
-  destino_tipo: 'divisao' | 'afiliado'
-  divisao_id: string | null
-  afiliado_id: string | null
-  descricao: string
-  base_centavos: number
-  valor_centavos: number
-  regra: string
-  metodo: 'pix' | 'stripe_connect'
-  status: 'pendente' | 'pago' | 'falhou' | 'cancelado'
-  stripe_transfer_id: string | null
-  erro: string | null
-  pago_em: string | null
-  pago_por: string | null
-  created_at: string
-  /** Da fatura (join): número legível, valor pago e restaurante. */
-  fatura?: {
-    numero: string | null
-    pago_centavos: number
-    pago_em: string | null
-    restaurante_id: number | null
-    hosted_invoice_url: string | null
-  } | null
-}
-
-export async function buscarRepasses(status?: Repasse['status']): Promise<Repasse[]> {
-  let q = supabase
-    .from('stripe_repasses')
-    .select(
-      '*, fatura:stripe_faturas(numero, pago_centavos, pago_em, restaurante_id, hosted_invoice_url)',
-    )
-    .order('created_at', { ascending: false })
-    .limit(200)
-  if (status) q = q.eq('status', status)
-  const { data, error } = await q
-  if (error) throw error
-  return (data ?? []) as unknown as Repasse[]
-}
-
-/** Admin pagou por Pix pela conta da empresa. */
-export async function marcarRepassePago(id: string, email: string): Promise<void> {
-  const { error } = await supabase
-    .from('stripe_repasses')
-    .update({ status: 'pago', pago_em: new Date().toISOString(), pago_por: email, erro: null })
-    .eq('id', id)
-  if (error) throw error
-}
-
-/** Transferência automática falhou: passa a Pix manual para não travar. */
-export async function repasseParaPix(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('stripe_repasses')
-    .update({ metodo: 'pix', status: 'pendente', erro: null })
-    .eq('id', id)
-  if (error) throw error
-}
-
 // ── Cupons ────────────────────────────────────────────────────────────────────
 
 /**
- * Um cupom de ACESSO — não de desconto.
- *
- * O painel pedia "tipo de desconto" e "valor", e obrigava a preencher os dois.
- * Só que `resgatar-cupom` nunca olhou para eles: o que ela faz é pôr a
- * assinatura como ativa por `dias_validade` dias. Criar um "DESC50 — 50%" e
- * esperar meio preço não acontecia, e o único cupom existente ("100%") na
- * verdade libera acesso PERMANENTE, porque o que decide isso é o campo de
- * dias estar vazio.
- *
- * As colunas de desconto continuam no banco (não se apaga o que já foi
- * gravado), mas saíram do formulário: um campo que não faz nada é pior que
- * campo nenhum, porque leva a decisão errada.
+ * Um cupom: libera acesso (dias, ou sem fim) e/ou guarda um desconto em % ou
+ * R$ para a cobrança. É de um software só e escolhe o tipo de conta que cria.
+ * A regra do que ele dá é a mesma do resgate (supabase/functions/_shared/cupom.ts).
+ * Até 15/10/2026 o desconto não existia de verdade (o resgate não lia as
+ * colunas); agora fica guardado em `cupons_usos` e entra na cobrança quando o
+ * pagamento novo (Asaas) chegar.
  */
 export interface Cupon {
   id: number
@@ -416,8 +345,15 @@ export interface Cupon {
   ativo: boolean
   /** Último dia em que o cupom pode ser RESGATADO. `null` = sempre. */
   data_expiracao: string | null
-  /** Só email marcado como vendedor resgata (ex.: VENDEDOR100). Não é editado pelo formulário. */
+  /** Só email marcado como vendedor resgata (ex.: VENDEDOR100). */
   somente_vendedores: boolean
+  /** De qual software é o cupom (só conta dele resgata). */
+  area: 'restaurante' | 'rh'
+  /** O que a conta vira ao resgatar. */
+  tipo_conta: 'normal' | 'vendedor' | 'admin'
+  /** Desconto guardado para a cobrança (entra com o pagamento novo). Um ou outro. */
+  porcentagem_desconto: number | null
+  valor_desconto: number | null
   created_at: string
 }
 
@@ -427,12 +363,19 @@ export type CuponInput = {
   vezes_uso_maximo: number | null
   ativo: boolean
   data_expiracao: string | null
+  somente_vendedores: boolean
+  area: 'restaurante' | 'rh'
+  tipo_conta: 'normal' | 'vendedor' | 'admin'
+  porcentagem_desconto: number | null
+  valor_desconto: number | null
 }
 
-export async function buscarCupons(): Promise<Cupon[]> {
+/** Os cupons de um software. */
+export async function buscarCupons(area: 'restaurante' | 'rh'): Promise<Cupon[]> {
   const { data, error } = await supabase
     .from('cupons')
     .select('*')
+    .eq('area', area)
     .order('created_at', { ascending: false })
   if (error) throw error
   return ((data ?? []) as any[]).map((c) => ({
@@ -444,6 +387,10 @@ export async function buscarCupons(): Promise<Cupon[]> {
     ativo: c.ativo ?? true,
     data_expiracao: c.data_expiracao ?? null,
     somente_vendedores: c.somente_vendedores === true,
+    area: c.area === 'rh' ? 'rh' : 'restaurante',
+    tipo_conta: c.tipo_conta === 'vendedor' || c.tipo_conta === 'admin' ? c.tipo_conta : 'normal',
+    porcentagem_desconto: c.porcentagem_desconto != null ? Number(c.porcentagem_desconto) : null,
+    valor_desconto: c.valor_desconto != null ? Number(c.valor_desconto) : null,
     created_at: c.created_at,
   }))
 }
@@ -455,6 +402,11 @@ function cuponToRow(input: CuponInput) {
     vezes_uso_maximo: input.vezes_uso_maximo,
     ativo: input.ativo,
     data_expiracao: input.data_expiracao,
+    somente_vendedores: input.somente_vendedores,
+    area: input.area,
+    tipo_conta: input.tipo_conta,
+    porcentagem_desconto: input.porcentagem_desconto,
+    valor_desconto: input.valor_desconto,
   }
 }
 
@@ -470,37 +422,6 @@ export async function atualizarCupon(id: number, input: CuponInput): Promise<voi
 
 export async function excluirCupon(id: number): Promise<void> {
   const { error } = await supabase.from('cupons').delete().eq('id', id)
-  if (error) throw error
-}
-
-// ── Divisão de Receita ────────────────────────────────────────────────────────
-
-export async function buscarDivisoes(): Promise<DivisaoReceita[]> {
-  const { data, error } = await supabase
-    .from('divisao_receita')
-    .select('*')
-    .order('created_at', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as DivisaoReceita[]
-}
-
-export async function criarDivisao(
-  input: Omit<DivisaoReceita, 'id' | 'created_at'>,
-): Promise<void> {
-  const { error } = await supabase.from('divisao_receita').insert(input)
-  if (error) throw error
-}
-
-export async function atualizarDivisao(
-  id: string,
-  input: Partial<Omit<DivisaoReceita, 'id' | 'created_at'>>,
-): Promise<void> {
-  const { error } = await supabase.from('divisao_receita').update(input).eq('id', id)
-  if (error) throw error
-}
-
-export async function excluirDivisao(id: string): Promise<void> {
-  const { error } = await supabase.from('divisao_receita').delete().eq('id', id)
   if (error) throw error
 }
 

@@ -26,16 +26,21 @@ Deno.serve(async (req: Request) => {
   const url = Deno.env.get('SUPABASE_URL') ?? ''
   const servico = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+  // O software da conta que pede (Restaurante ou RH): as missões e o limite por
+  // ano são de cada software (migration 20261026020000). quemPede roda primeiro.
+  let areaDaConta: 'restaurante' | 'rh' = 'restaurante'
+
   const r = await tratarVideos(corpo ?? {}, {
     quemPede: async () => {
       const { data } = await db.auth.getUser(jwt)
       const u = data?.user
       if (!u?.email) return null
       const [{ data: rest }, { data: admins }] = await Promise.all([
-        db.from('restaurantes').select('id').eq('auth_user_id', u.id).maybeSingle(),
+        db.from('restaurantes').select('id, area').eq('auth_user_id', u.id).maybeSingle(),
         db.from('platform_admins').select('email'),
       ])
       const email = u.email.toLowerCase()
+      areaDaConta = rest?.area === 'rh' ? 'rh' : 'restaurante'
       return {
         restauranteId: rest?.id ? Number(rest.id) : null,
         email,
@@ -49,7 +54,7 @@ Deno.serve(async (req: Request) => {
       return data ? { ...data, id: Number(data.id), requisitos: lerRequisitos(data.requisitos) } : null
     },
     missoes: async () => {
-      const { data, error } = await db.from('video_missoes').select('id, ativa, ordem, disponivel_de, disponivel_ate').eq('ativa', true)
+      const { data, error } = await db.from('video_missoes').select('id, ativa, ordem, disponivel_de, disponivel_ate').eq('ativa', true).eq('area', areaDaConta)
       if (error) throw error
       return (data ?? []).map((m: { id: number }) => ({ ...m, id: Number(m.id) }))
     },
@@ -60,7 +65,7 @@ Deno.serve(async (req: Request) => {
       return (data ?? []).map((e: { missao_id: number }) => ({ ...e, missao_id: Number(e.missao_id) }))
     },
     maxPorAno: async () => {
-      const { data } = await db.from('video_config').select('max_por_ano').eq('id', true).maybeSingle()
+      const { data } = await db.from('video_config').select('max_por_ano').eq('area', areaDaConta).maybeSingle()
       return data?.max_por_ano ?? null
     },
     descartarAbandonados: async (restauranteId, missaoId) => {

@@ -50,6 +50,7 @@
     "../gerar-plano-acao/*.ts",
     "../destacar-feedback/*.ts",
     "../atualizar-banner/*.ts",
-    "../conhecimento-ia/*.ts"
+    "../conhecimento-ia/*.ts",
+    "../resgatar-cupom/*.ts"
   ]
 }

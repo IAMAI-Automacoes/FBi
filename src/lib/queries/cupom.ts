@@ -2,10 +2,15 @@ import { supabase } from '@/lib/supabase/client'
 
 export interface ResultadoCupom {
   ok: boolean
+  /** O cupom liberou o acesso. Falso = só guardou um desconto para a cobrança. */
+  acesso: boolean
   /** ISO da expiração do acesso, ou null quando o cupom não expira. */
   expira_em: string | null
   /** Dias de acesso liberados, ou null (sem expiração). */
   dias: number | null
+  /** O desconto que ficou guardado (entra na cobrança com o pagamento novo). */
+  desconto: { tipo: 'porcentagem' | 'valor'; valor: number } | null
+  tipo_conta: 'normal' | 'vendedor' | 'admin'
 }
 
 /**
@@ -29,5 +34,6 @@ export async function resgatarCupom(codigo: string): Promise<ResultadoCupom> {
     throw new Error(detalhe)
   }
   if (data?.error) throw new Error(data.error)
-  return data as ResultadoCupom
+  // A versão antiga da função não mandava `acesso`: todo cupom liberava.
+  return { acesso: true, desconto: null, tipo_conta: 'normal', ...data } as ResultadoCupom
 }

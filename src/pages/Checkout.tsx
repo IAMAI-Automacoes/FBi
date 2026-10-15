@@ -7,6 +7,7 @@ import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
 import { RECURSOS_INCLUSOS, buscarCiclo, ehCiclo } from '@/components/vendas/ciclos-plano'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { resgatarCupom } from '@/lib/queries/cupom'
+import { textoDoDesconto } from '@/lib/cupons'
 import { usePrecos } from '@/hooks/use-precos'
 import { criarCheckout } from '@/lib/queries/stripe'
 
@@ -24,6 +25,8 @@ export default function Checkout() {
   const [cupom, setCupom] = useState('')
   const [aplicandoCupom, setAplicandoCupom] = useState(false)
   const [erroCupom, setErroCupom] = useState<string | null>(null)
+  // Cupom só de desconto: ficou guardado na conta (não libera o acesso agora).
+  const [descontoGuardado, setDescontoGuardado] = useState<string | null>(null)
 
   const cicloParam = params.get('ciclo')
   const ciclo = ehCiclo(cicloParam) ? cicloParam : 'mensal'
@@ -37,7 +40,15 @@ export default function Checkout() {
     setAplicandoCupom(true)
     setErroCupom(null)
     try {
-      await resgatarCupom(codigo)
+      const r = await resgatarCupom(codigo)
+      // Só desconto: fica guardado e entra na cobrança quando o pagamento novo
+      // chegar. A pessoa continua aqui para assinar.
+      if (!r.acesso) {
+        setDescontoGuardado(r.desconto ? textoDoDesconto(r.desconto) : 'O desconto')
+        setCupom('')
+        setAplicandoCupom(false)
+        return
+      }
       // Atualiza o usuário (assinatura_status vira "ativa") e entra no app.
       // O RotaProtegida encaminha para o onboarding ou para o painel.
       await refetchUsuario()
@@ -344,8 +355,14 @@ export default function Checkout() {
                 {erroCupom}
               </p>
             )}
+            {descontoGuardado && (
+              <p role="status" style={{ fontSize: '12.5px', color: '#047857', marginTop: '9px', lineHeight: 1.5 }}>
+                Cupom guardado na sua conta: {descontoGuardado}. Ele entra na sua mensalidade quando o novo sistema de
+                pagamento começar; por enquanto a cobrança segue o valor normal.
+              </p>
+            )}
             <p style={{ fontSize: '11.5px', color: cores.corpoSuave, marginTop: '9px', lineHeight: 1.5 }}>
-              Um cupom válido libera seu acesso na hora, sem passar pelo pagamento.
+              Cupom de acesso libera na hora, sem passar pelo pagamento. Cupom de desconto fica guardado para a cobrança.
             </p>
           </div>
 

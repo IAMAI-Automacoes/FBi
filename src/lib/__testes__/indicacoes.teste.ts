@@ -4,9 +4,10 @@
  *   node --experimental-strip-types src/lib/__testes__/indicacoes.teste.ts
  */
 import {
-  BENEFICIO_MAX, BENEFICIO_MIN, CODIGO_VALIDO, limparBeneficio, linkDeIndicacao, linkDoWhatsapp, mensagemDeIndicacao,
-  premiosPendentes, problemaDoBeneficio, RECUSA_QUE_TRAVA, resumoDasIndicacoes, ROTULO_PREMIO, ROTULO_PREMIO_ADMIN,
+  CODIGO_VALIDO, codigoParaCopia, lerNumeros, linkDeIndicacao, linkDoWhatsapp, mensagemDeIndicacao, premiosPendentes, RECUSA_QUE_TRAVA,
+  ROTULO_PREMIO, ROTULO_PREMIO_ADMIN, textoDaPorcentagem,
 } from '../indicacoes.ts'
+import { conviteDoEndereco } from '../areas.ts'
 import { ehRotaDeDescontos, ROTA_DESCONTOS, ROTA_DESCONTOS_HISTORICO, ROTA_INDICACOES } from '../descontos.ts'
 import { subpaginaAberta } from '../subpaginas.ts'
 
@@ -35,23 +36,22 @@ ok('rotas de descontos', ehRotaDeDescontos('/descontos') && ehRotaDeDescontos('/
 ok('o que não é de descontos', !ehRotaDeDescontos('/') && !ehRotaDeDescontos('/descontosx') && !ehRotaDeDescontos('/missoes') && !ehRotaDeDescontos('/equipe'))
 
 // ── O benefício (o texto que o admin escreve) ────────────────────────────────
-ok('limpa espaço sobrando e quebra de linha', limparBeneficio('  1 mês \n grátis   na próxima  ') === '1 mês grátis na próxima')
-ok('desligado aceita texto vazio', problemaDoBeneficio('', false) === null && problemaDoBeneficio('   ', false) === null)
-ok('ligar sem texto: não deixa', problemaDoBeneficio('', true) !== null && problemaDoBeneficio('oi', true) !== null && problemaDoBeneficio('a'.repeat(BENEFICIO_MIN - 1), true) !== null)
-ok('ligar com texto: deixa', problemaDoBeneficio('1 mês grátis', true) === null && problemaDoBeneficio('a'.repeat(BENEFICIO_MIN), true) === null)
-ok('texto comprido demais: não deixa, ligado ou não', problemaDoBeneficio('a'.repeat(BENEFICIO_MAX + 1), true) !== null && problemaDoBeneficio('a'.repeat(BENEFICIO_MAX + 1), false) !== null
-  && problemaDoBeneficio('a'.repeat(BENEFICIO_MAX), true) === null)
-ok('o limite conta o texto limpo, não os espaços', problemaDoBeneficio(`${'a'.repeat(BENEFICIO_MAX)}      `, true) === null)
+// O benefício deixou de ser um texto do admin (15/10/2026): é a % do afiliado.
 
 // ── O link ───────────────────────────────────────────────────────────────────
 const link = linkDeIndicacao('https://easyfeed.com.br/', 'CAMELO-R2UF')
-ok('o link abre a página de vendas com o código', link === 'https://easyfeed.com.br/vendas?ref=CAMELO-R2UF')
-ok('sem barra dobrada, com ou sem barra no fim do site', linkDeIndicacao('https://easyfeed.com.br', 'AB') === 'https://easyfeed.com.br/vendas?ref=AB' && linkDeIndicacao('https://easyfeed.com.br///', 'AB') === 'https://easyfeed.com.br/vendas?ref=AB')
+ok('o link abre a CRIAÇÃO DE CONTA com o código', link === 'https://easyfeed.com.br/cadastro?ref=CAMELO-R2UF')
+ok('sem barra dobrada, com ou sem barra no fim do site', linkDeIndicacao('https://easyfeed.com.br', 'AB') === 'https://easyfeed.com.br/cadastro?ref=AB' && linkDeIndicacao('https://easyfeed.com.br///', 'AB') === 'https://easyfeed.com.br/cadastro?ref=AB')
 ok('o código do link é o que o site lê de volta', CODIGO_VALIDO.test(new URL(link).searchParams.get('ref') ?? ''))
+const linkRh = linkDeIndicacao('https://easyfeed.com.br', 'CLINICA-AB12', 'rh')
+ok('no RH, o mesmo código vai como convite do RH', linkRh === 'https://easyfeed.com.br/cadastro?ref=CLINICA-AB12&area=rh&convite=CLINICA-AB12'
+  && JSON.stringify(conviteDoEndereco(new URL(linkRh).search)) === JSON.stringify({ area: 'rh', convite: 'CLINICA-AB12' }))
+ok('o código curto de um afiliado criado à mão também vira convite', conviteDoEndereco(new URL(linkDeIndicacao('https://x.com', 'JOAO10', 'rh')).search)?.convite === 'JOAO10')
 ok('formato do código: o mesmo do checkout', ['AB', 'CAMELO-R2UF', 'EASYFEED-N3B4', 'A_B-9'].every((c) => CODIGO_VALIDO.test(c))
   && !['', 'A', 'abc', 'COM ESPACO', 'AÇAÍ', 'A'.repeat(31)].some((c) => CODIGO_VALIDO.test(c)))
 const msg = mensagemDeIndicacao(link)
-ok('a mensagem pronta leva o link', msg.endsWith(link) && msg.includes('EasyFeed'))
+ok('a mensagem pronta leva o link', msg.endsWith(link) && msg.includes('EasyFeed') && msg.includes('restaurante'))
+ok('no RH, a mensagem fala da equipe (e não de restaurante)', /equipe/.test(mensagemDeIndicacao(linkRh, 'rh')) && !/restaurante/.test(mensagemDeIndicacao(linkRh, 'rh')) && mensagemDeIndicacao(linkRh, 'rh').endsWith(linkRh))
 const wa = linkDoWhatsapp(msg)
 ok('o link do WhatsApp leva a mensagem inteira, sem número fixo', wa.startsWith('https://wa.me/?text=') && decodeURIComponent(wa.split('text=')[1]) === msg)
 
@@ -59,9 +59,14 @@ ok('o link do WhatsApp leva a mensagem inteira, sem número fixo', wa.startsWith
 ok('situação por extenso, para o restaurante e para o admin', ROTULO_PREMIO.pendente === 'A receber' && ROTULO_PREMIO.aplicado === 'Recebido' && ROTULO_PREMIO.cancelado === 'Cancelado'
   && ROTULO_PREMIO_ADMIN.pendente === 'Pendente' && ROTULO_PREMIO_ADMIN.aplicado === 'Aplicado')
 ok('pendentes: só os que faltam dar', premiosPendentes([{ status: 'pendente' }, { status: 'aplicado' }, { status: 'cancelado' }, { status: 'pendente' }]) === 2 && premiosPendentes([]) === 0)
-ok('resumo: ninguém ainda', resumoDasIndicacoes(0, 0) === 'Nenhum restaurante entrou pelo seu link ainda.')
-ok('resumo: singular e plural', resumoDasIndicacoes(1, 0) === '1 restaurante entrou pelo seu link, nenhum assinou ainda.'
-  && resumoDasIndicacoes(1, 1) === '1 restaurante entrou pelo seu link, 1 assinou.' && resumoDasIndicacoes(3, 2) === '3 restaurantes entraram pelo seu link, 2 assinaram.')
+ok('números: lê o que veio do banco', JSON.stringify(lerNumeros({ entraram: 5, nao_pagaram: 1, usam: 2, pararam: 2, aguardando: 1, liberados: 1 }))
+  === JSON.stringify({ entraram: 5, nao_pagaram: 1, usam: 2, pararam: 2, aguardando: 1, liberados: 1 }))
+ok('números: o que falta ou não é número vira zero', JSON.stringify(lerNumeros({ entraram: '3', usam: -1, pararam: 'x' })) === JSON.stringify({ entraram: 3, nao_pagaram: 0, usam: 0, pararam: 0, aguardando: 0, liberados: 0 })
+  && lerNumeros(null).entraram === 0)
+ok('porcentagem com vírgula', textoDaPorcentagem(10) === '10%' && textoDaPorcentagem(12.5) === '12,5%')
+ok('copiar afiliado: código novo, com o sufixo do software', codigoParaCopia('joao10', 'rh', new Set()) === 'JOAO10RH' && codigoParaCopia('MARIA', 'restaurante', new Set()) === 'MARIAR')
+ok('copiar afiliado: não repete código que já existe', codigoParaCopia('JOAO10', 'rh', new Set(['JOAO10RH', 'JOAO10RH2'])) === 'JOAO10RH3')
+ok('copiar afiliado: o código novo cabe no formato', CODIGO_VALIDO.test(codigoParaCopia('A'.repeat(30), 'rh', new Set())))
 
 // ── Na hora de assinar ───────────────────────────────────────────────────────
 ok('só o próprio código trava a compra', Object.keys(RECUSA_QUE_TRAVA).join() === 'proprio_codigo' && RECUSA_QUE_TRAVA.proprio_codigo.includes('próprio código'))

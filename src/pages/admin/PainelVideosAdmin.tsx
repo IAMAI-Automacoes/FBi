@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
+import { useArea } from '@/lib/area'
+import { DEFINICOES } from '@/lib/areas'
 import {
   DURACAO_TETO_S, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito, ordinal, ROTULO_STATUS, rotuloDuracao, rotuloPeriodo,
   type Missao, type Recompensa,
@@ -159,6 +161,8 @@ function CampoTempo({ rotulo, valor, onMudar }: { rotulo: string; valor: number 
 }
 
 function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | null; onFechar: () => void; onSalvo: () => void }) {
+  // A missão nova é do software na tela (cada um tem as suas).
+  const { area } = useArea()
   const [m, setM] = useState<Rascunho | null>(rascunho)
   const [salvando, setSalvando] = useState(false)
   useEffect(() => setM(rascunho), [rascunho])
@@ -177,7 +181,7 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
         usados.push(id)
         return { id, texto: r.texto.trim() }
       })
-      await salvarMissao({ ...m, requisitos })
+      await salvarMissao(area, { ...m, requisitos })
       toast.success('Missão salva.')
       onSalvo()
       onFechar()
@@ -269,6 +273,7 @@ function EditarMissao({ rascunho, onFechar, onSalvo }: { rascunho: Rascunho | nu
 // ── Um degrau da escada (o texto salva ao sair do campo) ─────────────────────
 
 function DegrauEditavel({ r, ultimo, onSalvo, onRemover }: { r: Recompensa; ultimo: boolean; onSalvo: () => void; onRemover: () => void }) {
+  const { area } = useArea()
   const [texto, setTexto] = useState(r.descricao)
   const [salvando, setSalvando] = useState(false)
   useEffect(() => setTexto(r.descricao), [r.descricao])
@@ -276,7 +281,7 @@ function DegrauEditavel({ r, ultimo, onSalvo, onRemover }: { r: Recompensa; ulti
     if (!texto.trim() || texto.trim() === r.descricao) return setTexto(r.descricao)
     setSalvando(true)
     try {
-      await salvarRecompensa({ ordem: r.ordem, descricao: texto })
+      await salvarRecompensa(area, { ordem: r.ordem, descricao: texto })
       onSalvo()
     } catch {
       toast.error('Não foi possível salvar o prêmio.')
@@ -321,6 +326,8 @@ const FILTROS = [
 
 export function PainelVideosAdmin() {
   const { confirmar, dialogo } = useConfirmacao()
+  // Cada software tem as suas missões, a sua escada e o seu limite por ano.
+  const { area } = useArea()
   const [carregando, setCarregando] = useState(true)
   const [envios, setEnvios] = useState<EnvioAdmin[]>([])
   const [premios, setPremios] = useState<PremioAdmin[]>([])
@@ -336,7 +343,7 @@ export function PainelVideosAdmin() {
 
   const carregar = useCallback(async () => {
     try {
-      const [e, p, m, r, max] = await Promise.all([buscarTodosEnvios(), buscarTodosPremios(), buscarTodasMissoes(), buscarRecompensas(), buscarMaxPorAno()])
+      const [e, p, m, r, max] = await Promise.all([buscarTodosEnvios(area), buscarTodosPremios(area), buscarTodasMissoes(area), buscarRecompensas(area), buscarMaxPorAno(area)])
       setMaxPorAno(max)
       setTextoMax(max == null ? '' : String(max))
       setEnvios(e)
@@ -348,7 +355,7 @@ export function PainelVideosAdmin() {
     } finally {
       setCarregando(false)
     }
-  }, [])
+  }, [area])
   useEffect(() => { carregar() }, [carregar])
   // Enquanto a IA assiste algum vídeo, confere de tempos em tempos.
   const emAnalise = envios.some((e) => e.status === 'analisando')
@@ -378,7 +385,7 @@ export function PainelVideosAdmin() {
   const alternarMissao = async (m: Missao) => {
     setMexendo(`m${m.id}`)
     try {
-      await salvarMissao({ ...m, ativa: !m.ativa })
+      await salvarMissao(area, { ...m, ativa: !m.ativa })
       await carregar()
     } catch {
       toast.error('Não foi possível mudar a missão.')
@@ -392,7 +399,7 @@ export function PainelVideosAdmin() {
     if (n === maxPorAno) return
     setSalvandoMax(true)
     try {
-      await salvarMaxPorAno(n)
+      await salvarMaxPorAno(area, n)
       setMaxPorAno(n)
       toast.success(n == null ? 'Sem limite por ano.' : `Limite: ${n} ${n === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} por ano.`)
     } catch {
@@ -408,7 +415,7 @@ export function PainelVideosAdmin() {
   const novoDegrau = async () => {
     const ordem = (recompensas.at(-1)?.ordem ?? 0) + 1
     try {
-      await salvarRecompensa({ ordem, descricao: 'Novo prêmio (edite o texto)' })
+      await salvarRecompensa(area, { ordem, descricao: 'Novo prêmio (edite o texto)' })
       await carregar()
     } catch {
       toast.error('Não foi possível adicionar o degrau.')
@@ -417,7 +424,7 @@ export function PainelVideosAdmin() {
   const tirarDegrau = async (r: Recompensa) => {
     if (!(await confirmar({ titulo: `Tirar o prêmio da ${ordinal(r.ordem)}?`, descricao: 'Quem já ganhou continua com o prêmio.', destrutivo: true }))) return
     try {
-      await removerRecompensa(r.ordem)
+      await removerRecompensa(area, r.ordem)
       await carregar()
     } catch {
       toast.error('Não foi possível tirar o degrau.')
@@ -430,9 +437,9 @@ export function PainelVideosAdmin() {
       <div className="mx-auto max-w-5xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">Vídeos</h2>
+            <h2 className="text-base font-semibold text-gray-800">Vídeos <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
             <p className="mt-1 text-[12px] text-gray-500">
-              Missões de vídeo: o restaurante grava falando do EasyFeed, o Gemini confere os requisitos e cada missão cumprida dá o próximo prêmio da escada.
+              Missões de vídeo: {area === 'rh' ? 'a empresa' : 'o restaurante'} grava falando do EasyFeed, o Gemini confere os requisitos e cada missão cumprida dá o próximo prêmio da escada.
             </p>
           </div>
           <button

@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/use-auth'
+import { useArea } from '@/lib/area'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import {
@@ -201,6 +202,8 @@ function ProximoVideo({ missao, envios, limite, onEnviado }: {
 
 export default function Missoes() {
   const { usuario } = useAuth()
+  // As missões e o limite por ano são do software da conta.
+  const { area } = useArea()
   const restauranteId = usuario?.restaurante_id ?? null
   const [carregando, setCarregando] = useState(true)
   const [missoes, setMissoes] = useState<Missao[]>([])
@@ -210,7 +213,7 @@ export default function Missoes() {
   const carregar = useCallback(async () => {
     if (!restauranteId) return
     try {
-      const [m, e, max] = await Promise.all([buscarMissoes(), buscarEnvios(restauranteId), buscarMaxPorAno()])
+      const [m, e, max] = await Promise.all([buscarMissoes(), buscarEnvios(restauranteId), buscarMaxPorAno(area)])
       setMaxPorAno(max)
       setMissoes(m)
       setEnvios(e)
@@ -219,7 +222,7 @@ export default function Missoes() {
     } finally {
       setCarregando(false)
     }
-  }, [restauranteId])
+  }, [restauranteId, area])
 
   useEffect(() => { carregar() }, [carregar])
   useRealtimeReload(['video_envios'], restauranteId, carregar)

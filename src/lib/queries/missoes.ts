@@ -1,11 +1,14 @@
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/client'
+import type { Area } from '@/lib/areas'
 import {
   lerRequisitos, type AnaliseVideo, type EnvioVideo, type Missao, type PremioVideo, type Recompensa, type Requisito,
 } from '@/lib/missoes'
 
 /* Missões de vídeo: o restaurante manda um vídeo falando do EasyFeed e a IA
    (Gemini, pela função videos-missao) confere os requisitos. Aprovado, o banco
-   dá o prêmio do degrau seguinte da escada. */
+   dá o prêmio do degrau seguinte da escada.
+   Desde 15/10/2026 cada software (Restaurante e RH) tem as suas missões, a sua
+   escada e o seu limite por ano: tudo aqui recebe a versão (`area`). */
 
 const BUCKET = 'videos-clientes'
 
@@ -31,21 +34,21 @@ export async function buscarMissoes(): Promise<Missao[]> {
   return (data ?? []).map(paraMissao)
 }
 
-export async function buscarRecompensas(): Promise<Recompensa[]> {
-  const { data, error } = await supabase.from('video_recompensas').select('ordem, descricao').order('ordem')
+export async function buscarRecompensas(area: Area): Promise<Recompensa[]> {
+  const { data, error } = await supabase.from('video_recompensas').select('ordem, descricao').eq('area', area).order('ordem')
   if (error) throw error
   return data ?? []
 }
 
 /** Vídeos aprovados por ano, por restaurante (somando todas as missões); null = sem limite. */
-export async function buscarMaxPorAno(): Promise<number | null> {
-  const { data, error } = await supabase.from('video_config').select('max_por_ano').eq('id', true).maybeSingle()
+export async function buscarMaxPorAno(area: Area): Promise<number | null> {
+  const { data, error } = await supabase.from('video_config').select('max_por_ano').eq('area', area).maybeSingle()
   if (error) throw error
   return data?.max_por_ano ?? null
 }
 
-export async function salvarMaxPorAno(max: number | null): Promise<void> {
-  const { error } = await supabase.from('video_config').upsert({ id: true, max_por_ano: max })
+export async function salvarMaxPorAno(area: Area, max: number | null): Promise<void> {
+  const { error } = await supabase.from('video_config').upsert({ id: true, area, max_por_ano: max }, { onConflict: 'area' })
   if (error) throw error
 }
 
@@ -113,8 +116,8 @@ export async function subirVideo(caminho: string, arquivo: File, mime: string, a
 
 // ── Admin (aba Vídeos) ───────────────────────────────────────────────────────
 
-export async function buscarTodasMissoes(): Promise<Missao[]> {
-  const { data, error } = await supabase.from('video_missoes').select('*').order('ordem').order('id')
+export async function buscarTodasMissoes(area: Area): Promise<Missao[]> {
+  const { data, error } = await supabase.from('video_missoes').select('*').eq('area', area).order('ordem').order('id')
   if (error) throw error
   return (data ?? []).map(paraMissao)
 }
@@ -132,8 +135,9 @@ export interface MissaoParaSalvar {
   disponivel_ate: string | null
 }
 
-export async function salvarMissao(m: MissaoParaSalvar): Promise<void> {
+export async function salvarMissao(area: Area, m: MissaoParaSalvar): Promise<void> {
   const linha = {
+    area,
     titulo: m.titulo.trim(), descricao: m.descricao.trim(), requisitos: m.requisitos as unknown as never, ordem: m.ordem, ativa: m.ativa,
     // A tela só deixa salvar com as duas durações definidas (o banco exige).
     duracao_min_s: m.duracao_min_s ?? 0, duracao_max_s: m.duracao_max_s ?? 0,
@@ -145,21 +149,23 @@ export async function salvarMissao(m: MissaoParaSalvar): Promise<void> {
   if (error) throw error
 }
 
-export async function salvarRecompensa(r: Recompensa): Promise<void> {
-  const { error } = await supabase.from('video_recompensas').upsert({ ordem: r.ordem, descricao: r.descricao.trim() })
+export async function salvarRecompensa(area: Area, r: Recompensa): Promise<void> {
+  const { error } = await supabase.from('video_recompensas').upsert({ area, ordem: r.ordem, descricao: r.descricao.trim() }, { onConflict: 'area,ordem' })
   if (error) throw error
 }
 
-export async function removerRecompensa(ordem: number): Promise<void> {
-  const { error } = await supabase.from('video_recompensas').delete().eq('ordem', ordem)
+export async function removerRecompensa(area: Area, ordem: number): Promise<void> {
+  const { error } = await supabase.from('video_recompensas').delete().eq('area', area).eq('ordem', ordem)
   if (error) throw error
 }
 
 export interface EnvioAdmin extends EnvioVideo { restaurante: string; missao: string }
 
-export async function buscarTodosEnvios(): Promise<EnvioAdmin[]> {
+/** Os vídeos das contas de um software. */
+export async function buscarTodosEnvios(area: Area): Promise<EnvioAdmin[]> {
   const { data, error } = await supabase.from('video_envios')
-    .select('*, restaurantes(nome_restaurante), video_missoes(titulo)')
+    .select('*, restaurantes(nome_restaurante), video_missoes!inner(titulo, area)')
+    .eq('video_missoes.area', area)
     .neq('status', 'enviando')
     .order('criado_em', { ascending: false })
     .limit(300)
@@ -174,15 +180,18 @@ export async function buscarTodosEnvios(): Promise<EnvioAdmin[]> {
 
 export interface PremioAdmin extends PremioVideo { restaurante: string }
 
-export async function buscarTodosPremios(): Promise<PremioAdmin[]> {
+/** Os prêmios das contas de um software (conta sem versão conta como restaurante). */
+export async function buscarTodosPremios(area: Area): Promise<PremioAdmin[]> {
   const { data, error } = await supabase.from('video_premios')
-    .select('*, restaurantes(nome_restaurante)')
+    .select('*, restaurantes!inner(nome_restaurante, area)')
     .neq('status', 'cancelado')
     .order('criado_em', { ascending: false })
     .limit(300)
   if (error) throw error
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((l: any) => ({ ...l, restaurante: l.restaurantes?.nome_restaurante || `Restaurante ${l.restaurante_id}` }))
+  return (data ?? []).filter((l: any) => (l.restaurantes?.area === 'rh' ? 'rh' : 'restaurante') === area)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((l: any) => ({ ...l, restaurante: l.restaurantes?.nome_restaurante || `Restaurante ${l.restaurante_id}` }))
 }
 
 /** O admin marca que já deu o prêmio (ou desfaz). Grava quem marcou. */

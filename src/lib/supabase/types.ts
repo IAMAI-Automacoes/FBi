@@ -175,9 +175,31 @@ export type Database = {
           },
         ]
       }
+      afiliado_config: {
+        Row: {
+          area: string
+          atualizado_em: string
+          atualizado_por: string | null
+          comissao_padrao: number
+        }
+        Insert: {
+          area: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          comissao_padrao?: number
+        }
+        Update: {
+          area?: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          comissao_padrao?: number
+        }
+        Relationships: []
+      }
       afiliados: {
         Row: {
           agencia: string | null
+          area: string
           ativo: boolean
           banco: string | null
           chave_pix: string | null
@@ -200,6 +222,7 @@ export type Database = {
         }
         Insert: {
           agencia?: string | null
+          area?: string
           ativo?: boolean
           banco?: string | null
           chave_pix?: string | null
@@ -222,6 +245,7 @@ export type Database = {
         }
         Update: {
           agencia?: string | null
+          area?: string
           ativo?: boolean
           banco?: string | null
           chave_pix?: string | null
@@ -734,6 +758,7 @@ export type Database = {
       }
       cupons: {
         Row: {
+          area: string
           ativo: boolean | null
           created_at: string
           cupom: string | null
@@ -742,11 +767,13 @@ export type Database = {
           id: number
           porcentagem_desconto: number | null
           somente_vendedores: boolean
+          tipo_conta: string
           valor_desconto: number | null
           vezes_usado: number
           vezes_uso_maximo: number | null
         }
         Insert: {
+          area?: string
           ativo?: boolean | null
           created_at?: string
           cupom?: string | null
@@ -755,11 +782,13 @@ export type Database = {
           id?: number
           porcentagem_desconto?: number | null
           somente_vendedores?: boolean
+          tipo_conta?: string
           valor_desconto?: number | null
           vezes_usado?: number
           vezes_uso_maximo?: number | null
         }
         Update: {
+          area?: string
           ativo?: boolean | null
           created_at?: string
           cupom?: string | null
@@ -768,11 +797,69 @@ export type Database = {
           id?: number
           porcentagem_desconto?: number | null
           somente_vendedores?: boolean
+          tipo_conta?: string
           valor_desconto?: number | null
           vezes_usado?: number
           vezes_uso_maximo?: number | null
         }
         Relationships: []
+      }
+      cupons_usos: {
+        Row: {
+          area: string
+          cupom: string
+          cupom_id: number | null
+          dias_validade: number | null
+          email: string | null
+          id: string
+          porcentagem_desconto: number | null
+          restaurante_id: number | null
+          tipo_conta: string
+          usado_em: string
+          valor_desconto: number | null
+        }
+        Insert: {
+          area?: string
+          cupom: string
+          cupom_id?: number | null
+          dias_validade?: number | null
+          email?: string | null
+          id?: string
+          porcentagem_desconto?: number | null
+          restaurante_id?: number | null
+          tipo_conta?: string
+          usado_em?: string
+          valor_desconto?: number | null
+        }
+        Update: {
+          area?: string
+          cupom?: string
+          cupom_id?: number | null
+          dias_validade?: number | null
+          email?: string | null
+          id?: string
+          porcentagem_desconto?: number | null
+          restaurante_id?: number | null
+          tipo_conta?: string
+          usado_em?: string
+          valor_desconto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cupons_usos_cupom_id_fkey"
+            columns: ["cupom_id"]
+            isOneToOne: false
+            referencedRelation: "cupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cupons_usos_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       demo_tentativas: {
         Row: {
@@ -797,33 +884,47 @@ export type Database = {
       }
       divisao_receita: {
         Row: {
+          area: string
           ativo: boolean | null
           chave_pix: string | null
           created_at: string | null
           id: string
           nome: string
+          recebedor_id: string | null
           tipo: string
           valor: number
         }
         Insert: {
+          area?: string
           ativo?: boolean | null
           chave_pix?: string | null
           created_at?: string | null
           id?: string
           nome: string
+          recebedor_id?: string | null
           tipo: string
           valor: number
         }
         Update: {
+          area?: string
           ativo?: boolean | null
           chave_pix?: string | null
           created_at?: string | null
           id?: string
           nome?: string
+          recebedor_id?: string | null
           tipo?: string
           valor?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "divisao_receita_recebedor_id_fkey"
+            columns: ["recebedor_id"]
+            isOneToOne: false
+            referencedRelation: "recebedores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       documento_trechos: {
         Row: {
@@ -1852,6 +1953,7 @@ export type Database = {
           criado_em: string
           id: string
           indicado_restaurante_id: number | null
+          porcentagem: number | null
           restaurante_id: number
           status: string
         }
@@ -1862,6 +1964,7 @@ export type Database = {
           criado_em?: string
           id?: string
           indicado_restaurante_id?: number | null
+          porcentagem?: number | null
           restaurante_id: number
           status?: string
         }
@@ -1872,6 +1975,7 @@ export type Database = {
           criado_em?: string
           id?: string
           indicado_restaurante_id?: number | null
+          porcentagem?: number | null
           restaurante_id?: number
           status?: string
         }
@@ -2846,6 +2950,54 @@ export type Database = {
           },
         ]
       }
+      recebedores: {
+        Row: {
+          agencia: string | null
+          atualizado_em: string
+          banco: string | null
+          chave_pix: string | null
+          codigo_banco: string | null
+          conta: string | null
+          cpf_cnpj: string | null
+          criado_em: string
+          email: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          tipo_conta: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          atualizado_em?: string
+          banco?: string | null
+          chave_pix?: string | null
+          codigo_banco?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          criado_em?: string
+          email?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          tipo_conta?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          atualizado_em?: string
+          banco?: string | null
+          chave_pix?: string | null
+          codigo_banco?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          criado_em?: string
+          email?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          tipo_conta?: string | null
+        }
+        Relationships: []
+      }
       recuperacoes_senha: {
         Row: {
           criado_em: string
@@ -3786,16 +3938,19 @@ export type Database = {
       }
       video_config: {
         Row: {
+          area: string
           atualizado_em: string
           id: boolean
           max_por_ano: number | null
         }
         Insert: {
+          area?: string
           atualizado_em?: string
           id?: boolean
           max_por_ano?: number | null
         }
         Update: {
+          area?: string
           atualizado_em?: string
           id?: boolean
           max_por_ano?: number | null
@@ -3882,6 +4037,7 @@ export type Database = {
       }
       video_missoes: {
         Row: {
+          area: string
           ativa: boolean
           atualizado_em: string
           criado_em: string
@@ -3896,6 +4052,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          area?: string
           ativa?: boolean
           atualizado_em?: string
           criado_em?: string
@@ -3910,6 +4067,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          area?: string
           ativa?: boolean
           atualizado_em?: string
           criado_em?: string
@@ -3981,16 +4139,19 @@ export type Database = {
       }
       video_recompensas: {
         Row: {
+          area: string
           atualizado_em: string
           descricao: string
           ordem: number
         }
         Insert: {
+          area?: string
           atualizado_em?: string
           descricao: string
           ordem: number
         }
         Update: {
+          area?: string
           atualizado_em?: string
           descricao?: string
           ordem?: number
@@ -4276,6 +4437,7 @@ export type Database = {
           p256dh: string
         }[]
       }
+      afiliados_numeros: { Args: { p_area: string }; Returns: Json }
       aplicar_assinatura_stripe: {
         Args: { p_restaurante_id: number }
         Returns: undefined
@@ -4602,6 +4764,10 @@ export type Database = {
         Returns: boolean
       }
       indicacao_liberada: { Args: never; Returns: boolean }
+      indicacao_meses_pagos: {
+        Args: { p_restaurante_id: number }
+        Returns: number
+      }
       indicacao_minha: { Args: never; Returns: Json }
       indicacao_registrar: { Args: { p_codigo: string }; Returns: Json }
       indicacao_registrar_pagamento: {

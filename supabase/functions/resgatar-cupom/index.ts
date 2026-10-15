@@ -1,19 +1,23 @@
-// Resgata um cupom de ACESSO: põe a assinatura do restaurante como ativa por
-// `dias_validade` dias (ou sem data de fim, quando o campo está vazio).
+// Resgata um cupom: libera o acesso (assinatura ativa por `dias_validade` dias,
+// ou sem data de fim) e/ou guarda um desconto para a cobrança.
 //
-// Não aplica desconto. As colunas `porcentagem_desconto` e `valor_desconto`
-// existem na tabela desde o começo e NUNCA foram lidas aqui — o painel do
-// admin pedia as duas como obrigatórias, então quem criava um "DESC50 — 50%"
-// achava estar dando meio preço e estava dando acesso inteiro. O formulário
-// foi alinhado a esta função; as colunas ficaram no banco, sem uso.
+// Desde 15/10/2026 (decisões do Raver, regra em _shared/cupom.ts):
+//   - o cupom é de UM software: conta de outro software recebe "Cupom inválido";
+//   - desconto em % ou R$ fica guardado em `cupons_usos` e entra na cobrança
+//     quando o pagamento novo (Asaas) chegar. Cupom só de desconto parcial não
+//     libera o acesso; sem desconto, com 100% ou com dias grátis, libera;
+//   - o cupom escolhe o tipo de conta: vendedor entra em `vendedores`, admin em
+//     `platform_admins` (o de admin sempre tem limite de usos e validade, o
+//     banco garante).
 //
 // Cupom com `somente_vendedores` só é resgatado por conta cujo email está
 // marcado como vendedor: é o cupom do vendedor, e o nome é fácil de adivinhar.
 //
 // Estava publicada só no painel do Supabase, sem fonte no repositório. Este
-// arquivo é o que está rodando (versão 3), trazido para cá para que um deploy
-// geral não a apague e para que dê para revisar o que ela faz.
+// arquivo partiu do que estava rodando (versão 16, com a conferência da
+// assinatura do Stripe), trazido para cá para que um deploy geral não a apague.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { cupomDaArea, oQueOCupomDa } from '../_shared/cupom.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,7 +53,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: rest, error: restErr } = await admin
       .from('restaurantes')
-      .select('id, assinatura_status')
+      .select('id, assinatura_status, area')
       .eq('auth_user_id', userId)
       .single()
     if (restErr || !rest?.id) return json({ error: 'Restaurante não encontrado' }, 403)
@@ -71,6 +75,28 @@ Deno.serve(async (req: Request) => {
       .limit(1)
     const cupom = cupons?.[0]
     if (!cupom || cupom.ativo !== true) return json({ error: 'Cupom inválido ou inativo.' }, 404)
+    // Cupom de outro software: a mesma resposta de cupom inexistente.
+    if (!cupomDaArea(cupom.area, rest.area)) return json({ error: 'Cupom inválido ou inativo.' }, 404)
+
+    // O que o cupom dá: acesso, desconto guardado, ou os dois.
+    const da = oQueOCupomDa(cupom)
+
+    // Assinatura do Stripe que ainda cobra (ativa ou com pagamento atrasado,
+    // que o Stripe segue retentando): cupom por cima deixaria o cliente com
+    // acesso grátis enquanto o cartão continua sendo cobrado — ou, no atraso,
+    // com acesso liberado sem nunca vencer. Regulariza pelo pagamento.
+    const { data: cobrando } = await admin
+      .from('stripe_assinaturas')
+      .select('status')
+      .eq('restaurante_id', rest.id)
+      .in('status', ['active', 'trialing', 'past_due', 'unpaid'])
+      .limit(1)
+    if (da.acesso && cobrando?.length) {
+      return json(
+        { error: 'Sua conta já tem uma assinatura pelo cartão. Regularize o pagamento em vez de usar um cupom.' },
+        409,
+      )
+    }
 
     // Cupom de vendedor: só para email marcado como vendedor.
     if (cupom.somente_vendedores === true) {
@@ -115,19 +141,59 @@ Deno.serve(async (req: Request) => {
       expira = d.toISOString()
     }
 
-    // Libera o acesso (service_role passa pelo trigger de proteção)
-    const { data: upd, error: updErr } = await admin
-      .from('restaurantes')
-      .update({ assinatura_status: 'ativa', assinatura_expira_em: expira })
-      .eq('id', rest.id)
-      .select('id')
-    if (updErr || !upd?.length) {
-      // Devolve o uso reservado, para o cupom não ser consumido à toa
-      await admin.from('cupons').update({ vezes_usado: usado }).eq('id', cupom.id)
-      return json({ error: 'Não consegui liberar o acesso. Tente de novo.' }, 500)
+    if (da.acesso) {
+      // Libera o acesso (service_role passa pelo trigger de proteção).
+      // `stripe_subscription_id` sai: a assinatura antiga do Stripe (já
+      // encerrada, conferido acima) deixa de reger a conta. Sem isso o cron de
+      // expiração pula a conta (acha que é do Stripe) e o cupom nunca vence.
+      const { data: upd, error: updErr } = await admin
+        .from('restaurantes')
+        .update({
+          assinatura_status: 'ativa',
+          assinatura_expira_em: expira,
+          assinatura_cancelada_em: null,
+          stripe_subscription_id: null,
+        })
+        .eq('id', rest.id)
+        .select('id')
+      if (updErr || !upd?.length) {
+        // Devolve o uso reservado, para o cupom não ser consumido à toa
+        await admin.from('cupons').update({ vezes_usado: usado }).eq('id', cupom.id)
+        return json({ error: 'Não consegui liberar o acesso. Tente de novo.' }, 500)
+      }
     }
 
-    return json({ ok: true, expira_em: expira, dias: dias > 0 ? dias : null })
+    // O tipo de conta que o cupom cria.
+    const email = String(userData.user.email ?? '').trim().toLowerCase()
+    const tipoConta = cupom.tipo_conta === 'vendedor' || cupom.tipo_conta === 'admin' ? cupom.tipo_conta : 'normal'
+    if (tipoConta === 'vendedor' && email) {
+      await admin.from('vendedores').upsert({ email, criado_por: `cupom ${cupom.cupom}` }, { onConflict: 'email', ignoreDuplicates: true })
+    }
+    if (tipoConta === 'admin' && email) {
+      await admin.from('platform_admins').upsert({ email }, { onConflict: 'email', ignoreDuplicates: true })
+    }
+
+    // Quem usou, e o desconto que fica guardado para a cobrança.
+    await admin.from('cupons_usos').insert({
+      cupom_id: cupom.id,
+      cupom: cupom.cupom,
+      restaurante_id: rest.id,
+      email: email || null,
+      area: rest.area === 'rh' ? 'rh' : 'restaurante',
+      tipo_conta: tipoConta,
+      dias_validade: da.acesso ? da.dias : null,
+      porcentagem_desconto: da.desconto?.tipo === 'porcentagem' ? da.desconto.valor : null,
+      valor_desconto: da.desconto?.tipo === 'valor' ? da.desconto.valor : null,
+    })
+
+    return json({
+      ok: true,
+      acesso: da.acesso,
+      expira_em: da.acesso ? expira : null,
+      dias: da.acesso && dias > 0 ? dias : null,
+      desconto: da.desconto,
+      tipo_conta: tipoConta,
+    })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

@@ -27,7 +27,9 @@ import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
-import { PainelIndicacoes } from '@/pages/admin/PainelIndicacoes'
+import { DescontosDeQuemIndica, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
+import { buscarNumerosDosAfiliados, buscarPorcentagemPadrao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
+import { textoDaPorcentagem } from '@/lib/indicacoes'
 import { PainelVersoes } from '@/pages/admin/PainelVersoes'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -35,22 +37,20 @@ import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
 import { PainelMotorResposta } from '@/pages/admin/PainelMotorResposta'
 import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
 import { PainelUsoIA } from '@/pages/admin/PainelUsoIA'
+import { PainelPagamentos } from '@/pages/admin/PainelPagamentos'
+import { PainelCupons } from '@/pages/admin/PainelCupons'
 import {
   buscarTodasSugestoes, responderSugestao, uploadArquivosResposta,
   editarRespostaAdmin, excluirRespostaAdmin, excluirArquivosAdmin,
   marcarAdminLeu, resetClienteLeu, reagirAdmin,
-  buscarDivisoes, criarDivisao, atualizarDivisao, excluirDivisao,
   buscarAfiliados, criarAfiliado, atualizarAfiliado, excluirAfiliado,
-  buscarRepasses, marcarRepassePago, repasseParaPix, type Repasse,
-  buscarCupons, criarCupon, atualizarCupon, excluirCupon,
-  type SugestaoAdmin, type DivisaoReceita, type Afiliado, type Cupon, type ReacaoAdmin,
+  type SugestaoAdmin, type Afiliado, type ReacaoAdmin,
   buscarContas,
   definirExclusaoConta,
   type ContaAdmin,
 } from '@/lib/queries/admin'
 import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
 import { conectarAfiliado, statusConnectAfiliado } from '@/lib/queries/stripe'
-import { formatarReais } from '@/components/vendas/ciclos-plano'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -219,16 +219,6 @@ function unreadCount(s: SugestaoAdmin): number {
     return 1 + s.respostas.filter((r) => r.autor === 'usuario').length
   }
   return s.respostas.slice(lastAdminIdx + 1).filter((r) => r.autor === 'usuario').length
-}
-
-/** O que o cupom entrega a quem resgata — ver `Cupon` em queries/admin.ts. */
-function fmtLiberacao(c: Cupon) {
-  return c.dias_validade ? `${c.dias_validade} dias` : 'Acesso permanente'
-}
-
-/** Quantos resgates ainda cabem. */
-function fmtUsos(c: Cupon) {
-  return c.vezes_uso_maximo == null ? `${c.vezes_usado} / ilimitado` : `${c.vezes_usado} / ${c.vezes_uso_maximo}`
 }
 
 // ── ConvItem ──────────────────────────────────────────────────────────────────
@@ -1145,7 +1135,6 @@ const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
 ]
 
 // Form defaults
-const EMPTY_DIVISAO = { nome: '', chave_pix: '', tipo: 'porcentagem' as 'porcentagem' | 'valor_fixo', valor: '', ativo: true }
 const EMPTY_AFILIADO = {
   nome: '', email: '', telefone: '', codigo: '',
   comissao_tipo: 'porcentagem' as 'porcentagem' | 'valor_fixo', comissao_valor: '',
@@ -1153,11 +1142,6 @@ const EMPTY_AFILIADO = {
   codigo_banco: '', banco: '', agencia: '', conta: '', tipo_conta: 'corrente' as 'corrente' | 'poupanca',
   observacoes: '', ativo: true,
 }
-const EMPTY_CUPON = {
-  cupom: '', data_expiracao: '',
-  dias_validade: '', vezes_uso_maximo: '', ativo: true,
-}
-
 export default function Admin() {
   const { confirmar, dialogo } = useConfirmacao()
   const navigate = useNavigate()
@@ -1232,15 +1216,6 @@ export default function Admin() {
     })
   }, [sugestoesDaVersao, prefsSuporte.fixadaEm])
 
-  // ── Pagamentos ──
-  const [divisoes, setDivisoes] = useState<DivisaoReceita[]>([])
-  const [loadingDiv, setLoadingDiv] = useState(false)
-  const [showDivDialog, setShowDivDialog] = useState(false)
-  const [editingDivId, setEditingDivId] = useState<string | null>(null)
-  const [divForm, setDivForm] = useState(EMPTY_DIVISAO)
-  const [savingDiv, setSavingDiv] = useState(false)
-  const [deletingDivId, setDeletingDivId] = useState<string | null>(null)
-
   // ── Afiliados ──
   const [afiliados, setAfiliados] = useState<Afiliado[]>([])
   const [loadingAfil, setLoadingAfil] = useState(false)
@@ -1249,6 +1224,11 @@ export default function Admin() {
   const [afilForm, setAfilForm] = useState(EMPTY_AFILIADO)
   const [savingAfil, setSavingAfil] = useState(false)
   const [deletingAfilId, setDeletingAfilId] = useState<string | null>(null)
+  // Por software: a porcentagem que vem em todo afiliado novo, o que cada um
+  // trouxe e a conta EasyFeed indicando que está aberta (descontos).
+  const [pctPadrao, setPctPadrao] = useState<number | null>(null)
+  const [numerosAfil, setNumerosAfil] = useState<Record<string, NumerosDoAfiliado>>({})
+  const [quemIndicaAberto, setQuemIndicaAberto] = useState<Afiliado | null>(null)
 
   // ── Contas (assinatura) ──
   const [contas, setContas] = useState<ContaAdmin[]>([])
@@ -1263,14 +1243,7 @@ export default function Admin() {
   const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
   const [loadingVendedores, setLoadingVendedores] = useState(false)
 
-  // ── Cupons ──
-  const [cupons, setCupons] = useState<Cupon[]>([])
-  const [loadingCupons, setLoadingCupons] = useState(false)
-  const [showCuponDialog, setShowCuponDialog] = useState(false)
-  const [editingCuponId, setEditingCuponId] = useState<number | null>(null)
-  const [cuponForm, setCuponForm] = useState(EMPTY_CUPON)
-  const [savingCupon, setSavingCupon] = useState(false)
-  const [deletingCuponId, setDeletingCuponId] = useState<number | null>(null)
+
 
   useEffect(() => { if (!loadingAdmin && !isAdmin) navigate('/') }, [isAdmin, loadingAdmin, navigate])
 
@@ -1306,45 +1279,6 @@ export default function Admin() {
     if (paths.length === 0) return
     getSignedUrls(paths).then((urls) => setSignedUrls((p) => ({ ...p, ...urls }))).catch(console.error)
   }, [selectedId, sugestoes])
-
-  // Pagamentos: carrega ao entrar na aba
-  const loadDivisoes = useCallback(async () => {
-    setLoadingDiv(true)
-    try { setDivisoes(await buscarDivisoes()) } finally { setLoadingDiv(false) }
-  }, [])
-  useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadDivisoes() }, [isAdmin, activeTab, loadDivisoes])
-
-  // Repasses (livro-razão): o que cada sócio/afiliado tem a receber por fatura paga.
-  const [repasses, setRepasses] = useState<Repasse[]>([])
-  const [loadingRep, setLoadingRep] = useState(false)
-  const [filtroRep, setFiltroRep] = useState<'pendente' | 'pago' | 'falhou' | 'todos'>('pendente')
-  const [acaoRepId, setAcaoRepId] = useState<string | null>(null)
-  const loadRepasses = useCallback(async () => {
-    setLoadingRep(true)
-    try { setRepasses(await buscarRepasses(filtroRep === 'todos' ? undefined : filtroRep)) }
-    catch (err) { console.error(err) }
-    finally { setLoadingRep(false) }
-  }, [filtroRep])
-  useEffect(() => { if (isAdmin && activeTab === 'pagamentos') loadRepasses() }, [isAdmin, activeTab, loadRepasses])
-  const pagarRepasse = async (r: Repasse) => {
-    const ok = await confirmar({
-      titulo: 'Marcar como pago?',
-      descricao: `${r.descricao}: R$ ${formatarReais(r.valor_centavos)}. Confirme só depois de fazer o Pix pela conta da empresa.`,
-      confirmar: 'Já paguei',
-    })
-    if (!ok) return
-    setAcaoRepId(r.id)
-    try {
-      const { data } = await supabase.auth.getUser()
-      await marcarRepassePago(r.id, data.user?.email ?? 'admin')
-      await loadRepasses()
-    } catch (err) { console.error(err) } finally { setAcaoRepId(null) }
-  }
-  const repasseViraPix = async (r: Repasse) => {
-    setAcaoRepId(r.id)
-    try { await repasseParaPix(r.id); await loadRepasses() }
-    catch (err) { console.error(err) } finally { setAcaoRepId(null) }
-  }
 
   // Volta do cadastro Stripe Connect do afiliado (/admin?afiliado=ID&connect=retorno):
   // relê o status no Stripe e abre a aba de afiliados.
@@ -1440,21 +1374,23 @@ export default function Admin() {
     }
   }, [])
 
-  // Afiliados: carrega ao entrar na aba (e ao entrar em Cupons — precisamos dos nomes)
+  // Afiliados: carrega ao entrar na aba (os do software na tela)
   const loadAfiliados = useCallback(async () => {
     setLoadingAfil(true)
-    try { setAfiliados(await buscarAfiliados()) } finally { setLoadingAfil(false) }
-  }, [])
+    try {
+      const [lista, numeros, pct] = await Promise.all([
+        buscarAfiliados(area),
+        buscarNumerosDosAfiliados(area).catch(() => ({})),
+        buscarPorcentagemPadrao(area).catch(() => 10),
+      ])
+      setAfiliados(lista)
+      setNumerosAfil(numeros)
+      setPctPadrao(pct)
+    } finally { setLoadingAfil(false) }
+  }, [area])
   useEffect(() => {
-    if (isAdmin && (activeTab === 'afiliados' || activeTab === 'cupons')) loadAfiliados()
+    if (isAdmin && activeTab === 'afiliados') loadAfiliados()
   }, [isAdmin, activeTab, loadAfiliados])
-
-  // Cupons
-  const loadCupons = useCallback(async () => {
-    setLoadingCupons(true)
-    try { setCupons(await buscarCupons()) } finally { setLoadingCupons(false) }
-  }, [])
-  useEffect(() => { if (isAdmin && activeTab === 'cupons') loadCupons() }, [isAdmin, activeTab, loadCupons])
 
   // ── Suporte handlers ──
   const [badgeVersion, setBadgeVersion] = useState(0)
@@ -1534,30 +1470,9 @@ export default function Admin() {
     window.dispatchEvent(new CustomEvent('fib-unread-update', { detail: { count: total } }))
   }, [sugestoes, badgeVersion])
 
-  // ── Divisão handlers ──
-  const openAddDiv = () => { setEditingDivId(null); setDivForm(EMPTY_DIVISAO); setShowDivDialog(true) }
-  const openEditDiv = (d: DivisaoReceita) => {
-    setEditingDivId(d.id)
-    setDivForm({ nome: d.nome, chave_pix: d.chave_pix ?? '', tipo: d.tipo, valor: String(d.valor), ativo: d.ativo })
-    setShowDivDialog(true)
-  }
-  const saveDiv = async () => {
-    if (!divForm.nome || !divForm.valor) return
-    setSavingDiv(true)
-    try {
-      const p = { nome: divForm.nome, chave_pix: divForm.chave_pix || null, tipo: divForm.tipo, valor: Number(divForm.valor), ativo: divForm.ativo }
-      if (editingDivId) await atualizarDivisao(editingDivId, p); else await criarDivisao(p)
-      setDivisoes(await buscarDivisoes()); setShowDivDialog(false)
-    } catch (err) { console.error(err) } finally { setSavingDiv(false) }
-  }
-  const deleteDiv = async (id: string) => {
-    setDeletingDivId(id)
-    try { await excluirDivisao(id); setDivisoes((p) => p.filter((d) => d.id !== id)) }
-    catch (err) { console.error(err) } finally { setDeletingDivId(null) }
-  }
-
   // ── Afiliado handlers ──
-  const openAddAfil = () => { setAfilForm(EMPTY_AFILIADO); setAfilDetailId('new') }
+  // O afiliado novo já vem com a porcentagem padrão do software.
+  const openAddAfil = () => { setAfilForm({ ...EMPTY_AFILIADO, comissao_valor: String(pctPadrao ?? 10) }); setAfilDetailId('new') }
   const openDetailAfil = (a: Afiliado) => {
     setAfilForm({
       nome: a.nome, email: a.email ?? '', telefone: a.telefone ?? '', codigo: a.codigo,
@@ -1584,8 +1499,8 @@ export default function Admin() {
         observacoes: afilForm.observacoes || null, ativo: afilForm.ativo,
       }
       if (afilDetailId && afilDetailId !== 'new') await atualizarAfiliado(afilDetailId, p)
-      else await criarAfiliado(p)
-      setAfiliados(await buscarAfiliados()); setAfilDetailId(null)
+      else await criarAfiliado({ ...p, area })
+      await loadAfiliados(); setAfilDetailId(null)
     } catch (err) { console.error(err) } finally { setSavingAfil(false) }
   }
   const deleteAfil = async (id: string) => {
@@ -1594,43 +1509,6 @@ export default function Admin() {
     catch (err) { console.error(err) } finally { setDeletingAfilId(null) }
   }
 
-  // ── Cupon handlers ──
-  const openAddCupon = () => { setEditingCuponId(null); setCuponForm(EMPTY_CUPON); setShowCuponDialog(true) }
-  const openEditCupon = (c: Cupon) => {
-    setEditingCuponId(c.id)
-    setCuponForm({
-      cupom: c.cupom,
-      data_expiracao: c.data_expiracao ?? '',
-      dias_validade: c.dias_validade != null ? String(c.dias_validade) : '',
-      vezes_uso_maximo: String(c.vezes_uso_maximo),
-      ativo: c.ativo,
-    })
-    setShowCuponDialog(true)
-  }
-  const saveCupon = async () => {
-    // Só o código é obrigatório: um cupom sem dias é permanente de propósito,
-    // e sem limite de usos é ilimitado de propósito.
-    if (!cuponForm.cupom) return
-    setSavingCupon(true)
-    try {
-      const p = {
-        cupom: cuponForm.cupom.toUpperCase(),
-        dias_validade: cuponForm.dias_validade ? Number(cuponForm.dias_validade) : null,
-        vezes_uso_maximo: cuponForm.vezes_uso_maximo ? Number(cuponForm.vezes_uso_maximo) : null,
-        ativo: cuponForm.ativo,
-        data_expiracao: cuponForm.data_expiracao || null,
-      }
-      if (editingCuponId) await atualizarCupon(editingCuponId, p); else await criarCupon(p)
-      setCupons(await buscarCupons()); setShowCuponDialog(false)
-    } catch (err) { console.error(err) } finally { setSavingCupon(false) }
-  }
-  const deleteCupon = async (id: number) => {
-    setDeletingCuponId(id)
-    try { await excluirCupon(id); setCupons((p) => p.filter((c) => c.id !== id)) }
-    catch (err) { console.error(err) } finally { setDeletingCuponId(null) }
-  }
-
-  const totalPct = divisoes.filter((d) => d.ativo && d.tipo === 'porcentagem').reduce((a, d) => a + d.valor, 0)
   // Busca na lista inteira: a notificação de uma conversa da outra versão ainda abre ela.
   const selectedConv = sugestoes.find((s) => s.id === selectedId) ?? null
   // Não lidas das contas da outra versão: o aviso no topo da lista diz quantas.
@@ -2023,173 +1901,11 @@ export default function Admin() {
           </div>
         )}
 
-        {/* ── PAGAMENTOS ── */}
-        {activeTab === 'pagamentos' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-            <div className="max-w-3xl mx-auto">
-              <div className="flex items-start justify-between mb-5">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-800">Divisão de Receita</h2>
-                  {divisoes.some((d) => d.ativo && d.tipo === 'porcentagem') && (
-                    <p className={cn('text-[12px] mt-0.5', Math.abs(totalPct - 100) < 0.01 ? 'text-emerald-600' : 'text-amber-600')}>
-                      Total %: {totalPct}%{Math.abs(totalPct - 100) >= 0.01 && ' — deve somar 100%'}
-                    </p>
-                  )}
-                </div>
-                <Button size="sm" onClick={openAddDiv}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
-              </div>
-              {loadingDiv ? (
-                <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>
-              ) : divisoes.length === 0 ? (
-                <p className="text-center py-12 text-sm text-gray-400">Nenhuma configuração.</p>
-              ) : (
-                <CrudTable>
-                  <thead><tr>{['Nome','Chave PIX','Tipo','Valor','Ativo',''].map((h) => <Th key={h}>{h}</Th>)}</tr></thead>
-                  <tbody>
-                    {divisoes.map((d) => (
-                      <tr key={d.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
-                        <Td className="font-medium text-gray-800">{d.nome}</Td>
-                        <Td className="text-gray-500 text-[13px]">{d.chave_pix ?? '—'}</Td>
-                        <Td className="text-gray-500 text-[13px]">{d.tipo === 'porcentagem' ? 'Porcentagem' : 'Valor fixo'}</Td>
-                        <Td className="font-semibold text-gray-700">{d.tipo === 'porcentagem' ? `${d.valor}%` : `R$ ${d.valor.toFixed(2)}`}</Td>
-                        <Td><BadgeBool v={d.ativo} /></Td>
-                        <Td><RowActions onEdit={() => openEditDiv(d)} onDelete={() => deleteDiv(d.id)} deleting={deletingDivId === d.id} /></Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </CrudTable>
-              )}
+        {/* ── PAGAMENTOS (divisão da receita do software na tela) ── */}
+        {activeTab === 'pagamentos' && <PainelPagamentos />}
 
-              {/* ── Repasses (livro-razão) ── */}
-              <div className="flex items-start justify-between mt-10 mb-4">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-800">Repasses</h2>
-                  <p className="text-[12px] text-gray-500 mt-0.5">
-                    Gerados a cada fatura paga no Stripe. Sócios/empresa: pague por Pix pela conta da empresa e marque aqui.
-                    Afiliado com Stripe Connect ativo recebe sozinho.
-                  </p>
-                </div>
-                <Select value={filtroRep} onValueChange={(v) => setFiltroRep(v as typeof filtroRep)}>
-                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendentes</SelectItem>
-                    <SelectItem value="falhou">Com falha</SelectItem>
-                    <SelectItem value="pago">Pagos</SelectItem>
-                    <SelectItem value="todos">Todos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {loadingRep ? (
-                <p className="text-center py-8 text-sm text-gray-400">Carregando…</p>
-              ) : repasses.length === 0 ? (
-                <p className="text-center py-8 text-sm text-gray-400">Nenhum repasse {filtroRep === 'todos' ? '' : filtroRep === 'falhou' ? 'com falha' : filtroRep}.</p>
-              ) : (
-                <CrudTable>
-                  <thead><tr>{['Data','Fatura','Para','Regra','Valor','Método','Status',''].map((h) => <Th key={h}>{h}</Th>)}</tr></thead>
-                  <tbody>
-                    {repasses.map((r) => (
-                      <tr key={r.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
-                        <Td className="text-gray-500 text-[13px] whitespace-nowrap">{format(new Date(r.created_at), 'dd/MM/yy')}</Td>
-                        <Td className="text-[13px]">
-                          {r.fatura?.hosted_invoice_url ? (
-                            <a href={r.fatura.hosted_invoice_url} target="_blank" rel="noopener noreferrer" className="text-[#1D4ED8] hover:underline">{r.fatura.numero ?? 'fatura'}</a>
-                          ) : (r.fatura?.numero ?? '—')}
-                          {r.fatura?.pago_centavos != null && <span className="text-gray-400"> · R$ {formatarReais(r.fatura.pago_centavos)}</span>}
-                        </Td>
-                        <Td className="font-medium text-gray-800">
-                          {r.descricao}
-                          <span className="ml-1 text-[10px] uppercase text-gray-400">{r.destino_tipo === 'afiliado' ? 'afiliado' : 'sócio'}</span>
-                        </Td>
-                        <Td className="text-gray-500 text-[13px]">{r.regra}</Td>
-                        <Td className="font-semibold text-gray-700 whitespace-nowrap">R$ {formatarReais(r.valor_centavos)}</Td>
-                        <Td className="text-gray-500 text-[13px]">{r.metodo === 'stripe_connect' ? 'Stripe' : 'Pix'}</Td>
-                        <Td>
-                          <span className={cn('text-[11px] font-semibold rounded-full px-2 py-0.5',
-                            r.status === 'pago' ? 'bg-emerald-50 text-emerald-700'
-                            : r.status === 'falhou' ? 'bg-red-50 text-red-700'
-                            : r.status === 'cancelado' ? 'bg-gray-100 text-gray-500'
-                            : 'bg-amber-50 text-amber-700')}>
-                            {r.status}
-                          </span>
-                          {r.erro && <p className="text-[11px] text-red-600 mt-1 max-w-[220px] truncate" title={r.erro}>{r.erro}</p>}
-                          {r.status === 'pago' && r.pago_por && <p className="text-[11px] text-gray-400 mt-0.5">{r.pago_por}</p>}
-                        </Td>
-                        <Td>
-                          {r.status === 'pendente' && r.metodo === 'pix' && (
-                            <Button size="sm" variant="outline" disabled={acaoRepId === r.id} onClick={() => pagarRepasse(r)}>
-                              {acaoRepId === r.id ? '…' : 'Marcar pago'}
-                            </Button>
-                          )}
-                          {r.status === 'falhou' && (
-                            <Button size="sm" variant="outline" disabled={acaoRepId === r.id} onClick={() => repasseViraPix(r)}>
-                              {acaoRepId === r.id ? '…' : 'Pagar por Pix'}
-                            </Button>
-                          )}
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </CrudTable>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── CUPONS ── */}
-        {activeTab === 'cupons' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-gray-500" />
-                  <h2 className="text-base font-semibold text-gray-800">Cupons de Acesso</h2>
-                </div>
-                <Button size="sm" onClick={openAddCupon}><Plus className="h-4 w-4 mr-1" /> Novo cupom</Button>
-              </div>
-              {loadingCupons ? (
-                <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>
-              ) : cupons.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <Tag className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Nenhum cupom criado ainda.</p>
-                </div>
-              ) : (
-                <CrudTable>
-                  <thead>
-                    <tr>{['Código','Libera','Resgatável até','Usos','Ativo',''].map((h) => <Th key={h}>{h}</Th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {cupons.map((c) => (
-                      <tr key={c.id} className="border-b border-gray-200 last:border-0 hover:bg-gray-50">
-                        <Td>
-                          <span className="font-mono font-semibold text-[13px] bg-gray-100 px-2 py-0.5 rounded text-gray-800">
-                            {c.cupom}
-                          </span>
-                          {c.somente_vendedores && (
-                            <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold tracking-wide align-middle">
-                              SÓ VENDEDORES
-                            </span>
-                          )}
-                        </Td>
-                        <Td className="font-semibold text-emerald-700">{fmtLiberacao(c)}</Td>
-                        <Td>
-                          {c.data_expiracao ? (
-                            <span className="text-[13px] text-gray-600">
-                              {new Date(c.data_expiracao + 'T12:00:00').toLocaleDateString('pt-BR')}
-                            </span>
-                          ) : <span className="text-gray-400 text-[13px]">Sem prazo</span>}
-                        </Td>
-                        <Td className="text-[13px] text-gray-600">{fmtUsos(c)}</Td>
-                        <Td><BadgeBool v={c.ativo} /></Td>
-                        <Td><RowActions onEdit={() => openEditCupon(c)} onDelete={() => deleteCupon(c.id)} deleting={deletingCuponId === c.id} /></Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </CrudTable>
-              )}
-            </div>
-          </div>
-        )}
+        {/* ── CUPONS (do software na tela) ── */}
+        {activeTab === 'cupons' && <PainelCupons />}
 
         {/* ── AFILIADOS ── */}
         {activeTab === 'afiliados' && (
@@ -2209,19 +1925,23 @@ export default function Admin() {
               />
             ) : (
               <div className="max-w-4xl mx-auto">
-                {/* Restaurante que indica restaurante: ganha o benefício escrito aqui. */}
-                <PainelIndicacoes />
-
-                {/* Quem não é restaurante: só indica e ganha comissão em dinheiro. */}
-                <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                   <div className="flex items-start gap-2">
                     <Users className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
                     <div>
-                      <h2 className="text-base font-semibold text-gray-800">Afiliados</h2>
-                      <p className="mt-1 text-[12px] text-gray-500">Quem não é restaurante: só indica e ganha comissão em dinheiro a cada mensalidade paga.</p>
+                      <h2 className="text-base font-semibold text-gray-800">Afiliados <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
+                      <p className="mt-1 text-[12px] text-gray-500">
+                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha a % como desconto na própria mensalidade, depois do 2º mês pago do indicado.
+                      </p>
                     </div>
                   </div>
-                  <Button size="sm" onClick={openAddAfil} className="shrink-0"><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
+                  <div className="flex flex-wrap gap-2">
+                    <TrazerDoOutroSoftware area={area} aoTrazer={loadAfiliados} />
+                    <Button size="sm" onClick={openAddAfil} className="shrink-0"><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
+                  </div>
+                </div>
+                <div className="mb-5">
+                  <PorcentagemPadrao area={area} valor={pctPadrao} aoSalvar={setPctPadrao} />
                 </div>
                 {loadingAfil ? (
                   <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>
@@ -2235,7 +1955,8 @@ export default function Admin() {
                     {afiliados.map((a) => (
                       <button
                         key={a.id}
-                        onClick={() => openDetailAfil(a)}
+                        // Conta EasyFeed que indica: os números e os descontos para aplicar.
+                        onClick={() => (a.restaurante_id != null ? setQuemIndicaAberto(a) : openDetailAfil(a))}
                         className="text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-violet-300 transition-all"
                       >
                         <div className="flex items-center gap-3">
@@ -2248,16 +1969,33 @@ export default function Admin() {
                           </div>
                           {!a.ativo && <span className="text-[10px] text-gray-400 shrink-0">inativo</span>}
                         </div>
+                        {(() => {
+                          const n = numerosAfil[a.id]
+                          const pendentes = n?.premios.filter((x) => x.status === 'pendente').length ?? 0
+                          return (
+                            <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-gray-500">
+                              {a.restaurante_id != null && <span className="rounded bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">Conta EasyFeed · desconto</span>}
+                              <span>{n?.entraram ?? 0} criaram conta · {n?.usam ?? 0} {n?.usam === 1 ? 'usa' : 'usam'}</span>
+                              {pendentes > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">{pendentes} desconto{pendentes > 1 ? 's' : ''} para aplicar</span>}
+                            </p>
+                          )
+                        })()}
                         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-300">
                           <span className="font-mono text-[12px] bg-violet-50 text-violet-700 px-2 py-0.5 rounded font-semibold">{a.codigo}</span>
                           <span className="text-[13px] font-semibold text-gray-700">
-                            {a.comissao_tipo === 'porcentagem' ? `${a.comissao_valor}%` : `R$ ${Number(a.comissao_valor).toFixed(2)}`}
+                            {a.comissao_tipo === 'porcentagem' ? textoDaPorcentagem(a.comissao_valor) : `R$ ${Number(a.comissao_valor).toFixed(2)}`}
                           </span>
                         </div>
                       </button>
                     ))}
                   </div>
                 )}
+                <DescontosDeQuemIndica
+                  afiliado={quemIndicaAberto}
+                  numeros={quemIndicaAberto ? numerosAfil[quemIndicaAberto.id] : undefined}
+                  aoFechar={() => setQuemIndicaAberto(null)}
+                  aoMudar={loadAfiliados}
+                />
               </div>
             )}
           </div>
@@ -2285,91 +2023,6 @@ export default function Admin() {
         )}
       </div>
 
-      {/* ── Dialog: Divisão ── */}
-      <Dialog open={showDivDialog} onOpenChange={setShowDivDialog}>
-        <DialogContent className="sm:max-w-[400px] rounded-xl">
-          <DialogHeader><DialogTitle>{editingDivId ? 'Editar entrada' : 'Adicionar entrada'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-1">
-            <div>
-              <Label className="text-[13px]">Nome</Label>
-              <Input value={divForm.nome} onChange={(e) => setDivForm((p) => ({ ...p, nome: e.target.value }))} placeholder="Ex: Raver" className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-[13px]">Chave PIX</Label>
-              <Input value={divForm.chave_pix} onChange={(e) => setDivForm((p) => ({ ...p, chave_pix: e.target.value }))} placeholder="CPF, e-mail, telefone…" className="mt-1" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[13px]">Tipo</Label>
-                <Select value={divForm.tipo} onValueChange={(v) => setDivForm((p) => ({ ...p, tipo: v as any }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="porcentagem">Porcentagem (%)</SelectItem>
-                    <SelectItem value="valor_fixo">Valor fixo (R$)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[13px]">Valor</Label>
-                <Input type="number" value={divForm.valor} onChange={(e) => setDivForm((p) => ({ ...p, valor: e.target.value }))} placeholder={divForm.tipo === 'porcentagem' ? '70' : '200'} className="mt-1" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="div-ativo" checked={divForm.ativo} onChange={(e) => setDivForm((p) => ({ ...p, ativo: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
-              <Label htmlFor="div-ativo" className="text-[13px] cursor-pointer">Ativo</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDivDialog(false)}>Cancelar</Button>
-            <Button onClick={saveDiv} disabled={savingDiv || !divForm.nome || !divForm.valor}>{savingDiv ? 'Salvando…' : 'Salvar'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Dialog: Cupom ── */}
-      <Dialog open={showCuponDialog} onOpenChange={setShowCuponDialog}>
-        <DialogContent className="sm:max-w-[480px] rounded-xl">
-          <DialogHeader><DialogTitle>{editingCuponId ? 'Editar cupom' : 'Novo cupom'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-1">
-            <div>
-              <Label className="text-[13px]">Código *</Label>
-              <Input value={cuponForm.cupom} onChange={(e) => setCuponForm((p) => ({ ...p, cupom: e.target.value.toUpperCase() }))} placeholder="DESC20" className="mt-1 font-mono" />
-            </div>
-            {/* O resgate só olha para estes campos. Havia aqui um "tipo de
-                desconto" e um "valor" obrigatórios que a edge function nunca
-                leu — quem preenchia "50%" criava um cupom que dava acesso
-                cheio, não meio preço. */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[13px]">Dias de acesso</Label>
-                <Input type="number" value={cuponForm.dias_validade} onChange={(e) => setCuponForm((p) => ({ ...p, dias_validade: e.target.value }))} placeholder="30" className="mt-1" />
-                <p className="text-[11px] text-gray-400 mt-1">Vazio = acesso permanente</p>
-              </div>
-              <div>
-                <Label className="text-[13px]">Usos máximos</Label>
-                <Input type="number" value={cuponForm.vezes_uso_maximo} onChange={(e) => setCuponForm((p) => ({ ...p, vezes_uso_maximo: e.target.value }))} placeholder="Ilimitado" className="mt-1" />
-                <p className="text-[11px] text-gray-400 mt-1">Vazio = ilimitado</p>
-              </div>
-            </div>
-            <div>
-              <Label className="text-[13px]">Resgatável até</Label>
-              <Input type="date" value={cuponForm.data_expiracao} onChange={(e) => setCuponForm((p) => ({ ...p, data_expiracao: e.target.value }))} className="mt-1" />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Vazio = sem prazo. Depois desta data o código para de ser aceito — não
-                tira o acesso de quem já resgatou.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="cupon-ativo" checked={cuponForm.ativo} onChange={(e) => setCuponForm((p) => ({ ...p, ativo: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
-              <Label htmlFor="cupon-ativo" className="text-[13px] cursor-pointer">Ativo</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCuponDialog(false)}>Cancelar</Button>
-            <Button onClick={saveCupon} disabled={savingCupon || !cuponForm.cupom}>{savingCupon ? 'Salvando…' : 'Salvar'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       </div>
     </SidebarProvider>
   )
@@ -2512,7 +2165,7 @@ function AfiliadoDetalhe({ novo, afiliado, onConnectAtualizado, form, setForm, s
               )}
               {connectErro && <p className="text-[12px] text-red-600">{connectErro}</p>}
               <p className="text-[11px] text-gray-400">
-                Com a conta ativa, a comissão de cada fatura paga é transferida sozinha. Sem ela, a comissão entra em Repasses (aba Pagamentos) para pagar por Pix.
+                Com a conta ativa, a comissão de cada fatura paga é transferida sozinha. Sem ela, a comissão fica registrada para pagar por Pix.
               </p>
               <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
             </div>

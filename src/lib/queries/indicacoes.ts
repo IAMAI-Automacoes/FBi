@@ -1,23 +1,23 @@
 import { supabase } from '@/lib/supabase/client'
-import type { IndicacaoAdmin, MinhaIndicacao, StatusPremio } from '@/lib/indicacoes'
+import { lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type PremioIndicacao, type StatusPremio } from '@/lib/indicacoes'
 
-/* Indicação entre restaurantes: tudo passa por funções do banco
-   (migration 20261017010000_indicacoes.sql), que conferem por dentro quem pode. */
+/* Indicações: tudo passa por funções do banco (migrations 20261017010000 e
+   20261027000000), que conferem por dentro quem pode. */
 
-/** A subpágina Indicações: benefício, código, contagens e prêmios da conta logada. */
+/** A subpágina Indicações: código, porcentagem, números e benefícios da conta logada. */
 export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
   const { data, error } = await supabase.rpc('indicacao_minha')
   if (error) throw error
-  const r = (data ?? {}) as Partial<MinhaIndicacao>
+  const r = (data ?? {}) as Record<string, unknown>
   return {
     liberado: r.liberado === true,
     sem_restaurante: r.sem_restaurante === true,
-    ativo: r.ativo === true,
-    beneficio: r.beneficio ?? '',
-    codigo: r.codigo ?? null,
-    indicados: Number(r.indicados ?? 0),
-    assinaram: Number(r.assinaram ?? 0),
-    premios: r.premios ?? [],
+    area: r.area === 'rh' ? 'rh' : 'restaurante',
+    codigo: typeof r.codigo === 'string' ? r.codigo : null,
+    ativo: r.ativo !== false,
+    porcentagem: Number(r.porcentagem) || 0,
+    numeros: lerNumeros(r.numeros),
+    premios: Array.isArray(r.premios) ? (r.premios as PremioIndicacao[]).map((p) => ({ ...p, porcentagem: p.porcentagem != null ? Number(p.porcentagem) : null })) : [],
   }
 }
 
@@ -39,24 +39,28 @@ export async function registrarIndicacao(codigo: string): Promise<{ ok: boolean;
 
 // ── Admin (Admin → Afiliados) ────────────────────────────────────────────────
 
-export async function buscarIndicacaoAdmin(): Promise<IndicacaoAdmin> {
-  const { data, error } = await supabase.rpc('indicacao_admin')
+/** A porcentagem que já vem em todo afiliado novo deste software. */
+export async function buscarPorcentagemPadrao(area: AreaDaIndicacao): Promise<number> {
+  const { data, error } = await supabase.from('afiliado_config').select('comissao_padrao').eq('area', area).maybeSingle()
   if (error) throw error
-  const r = (data ?? {}) as Partial<IndicacaoAdmin>
-  return {
-    ativo: r.ativo === true,
-    beneficio: r.beneficio ?? '',
-    atualizado_em: r.atualizado_em ?? null,
-    premios: r.premios ?? [],
-    indicadores: r.indicadores ?? [],
-  }
+  return data ? Number(data.comissao_padrao) : 10
 }
 
-/** Liga, desliga e muda o texto do benefício. Devolve o motivo quando o banco recusa. */
-export async function salvarIndicacaoAdmin(ativo: boolean, beneficio: string): Promise<{ ok: boolean; motivo?: string }> {
-  const { data, error } = await supabase.rpc('indicacao_admin_salvar', { p_ativo: ativo, p_beneficio: beneficio })
+export async function salvarPorcentagemPadrao(area: AreaDaIndicacao, porcentagem: number): Promise<void> {
+  const { data: u } = await supabase.auth.getUser()
+  const { error } = await supabase.from('afiliado_config')
+    .upsert({ area, comissao_padrao: porcentagem, atualizado_por: u.user?.email ?? null, atualizado_em: new Date().toISOString() })
   if (error) throw error
-  return (data ?? { ok: false }) as { ok: boolean; motivo?: string }
+}
+
+export interface PremioDoAfiliado { id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null; indicado: string }
+export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; premios: PremioDoAfiliado[] }
+
+/** O que cada afiliado de um software trouxe (por id do afiliado). */
+export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<Record<string, NumerosDoAfiliado>> {
+  const { data, error } = await supabase.rpc('afiliados_numeros', { p_area: area })
+  if (error) throw error
+  return (data ?? {}) as unknown as Record<string, NumerosDoAfiliado>
 }
 
 /** O admin marca que já deu o benefício, cancela ou volta para pendente. */
