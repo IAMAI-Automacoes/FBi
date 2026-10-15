@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/hooks/use-auth'
 import { useUserProfile } from '@/hooks/use-user-profile'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
+import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
+import { PontoPendente } from '@/components/PontoPendente'
 import { getIniciais } from '@/lib/iniciais'
 import { easyFeedLogoInterna } from '@/assets/brand'
 import { PilulaDemo } from '@/components/demo/ControleDemo'
@@ -66,6 +68,11 @@ export function TopHeader() {
   const title = tituloNoRh ?? (naEquipe ? 'Equipe' : emDescontos ? 'Descontos' : routeTitles[location.pathname] || 'Dashboard')
 
   const { extra } = useHeaderExtra()
+  // "Sobre o restaurante" incompleto: selo no avatar e bolinha no item do menu,
+  // levando direto à seção. O RH usa outro formulário ("Sobre a empresa").
+  const { perfilFaltando } = useRestauranteConfig()
+  const perfilPendente = !ehRh && perfilFaltando > 0
+  const avisoPerfil = `Faltam ${perfilFaltando} ${perfilFaltando === 1 ? 'informação' : 'informações'} sobre o restaurante`
   const { isAdmin } = usePlatformAdmin()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [adminUnread, setAdminUnread] = useState(0)
@@ -154,14 +161,20 @@ export function TopHeader() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-9 w-9 border border-border cursor-pointer hover:opacity-80 transition-opacity ring-offset-2 hover:ring-2 ring-primary/20">
-                  {(usuario?.avatar_url || profile?.avatar_url) && (
-                    <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                <button type="button" className="relative rounded-full" aria-label="Menu da conta">
+                  <Avatar className="h-9 w-9 border border-border cursor-pointer hover:opacity-80 transition-opacity ring-offset-2 hover:ring-2 ring-primary/20">
+                    {(usuario?.avatar_url || profile?.avatar_url) && (
+                      <AvatarImage src={usuario?.avatar_url || profile?.avatar_url} alt={usuario?.nome || 'Usuário'} />
+                    )}
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
+                      {getIniciais(usuario?.nome, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  {/* Conta pendências, não campos: hoje a única é o perfil. */}
+                  {perfilPendente && (
+                    <PontoPendente numero={1} titulo={avisoPerfil} className="absolute -top-1 -right-1 pointer-events-none" />
                   )}
-                  <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                    {getIniciais(usuario?.nome, 2)}
-                  </AvatarFallback>
-                </Avatar>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 className="w-[260px] mt-1.5 p-0 border-border shadow-lg rounded-xl overflow-hidden"
@@ -207,9 +220,10 @@ export function TopHeader() {
                     asChild
                     className="cursor-pointer py-2 px-3 text-[13px] font-medium rounded-md transition-colors focus:bg-secondary"
                   >
-                    <Link to="/configuracoes">
+                    <Link to={perfilPendente ? '/configuracoes#perfil' : '/configuracoes'}>
                       <SettingsIcon className="mr-2.5 h-[15px] w-[15px] text-muted-foreground" />
                       <span>Seu Restaurante</span>
+                      {perfilPendente && <PontoPendente titulo={avisoPerfil} className="ml-auto" />}
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
