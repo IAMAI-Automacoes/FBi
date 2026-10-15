@@ -41,6 +41,7 @@ import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferram
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 import { polaridade } from '../_shared/sentimento.ts'
 import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
+import { comRaciocinio, raciocinioPara } from '../_shared/raciocinio.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'sugeridor_acoes'
@@ -280,7 +281,8 @@ async function redigirAcao(
   const publico = publicoDe(insight.publico)
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const prompt = promptPara(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
+    // O método de analista (raciocinio.ts) entra sempre, mesmo com o prompt editado.
+    const prompt = comRaciocinio(promptPara(ctx.prompts, 'ef_sugerir_acoes', PROMPT_REDATOR, {
       nome: nomeDoAssistente(ctx.config?.mascote_config),
       tom: tomDoAssistente(ctx.config?.mascote_config),
       perfil: blocoPerfil(ctx.config),
@@ -292,7 +294,7 @@ async function redigirAcao(
       descricao: insight.descricao ?? '',
       sugestao: insight.sugestao ?? '',
       pontos: listarParaPrompt(pontos),
-    }, publico)
+    }, publico), raciocinioPara(ctx.prompts, publico))
 
     const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
       { role: 'user', content: prompt },

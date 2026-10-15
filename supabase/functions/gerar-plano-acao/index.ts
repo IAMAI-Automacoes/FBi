@@ -4,6 +4,7 @@ import { clienteAdmin } from '../_shared/auth.ts'
 import { podeMexerNaConta, quemChama } from '../_shared/quem-chama.ts'
 import { carregarPrompts } from '../_shared/prompts.ts'
 import { publicoDe } from '../_shared/publico.ts'
+import { comRaciocinio, raciocinioPara } from '../_shared/raciocinio.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
@@ -133,13 +134,14 @@ Deno.serve(async (req: Request) => {
       : ''
 
     const prompts = await comAreaDaConta(db, await carregarPrompts(db), acao.restaurante_id)
-    const prompt = promptPara(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
+    // O método de analista (raciocinio.ts) entra sempre, mesmo com o prompt editado.
+    const prompt = comRaciocinio(promptPara(prompts, 'ef_plano_acao', PROMPT_PADRAO, {
       tom: tomDoAssistente(restaurante?.mascote_config),
       perfil: blocoPerfil(restaurante),
       acao: contextoAcao,
       insights: blocoInsights,
       conhecimento: blocoConhecimento,
-    }, publico)
+    }, publico), raciocinioPara(prompts, publico))
 
     // Único agente do sistema com busca na web ligada, e de propósito: é o
     // único que escreve instrução operacional que alguém vai EXECUTAR. Um plano

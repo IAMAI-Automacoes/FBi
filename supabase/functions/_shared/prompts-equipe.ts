@@ -169,6 +169,9 @@ Os feedbacks abaixo sao da EQUIPE: quem trabalha no restaurante, contando como e
 
 ## Sobre este restaurante
 {perfil}
+
+## O que ja sabemos sobre ele
+{memorias}
 {conhecimento}
 
 ## O UNICO assunto em analise

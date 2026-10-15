@@ -53,6 +53,7 @@ import {
 } from '../_shared/avaliacao.ts'
 import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti-vazamento.ts'
 import { polaridade } from '../_shared/sentimento.ts'
+import { comRaciocinio, raciocinioPara } from '../_shared/raciocinio.ts'
 import { ferramentaHistoricoDoAssunto, ferramentaLerOriginal } from '../_shared/ferramentas-feedback.ts'
 
 const corsHeaders = {
@@ -159,6 +160,9 @@ const PROMPT_REDATOR = `Voce e o "{nome}", consultor de gestao de restaurantes.
 
 ## Sobre este restaurante
 {perfil}
+
+## O que ja sabemos sobre ele
+{memorias}
 {conhecimento}
 
 ## O UNICO assunto em analise
@@ -485,6 +489,8 @@ async function redigirInsight(
     prompts: Prompts
     config: Record<string, unknown>
     conhecimento: string
+    /** Anotações da IA sobre a conta (memoria_assistente). */
+    memorias?: string
     // deno-lint-ignore no-explicit-any
     params: any
     publico?: Publico
@@ -494,10 +500,12 @@ async function redigirInsight(
   const { assunto } = ctx
   const publico = publicoDe(ctx.publico)
 
-  const prompt = promptPara(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
+  // O método de analista (raciocinio.ts) entra sempre, mesmo com o prompt editado.
+  const prompt = comRaciocinio(promptPara(ctx.prompts, 'ef_gerar_insights', PROMPT_REDATOR, {
     nome: nomeDoAssistente(ctx.config.mascote_config),
     tom: tomDoAssistente(ctx.config.mascote_config),
     perfil: blocoPerfil(ctx.config),
+    memorias: ctx.memorias || '(nenhuma anotacao registrada ainda)',
     conhecimento: ctx.conhecimento
       ? `\n## Boas praticas de referencia\n${ctx.conhecimento}`
       : '',
@@ -512,7 +520,7 @@ async function redigirInsight(
     mininimo: String(assunto.pessoasNecessarias),
     confianca: assunto.confianca,
     pontos: listarPontosParaPrompt(assunto),
-  }, publico)
+  }, publico), raciocinioPara(ctx.prompts, publico))
 
   const mensagens: { role: 'user' | 'assistant'; content: string }[] = [
     { role: 'user', content: prompt },

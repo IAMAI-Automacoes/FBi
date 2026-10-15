@@ -1,9 +1,10 @@
 import {
-  SOBRE_O_SISTEMA, SOBRE_A_EQUIPE, REGRAS_RESPOSTA, COMANDOS, REGRA_POS_BUSCA,
+  SOBRE_O_SISTEMA, SOBRE_A_EQUIPE, REGRAS_RESPOSTA, COMANDOS, REGRA_POS_BUSCA, MODO_ANALISTA, MODO_ANALISTA_EQUIPE,
 } from '@/lib/prompts-sistema'
 // O treinamento da equipe mora junto das funções do servidor (é lá que roda).
 import { PROMPTS_EQUIPE } from '../../../supabase/functions/_shared/prompts-equipe.ts'
 import { PROMPT_AVISO } from '../../../supabase/functions/_shared/equipe.ts'
+import { RACIOCINIO_CLIENTE, RACIOCINIO_EQUIPE } from '../../../supabase/functions/_shared/raciocinio.ts'
 
 /**
  * Catálogo dos agentes de IA — o que cada um faz, o que ACESSA, sua MEMÓRIA e o
@@ -105,6 +106,20 @@ export const CATALOGO_AGENTES: AgenteInfo[] = [
         explicacao: 'Como ela deve responder: o que pode falar, como usar o contexto sem inventar, estilo, e a hierarquia de verdade quando os dados se contradizem.',
         conteudo: REGRAS_RESPOSTA,
         chave: 'regras_resposta',
+        editavel: true,
+      },
+      {
+        titulo: 'Como pensar (analista)',
+        explicacao: 'Entra logo depois das regras, sempre: faz a IA levantar as causas possíveis cruzando com o perfil e os dados do restaurante, dizer em que se apoia e terminar com o próximo passo. Genérica só quando faltar dado.',
+        conteudo: MODO_ANALISTA,
+        chave: 'modo_analista',
+        editavel: true,
+      },
+      {
+        titulo: 'Como pensar (analista) da EQUIPE',
+        explicacao: 'O mesmo método quando a conversa é sobre os funcionários (páginas da Equipe e versão RH), com exemplos de gestão de pessoas.',
+        conteudo: MODO_ANALISTA_EQUIPE,
+        chave: 'modo_analista_equipe',
         editavel: true,
       },
       {
@@ -920,6 +935,33 @@ for (const agente of CATALOGO_AGENTES) {
       conteudo: daEquipe,
     }]
   })
+}
+
+/**
+ * O método de analista (supabase/functions/_shared/raciocinio.ts): o mesmo bloco
+ * nos três agentes que escrevem insight, ação e plano, acrescentado ao prompt
+ * deles mesmo quando foi editado.
+ */
+const BLOCOS_DO_RACIOCINIO: BlocoPrompt[] = [
+  {
+    titulo: 'Como pensar (analista)',
+    explicacao: 'Entra sempre no fim do prompt, mesmo se ele foi editado: levantar as causas com os dados do restaurante, ficar com a mais provável e dizer em que se apoia, e propor o que um gerente faria amanhã. O mesmo bloco aparece no gerador de insights, no sugeridor de ações e no plano: editar aqui muda nos três.',
+    conteudo: RACIOCINIO_CLIENTE,
+    chave: 'ef_raciocinio',
+    editavel: true,
+  },
+  {
+    titulo: 'Como pensar (analista) da EQUIPE',
+    explicacao: 'O mesmo método quando o feedback é de funcionário, com exemplos de gestão de pessoas. O mesmo bloco aparece nos três agentes: editar aqui muda nos três.',
+    conteudo: RACIOCINIO_EQUIPE,
+    chave: 'ef_raciocinio_equipe',
+    editavel: true,
+  },
+]
+for (const id of ['gerador_insights', 'sugeridor_acoes', 'plano_acao']) {
+  const agente = CATALOGO_AGENTES.find((a) => a.id === id)
+  if (!agente) throw new Error(`catálogo sem o agente ${id}`)
+  agente.blocos.push(...BLOCOS_DO_RACIOCINIO)
 }
 
 /**
