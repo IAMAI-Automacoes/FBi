@@ -7,16 +7,11 @@ export const CAMPOS_CONFIG: Record<string, string> = {
   tipo_culinaria: 'tipo de cozinha',
   numero_mesas: 'número de mesas',
   localizacao: 'localização',
-  estilo: 'estilo',
   capacidade_lugares: 'capacidade de lugares',
   num_funcionarios: 'tamanho da equipe',
   faixa_preco: 'ticket médio',
   horario_funcionamento: 'horário de funcionamento',
   publico_alvo: 'público',
-  pratos_destaque: 'pratos que mais saem',
-  diferenciais: 'diferenciais',
-  desafios: 'desafios',
-  ano_abertura: 'ano de abertura',
 }
 // `detalhes` (descrição do restaurante) e `perfil_notas` (notas da pessoa) são
 // campos de texto livre do USUÁRIO — a IA não escreve neles. Ela aprende na
@@ -27,8 +22,8 @@ export const CAMPOS_CONFIG: Record<string, string> = {
 const COLUNAS_PESSOA = new Set(['nome'])
 const COLUNAS_TEXTO = new Set(['nome_restaurante', 'tipo_culinaria'])
 const CAMPOS_JSON = new Set([
-  'localizacao', 'estilo', 'capacidade_lugares', 'num_funcionarios', 'faixa_preco',
-  'horario_funcionamento', 'publico_alvo', 'pratos_destaque', 'diferenciais', 'desafios', 'ano_abertura',
+  'localizacao', 'capacidade_lugares', 'num_funcionarios', 'faixa_preco',
+  'horario_funcionamento', 'publico_alvo',
 ])
 
 export function campoValido(campo: string): boolean {

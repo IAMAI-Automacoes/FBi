@@ -114,10 +114,12 @@ export default function Settings() {
           telefone_contato: (data as any).telefone_contato || '',
         }
         const pf = ((data as any).perfil_restaurante as any) || {}
+        // `...pf` traz também as chaves que saíram da tela (estilo, serviços,
+        // pratos, diferenciais, desafios, ano de abertura): elas voltam intactas
+        // no save, então nada do que o dono já escreveu é apagado do banco.
         const p: PerfilNegocioForm = {
           ...PERFIL_VAZIO,
           ...pf,
-          servicos: Array.isArray(pf.servicos) ? pf.servicos : [],
           tipo_culinaria: (data as any).tipo_culinaria || pf.tipo_culinaria || '',
           numero_mesas: (data as any).numero_mesas != null ? String((data as any).numero_mesas) : '',
           detalhes: (data as any).detalhes || '',
