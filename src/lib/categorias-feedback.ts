@@ -4,11 +4,11 @@
  * categoria usa este arquivo, pra nunca ter duas cores ou dois ícones
  * diferentes pro mesmo assunto em lugares diferentes do app.
  *
- * Estas são as ÚNICAS 14 categorias que existem — o n8n foi instruído a só
- * classificar feedbacks dentro desta lista (2026-08-19), e os dados antigos
- * com nomes diferentes já foram migrados pras categorias corretas (ver
- * `supabase/migrations/20260819000000_normaliza_categorias_feedback.sql`).
- * Não crie cor/ícone pra nenhum nome fora desta lista.
+ * Estas são as 14 categorias PADRÃO dos clientes. Desde 15/10/2026 cada conta
+ * edita e cria as suas (Configurações → Categorias; tabela `categorias`, e o
+ * n8n classifica pela lista da conta). A categoria renomeada mantém a cor
+ * oficial; a nova escolhe na paleta extra lá embaixo. Não crie cor/ícone fora
+ * deste arquivo.
  *
  * ## Cores — paleta oficial (fixa)
  * As cores abaixo (`corTexto`/`corSolida` = HEX PRINCIPAL, `corFundo` = FUNDO
@@ -39,6 +39,19 @@ import {
   BookOpen,
   ShieldCheck,
   MoreHorizontal,
+  Wine,
+  Coffee,
+  IceCreamCone,
+  Users,
+  Wallet,
+  Car,
+  Bike,
+  HeartPulse,
+  Wrench,
+  MessagesSquare,
+  Star,
+  Wifi,
+  Store,
 } from 'lucide-react'
 import { estiloCategoriaEquipe } from '@/lib/categorias-equipe'
 
@@ -154,14 +167,99 @@ const ESTILOS: Record<CategoriaFeedback, EstiloCategoria> = {
 
 const ESTILO_PADRAO = ESTILOS.Outros
 
+// ── Categorias criadas pela conta (Configurações → Categorias) ──────────────
+// Desde 15/10/2026 cada conta renomeia e cria categorias. As 14 acima continuam
+// com a cor oficial (renomear "Comida" para "Pratos" mantém o laranja dela). A
+// categoria NOVA escolhe uma cor desta paleta extra, também escrita por extenso
+// para o Tailwind gerar as classes.
+const ESTILOS_EXTRA: Record<string, Omit<EstiloCategoria, 'icon'> & { nome: string }> = {
+  'extra:ameixa': { nome: 'Ameixa', corTexto: 'text-[#9333EA]', corSolida: 'bg-[#9333EA]', corFundo: 'bg-[#FAF5FF]', corBorda: 'border-[#E9D5FF]' },
+  'extra:carmim': { nome: 'Carmim', corTexto: 'text-[#BE123C]', corSolida: 'bg-[#BE123C]', corFundo: 'bg-[#FFF1F2]', corBorda: 'border-[#FECDD3]' },
+  'extra:oliva': { nome: 'Oliva', corTexto: 'text-[#4D7C0F]', corSolida: 'bg-[#4D7C0F]', corFundo: 'bg-[#F7FEE7]', corBorda: 'border-[#D9F99D]' },
+  'extra:petroleo': { nome: 'Petróleo', corTexto: 'text-[#115E59]', corSolida: 'bg-[#115E59]', corFundo: 'bg-[#F0FDFA]', corBorda: 'border-[#99F6E4]' },
+  'extra:marinho': { nome: 'Marinho', corTexto: 'text-[#1E3A8A]', corSolida: 'bg-[#1E3A8A]', corFundo: 'bg-[#EFF6FF]', corBorda: 'border-[#BFDBFE]' },
+  'extra:terracota': { nome: 'Terracota', corTexto: 'text-[#9A3412]', corSolida: 'bg-[#9A3412]', corFundo: 'bg-[#FFF7ED]', corBorda: 'border-[#FED7AA]' },
+  'extra:grafite': { nome: 'Grafite', corTexto: 'text-[#334155]', corSolida: 'bg-[#334155]', corFundo: 'bg-[#F8FAFC]', corBorda: 'border-[#CBD5E1]' },
+  'extra:magenta': { nome: 'Magenta', corTexto: 'text-[#A21CAF]', corSolida: 'bg-[#A21CAF]', corFundo: 'bg-[#FDF4FF]', corBorda: 'border-[#F5D0FE]' },
+  'extra:ocre': { nome: 'Ocre', corTexto: 'text-[#854D0E]', corSolida: 'bg-[#854D0E]', corFundo: 'bg-[#FEFCE8]', corBorda: 'border-[#FEF08A]' },
+  'extra:esmeralda': { nome: 'Esmeralda', corTexto: 'text-[#047857]', corSolida: 'bg-[#047857]', corFundo: 'bg-[#ECFDF5]', corBorda: 'border-[#A7F3D0]' },
+}
+
+/** As cores que uma categoria pode ter: as oficiais (pelo nome padrão) e as da paleta extra. */
+export const PALETA_EXTRA = Object.entries(ESTILOS_EXTRA).map(([chave, e]) => ({ chave, nome: e.nome }))
+
+/** Os ícones que a pessoa pode escolher para uma categoria. */
+export const ICONES_DE_CATEGORIA: { chave: string; nome: string; icon: LucideIcon }[] = [
+  { chave: 'prato', nome: 'Prato', icon: UtensilsCrossed },
+  { chave: 'bebida', nome: 'Bebida', icon: CupSoda },
+  { chave: 'vinho', nome: 'Vinho', icon: Wine },
+  { chave: 'cafe', nome: 'Café', icon: Coffee },
+  { chave: 'sobremesa', nome: 'Sobremesa', icon: IceCreamCone },
+  { chave: 'atendimento', nome: 'Atendimento', icon: Handshake },
+  { chave: 'pessoas', nome: 'Pessoas', icon: Users },
+  { chave: 'ambiente', nome: 'Ambiente', icon: Armchair },
+  { chave: 'limpeza', nome: 'Limpeza', icon: Sparkles },
+  { chave: 'preco', nome: 'Preço', icon: Tag },
+  { chave: 'dinheiro', nome: 'Dinheiro', icon: Wallet },
+  { chave: 'tempo', nome: 'Tempo', icon: Clock },
+  { chave: 'agenda', nome: 'Agenda', icon: CalendarCheck },
+  { chave: 'carro', nome: 'Carro', icon: Car },
+  { chave: 'entrega', nome: 'Entrega', icon: Bike },
+  { chave: 'acessibilidade', nome: 'Acessibilidade', icon: Accessibility },
+  { chave: 'musica', nome: 'Música', icon: Music },
+  { chave: 'cardapio', nome: 'Cardápio', icon: BookOpen },
+  { chave: 'seguranca', nome: 'Segurança', icon: ShieldCheck },
+  { chave: 'saude', nome: 'Saúde', icon: HeartPulse },
+  { chave: 'ferramenta', nome: 'Ferramenta', icon: Wrench },
+  { chave: 'conversa', nome: 'Conversa', icon: MessagesSquare },
+  { chave: 'estrela', nome: 'Estrela', icon: Star },
+  { chave: 'wifi', nome: 'Internet', icon: Wifi },
+  { chave: 'loja', nome: 'Loja', icon: Store },
+  { chave: 'outros', nome: 'Outros', icon: MoreHorizontal },
+]
+
 /**
- * Estilo de uma categoria pelo nome — só bate com as 14 categorias oficiais
- * (ignorando acento/caixa, pra não quebrar por causa de "preço" vs "Preço").
- * Qualquer outro nome cai no estilo neutro de "Outros" em vez de quebrar a tela.
+ * O estilo de uma CHAVE de cor (o nome de uma categoria padrão, dos clientes ou
+ * da equipe, ou "extra:…") com o ícone escolhido. É o que a tela de
+ * Configurações mostra enquanto a pessoa escolhe.
+ */
+export function estiloDaCor(cor: string | null | undefined, icone?: string | null): EstiloCategoria {
+  const chave = (cor ?? '').trim()
+  const padrao = CATEGORIAS_FEEDBACK.find((c) => c.toLowerCase() === chave.toLowerCase())
+  const extra = ESTILOS_EXTRA[chave]
+  const base: EstiloCategoria = padrao
+    ? ESTILOS[padrao]
+    : extra
+      ? { icon: MoreHorizontal, corTexto: extra.corTexto, corSolida: extra.corSolida, corFundo: extra.corFundo, corBorda: extra.corBorda }
+      : estiloCategoriaEquipe(chave) ?? ESTILO_PADRAO
+  const escolhido = icone ? ICONES_DE_CATEGORIA.find((i) => i.chave === icone)?.icon : undefined
+  return escolhido ? { ...base, icon: escolhido } : base
+}
+
+/** As categorias da conta logada, pelo nome (sem ligar para a caixa). Preenchido por `use-categorias.ts`. */
+const DA_CONTA = new Map<string, EstiloCategoria>()
+
+/** Guarda a cor e o ícone das categorias da conta (todas, inclusive as desligadas). */
+export function registrarCategoriasDaConta(itens: readonly { nome: string; cor: string | null; icone: string | null }[]): void {
+  DA_CONTA.clear()
+  for (const c of itens) {
+    if (!c.nome) continue
+    // Sem cor escolhida, a categoria padrão fica com a dela; a nova, com a de Outros.
+    DA_CONTA.set(c.nome.trim().toLowerCase(), estiloDaCor(c.cor || c.nome, c.icone))
+  }
+}
+
+/**
+ * Estilo de uma categoria pelo nome. Primeiro as da conta (renomeadas e
+ * criadas nas Configurações), depois as 14 oficiais (ignorando acento/caixa,
+ * pra não quebrar por causa de "preço" vs "Preço") e as da equipe. Qualquer
+ * outro nome cai no estilo neutro de "Outros" em vez de quebrar a tela.
  */
 export function estiloCategoria(nome: string | null | undefined): EstiloCategoria {
   if (!nome) return ESTILO_PADRAO
   const alvo = nome.trim().toLowerCase()
+  const daConta = DA_CONTA.get(alvo)
+  if (daConta) return daConta
   const cat = CATEGORIAS_FEEDBACK.find((c) => c.toLowerCase() === alvo)
   if (cat) return ESTILOS[cat]
   // Não é uma das 14 dos clientes: pode ser do feedback da equipe (páginas

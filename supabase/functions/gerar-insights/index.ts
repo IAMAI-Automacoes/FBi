@@ -32,9 +32,8 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { carregarPrompts, type Prompts } from '../_shared/prompts.ts'
-import {
-  CATEGORIAS_EQUIPE, colunaDaUltimaAnalise, publicoDe, PUBLICOS, type Publico,
-} from '../_shared/publico.ts'
+import { colunaDaUltimaAnalise, publicoDe, PUBLICOS, type Publico } from '../_shared/publico.ts'
+import { categoriasDaConta, categoriasDe } from '../_shared/categorias.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 import { paramsDoAgente } from '../_shared/params.ts'
 import { chamarIA, checarCota, ErroCota } from '../_shared/openrouter.ts'
@@ -138,12 +137,6 @@ const MAX_CANDIDATOS = 8
  * avaliador existe para resolver.
  */
 const MAX_AVALIACOES = 14
-
-const CATEGORIAS = [
-  'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
-  'Tempo de Espera', 'Reserva', 'Estacionamento', 'Acessibilidade',
-  'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
-]
 
 const EXPLICACAO_GRAVIDADE: Record<number, string> = {
   4: 'risco sanitario ou de seguranca (corpo estranho, intoxicacao, agressao)',
@@ -308,10 +301,8 @@ const SCHEMA_AVALIACAO = {
   required: ['nota'],
 }
 
-/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
-const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
-
-const schemaInsight = (publico: Publico) => ({
+// As categorias da CONTA (Configurações → Categorias); sem elas, o padrão do público.
+const schemaInsight = (publico: Publico, categorias?: readonly string[]) => ({
   type: 'object',
   properties: {
     gerar: {
@@ -319,7 +310,7 @@ const schemaInsight = (publico: Publico) => ({
       description: 'false quando o assunto nao justifica um insight. Prefira false a encher a lista.',
     },
     prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
-    categoria: { type: 'string', enum: categoriasDe(publico) },
+    categoria: { type: 'string', enum: categoriasDe(publico, categorias) },
     titulo: { type: 'string', description: 'Curto e claro, sem ponto final.' },
     descricao: { type: 'string', description: 'O padrao que os feedbacks mostram.' },
     sugestao: { type: 'string', description: 'Acao pratica e especifica para a equipe.' },
@@ -491,6 +482,8 @@ async function redigirInsight(
     conhecimento: string
     /** Anotações da IA sobre a conta (memoria_assistente). */
     memorias?: string
+    /** As categorias da conta (categorias_da_conta). */
+    categorias?: string[]
     // deno-lint-ignore no-explicit-any
     params: any
     publico?: Publico
@@ -553,7 +546,7 @@ async function redigirInsight(
     saida: {
       nome: 'registrar_insight',
       descricao: 'Registra o insight deste assunto, ou informa que ele nao justifica um insight.',
-      schema: schemaInsight(publico),
+      schema: schemaInsight(publico, ctx.categorias),
     },
   })
 
@@ -908,9 +901,13 @@ async function processarRestaurante(
       buscarMemorias(db, restauranteId),
     ])
 
+    // As categorias que a conta usa hoje (podem ter sido renomeadas ou criadas).
+    const categorias = await categoriasDaConta(db, restauranteId, publico)
+
     const ctx = {
       restauranteId,
       publico,
+      categorias,
       prompts,
       config,
       conhecimento,
@@ -1056,7 +1053,7 @@ async function processarRestaurante(
       }
       let categoria = assunto.categoria ?? 'Outros'
       let maisVotos = 0
-      for (const nome of categoriasDe(publico)) {
+      for (const nome of categoriasDe(publico, categorias)) {
         const v = votos.get(nome) ?? 0
         if (v > maisVotos) {
           maisVotos = v

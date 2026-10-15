@@ -542,23 +542,41 @@ export type Database = {
       categorias: {
         Row: {
           ativa: boolean | null
+          atualizado_em: string
+          cor: string | null
           created_at: string | null
+          descricao: string | null
+          icone: string | null
           id: string
           nome: string
+          ordem: number
+          publico: string
           restaurante_id: number | null
         }
         Insert: {
           ativa?: boolean | null
+          atualizado_em?: string
+          cor?: string | null
           created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
           id?: string
           nome: string
+          ordem?: number
+          publico?: string
           restaurante_id?: number | null
         }
         Update: {
           ativa?: boolean | null
+          atualizado_em?: string
+          cor?: string | null
           created_at?: string | null
+          descricao?: string | null
+          icone?: string | null
           id?: string
           nome?: string
+          ordem?: number
+          publico?: string
           restaurante_id?: number | null
         }
         Relationships: [
@@ -4307,6 +4325,15 @@ export type Database = {
           url: string
         }[]
       }
+      categorias_da_conta: {
+        Args: { p_publico?: string; p_restaurante_id: number }
+        Returns: Json
+      }
+      categorias_padrao: { Args: { p_publico: string }; Returns: Json }
+      categorias_pode_ver: {
+        Args: { p_restaurante_id: number }
+        Returns: boolean
+      }
       codigo_demo: {
         Args: { p_janela: number; p_segredo: string }
         Returns: string
@@ -4639,6 +4666,8 @@ export type Database = {
           limite: number
         }[]
       }
+      minhas_categorias: { Args: never; Returns: Json }
+      motor_cabecalhos: { Args: never; Returns: Json }
       normalizar_busca: { Args: { t: string }; Returns: string }
       normalizar_telefone: { Args: { p: string }; Returns: string }
       ordem_status_acao:
@@ -4720,7 +4749,12 @@ export type Database = {
           expira_em: string
         }[]
       }
+      restaurar_categorias: { Args: { p_publico: string }; Returns: Json }
       retriar_feedbacks_pendentes: { Args: never; Returns: undefined }
+      salvar_categorias: {
+        Args: { p_itens: Json; p_publico: string }
+        Returns: Json
+      }
       sessao_eh_demo: { Args: never; Returns: boolean }
       telefone_chave: { Args: { valor: string }; Returns: string }
       temas_agrupados: {

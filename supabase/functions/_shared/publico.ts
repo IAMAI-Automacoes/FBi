@@ -30,6 +30,13 @@ export function publicoDoPedido(corpo: unknown, cabecalho?: string | null): Publ
   return publicoDe(doCorpo ?? cabecalho)
 }
 
+/** As 14 categorias PADRÃO dos clientes (a mesma lista de src/lib/categorias-feedback.ts). */
+export const CATEGORIAS_CLIENTE = [
+  'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
+  'Tempo de Espera', 'Reserva', 'Estacionamento', 'Acessibilidade',
+  'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
+] as const
+
 export const CATEGORIAS_EQUIPE = [
   'Liderança e gestão',
   'Salário e benefícios',

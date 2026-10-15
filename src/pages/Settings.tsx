@@ -18,6 +18,7 @@ import { telefoneNacionalValido, mesmoWhatsapp } from '@/lib/telefone'
 import { useArea } from '@/lib/area'
 import { inicioDa, lerSobreAEmpresa, numeroDeFuncionarios, SOBRE_A_EMPRESA_VAZIO, sobreAEmpresaNoPerfil, type SobreAEmpresa } from '@/lib/areas'
 import { SobreEmpresaTab } from './settings/SobreEmpresaTab'
+import { CategoriasTab } from './settings/CategoriasTab'
 
 const RESTAURANTE_VAZIO: RestauranteForm = { nome_restaurante: '', logo_url: '', telefone_contato: '' }
 const MASCOTE_VAZIO: MascoteForm = { nome: '', personalidade: 'direto_objetivo', foto_url: '', modo_acao: 'perguntar' }
@@ -300,12 +301,14 @@ export default function Settings() {
     ? [
         { id: 'restaurante', label: 'Empresa' },
         { id: 'perfil', label: 'Sobre a empresa' },
+        { id: 'categorias', label: 'Categorias' },
         { id: 'whatsapp', label: 'WhatsApp' },
         { id: 'mascote', label: 'Assistente de IA' },
       ]
     : [
         { id: 'restaurante', label: 'Restaurante' },
         { id: 'perfil', label: 'Sobre o restaurante' },
+        { id: 'categorias', label: 'Categorias' },
         { id: 'conhecimento', label: 'Base de conhecimento' },
         { id: 'whatsapp', label: 'WhatsApp' },
         { id: 'feedbacks', label: 'Feedbacks' },
@@ -365,10 +368,18 @@ export default function Settings() {
                   <SobreEmpresaTab value={empresa} onChange={setEmpresa} />
                 </section>
               )}
+              {ehRh && (
+                <section id="categorias" className="scroll-mt-28">
+                  <CategoriasTab />
+                </section>
+              )}
               {!ehRh && (
                 <>
                   <section id="perfil" className="scroll-mt-28">
                     <PerfilNegocioTab value={perfil} onChange={setPerfil} />
+                  </section>
+                  <section id="categorias" className="scroll-mt-28">
+                    <CategoriasTab />
                   </section>
                   <section id="conhecimento" className="scroll-mt-28">
                     <ConhecimentoTab restauranteId={restauranteId} />

@@ -40,16 +40,11 @@ import { chamarIA, ErroCota } from '../_shared/openrouter.ts'
 import { blocoPerfil, nomeDoAssistente } from '../_shared/perfil.ts'
 import { avaliarGravidade, normalizar, type NivelGravidade } from '../_shared/gravidade.ts'
 import { prioridadeAcaoManual } from '../_shared/limiar.ts'
-import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
+import { publicoDe, type Publico } from '../_shared/publico.ts'
+import { categoriasDaConta, categoriasDe } from '../_shared/categorias.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'categorizador_acao'
-
-const CATEGORIAS = [
-  'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
-  'Tempo de Espera', 'Reserva', 'Estacionamento', 'Acessibilidade',
-  'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
-]
 
 /** Janela de feedbacks considerada no cálculo da prioridade. */
 const JANELA_DIAS = 30
@@ -118,13 +113,11 @@ Regras:
 
 Chame registrar_vinculos.`
 
-/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
-const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
-
-const schemaCategoria = (publico: Publico) => ({
+// As categorias da CONTA (Configurações → Categorias); sem elas, o padrão do público.
+const schemaCategoria = (publico: Publico, categorias?: readonly string[]) => ({
   type: 'object',
   properties: {
-    categoria: { type: 'string', enum: categoriasDe(publico) },
+    categoria: { type: 'string', enum: categoriasDe(publico, categorias) },
     justificativa: { type: 'string', description: 'Uma frase curta.' },
   },
   required: ['categoria'],
@@ -199,6 +192,8 @@ Deno.serve(async (req: Request) => {
     let categoriaFinal: string = acao.categoria ?? 'Outros'
 
     if (precisaCategoria) {
+      // As categorias que a conta usa hoje (podem ter sido renomeadas ou criadas).
+      const categorias = await categoriasDaConta(db, acao.restaurante_id, publico)
       try {
         const prompt = promptPara(prompts, 'ef_categorizar_acao', PROMPT_CATEGORIA, {
           nome: nomeDoAssistente(config?.mascote_config),
@@ -216,10 +211,10 @@ Deno.serve(async (req: Request) => {
           saida: {
             nome: 'registrar_categoria',
             descricao: 'Registra a categoria escolhida.',
-            schema: schemaCategoria(publico),
+            schema: schemaCategoria(publico, categorias),
           },
         })
-        categoriaFinal = categoriasDe(publico).includes(result?.categoria) ? result.categoria : 'Outros'
+        categoriaFinal = categoriasDe(publico, categorias).includes(result?.categoria) ? result.categoria : 'Outros'
       } catch (err) {
         if (err instanceof ErroCota) throw err
         console.error('Falha ao categorizar, usando Outros:', err)

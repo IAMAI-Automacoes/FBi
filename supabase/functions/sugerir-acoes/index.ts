@@ -40,18 +40,13 @@ import { construirVocabularioProibido, detectarVazamento } from '../_shared/anti
 import { ferramentaLerOriginal, ferramentaListarPontos } from '../_shared/ferramentas-feedback.ts'
 import type { PontoDoAssunto } from '../_shared/assuntos.ts'
 import { polaridade } from '../_shared/sentimento.ts'
-import { CATEGORIAS_EQUIPE, publicoDe, type Publico } from '../_shared/publico.ts'
+import { publicoDe, type Publico } from '../_shared/publico.ts'
+import { categoriasDaConta, categoriasDe } from '../_shared/categorias.ts'
 import { comRaciocinio, raciocinioPara } from '../_shared/raciocinio.ts'
 import { comAreaDaConta, promptPara } from '../_shared/prompts-equipe.ts'
 
 const AGENTE = 'sugeridor_acoes'
 const AGENTE_VERIFICADOR = 'verificador_acoes'
-
-const CATEGORIAS = [
-  'Comida', 'Bebidas', 'Atendimento', 'Ambiente', 'Limpeza', 'Preço',
-  'Tempo de Espera', 'Reserva', 'Estacionamento', 'Acessibilidade',
-  'Música/Som', 'Cardápio/Variedade', 'Higiene', 'Outros',
-]
 
 /** Insights convertidos em paralelo (150s de teto na edge function). */
 const CONCORRENCIA = 3
@@ -122,16 +117,14 @@ NAO reprove por:
 
 Chame registrar_verificacao.`
 
-/** As categorias de cada público (a equipe tem as dela: _shared/publico.ts). */
-const categoriasDe = (publico: Publico): string[] => (publico === 'equipe' ? [...CATEGORIAS_EQUIPE] : CATEGORIAS)
-
-const schemaAcao = (publico: Publico) => ({
+// As categorias da CONTA (Configurações → Categorias); sem elas, o padrão do público.
+const schemaAcao = (publico: Publico, categorias?: readonly string[]) => ({
   type: 'object',
   properties: {
     titulo_acao: { type: 'string', description: 'O que precisa ser feito, curto e claro.' },
     plano_detalhado: { type: 'string', description: 'Passos praticos, com responsavel e criterio de conclusao.' },
     prioridade: { type: 'string', enum: ['URGENTE', 'IMPORTANTE', 'OBSERVACAO'] },
-    categoria: { type: 'string', enum: categoriasDe(publico) },
+    categoria: { type: 'string', enum: categoriasDe(publico, categorias) },
   },
   required: ['titulo_acao', 'plano_detalhado'],
 })
@@ -324,7 +317,7 @@ async function redigirAcao(
       saida: {
         nome: 'registrar_acao',
         descricao: 'Registra a acao operacional que resolve este insight.',
-        schema: schemaAcao(publico),
+        schema: schemaAcao(publico, ctx.categorias?.[publico]),
       },
     })
 
@@ -417,7 +410,7 @@ async function converterInsight(db: Db, ctx: any, insight: any) {
   const doInsight = insight.prioridade ?? 'IMPORTANTE'
   const daIA = rascunho.prioridade
   const prioridade = daIA && (peso[daIA] ?? 0) > (peso[doInsight] ?? 0) ? daIA : doInsight
-  const categoria = categoriasDe(publico).includes(rascunho.categoria)
+  const categoria = categoriasDe(publico, ctx.categorias?.[publico]).includes(rascunho.categoria)
     ? rascunho.categoria
     : (insight.categoria ?? 'Outros')
 
@@ -559,8 +552,15 @@ Deno.serve(async (req: Request) => {
       buscarMemorias(db, restauranteId),
     ])
 
+    // As categorias da conta, dos dois públicos (os insights podem ser de cliente e da equipe).
+    const [catCliente, catEquipe] = await Promise.all([
+      categoriasDaConta(db, restauranteId, 'cliente'),
+      categoriasDaConta(db, restauranteId, 'equipe'),
+    ])
+
     const ctx = {
       restauranteId,
+      categorias: { cliente: catCliente, equipe: catEquipe } as Record<Publico, string[]>,
       prompts,
       config,
       conhecimento,

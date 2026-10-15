@@ -1,6 +1,8 @@
 import { getPersonalidadePrompt } from './mascote-config'
 import { promptOverride, dadoAtivo } from './ia/prompt-store'
+import { itensDaContaAgora } from '@/hooks/use-categorias'
 import { CATEGORIAS_EQUIPE } from './categorias-equipe'
+import { CATEGORIAS_FEEDBACK } from './categorias-feedback'
 
 /** Interruptores de dados do assistente (admin liga/desliga cada bloco). */
 const DADOS = 'assistente_dados'
@@ -12,9 +14,8 @@ clientes do restaurante por WhatsApp (o cliente escaneia um QR Code, cai numa p�
 para a conversa), analisa cada mensagem com IA e organiza tudo em um painel.
 
 Como os dados nascem: cada avaliação vira um registro com texto original, uma CATEGORIA
-(uma destas 14: Comida, Bebidas, Atendimento, Ambiente, Limpeza, Preço, Tempo de Espera, Reserva,
-Estacionamento, Acessibilidade, Música/Som, Cardápio/Variedade, Higiene, Outros) e um SENTIMENTO
-(positivo, neutro ou negativo).
+(uma das categorias desta conta, listadas em "Categorias desta conta"; o dono pode renomear e criar
+categorias nas Configurações) e um SENTIMENTO (positivo, neutro ou negativo).
 
 Páginas do painel que o dono usa:
 - Visão Geral: resumo com indicadores e tendência.
@@ -42,7 +43,7 @@ TRABALHA no restaurante, contando como é trabalhar lá. Os funcionários respon
 restaurante, quando o dono pede ou por conta própria.
 
 O que muda nesta conversa:
-- As categorias são estas ${CATEGORIAS_EQUIPE.length}: ${CATEGORIAS_EQUIPE.join(', ')} (não as 14 dos clientes).
+- As categorias são as da equipe desta conta (listadas em "Categorias desta conta"), não as dos clientes.
 - O assunto é gestão de pessoas: escala, pagamento, treinamento, comunicação, liderança, condições
   de trabalho, e como fazer a equipe trabalhar bem e não ir embora.
 - SIGILO: você não sabe quem escreveu cada feedback e nunca tenta descobrir nem adivinhar (pelo
@@ -312,10 +313,20 @@ export function construirSystemPromptChef(
   const sobreAEquipe = (daEquipe || daVersaoRh ? `\n\n${promptOverride('sobre_equipe') ?? SOBRE_A_EQUIPE}` : '')
     + (daVersaoRh ? `\n\n${promptOverride('sobre_versao_rh') ?? SOBRE_A_VERSAO_RH}` : '')
 
+  // As categorias desta conta (Configurações → Categorias), com o que entra em cada uma.
+  const publicoDasCategorias = daEquipe || daVersaoRh ? 'equipe' : 'cliente'
+  const itensDasCategorias = itensDaContaAgora(publicoDasCategorias)?.filter((c) => c.ativa)
+  const categoriasDaConta = itensDasCategorias?.length
+    ? itensDasCategorias.map((c) => `- ${c.nome}${c.descricao ? `: ${c.descricao}` : ''}`).join('\n')
+    : (publicoDasCategorias === 'equipe' ? CATEGORIAS_EQUIPE : CATEGORIAS_FEEDBACK).map((c) => `- ${c}`).join('\n')
+
   let prompt = `Você é o ${nome}, assistente de IA do painel de ${daVersaoRh ? 'uma empresa, especialista em gestão de pessoas' : 'um restaurante, especialista em gestão e operação'}.
 Personalidade: ${personalidade}
 
 ${sobre}${sobreAEquipe}
+
+## Categorias desta conta
+${categoriasDaConta}
 
 ${regras}
 

@@ -45,7 +45,7 @@ ok('webhook continua em /easyfeed (POST)', wh.parameters.path === 'easyfeed' && 
 ok('espera de 20 s', porNome('Espera 20 segundos').parameters.amount === 20 && padraoOu(porNome('Espera 20 segundos').parameters.unit, 'seconds'))
 ok('restaurante é achado pelo token', JSON.stringify(porNome('Acha o restaurante').parameters).includes('whatsapp_token'))
 ok('Always Output Data só onde vazio precisa seguir', nos.filter((n) => n.alwaysOutputData).map((n) => n.name).sort().join() === 'Já respondeu hoje?,Limpa o buffer,Quem escreveu?')
-ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a equipe,Analisa a mensagem,Começa o prazo,Já respondeu hoje?,Tem resposta?,Vai perguntar?')
+ok('Execute Once só onde há vários itens chegando', nos.filter((n) => n.executeOnce).map((n) => n.name).sort().join() === 'Analisa a equipe,Analisa a mensagem,Categorias da equipe,Categorias do cliente,Começa o prazo,Já respondeu hoje?,Tem resposta?,Vai perguntar?')
 const opcoesDoModelo = (nome, temperatura) => {
   const o = porNome(nome).parameters.options || {}
   return o.temperature === temperatura && padraoOu(o.responseFormat, 'json_object') && Object.keys(o).every((k) => k === 'temperature' || k === 'responseFormat')
@@ -416,8 +416,9 @@ const condicaoDe = (nome) => porNome(nome).parameters.conditions.conditions[0].l
 const seVale = (nome, json, outros = {}) => new Function('$json', '$', 'return (' + condicaoDe(nome) + ')')(json, (n) => ({ first: () => ({ json: outros[n] ?? {} }) }))
 
 // O cliente não passa pelo ramo da equipe
-ok('cliente: o caminho de sempre continua inteiro, só com um desvio antes da análise', destinos('Já respondeu hoje?').join() === 'É da equipe?'
-  && destinos('É da equipe?', 1).join() === 'Analisa a mensagem' && destinos('Analisa a mensagem').join() === 'Monta a resposta' && destinos('Monta a resposta').join() === 'É feedback?')
+ok('cliente: o caminho de sempre continua inteiro, só com um desvio antes da análise (e as categorias da conta logo antes dela)', destinos('Já respondeu hoje?').join() === 'É da equipe?'
+  && destinos('É da equipe?', 1).join() === 'Categorias do cliente' && destinos('Categorias do cliente').join() === 'Analisa a mensagem'
+  && destinos('Analisa a mensagem').join() === 'Monta a resposta' && destinos('Monta a resposta').join() === 'É feedback?')
 ok('cliente (equipe nula) segue para a análise de sempre; funcionário vai para o ramo da equipe', seVale('É da equipe?', {}, { 'Junta quem escreveu': { equipe: null } }) === false
   && seVale('É da equipe?', {}, { 'Junta quem escreveu': { equipe: { funcionarioId: 3 } } }) === true && destinos('É da equipe?', 0).join() === 'Respondeu a pergunta?')
 ok('a consulta de quem escreveu nunca trava o fluxo do cliente (falhou, segue; vazio, segue)', porNome('Quem escreveu?').onError === 'continueRegularOutput' && porNome('Quem escreveu?').alwaysOutputData === true
@@ -468,7 +469,8 @@ for (const txt of ['O salário atrasa todo mês', 'Queria que o gerente não mos
 ok('"sim" e "não" soltos só valem com a pergunta no ar', diz('Sim', { aguardando_escolha: true }) === 'anonimo' && diz('não', { aguardando_escolha: true }) === 'identificado' && diz('Não precisa', { aguardando_escolha: true }) === 'identificado')
 ok('cliente escrevendo "anônimo" nunca vira escolha', junta({ ok: true, funcionario_id: null }, { ...juntada, textoCompleto: 'Anônimo' }).escolha === null)
 ok('quem nunca recebeu a pergunta: "anônimo" segue como mensagem comum', junta(FUNC, { ...juntada, textoCompleto: 'Anônimo' }).escolha === null)
-ok('escolha por escrito vai para o registro; o resto, para a análise da equipe', destinos('Respondeu a pergunta?', 0).join() === 'Prepara a escolha' && destinos('Respondeu a pergunta?', 1).join() === 'Analisa a equipe'
+ok('escolha por escrito vai para o registro; o resto, para a análise da equipe', destinos('Respondeu a pergunta?', 0).join() === 'Prepara a escolha' && destinos('Respondeu a pergunta?', 1).join() === 'Categorias da equipe'
+  && destinos('Categorias da equipe').join() === 'Analisa a equipe'
   && seVale('Respondeu a pergunta?', {}, { 'Junta quem escreveu': { escolha: 'anonimo' } }) === true && seVale('Respondeu a pergunta?', {}, { 'Junta quem escreveu': { escolha: null } }) === false)
 
 // O clique no botão
@@ -678,6 +680,33 @@ ok('prazo: começa quando a pergunta saiu (equipe_identidade_perguntada), uma ve
   && exprCom(prazo.parameters.jsonBody, {}, CTX) === '{"p_restaurante_id":11,"p_telefone":"5511932903005"}' && !wf.connections['Começa o prazo'])
 ok('equipe: o ramo fica abaixo do caminho do cliente no canvas (não muda a ordem dos ramos de cima)', ['Analisa a equipe', 'Monta a resposta da equipe', 'Prepara a escolha'].every((n) => porNome(n).position[1] > porNome('Limpa buffer antigo').position[1])
   && porNome('Quem escreveu?').position[1] === porNome('Sou a última mensagem?').position[1])
+// ── 6. As categorias da CONTA (Configurações → Categorias, desde 15/10/2026) ──
+for (const [no, publico, analise, monta] of [['Categorias do cliente', 'cliente', 'Analisa a mensagem', 'Monta a resposta'], ['Categorias da equipe', 'equipe', 'Analisa a equipe', 'Monta a resposta da equipe']]) {
+  const n = porNome(no)
+  ok(`${no}: chama categorias_da_conta com a conta e o público, e nunca trava o fluxo`, n.parameters.url.endsWith('/rest/v1/rpc/categorias_da_conta')
+    && new Function('$', 'return (' + n.parameters.jsonBody.replace(/^=\{\{\s*/, '').replace(/\s*\}\}$/, '') + ')')((x) => ({ first: () => ({ json: x === 'Restaurante ativo?' ? { restauranteId: 11 } : {} }) })) === `{"p_restaurante_id":11,"p_publico":"${publico}"}`
+    && n.onError === 'continueRegularOutput' && n.executeOnce === true && JSON.stringify(n.credentials) === JSON.stringify(porNome('Quem escreveu?').credentials))
+  const msg = porNome(analise).parameters.messages.messageValues[0].message
+  const expr = msg.match(/\{\{([\s\S]*?)\}\}/)?.[1] ?? ''
+  const lista = (cats) => new Function('$', 'return (' + expr + ')')((x) => ({ first: () => ({ json: x === no ? cats : {} }) }))
+  ok(`${analise}: o prompt lista as categorias da conta, com a explicação`, msg.startsWith('=') && (msg.match(/\{\{/g) || []).length === 1
+    && lista({ prompt: '- "Pratos": o que sai da cozinha\n- "Outros"' }) === '- "Pratos": o que sai da cozinha\n- "Outros"')
+  ok(`${analise}: sem resposta do banco, a lista padrão (uma por linha, entre aspas)`, lista({}).split('\n').length >= 12
+    && lista({}).split('\n').every((l) => /^- ".+"$/.test(l)) && lista({}).endsWith('- "Outros"'))
+  ok(`${monta}: sem lista fixa solta no código (lê a da conta)`, porNome(monta).parameters.jsCode.includes(`$('${no}').first().json.nomes`))
+}
+const pontoDe = (cat, cats) => {
+  const extra = cats ? { 'Categorias do cliente': cats } : {}
+  return roda('Monta a resposta', { text: JSON.stringify({ tipo: 'feedback', pontos: [P('Negativo', cat)] }) }, { 'Sou a última mensagem?': juntada, 'Já respondeu hoje?': JA_FALOU, ...extra })[0].json.pontos[0].categoria
+}
+ok('cliente: categoria da conta (renomeada ou nova) é aceita; a que saiu da lista vira Outros', pontoDe('Pratos', { nomes: ['Pratos', 'Drinks', 'Outros'] }) === 'Pratos'
+  && pontoDe('pratos', { nomes: ['Pratos', 'Outros'] }) === 'Pratos' && pontoDe('Comida', { nomes: ['Pratos', 'Outros'] }) === 'Outros')
+ok('cliente: a consulta falhou (ou não rodou): valem as 14 de padrão', pontoDe('Comida', { error: 'falhou' }) === 'Comida' && pontoDe('Comida') === 'Comida' && pontoDe('Pratos') === 'Outros')
+const pontoEq = (cat, cats) => roda('Monta a resposta da equipe', { text: JSON.stringify({ tipo: 'feedback', pontos: [PE('Negativo', cat)], sensivel: false }) },
+  { 'Sou a última mensagem?': juntadaEq, 'Já respondeu hoje?': JA_FALOU, ...(cats ? { 'Categorias da equipe': cats } : {}) })[0].json.pontos[0].categoria
+ok('equipe: categoria da conta é aceita; sem a consulta, as 12 de padrão', pontoEq('Turnos da noite', { nomes: ['Turnos da noite', 'Outros'] }) === 'Turnos da noite'
+  && pontoEq('Salário e benefícios', { nomes: ['Turnos da noite', 'Outros'] }) === 'Outros' && pontoEq('Salário e benefícios') === 'Salário e benefícios')
+
 const posicoes = nos.map((n) => n.position.join())
 ok('nenhum nó em cima de outro no canvas', new Set(posicoes).size === posicoes.length, posicoes.filter((p, i) => posicoes.indexOf(p) !== i))
 
