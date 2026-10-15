@@ -49,6 +49,7 @@
     "../classificar-feedback/*.ts",
     "../gerar-plano-acao/*.ts",
     "../destacar-feedback/*.ts",
-    "../atualizar-banner/*.ts"
+    "../atualizar-banner/*.ts",
+    "../conhecimento-ia/*.ts"
   ]
 }
