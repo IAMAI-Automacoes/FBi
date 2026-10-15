@@ -6,6 +6,7 @@ import { CICLOS, recursosDaArea, type Ciclo } from '@/components/vendas/ciclos-p
 import { useArea } from '@/lib/area'
 import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
+import { CaixaCupom } from '@/components/compra/CaixaCupom'
 import { usePrecos } from '@/hooks/use-precos'
 import { criarCheckout, ErroCobranca } from '@/lib/queries/cobranca'
 import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
@@ -144,6 +145,11 @@ export default function Assinatura() {
             {erroCheckout}
           </p>
         )}
+
+        {/* Cupom de acesso — libera a conta sem passar pelo pagamento online. */}
+        <div className="mx-auto" style={{ maxWidth: '480px' }}>
+          <CaixaCupom marginBottom="26px" />
+        </div>
 
         {/* Código de indicação (afiliado) — opcional, validado no servidor. */}
         <div className="mx-auto flex items-center" style={{ maxWidth: '420px', gap: '10px', marginBottom: '22px' }}>
