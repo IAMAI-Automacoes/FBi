@@ -40,6 +40,9 @@ export default function WhatsApp() {
   const conectadoNoBanco = u?.whatsapp_conectado === true
   // null = ainda conferindo.
   const [conectado, setConectado] = useState<boolean | null>(null)
+  // Número conectado agora. Trocou (conectou outro pelo QR) → a tela de
+  // conversas monta de novo e só lista as do número novo.
+  const [numero, setNumero] = useState<string | null>(u?.numero_whatsapp ?? null)
 
   useEffect(() => {
     if (!restauranteId) return
@@ -48,7 +51,10 @@ export default function WhatsApp() {
       try {
         const { data, error } = await supabase.functions.invoke('whatsapp-instancia', { body: { action: 'status' } })
         if (error || (data as { error?: string } | null)?.error) throw new Error('sem resposta')
-        if (vivo) setConectado((data as { connected?: boolean }).connected === true)
+        if (!vivo) return
+        const d = data as { connected?: boolean; numero?: string | null }
+        setConectado(d.connected === true)
+        setNumero(d.connected === true ? d.numero ?? null : null)
       } catch {
         // Sem resposta (rede, demonstração): vale o último estado gravado no banco.
         if (vivo) setConectado((atual) => atual ?? conectadoNoBanco)
@@ -86,5 +92,5 @@ export default function WhatsApp() {
 
   if (!conectado) return <WhatsappDesconectado modo="dono" className={CLASSE_TELA} />
 
-  return <TelaWhatsapp modo="dono" restaurante={restaurante} className={CLASSE_TELA} />
+  return <TelaWhatsapp key={numero ?? ''} modo="dono" restaurante={restaurante} className={CLASSE_TELA} />
 }
