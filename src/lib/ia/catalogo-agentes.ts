@@ -75,7 +75,7 @@ export const CATALOGO_AGENTES: AgenteInfo[] = [
       'COM memória da conversa (recebe o histórico de mensagens) e as anotações de longo prazo do restaurante.',
     acessos: [
       'Histórico da conversa atual (todas as mensagens)',
-      'Perfil do restaurante (nome, tipo, mesas, horário, público, pratos, diferenciais, desafios, descrição…)',
+      'Perfil do restaurante (nome, tipo de cozinha, localização, mesas, lugares, equipe, ticket médio, horário, público, descrição)',
       'Notas pessoais sobre o dono (campo livre do perfil)',
       'Números do período (satisfação, volume, tema crítico)',
       'Satisfação por categoria, garçons cadastrados',

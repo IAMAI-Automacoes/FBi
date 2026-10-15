@@ -168,8 +168,8 @@ export const MODO_ANALISTA = `COMO PENSAR (você é um analista que conhece este
 Quando o dono trouxer um problema, uma reclamação ou perguntar "por quê?", não responda com a dica
 que serviria para qualquer restaurante. Pense como um consultor experiente que passou a semana lá:
 1. Levante as causas possíveis e cruze cada uma com o que você sabe DESTE restaurante: o perfil
-   (tamanho, número de mesas, quantas pessoas trabalham, horário e pico, tipo de cozinha, cardápio,
-   serviços, público, faixa de preço, desafios), os números do período, os feedbacks, os insights,
+   (localização, número de mesas e de lugares, quantas pessoas trabalham, horário, tipo de cozinha,
+   público, ticket médio, o que o dono contou), os números do período, os feedbacks, os insights,
    as ações em aberto e as suas anotações.
 2. Diga qual causa é mais provável AQUI e em que dado você se apoia. Se houver duas, diga as duas
    e como o dono descobre qual é.
@@ -354,7 +354,6 @@ não estiver nos resultados, diga que não encontrou.`,
   const r = on('perfil') ? ctx.restaurante : null
   if (r) {
     const p = r.perfil || {}
-    const servicos = Array.isArray(p.servicos) && p.servicos.length ? p.servicos.join(', ') : ''
     prompt += bloco(
       daVersaoRh ? 'Perfil da empresa' : 'Perfil do restaurante',
       [
@@ -365,7 +364,6 @@ não estiver nos resultados, diga que não encontrou.`,
         daVersaoRh && p.turnos ? `Turnos de trabalho: ${p.turnos}` : '',
         daVersaoRh && p.unidades ? `Unidades: ${p.unidades}` : '',
         r.tipo_culinaria ? `Tipo de cozinha: ${r.tipo_culinaria}` : '',
-        p.estilo ? `Estilo: ${p.estilo}` : '',
         p.localizacao ? `Localização: ${p.localizacao}` : '',
         r.numero_mesas ? `Mesas: ${r.numero_mesas}` : '',
         p.capacidade_lugares ? `Capacidade: ${p.capacidade_lugares} lugares` : '',
@@ -373,13 +371,6 @@ não estiver nos resultados, diga que não encontrou.`,
         p.faixa_preco ? `Ticket médio / faixa de preço: ${p.faixa_preco}` : '',
         p.horario_funcionamento ? `Horário de funcionamento: ${p.horario_funcionamento}` : '',
         p.publico_alvo ? `Público: ${p.publico_alvo}` : '',
-        p.pratos_destaque
-          ? `Pratos e bebidas que mais saem / carro-chefe / destaques (é tudo o mesmo campo): ${p.pratos_destaque}`
-          : '',
-        servicos ? `Serviços oferecidos: ${servicos}` : '',
-        p.diferenciais ? `Diferenciais: ${p.diferenciais}` : '',
-        p.desafios ? `Desafios atuais relatados pelo dono: ${p.desafios}` : '',
-        p.ano_abertura ? `Aberto desde: ${p.ano_abertura}` : '',
         r.detalhes
           ? `\nTexto escrito PELO DONO sobre o restaurante (o "eu" abaixo é ele, não você — nunca repita isto literalmente, use como informação):\n"""\n${r.detalhes}\n"""`
           : '',
