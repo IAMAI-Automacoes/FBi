@@ -798,8 +798,223 @@ export type Database = {
         }
         Relationships: []
       }
+      cobranca_assinaturas: {
+        Row: {
+          afiliado_id: string | null
+          area: string
+          asaas_customer_id: string
+          asaas_id: string | null
+          atualizada_em: string
+          cancelada_em: string | null
+          ciclo: string
+          conta_id: string
+          criada_em: string
+          cupom_uso_id: string | null
+          id: string
+          modalidade: string
+          parcelas: number | null
+          periodo_fim: string | null
+          primeira_cobranca_centavos: number | null
+          restaurante_id: number | null
+          status: string
+          termos_versao: string | null
+          valor_centavos: number
+        }
+        Insert: {
+          afiliado_id?: string | null
+          area?: string
+          asaas_customer_id: string
+          asaas_id?: string | null
+          atualizada_em?: string
+          cancelada_em?: string | null
+          ciclo: string
+          conta_id: string
+          criada_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          modalidade: string
+          parcelas?: number | null
+          periodo_fim?: string | null
+          primeira_cobranca_centavos?: number | null
+          restaurante_id?: number | null
+          status?: string
+          termos_versao?: string | null
+          valor_centavos: number
+        }
+        Update: {
+          afiliado_id?: string | null
+          area?: string
+          asaas_customer_id?: string
+          asaas_id?: string | null
+          atualizada_em?: string
+          cancelada_em?: string | null
+          ciclo?: string
+          conta_id?: string
+          criada_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          modalidade?: string
+          parcelas?: number | null
+          periodo_fim?: string | null
+          primeira_cobranca_centavos?: number | null
+          restaurante_id?: number | null
+          status?: string
+          termos_versao?: string | null
+          valor_centavos?: number
+        }
+        Relationships: []
+      }
+      cobranca_clientes: {
+        Row: {
+          asaas_customer_id: string
+          conta_id: string
+          cpf_cnpj: string
+          criado_em: string
+          id: string
+          restaurante_id: number
+        }
+        Insert: {
+          asaas_customer_id: string
+          conta_id: string
+          cpf_cnpj: string
+          criado_em?: string
+          id?: string
+          restaurante_id: number
+        }
+        Update: {
+          asaas_customer_id?: string
+          conta_id?: string
+          cpf_cnpj?: string
+          criado_em?: string
+          id?: string
+          restaurante_id?: number
+        }
+        Relationships: []
+      }
+      cobranca_eventos_webhook: {
+        Row: {
+          conta_id: string
+          erro: string | null
+          event_id: string
+          payload: Json | null
+          processado_em: string | null
+          recebido_em: string
+          status: string
+          tipo: string
+        }
+        Insert: {
+          conta_id: string
+          erro?: string | null
+          event_id: string
+          payload?: Json | null
+          processado_em?: string | null
+          recebido_em?: string
+          status?: string
+          tipo: string
+        }
+        Update: {
+          conta_id?: string
+          erro?: string | null
+          event_id?: string
+          payload?: Json | null
+          processado_em?: string | null
+          recebido_em?: string
+          status?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
+      cobranca_pagamentos: {
+        Row: {
+          asaas_payment_id: string
+          assinatura_id: string | null
+          atualizado_em: string
+          conta_id: string
+          credito_em: string | null
+          criado_em: string
+          cupom_uso_id: string | null
+          id: string
+          invoice_url: string | null
+          liquido_centavos: number | null
+          numero_parcela: number | null
+          pago_em: string | null
+          premio_id: string | null
+          restaurante_id: number | null
+          status: string
+          valor_centavos: number
+          vencimento: string | null
+        }
+        Insert: {
+          asaas_payment_id: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id: string
+          credito_em?: string | null
+          criado_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          liquido_centavos?: number | null
+          numero_parcela?: number | null
+          pago_em?: string | null
+          premio_id?: string | null
+          restaurante_id?: number | null
+          status: string
+          valor_centavos: number
+          vencimento?: string | null
+        }
+        Update: {
+          asaas_payment_id?: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id?: string
+          credito_em?: string | null
+          criado_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          liquido_centavos?: number | null
+          numero_parcela?: number | null
+          pago_em?: string | null
+          premio_id?: string | null
+          restaurante_id?: number | null
+          status?: string
+          valor_centavos?: number
+          vencimento?: string | null
+        }
+        Relationships: []
+      }
+      contas_cobranca: {
+        Row: {
+          ambiente: string
+          ativa: boolean
+          criado_em: string
+          id: string
+          nome: string
+          recebe_novas_vendas: boolean
+        }
+        Insert: {
+          ambiente?: string
+          ativa?: boolean
+          criado_em?: string
+          id: string
+          nome: string
+          recebe_novas_vendas?: boolean
+        }
+        Update: {
+          ambiente?: string
+          ativa?: boolean
+          criado_em?: string
+          id?: string
+          nome?: string
+          recebe_novas_vendas?: boolean
+        }
+        Relationships: []
+      }
       cupons_usos: {
         Row: {
+          aplicado_em: string | null
+          aplicado_pagamento: string | null
           area: string
           cupom: string
           cupom_id: number | null
@@ -813,6 +1028,8 @@ export type Database = {
           valor_desconto: number | null
         }
         Insert: {
+          aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           area?: string
           cupom: string
           cupom_id?: number | null
@@ -826,6 +1043,8 @@ export type Database = {
           valor_desconto?: number | null
         }
         Update: {
+          aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           area?: string
           cupom?: string
           cupom_id?: number | null
@@ -2710,6 +2929,7 @@ export type Database = {
           atualizado_em: string
           atualizado_por: string | null
           ciclo: string
+          parcelas_max: number | null
           total_centavos: number
         }
         Insert: {
@@ -2718,6 +2938,7 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           ciclo: string
+          parcelas_max?: number | null
           total_centavos: number
         }
         Update: {
@@ -2726,6 +2947,7 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           ciclo?: string
+          parcelas_max?: number | null
           total_centavos?: number
         }
         Relationships: []
@@ -3121,6 +3343,7 @@ export type Database = {
           area: string | null
           assinatura_cancelada_em: string | null
           assinatura_expira_em: string | null
+          assinatura_origem: string | null
           assinatura_status: string
           auth_user_id: string
           cliente_bg_imagem: string | null
@@ -3180,6 +3403,7 @@ export type Database = {
           area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
+          assinatura_origem?: string | null
           assinatura_status?: string
           auth_user_id: string
           cliente_bg_imagem?: string | null
@@ -3239,6 +3463,7 @@ export type Database = {
           area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
+          assinatura_origem?: string | null
           assinatura_status?: string
           auth_user_id?: string
           cliente_bg_imagem?: string | null
