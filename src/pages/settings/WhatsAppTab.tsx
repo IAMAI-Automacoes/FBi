@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { CampoTelefone } from '@/components/CampoTelefone'
 import { useArea } from '@/lib/area'
+import { useAuth } from '@/hooks/use-auth'
 
 interface EstadoWhats {
   hasInstance: boolean
@@ -49,6 +50,7 @@ export function WhatsAppTab({
 }) {
   const { toast } = useToast()
   const { ehRh } = useArea()
+  const { usuario, refetchUsuario } = useAuth()
   const [loading, setLoading] = useState(true)
   const [estado, setEstado] = useState<EstadoWhats | null>(null)
   const [conectando, setConectando] = useState(false)
@@ -92,6 +94,18 @@ export function WhatsAppTab({
   useEffect(() => {
     onConnectedChange?.(estado?.connected === true)
   }, [estado?.connected, onConnectedChange])
+
+  // O resto do app (início, tela WhatsApp) lê o número do `usuario` do useAuth,
+  // carregado no login. Conectou ou desconectou aqui → rebusca, senão as outras
+  // telas seguem com o número antigo até o F5.
+  useEffect(() => {
+    if (!estado) return
+    const numeroAqui = estado.connected ? estado.numero : null
+    const conectadoAqui = estado.connected === true
+    if ((numeroAqui ?? null) !== (usuario?.numero_whatsapp ?? null) || conectadoAqui !== (usuario?.whatsapp_conectado === true)) {
+      refetchUsuario()
+    }
+  }, [estado, usuario?.numero_whatsapp, usuario?.whatsapp_conectado, refetchUsuario])
 
   const iniciarConexao = async () => {
     setRecusa(null)

@@ -31,6 +31,8 @@ export interface UsuarioDados {
       = WhatsApp conectado; whatsapp_token = instância criada na uazapi. */
   numero_whatsapp?: string | null
   whatsapp_token?: string | null
+  /** Conferido com a uazapi (whatsapp-instancia e a rotina de 5 em 5 min). */
+  whatsapp_conectado?: boolean | null
   /** Assinatura: data até quando o acesso é válido (null = sem expiração) e
       quando o usuário pediu o cancelamento (null = não pediu). */
   assinatura_expira_em?: string | null
@@ -397,6 +399,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUsuario(mesclarUsuario(data, pessoa, atual))
     }
   }, [])
+
+  // `restaurantes` não está no Realtime: o que mudou em outro aparelho (ou pelo
+  // admin dentro da conta, ex.: WhatsApp conectado) só chegava na renovação do
+  // token, de hora em hora. Ao voltar para a aba, rebusca — no máximo uma vez
+  // a cada 30 s.
+  useEffect(() => {
+    if (!user?.id) return
+    let ultima = Date.now()
+    const aoVoltar = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - ultima < 30_000) return
+      ultima = Date.now()
+      refetchUsuario().catch(() => { /* fica o que já estava */ })
+    }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [user?.id, refetchUsuario])
 
   return (
     <AuthContext.Provider
