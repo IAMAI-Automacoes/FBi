@@ -212,7 +212,10 @@ export function RotaProtegida() {
   // sessão é do admin é o banco (`acesso_admin_atual`), não o navegador.
   if (acessoAdmin) return foraDaVersao ? <Navigate to={inicioDa(usuario.area)} replace /> : <Outlet />
 
-  if (semPlanoAtivo && !naRotaDePagamento && !adminPulouPagamento) {
+  // A escolha da versão vem ANTES do pagamento (bloco acima): sem esta exceção,
+  // conta nova sem plano e sem versão ficava num laço /assinatura ↔
+  // /escolher-versao (a tela de escolha nunca chegava a aparecer).
+  if (semPlanoAtivo && !naRotaDePagamento && !naEscolhaDaVersao && !adminPulouPagamento) {
     return <Navigate to="/assinatura" replace />
   }
 
@@ -223,6 +226,7 @@ export function RotaProtegida() {
   if (
     usuario.onboarding_completo === false &&
     !naRotaDePagamento &&
+    !naEscolhaDaVersao && // mesmo laço do pagamento, agora com /onboarding
     location.pathname !== '/onboarding'
   ) {
     return <Navigate to="/onboarding" replace />
