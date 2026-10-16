@@ -30,6 +30,14 @@ Deno.serve(async (req: Request) => {
       const { data } = await db.from('platform_admins').select('email')
       return (data ?? []).map((l: { email: string }) => l.email)
     },
+    ehParceiro: async (email) => {
+      const { data } = await db.from('admins_parceiros').select('email').eq('email', email).maybeSingle()
+      return !!data
+    },
+    parceiroPodeVer: async (email, id) => {
+      const { data, error } = await db.rpc('parceiro_pode_ver', { p_email: email, p_restaurante_id: id })
+      return !error && data === true
+    },
     restaurante: async (id) => {
       const { data } = await db.from('restaurantes').select('auth_user_id, nome_restaurante, excluida_em').eq('id', id).maybeSingle()
       return data ?? null

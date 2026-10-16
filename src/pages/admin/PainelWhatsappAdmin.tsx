@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { buscarRestaurantesWhatsapp, type RestauranteWhatsappAdmin } from '@/lib/queries/admin'
 import { daVersao } from '@/lib/admin-versoes'
 import { useArea } from '@/lib/area'
+import { usePainelAdmin } from '@/hooks/use-platform-admin'
 import { formatarTelefone, normalizarBusca } from '@/lib/whatsapp/formatacao'
 import { TelaWhatsapp } from '@/components/whatsapp/TelaWhatsapp'
 import { WhatsappDesconectado } from '@/components/whatsapp/WhatsappDesconectado'
@@ -109,6 +110,8 @@ function EscolherRestaurante({ lista, escolhido, aoEscolher, aberto, aoMudarAber
 
 export function PainelWhatsappAdmin() {
   const { area, ehRh, Negocio } = useArea()
+  // O admin parceiro recebe a lista sem a chave do WhatsApp (parceiro_contas).
+  const { parceiro } = usePainelAdmin()
   const [params, setParams] = useSearchParams()
   const idUrl = Number(params.get('restaurante')) || null
   const [lista, setLista] = useState<RestauranteWhatsappAdmin[] | null>(null)
@@ -117,11 +120,11 @@ export function PainelWhatsappAdmin() {
 
   useEffect(() => {
     let ativo = true
-    buscarRestaurantesWhatsapp()
+    buscarRestaurantesWhatsapp({ parceiro })
       .then((l) => { if (ativo) setLista(daVersao(l, area, (r) => r.area)) })
       .catch(() => { if (ativo) setErro(true) })
     return () => { ativo = false }
-  }, [area])
+  }, [area, parceiro])
 
   // Voltou para a aba sem ?restaurante=: abre o último escolhido neste aparelho.
   useEffect(() => {

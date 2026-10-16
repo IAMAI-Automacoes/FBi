@@ -162,7 +162,8 @@ Deno.serve(async (req: Request) => {
 
     // Painel do admin, aba WhatsApp: o admin da plataforma vê o WhatsApp de
     // qualquer restaurante. Só a ação "fotos" (leitura) aceita outro
-    // restaurante (restaurante_id), e só para quem está em platform_admins.
+    // restaurante (restaurante_id), e só para quem está em platform_admins —
+    // ou para o admin parceiro, nas contas ao alcance dele (parceiro_pode_ver).
     // Todas as outras ações seguem presas ao restaurante da própria conta.
     const outroRestaurante = body.restaurante_id != null ? Number(body.restaurante_id) : null
     if (outroRestaurante != null) {
@@ -172,7 +173,10 @@ Deno.serve(async (req: Request) => {
         .select('email')
         .eq('email', userData.user.email ?? '')
         .maybeSingle()
-      if (!adm) return json({ error: 'Só o admin da plataforma' }, 403)
+      if (!adm) {
+        const { data: alcance } = await admin.rpc('parceiro_pode_ver', { p_email: userData.user.email ?? '', p_restaurante_id: outroRestaurante })
+        if (alcance !== true) return json({ error: 'Só o admin da plataforma' }, 403)
+      }
     }
 
     const { data: rest, error: restErr } = outroRestaurante != null

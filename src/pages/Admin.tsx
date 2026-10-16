@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { usePlatformAdmin } from '@/hooks/use-platform-admin'
+import { usePainelAdmin } from '@/hooks/use-platform-admin'
 import { useAuth } from '@/hooks/use-auth'
 import { useArea } from '@/lib/area'
 import { DEFINICOES } from '@/lib/areas'
@@ -1145,7 +1145,9 @@ const EMPTY_AFILIADO = {
 export default function Admin() {
   const { confirmar, dialogo } = useConfirmacao()
   const navigate = useNavigate()
-  const { isAdmin, loading: loadingAdmin } = usePlatformAdmin()
+  // Admin da plataforma (tudo) ou admin parceiro (só Suporte, WhatsApp e
+  // Contas; o banco garante o resto nas regras `parceiro_*`).
+  const { podeAbrir: isAdmin, parceiro, loading: loadingAdmin } = usePainelAdmin()
   const location = useLocation()
   // App "Mensagens" instalado (start_url /admin?app=mensagens rodando em standalone):
   // abre direto na lista, sem a barra do Painel Admin — estilo WhatsApp.
@@ -1171,13 +1173,16 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const q = new URLSearchParams(location.search)
     if (q.has('restaurante')) return 'whatsapp'
-    return abaDaVersao(q.get('aba'), area)
+    return abaDaVersao(q.get('aba'), area, 'suporte', parceiro)
   })
+  // A aba que vale nesta tela: a do parceiro só entre as dele (a escolhida pelo
+  // endereço pode ser de admin antes de a conta carregar).
+  const abaAtual: Tab = abasDaVersao(area, parceiro).includes(activeTab) ? activeTab : 'suporte'
   // A versão chega com a conta, às vezes depois do primeiro desenho: aba que
   // não existe nela volta para o Suporte.
   useEffect(() => {
-    if (!abasDaVersao(area).includes(activeTab)) setActiveTab('suporte')
-  }, [area, activeTab])
+    if (!abasDaVersao(area, parceiro).includes(activeTab)) setActiveTab('suporte')
+  }, [area, activeTab, parceiro])
   const trocarAba = (tab: Tab) => {
     // Saindo da aba WhatsApp: os parâmetros dela (?restaurante=, ?chat=…) saem da URL.
     // O ?aba= também sai: recarregar fica na aba em que você está.
@@ -1250,16 +1255,16 @@ export default function Admin() {
   // Suporte: carrega uma vez
   useEffect(() => {
     if (!isAdmin) return
-    buscarTodasSugestoes()
+    buscarTodasSugestoes({ parceiro })
       .then((data) => { setSugestoes(data) })
       .catch(console.error)
       .finally(() => setLoadingSugestoes(false))
-  }, [isAdmin])
+  }, [isAdmin, parceiro])
 
   // Global Realtime: re-carrega ao chegar mensagem nova ou edição (unreadCount deriva de admin_leu_em)
   useEffect(() => {
     if (!isAdmin) return
-    const refetch = () => buscarTodasSugestoes().then(setSugestoes).catch(console.error)
+    const refetch = () => buscarTodasSugestoes({ parceiro }).then(setSugestoes).catch(console.error)
     const ch = supabase
       .channel('admin-global-leitura')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sugestoes_plataforma' }, refetch)
@@ -1268,7 +1273,7 @@ export default function Admin() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reacoes_sugestoes' }, refetch)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [isAdmin])
+  }, [isAdmin, parceiro])
 
   // Signed URLs
   useEffect(() => {
@@ -1284,13 +1289,14 @@ export default function Admin() {
   const loadContas = useCallback(async () => {
     setLoadingContas(true)
     try {
-      const [listaContas, listaVendedores] = await Promise.all([buscarContas(), buscarVendedores()])
+      // O parceiro não vê a marca de vendedor (a lista é só do admin).
+      const [listaContas, listaVendedores] = await Promise.all([buscarContas({ parceiro }), parceiro ? [] : buscarVendedores()])
       setContas(listaContas)
       setVendedores(listaVendedores)
     } finally {
       setLoadingContas(false)
     }
-  }, [])
+  }, [parceiro])
 
   // Vendedores: carrega ao entrar na aba. A marca é por email — vale antes de a
   // pessoa criar a conta.
@@ -1298,7 +1304,7 @@ export default function Admin() {
     setLoadingVendedores(true)
     try { setVendedores(await buscarVendedores()) } finally { setLoadingVendedores(false) }
   }, [])
-  useEffect(() => { if (isAdmin && activeTab === 'vendedores') loadVendedores() }, [isAdmin, activeTab, loadVendedores])
+  useEffect(() => { if (isAdmin && abaAtual === 'vendedores') loadVendedores() }, [isAdmin, abaAtual, loadVendedores])
 
   const alternarVendedor = useCallback(async (email: string, virar: boolean) => {
     if (!virar) {
@@ -1321,7 +1327,7 @@ export default function Admin() {
       setSalvandoVendedor(null)
     }
   }, [confirmar, loadVendedores])
-  useEffect(() => { if (isAdmin && activeTab === 'contas') loadContas() }, [isAdmin, activeTab, loadContas])
+  useEffect(() => { if (isAdmin && abaAtual === 'contas') loadContas() }, [isAdmin, abaAtual, loadContas])
 
 
   // Um clique: abre a conta do cliente com acesso total (a página recarrega já
@@ -1377,8 +1383,8 @@ export default function Admin() {
     } finally { setLoadingAfil(false) }
   }, [area])
   useEffect(() => {
-    if (isAdmin && activeTab === 'afiliados') loadAfiliados()
-  }, [isAdmin, activeTab, loadAfiliados])
+    if (isAdmin && abaAtual === 'afiliados') loadAfiliados()
+  }, [isAdmin, abaAtual, loadAfiliados])
 
   // ── Suporte handlers ──
   const [badgeVersion, setBadgeVersion] = useState(0)
@@ -1417,7 +1423,7 @@ export default function Admin() {
       refreshBadges()
       setReplyTexts((p) => ({ ...p, [sugestaoId]: '' }))
       setReplyFilesMap((p) => ({ ...p, [sugestaoId]: [] }))
-      setSugestoes(await buscarTodasSugestoes())
+      setSugestoes(await buscarTodasSugestoes({ parceiro }))
     } catch (err) { console.error(err) }
     finally { setSendingId(null) }
   }
@@ -1436,19 +1442,19 @@ export default function Admin() {
     try {
       await reagirAdmin(sugestaoId, mensagemId, emoji)
     } catch {
-      buscarTodasSugestoes().then(setSugestoes).catch(console.error)
+      buscarTodasSugestoes({ parceiro }).then(setSugestoes).catch(console.error)
     }
   }
 
   // Presença: fica "online" para clientes somente quando admin está na aba suporte
   useEffect(() => {
-    if (!isAdmin || activeTab !== 'suporte') return
+    if (!isAdmin || abaAtual !== 'suporte') return
     const ch = supabase.channel('fib-admin-presence')
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') await ch.track({ online: true })
     })
     return () => { ch.untrack().finally(() => supabase.removeChannel(ch)) }
-  }, [isAdmin, activeTab])
+  }, [isAdmin, abaAtual])
 
   // Total não lidas → localStorage + evento para badge no TopHeader
   useEffect(() => {
@@ -1516,15 +1522,15 @@ export default function Admin() {
     >
       {dialogo}
       {/* Menu lateral — escondido no app "Mensagens" instalado (fica só a lista, tipo WhatsApp) */}
-      {!ehAppMensagens && <MenuAdmin aba={activeTab} onTrocar={trocarAba} />}
+      {!ehAppMensagens && <MenuAdmin aba={abaAtual} onTrocar={trocarAba} parceiro={parceiro} />}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {!ehAppMensagens && <TopoAdminCelular aba={activeTab} />}
+      {!ehAppMensagens && <TopoAdminCelular aba={abaAtual} />}
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-hidden flex">
 
         {/* ── SUPORTE ── */}
-        {activeTab === 'suporte' && (
+        {abaAtual === 'suporte' && (
           <>
             <div
               className={cn(
@@ -1585,7 +1591,7 @@ export default function Admin() {
                   onReplyFilesChange={(files) => setReplyFilesMap((p) => ({ ...p, [selectedId!]: files }))}
                   onRemoveFile={(idx) => setReplyFilesMap((p) => ({ ...p, [selectedId!]: (p[selectedId!] ?? []).filter((_, i) => i !== idx) }))}
                   onSend={(respondeA) => handleSend(selectedId!, respondeA)}
-                  onRefresh={() => buscarTodasSugestoes().then(setSugestoes).catch(console.error)}
+                  onRefresh={() => buscarTodasSugestoes({ parceiro }).then(setSugestoes).catch(console.error)}
                   onRead={() => {
                     const nowIso = new Date().toISOString()
                     setSugestoes((prev) => prev.map((x) => (x.id === selectedId ? { ...x, admin_leu_em: nowIso } : x)))
@@ -1604,7 +1610,7 @@ export default function Admin() {
         )}
 
         {/* ── CONTAS ── */}
-        {activeTab === 'contas' && (() => {
+        {abaAtual === 'contas' && (() => {
           const busca = buscaConta.trim().toLowerCase()
           // Só as contas da versão na tela; o cartão das versões (convite do RH e
           // troca de versão de uma conta) continua vendo todas.
@@ -1633,8 +1639,9 @@ export default function Admin() {
                 Contas <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span>
               </h2>
 
-              {/* As versões do EasyFeed: convite do RH e troca de versão de uma conta. */}
-              <PainelVersoes contas={contas} aoMudar={loadContas} />
+              {/* As versões do EasyFeed: convite do RH e troca de versão de uma conta.
+                  O parceiro só vê e entra nas contas. */}
+              {!parceiro && <PainelVersoes contas={contas} aoMudar={loadContas} />}
 
               {/* Busca */}
               <div className="relative mb-3">
@@ -1649,7 +1656,7 @@ export default function Admin() {
 
               {/* Filtros por situação, com contagem */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {FILTROS_CONTA.map((f) => {
+                {FILTROS_CONTA.filter((f) => !parceiro || f.key !== 'excluidas').map((f) => {
                   const n = contasBusca.filter((c) => casaFiltro(c, f.key)).length
                   const on = filtroConta === f.key
                   return (
@@ -1749,7 +1756,7 @@ export default function Admin() {
                           <Td>
                             <div className="flex items-center gap-1.5">
                               <div className="w-[112px]">
-                                {excluida ? (
+                                {excluida ? (!parceiro && (
                                   <button
                                     onClick={() => alternarExclusao(c)}
                                     disabled={salvando}
@@ -1761,7 +1768,7 @@ export default function Admin() {
                                       : <RotateCcw className="h-3.5 w-3.5" />}
                                     Restaurar
                                   </button>
-                                ) : (!c.email || c.email.toLowerCase() !== (euAdmin?.email ?? '').toLowerCase()) && (
+                                )) : (!c.email || c.email.toLowerCase() !== (euAdmin?.email ?? '').toLowerCase()) && (
                                   <button
                                     onClick={() => entrarNaContaDoCliente(c)}
                                     disabled={entrandoContaId !== null}
@@ -1776,7 +1783,7 @@ export default function Admin() {
                                 )}
                               </div>
                               <div className="w-8">
-                                {!excluida && (
+                                {!excluida && !parceiro && (
                                   <button
                                     onClick={() => alternarExclusao(c)}
                                     disabled={salvando}
@@ -1802,7 +1809,7 @@ export default function Admin() {
         })()}
 
         {/* ── VENDEDORES ── */}
-        {activeTab === 'vendedores' && (
+        {abaAtual === 'vendedores' && (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
               <div className="mb-4">
@@ -1890,13 +1897,13 @@ export default function Admin() {
         )}
 
         {/* ── PAGAMENTOS (divisão da receita do software na tela) ── */}
-        {activeTab === 'pagamentos' && <PainelPagamentos />}
+        {abaAtual === 'pagamentos' && <PainelPagamentos />}
 
         {/* ── CUPONS (do software na tela) ── */}
-        {activeTab === 'cupons' && <PainelCupons />}
+        {abaAtual === 'cupons' && <PainelCupons />}
 
         {/* ── AFILIADOS ── */}
-        {activeTab === 'afiliados' && (
+        {abaAtual === 'afiliados' && (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             {afilDetailId ? (
               <AfiliadoDetalhe
@@ -1989,23 +1996,23 @@ export default function Admin() {
 
         {/* ── AGENTES DE IA ── */}
         {/* ── WHATSAPP (o que o dono vê, só leitura) ── */}
-        {activeTab === 'whatsapp' && <PainelWhatsappAdmin />}
+        {abaAtual === 'whatsapp' && <PainelWhatsappAdmin />}
 
-        {activeTab === 'influenciadores' && <PainelInfluenciadores />}
-        {activeTab === 'videos' && <PainelVideosAdmin />}
-        {activeTab === 'agentes' && <PainelAgentes />}
+        {abaAtual === 'influenciadores' && <PainelInfluenciadores />}
+        {abaAtual === 'videos' && <PainelVideosAdmin />}
+        {abaAtual === 'agentes' && <PainelAgentes />}
 
         {/* ── MOTOR DE RESPOSTA ── */}
-        {activeTab === 'motor' && <PainelMotorResposta />}
+        {abaAtual === 'motor' && <PainelMotorResposta />}
 
         {/* ── RESULTADOS (evolução dos restaurantes, para o marketing) ── */}
-        {activeTab === 'resultados' && <PainelResultados />}
+        {abaAtual === 'resultados' && <PainelResultados />}
 
         {/* ── CONHECIMENTO GLOBAL ── */}
-        {activeTab === 'conhecimento' && <ConhecimentoGlobal />}
+        {abaAtual === 'conhecimento' && <ConhecimentoGlobal />}
 
         {/* ── USO E CUSTO DE IA ── */}
-        {activeTab === 'uso_ia' && (
+        {abaAtual === 'uso_ia' && (
           <div className="flex-1 overflow-y-auto sem-barra p-6">
             <PainelUsoIA />
           </div>

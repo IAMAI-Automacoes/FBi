@@ -43,10 +43,11 @@ const navigation = [
   { name: 'Insights', href: '/insights', icon: Lightbulb, modulo: 'insights' },
   { name: 'Ações', href: '/acoes', icon: Zap, modulo: 'acoes' },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart, modulo: 'relatorios' },
-  // Avaliações do Google: só o admin da plataforma vê enquanto o Google não
-  // libera a API para o EasyFeed. Para liberar aos clientes: apague `soAdmin`,
-  // o SoAdminPlataforma da rota (App.tsx) e o SO_ADMIN da função google-perfil.
-  { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true },
+  // Avaliações do Google: só o admin da plataforma (e o admin parceiro) vê
+  // enquanto o app não é verificado pelo Google. Para liberar aos clientes:
+  // apague `soAdmin`, o SoAdminPlataforma da rota (App.tsx) e o SO_ADMIN da
+  // função google-perfil.
+  { name: 'Google', href: '/google', icon: Star, modulo: 'relatorios', soAdmin: true, tambemParceiro: true },
   { name: 'QR Code', href: '/qrcode', icon: QrCode, modulo: 'qrcodes' },
   { name: 'Garçons', href: '/garcons', icon: Users, modulo: 'qrcodes' },
   // Descontos (vídeos e indicações): só o admin da plataforma por enquanto.
@@ -63,7 +64,11 @@ const navigation = [
 /* O menu da versão RH: as páginas /equipe direto no menu lateral (a lista e a
    ordem vêm de lib/areas.ts; aqui entram o ícone e o módulo da permissão). */
 type IconeDoMenu = ComponentType<{ className?: string }>
-interface ItemDaBarra { name: string; href: string; icon: IconeDoMenu; modulo: string; soAdmin?: boolean }
+interface ItemDaBarra {
+  name: string; href: string; icon: IconeDoMenu; modulo: string; soAdmin?: boolean
+  /** Item `soAdmin` que o admin parceiro também vê. */
+  tambemParceiro?: boolean
+}
 
 const ICONE_DO_RH: Record<string, { icon: IconeDoMenu; modulo: string }> = {
   '/equipe': { icon: LayoutDashboard, modulo: 'visao_geral' },
@@ -81,7 +86,7 @@ export function AppSidebar() {
   const location = useLocation()
   const { nomeRestaurante, logoUrl } = useRestauranteConfig()
   const { podeVer } = usePermissoes()
-  const { usuario, ehAdminPlataforma } = useAuth()
+  const { usuario, ehAdminPlataforma, ehAdminParceiro } = useAuth()
   // A versão da conta decide o menu: restaurante (o de sempre) ou RH.
   const { area, ehRh } = useArea()
   const itens: readonly ItemDaBarra[] = ehRh ? navegacaoDoRh : navigation
@@ -231,7 +236,7 @@ export function AppSidebar() {
         {ehAdminPlataforma && usuario?.restaurante_id && <TrocaDeVersao restauranteId={usuario.restaurante_id} area={area} />}
         <SidebarMenu className="gap-0.5">
           {itens
-            .filter((item) => podeVer(item.modulo) && (!item.soAdmin || ehAdminPlataforma))
+            .filter((item) => podeVer(item.modulo) && (!item.soAdmin || ehAdminPlataforma || (item.tambemParceiro && ehAdminParceiro)))
             .map((item) => {
               // A subpágina (/acoes/arquivadas, /descontos/indicacoes) marca o item de cima.
               // No RH vale o endereço mais específico: senão "/equipe" (Visão

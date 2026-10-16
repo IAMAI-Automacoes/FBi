@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { LogOut, Settings as SettingsIcon, User as UserIcon, ShieldCheck } from 'lucide-react'
-import { usePlatformAdmin } from '@/hooks/use-platform-admin'
+import { usePainelAdmin } from '@/hooks/use-platform-admin'
 import { buscarTotalNaoLidas } from '@/lib/queries/admin'
 import { supabase } from '@/lib/supabase/client'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -73,7 +73,8 @@ export function TopHeader() {
   const { perfilFaltando } = useRestauranteConfig()
   const perfilPendente = !ehRh && perfilFaltando > 0
   const avisoPerfil = `Faltam ${perfilFaltando} ${perfilFaltando === 1 ? 'informação' : 'informações'} sobre o restaurante`
-  const { isAdmin } = usePlatformAdmin()
+  // O botão do Painel Admin: o admin da plataforma e o admin parceiro.
+  const { podeAbrir: isAdmin } = usePainelAdmin()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [adminUnread, setAdminUnread] = useState(0)
 

@@ -71,8 +71,13 @@ Deno.serve(async (req: Request) => {
   const auth = await autenticarRestaurante(req, db)
   if (auth.ok === false) return json({ error: auth.erro }, auth.status)
   if (SO_ADMIN) {
-    const { data: admin } = await db.from('platform_admins').select('email').eq('email', auth.restaurante.email).maybeSingle()
-    if (!admin) return json({ error: 'Disponível só para o admin por enquanto' }, 403)
+    // O admin parceiro (Anderson, na conta da hamburgueria dele) também usa.
+    const email = String(auth.restaurante.email ?? '').toLowerCase()
+    const [{ data: admin }, { data: parceiro }] = await Promise.all([
+      db.from('platform_admins').select('email').eq('email', auth.restaurante.email).maybeSingle(),
+      db.from('admins_parceiros').select('email').eq('email', email).maybeSingle(),
+    ])
+    if (!admin && !parceiro) return json({ error: 'Disponível só para o admin por enquanto' }, 403)
   }
   const restauranteId = auth.restaurante.id
   if (!cfg) return json({ ok: false, motivo: 'nao_configurado' })

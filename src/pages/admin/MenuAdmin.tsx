@@ -48,12 +48,13 @@ export const LARGURA_MENU_ADMIN = '12.5rem'
    cliente (AppSidebar): fixo à esquerda no computador e gaveta no celular,
    aberta pelo botão de menu da barra do topo (`TopoAdminCelular`).
    Segue a versão da conta do admin (Restaurante | RH, a troca fica no topo):
-   o que só existe numa versão some da outra (lib/admin-versoes.ts). */
-export function MenuAdmin({ aba, onTrocar }: { aba: AbaAdmin; onTrocar: (aba: AbaAdmin) => void }) {
+   o que só existe numa versão some da outra (lib/admin-versoes.ts).
+   O admin parceiro vê só as abas dele, sem a troca de versão. */
+export function MenuAdmin({ aba, onTrocar, parceiro = false }: { aba: AbaAdmin; onTrocar: (aba: AbaAdmin) => void; parceiro?: boolean }) {
   const { isMobile, setOpenMobile } = useSidebar()
   const { usuario } = useAuth()
   const { area } = useArea()
-  const daVersao = abasDaVersao(area)
+  const daVersao = abasDaVersao(area, parceiro)
   const abas = ABAS_ADMIN.filter((a) => daVersao.includes(a.key))
 
   return (
@@ -70,7 +71,7 @@ export function MenuAdmin({ aba, onTrocar }: { aba: AbaAdmin; onTrocar: (aba: Ab
         </div>
         {/* A versão da conta do admin decide o que o painel mostra; ao trocar,
             volta para a mesma aba (se ela existir na outra versão). */}
-        {usuario?.restaurante_id && (
+        {usuario?.restaurante_id && !parceiro && (
           <TrocaDeVersao
             restauranteId={usuario.restaurante_id}
             area={area}

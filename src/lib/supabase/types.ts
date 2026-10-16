@@ -175,6 +175,24 @@ export type Database = {
           },
         ]
       }
+      admins_parceiros: {
+        Row: {
+          criado_em: string
+          email: string
+          nome: string | null
+        }
+        Insert: {
+          criado_em?: string
+          email: string
+          nome?: string | null
+        }
+        Update: {
+          criado_em?: string
+          email?: string
+          nome?: string | null
+        }
+        Relationships: []
+      }
       afiliado_config: {
         Row: {
           area: string
@@ -409,6 +427,127 @@ export type Database = {
         }
         Relationships: []
       }
+      autorizacoes_marketing: {
+        Row: {
+          atualizado_em: string
+          autorizado_em: string
+          autorizado_por: string
+          canal: string
+          observacao: string | null
+          origem: string
+          pode_depoimento: boolean
+          pode_logo: boolean
+          pode_nome: boolean
+          pode_numeros: boolean
+          registrado_por: string
+          restaurante_id: number
+          revogado_em: string | null
+          status: string
+          versao_texto: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          autorizado_em?: string
+          autorizado_por: string
+          canal: string
+          observacao?: string | null
+          origem?: string
+          pode_depoimento?: boolean
+          pode_logo?: boolean
+          pode_nome?: boolean
+          pode_numeros?: boolean
+          registrado_por?: string
+          restaurante_id: number
+          revogado_em?: string | null
+          status?: string
+          versao_texto?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          autorizado_em?: string
+          autorizado_por?: string
+          canal?: string
+          observacao?: string | null
+          origem?: string
+          pode_depoimento?: boolean
+          pode_logo?: boolean
+          pode_nome?: boolean
+          pode_numeros?: boolean
+          registrado_por?: string
+          restaurante_id?: number
+          revogado_em?: string | null
+          status?: string
+          versao_texto?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autorizacoes_marketing_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: true
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autorizacoes_marketing_historico: {
+        Row: {
+          autorizado_por: string
+          canal: string
+          criado_em: string
+          id: number
+          observacao: string | null
+          origem: string
+          pode_depoimento: boolean
+          pode_logo: boolean
+          pode_nome: boolean
+          pode_numeros: boolean
+          registrado_por: string | null
+          restaurante_id: number
+          status: string
+          versao_texto: string | null
+        }
+        Insert: {
+          autorizado_por: string
+          canal: string
+          criado_em?: string
+          id?: never
+          observacao?: string | null
+          origem: string
+          pode_depoimento: boolean
+          pode_logo: boolean
+          pode_nome: boolean
+          pode_numeros: boolean
+          registrado_por?: string | null
+          restaurante_id: number
+          status: string
+          versao_texto?: string | null
+        }
+        Update: {
+          autorizado_por?: string
+          canal?: string
+          criado_em?: string
+          id?: never
+          observacao?: string | null
+          origem?: string
+          pode_depoimento?: boolean
+          pode_logo?: boolean
+          pode_nome?: boolean
+          pode_numeros?: boolean
+          registrado_por?: string | null
+          restaurante_id?: number
+          status?: string
+          versao_texto?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autorizacoes_marketing_historico_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aviso_pendente: {
         Row: {
           acao_id: number
@@ -607,6 +746,307 @@ export type Database = {
           },
         ]
       }
+      cobranca_assinaturas: {
+        Row: {
+          afiliado_id: string | null
+          area: string
+          asaas_customer_id: string
+          asaas_id: string | null
+          atualizada_em: string
+          cancelada_em: string | null
+          ciclo: string
+          conta_id: string
+          criada_em: string
+          cupom_uso_id: string | null
+          id: string
+          modalidade: string
+          parcelas: number | null
+          periodo_fim: string | null
+          primeira_cobranca_centavos: number | null
+          restaurante_id: number | null
+          status: string
+          termos_versao: string | null
+          valor_centavos: number
+        }
+        Insert: {
+          afiliado_id?: string | null
+          area?: string
+          asaas_customer_id: string
+          asaas_id?: string | null
+          atualizada_em?: string
+          cancelada_em?: string | null
+          ciclo: string
+          conta_id: string
+          criada_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          modalidade: string
+          parcelas?: number | null
+          periodo_fim?: string | null
+          primeira_cobranca_centavos?: number | null
+          restaurante_id?: number | null
+          status?: string
+          termos_versao?: string | null
+          valor_centavos: number
+        }
+        Update: {
+          afiliado_id?: string | null
+          area?: string
+          asaas_customer_id?: string
+          asaas_id?: string | null
+          atualizada_em?: string
+          cancelada_em?: string | null
+          ciclo?: string
+          conta_id?: string
+          criada_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          modalidade?: string
+          parcelas?: number | null
+          periodo_fim?: string | null
+          primeira_cobranca_centavos?: number | null
+          restaurante_id?: number | null
+          status?: string
+          termos_versao?: string | null
+          valor_centavos?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_assinaturas_afiliado_id_fkey"
+            columns: ["afiliado_id"]
+            isOneToOne: false
+            referencedRelation: "afiliados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_assinaturas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas_cobranca"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_assinaturas_cupom_uso_id_fkey"
+            columns: ["cupom_uso_id"]
+            isOneToOne: false
+            referencedRelation: "cupons_usos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_assinaturas_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobranca_clientes: {
+        Row: {
+          asaas_customer_id: string
+          conta_id: string
+          cpf_cnpj: string
+          criado_em: string
+          id: string
+          restaurante_id: number
+        }
+        Insert: {
+          asaas_customer_id: string
+          conta_id: string
+          cpf_cnpj: string
+          criado_em?: string
+          id?: string
+          restaurante_id: number
+        }
+        Update: {
+          asaas_customer_id?: string
+          conta_id?: string
+          cpf_cnpj?: string
+          criado_em?: string
+          id?: string
+          restaurante_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_clientes_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas_cobranca"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_clientes_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobranca_eventos_webhook: {
+        Row: {
+          conta_id: string
+          erro: string | null
+          event_id: string
+          payload: Json | null
+          processado_em: string | null
+          recebido_em: string
+          status: string
+          tipo: string
+        }
+        Insert: {
+          conta_id: string
+          erro?: string | null
+          event_id: string
+          payload?: Json | null
+          processado_em?: string | null
+          recebido_em?: string
+          status?: string
+          tipo: string
+        }
+        Update: {
+          conta_id?: string
+          erro?: string | null
+          event_id?: string
+          payload?: Json | null
+          processado_em?: string | null
+          recebido_em?: string
+          status?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_eventos_webhook_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas_cobranca"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobranca_pagamentos: {
+        Row: {
+          asaas_payment_id: string
+          assinatura_id: string | null
+          atualizado_em: string
+          conta_id: string
+          credito_em: string | null
+          criado_em: string
+          cupom_uso_id: string | null
+          id: string
+          invoice_url: string | null
+          liquido_centavos: number | null
+          numero_parcela: number | null
+          pago_em: string | null
+          premio_id: string | null
+          restaurante_id: number | null
+          status: string
+          valor_centavos: number
+          vencimento: string | null
+        }
+        Insert: {
+          asaas_payment_id: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id: string
+          credito_em?: string | null
+          criado_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          liquido_centavos?: number | null
+          numero_parcela?: number | null
+          pago_em?: string | null
+          premio_id?: string | null
+          restaurante_id?: number | null
+          status: string
+          valor_centavos: number
+          vencimento?: string | null
+        }
+        Update: {
+          asaas_payment_id?: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id?: string
+          credito_em?: string | null
+          criado_em?: string
+          cupom_uso_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          liquido_centavos?: number | null
+          numero_parcela?: number | null
+          pago_em?: string | null
+          premio_id?: string | null
+          restaurante_id?: number | null
+          status?: string
+          valor_centavos?: number
+          vencimento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_pagamentos_assinatura_id_fkey"
+            columns: ["assinatura_id"]
+            isOneToOne: false
+            referencedRelation: "cobranca_assinaturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_pagamentos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas_cobranca"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_pagamentos_cupom_uso_id_fkey"
+            columns: ["cupom_uso_id"]
+            isOneToOne: false
+            referencedRelation: "cupons_usos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_pagamentos_premio_id_fkey"
+            columns: ["premio_id"]
+            isOneToOne: false
+            referencedRelation: "indicacao_premios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_pagamentos_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contas_cobranca: {
+        Row: {
+          ambiente: string
+          ativa: boolean
+          criado_em: string
+          id: string
+          nome: string
+          recebe_novas_vendas: boolean
+        }
+        Insert: {
+          ambiente?: string
+          ativa?: boolean
+          criado_em?: string
+          id: string
+          nome: string
+          recebe_novas_vendas?: boolean
+        }
+        Update: {
+          ambiente?: string
+          ativa?: boolean
+          criado_em?: string
+          id?: string
+          nome?: string
+          recebe_novas_vendas?: boolean
+        }
+        Relationships: []
+      }
       contatos: {
         Row: {
           aviso_parar_em: string | null
@@ -800,6 +1240,8 @@ export type Database = {
       }
       cupons_usos: {
         Row: {
+          aplicado_em: string | null
+          aplicado_pagamento: string | null
           area: string
           cupom: string
           cupom_id: number | null
@@ -813,6 +1255,8 @@ export type Database = {
           valor_desconto: number | null
         }
         Insert: {
+          aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           area?: string
           cupom: string
           cupom_id?: number | null
@@ -826,6 +1270,8 @@ export type Database = {
           valor_desconto?: number | null
         }
         Update: {
+          aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           area?: string
           cupom?: string
           cupom_id?: number | null
@@ -2441,6 +2887,7 @@ export type Database = {
           midia_nome: string | null
           midia_url: string | null
           nome_exibicao: string | null
+          numero_restaurante: string | null
           oculta: boolean
           payload: Json | null
           por_api: boolean
@@ -2471,6 +2918,7 @@ export type Database = {
           midia_nome?: string | null
           midia_url?: string | null
           nome_exibicao?: string | null
+          numero_restaurante?: string | null
           oculta?: boolean
           payload?: Json | null
           por_api?: boolean
@@ -2501,6 +2949,7 @@ export type Database = {
           midia_nome?: string | null
           midia_url?: string | null
           nome_exibicao?: string | null
+          numero_restaurante?: string | null
           oculta?: boolean
           payload?: Json | null
           por_api?: boolean
@@ -2576,6 +3025,68 @@ export type Database = {
           remote_id?: string
         }
         Relationships: []
+      }
+      metricas_diarias: {
+        Row: {
+          aberturas_qr: number
+          acoes_concluidas: number
+          acoes_criadas: number
+          calculado_em: string
+          clientes_novos: number
+          dia: string
+          insights_gerados: number
+          mensagens: number
+          negativos: number
+          neutros: number
+          por_categoria: Json
+          positivos: number
+          restaurante_id: number
+          retornos: number
+          sugestoes: number
+        }
+        Insert: {
+          aberturas_qr?: number
+          acoes_concluidas?: number
+          acoes_criadas?: number
+          calculado_em?: string
+          clientes_novos?: number
+          dia: string
+          insights_gerados?: number
+          mensagens?: number
+          negativos?: number
+          neutros?: number
+          por_categoria?: Json
+          positivos?: number
+          restaurante_id: number
+          retornos?: number
+          sugestoes?: number
+        }
+        Update: {
+          aberturas_qr?: number
+          acoes_concluidas?: number
+          acoes_criadas?: number
+          calculado_em?: string
+          clientes_novos?: number
+          dia?: string
+          insights_gerados?: number
+          mensagens?: number
+          negativos?: number
+          neutros?: number
+          por_categoria?: Json
+          positivos?: number
+          restaurante_id?: number
+          retornos?: number
+          sugestoes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metricas_diarias_restaurante_id_fkey"
+            columns: ["restaurante_id"]
+            isOneToOne: false
+            referencedRelation: "restaurantes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       modelos_ia: {
         Row: {
@@ -2710,7 +3221,9 @@ export type Database = {
           atualizado_em: string
           atualizado_por: string | null
           ciclo: string
+          parcelas_max: number | null
           total_centavos: number
+          total_parcelado_centavos: number | null
         }
         Insert: {
           area: string
@@ -2718,7 +3231,9 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           ciclo: string
+          parcelas_max?: number | null
           total_centavos: number
+          total_parcelado_centavos?: number | null
         }
         Update: {
           area?: string
@@ -2726,7 +3241,9 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           ciclo?: string
+          parcelas_max?: number | null
           total_centavos?: number
+          total_parcelado_centavos?: number | null
         }
         Relationships: []
       }
@@ -3121,6 +3638,7 @@ export type Database = {
           area: string | null
           assinatura_cancelada_em: string | null
           assinatura_expira_em: string | null
+          assinatura_origem: string | null
           assinatura_status: string
           auth_user_id: string
           cliente_bg_imagem: string | null
@@ -3180,6 +3698,7 @@ export type Database = {
           area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
+          assinatura_origem?: string | null
           assinatura_status?: string
           auth_user_id: string
           cliente_bg_imagem?: string | null
@@ -3239,6 +3758,7 @@ export type Database = {
           area?: string | null
           assinatura_cancelada_em?: string | null
           assinatura_expira_em?: string | null
+          assinatura_origem?: string | null
           assinatura_status?: string
           auth_user_id?: string
           cliente_bg_imagem?: string | null
@@ -3449,6 +3969,24 @@ export type Database = {
           texto?: string
           titulo?: string | null
           usuario_id?: string | null
+        }
+        Relationships: []
+      }
+      textos_autorizacao_marketing: {
+        Row: {
+          criado_em: string
+          texto: string
+          versao: string
+        }
+        Insert: {
+          criado_em?: string
+          texto: string
+          versao: string
+        }
+        Update: {
+          criado_em?: string
+          texto?: string
+          versao?: string
         }
         Relationships: []
       }
@@ -4055,14 +4593,32 @@ export type Database = {
           ultima_demo_em: string
         }[]
       }
+      admin_metricas_atualizar: {
+        Args: { p_restaurante_id?: number }
+        Returns: number
+      }
       admin_push_subscriptions: {
-        Args: never
+        Args: { p_cliente?: string }
         Returns: {
           aparelho: string
           auth: string
           auth_user_id: string
           endpoint: string
           p256dh: string
+        }[]
+      }
+      admin_resultados_restaurantes: {
+        Args: never
+        Returns: {
+          area: string
+          assinatura_status: string
+          created_at: string
+          eh_teste: boolean
+          excluida_em: string
+          id: number
+          logo_url: string
+          nome: string
+          tipo_culinaria: string
         }[]
       }
       afiliados_numeros: { Args: { p_area: string }; Returns: Json }
@@ -4120,6 +4676,8 @@ export type Database = {
         Args: { p_restaurante_id: number }
         Returns: boolean
       }
+      cobranca_aplicar: { Args: { p_restaurante_id: number }; Returns: string }
+      cobranca_vigente: { Args: { p_restaurante_id: number }; Returns: boolean }
       codigo_demo: {
         Args: { p_janela: number; p_segredo: string }
         Returns: string
@@ -4184,6 +4742,17 @@ export type Database = {
           ultima_tipo: string
         }[]
       }
+      definir_minha_autorizacao_marketing: {
+        Args: {
+          p_autorizar: boolean
+          p_pode_depoimento: boolean
+          p_pode_logo: boolean
+          p_pode_nome: boolean
+          p_pode_numeros: boolean
+          p_versao: string
+        }
+        Returns: undefined
+      }
       deve_gerar_insights: {
         Args: { p_publico?: string; p_restaurante_id: number }
         Returns: {
@@ -4193,6 +4762,7 @@ export type Database = {
         }[]
       }
       difere_por_troca: { Args: { a: string; b: string }; Returns: boolean }
+      eh_admin_parceiro: { Args: never; Returns: boolean }
       eh_admin_plataforma_ou_console: { Args: never; Returns: boolean }
       eh_influencer: { Args: never; Returns: boolean }
       encerrar_acesso_admin: { Args: never; Returns: boolean }
@@ -4427,6 +4997,14 @@ export type Database = {
       janela_demo_atual: { Args: never; Returns: number }
       jsonb_de_texto: { Args: { p_texto: string }; Returns: Json }
       limpar_contas_abandonadas: { Args: never; Returns: number }
+      metricas_atualizar: {
+        Args: { p_dias?: number; p_restaurante_id?: number }
+        Returns: number
+      }
+      metricas_calcular: {
+        Args: { p_ate: string; p_desde: string; p_restaurante_id: number }
+        Returns: number
+      }
       meu_acesso: {
         Args: never
         Returns: {
@@ -4451,6 +5029,24 @@ export type Database = {
           limite: number
         }[]
       }
+      minha_autorizacao_marketing: {
+        Args: never
+        Returns: {
+          autorizado_em: string
+          autorizado_por: string
+          eh_dono: boolean
+          origem: string
+          pode_depoimento: boolean
+          pode_logo: boolean
+          pode_nome: boolean
+          pode_numeros: boolean
+          revogado_em: string
+          status: string
+          texto_atual: string
+          versao_aceita: string
+          versao_atual: string
+        }[]
+      }
       minhas_categorias: { Args: never; Returns: Json }
       motor_cabecalhos: { Args: never; Returns: Json }
       normalizar_busca: { Args: { t: string }; Returns: string }
@@ -4461,6 +5057,45 @@ export type Database = {
             Returns: number
           }
         | { Args: { p_status: string }; Returns: number }
+      parceiro_contas: {
+        Args: never
+        Returns: {
+          area: string
+          assinatura_status: string
+          auth_user_id: string
+          avatar_url: string
+          created_at: string
+          detalhes: string
+          email: string
+          id: number
+          logo_url: string
+          nome: string
+          nome_restaurante: string
+          numero_mesas: number
+          numero_whatsapp: string
+          onboarding_completo: boolean
+          plano_ciclo: string
+          tem_instancia: boolean
+          tipo_culinaria: string
+          whatsapp_conectado: boolean
+          whatsapp_dono: string
+        }[]
+      }
+      parceiro_pode_ver: {
+        Args: { p_email: string; p_restaurante_id: number }
+        Returns: boolean
+      }
+      parceiro_ve_arquivo_suporte: {
+        Args: { p_nome: string }
+        Returns: boolean
+      }
+      parceiro_ve_conta: {
+        Args: { p_restaurante_id: number }
+        Returns: boolean
+      }
+      parceiro_ve_midia_whatsapp: { Args: { p_nome: string }; Returns: boolean }
+      parceiro_ve_sugestao: { Args: { p_sugestao: string }; Returns: boolean }
+      parceiro_ve_usuario: { Args: { p_usuario: string }; Returns: boolean }
       pesquisar_mensagens_whatsapp: {
         Args: {
           p_chat_id?: string
@@ -4561,6 +5196,10 @@ export type Database = {
         }[]
       }
       whatsapp_interativo: { Args: { p_payload: Json }; Returns: Json }
+      whatsapp_numero_da_conta: {
+        Args: { p_restaurante_id: number }
+        Returns: string
+      }
       whatsapp_publico_da_conta: {
         Args: { p_restaurante_id: number }
         Returns: string

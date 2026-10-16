@@ -206,9 +206,9 @@ const App = () => (
               <Route
                 path="/google"
                 element={
-                  // Só o admin até o Google liberar a API (ver SO_ADMIN em google-perfil).
+                  // Só o admin (e o admin parceiro) até o Google verificar o app (ver SO_ADMIN em google-perfil).
                   <RotaPermitida modulo="relatorios">
-                    <SoAdminPlataforma>
+                    <SoAdminPlataforma tambemParceiro>
                       <Google />
                     </SoAdminPlataforma>
                   </RotaPermitida>
