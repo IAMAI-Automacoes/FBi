@@ -28,7 +28,9 @@ export default function Assinatura() {
   // Inadimplente: a fatura vencida da assinatura que já existe.
   const [faturaEmAberto, setFaturaEmAberto] = useState<string | null>(null)
   const [erroCheckout, setErroCheckout] = useState<string | null>(null)
-  const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
+  // O campo começa SEMPRE vazio: o código do link `?ref=` fica guardado no
+  // navegador e é registrado abaixo sem aparecer no campo.
+  const [codigo, setCodigo] = useState('')
 
   // Entrou por um link de indicação (`?ref=`, guardado no navegador): a conta
   // já fica marcada como indicada, mesmo que só assine outro dia. O banco
@@ -54,10 +56,10 @@ export default function Assinatura() {
     setAbrindo(ciclo)
     setErroCheckout(null)
     try {
-      guardarCodigoIndicacao(codigo)
       // O código digitado agora é o que vale. Só o próprio código trava a
       // compra; qualquer outra recusa (ou erro) segue para o pagamento.
       if (codigo.trim()) {
+        guardarCodigoIndicacao(codigo)
         const indicacao = await registrarIndicacao(codigo)
         const trava = indicacao.motivo ? RECUSA_QUE_TRAVA[indicacao.motivo] : undefined
         if (trava) {

@@ -4,7 +4,7 @@ import { Check, ChevronRight, Loader2, ShieldCheck } from 'lucide-react'
 import { ancora, cores, orbe, rotuloSecao, tituloSecao, TRANSICAO } from './tokens'
 import { CICLOS, RECURSOS_INCLUSOS, type Ciclo } from './ciclos-plano'
 import { usePrecos } from '@/hooks/use-precos'
-import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
+import { guardarCodigoIndicacao } from '@/lib/indicacao'
 
 /* Preços vêm do banco (`planos_precos`) — nenhum valor fixo aqui. O botão leva
    ao /checkout do plano: rota protegida, então quem não tem conta cria antes
@@ -16,14 +16,15 @@ export function Planos() {
   const atual = porCiclo(ciclo)
   const navigate = useNavigate()
   const [abrindo, setAbrindo] = useState(false)
-  // Código do afiliado: vem do link `?ref=` (guardado 30 dias) ou é digitado.
-  // Quem confere é o servidor, na hora de pagar.
-  const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
+  // Código do afiliado: o campo começa SEMPRE vazio. O do link `?ref=` fica
+  // guardado no navegador (App.tsx) sem aparecer aqui; digitar um código
+  // substitui o guardado, e deixar em branco não apaga o do link.
+  const [codigo, setCodigo] = useState('')
 
   const assinar = () => {
     if (abrindo || !atual) return
     setAbrindo(true)
-    guardarCodigoIndicacao(codigo)
+    if (codigo.trim()) guardarCodigoIndicacao(codigo)
     navigate(`/checkout?ciclo=${ciclo}`)
   }
 
