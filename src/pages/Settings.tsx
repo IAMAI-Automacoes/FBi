@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { RestaurantTab, RestauranteForm } from './settings/RestaurantTab'
 import { MascotTab, MascoteForm } from './settings/MascotTab'
 import { PerfilNegocioTab, PerfilNegocioForm, PERFIL_VAZIO } from './settings/PerfilNegocioTab'
+import { DivulgacaoTab } from './settings/DivulgacaoTab'
 import { ConhecimentoTab } from './settings/ConhecimentoTab'
 import { SecaoWhatsApp } from '@/components/demo/SecaoWhatsApp'
 import { EXPIRACAO_PADRAO, FeedbacksTab } from './settings/FeedbacksTab'
@@ -329,6 +330,7 @@ export default function Settings() {
         { id: 'whatsapp', label: 'WhatsApp' },
         { id: 'feedbacks', label: 'Feedbacks' },
         { id: 'mascote', label: 'Assistente de IA' },
+        { id: 'divulgacao', label: 'Divulgação' },
       ]
 
   return (
@@ -430,6 +432,12 @@ export default function Settings() {
                   onUploadingChange={setEnviandoArquivo}
                 />
               </section>
+              {/* Salva sozinha: autorizar divulgação não vai junto na barra de salvar. */}
+              {!ehRh && (
+                <section id="divulgacao" className="scroll-mt-28">
+                  <DivulgacaoTab />
+                </section>
+              )}
             </div>
           </div>
         </div>
