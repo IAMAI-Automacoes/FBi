@@ -127,15 +127,32 @@ Supabase project ID: `lixrcruilisncfhfhndo`
 | `atualizar-banner` | Atualiza `restaurantes.texto_banner` via IA |
 | `gerenciar-qr-code` | CRUD de QR codes |
 | `qr-redirect` | Redireciona scan do QR → WhatsApp |
-| `cancelar-assinatura` | Cancela o acesso por data (cupom/liberação manual) |
+| `criar-cobranca` | Cria cliente + assinatura recorrente ou parcelamento no Asaas e devolve a fatura (`invoiceUrl`) |
+| `asaas-webhook` | Eventos do Asaas (`?conta=mei`, token no header) → `cobranca_*` → acesso por `cobranca_aplicar` (idempotente) |
+| `cancelar-assinatura` | Recorrente: remove no Asaas antes, acesso até o fim do período. Cupom/manual: por data |
 
-**Cobrança:** o Stripe foi removido (15/10/2026) e a cobrança vai para o Asaas
-(plano em andamento). Até lá não há pagamento online: `criarCheckout`
-(`src/lib/queries/cobranca.ts`) recusa com a mensagem do WhatsApp, e o acesso
-é liberado por cupom ou pelo admin. Preços na tabela `planos_precos` (por
-software e ciclo, editável pelo admin) — NUNCA valor fixo no código.
-`SITE_URL` (config não secreta) fica em `integracao_config`, lida por
-`_shared/config.ts`.
+**Cobrança (Asaas, fase 1 — 15/10/2026):** o Stripe saiu. O sistema cria a
+cobrança pela API do Asaas com o nosso id (`externalReference`) e manda a
+pessoa para a fatura do Asaas; o cartão nunca passa por nós. Quem libera o
+acesso é o `asaas-webhook`. Detalhes em `supabase/migrations/20261029100000_cobranca_asaas.sql`.
+- Modalidades: recorrente no cartão (mensal, semestral, anual) ou parcelado
+  pelo mesmo total (semestral 6x, anual 12x; `planos_precos.parcelas_max`),
+  que não renova e tem 7 dias de carência.
+- `restaurantes.assinatura_origem`: `asaas_recorrente` (o webhook rege, o cron
+  não toca), `asaas_parcelado`, `cupom`, `manual`.
+- Contas do Asaas em `contas_cobranca` (hoje só `mei`). Secrets por conta:
+  `ASAAS_CONTA_MEI_API_KEY`, `ASAAS_CONTA_MEI_AMBIENTE` (`sandbox`|`producao`),
+  `ASAAS_CONTA_MEI_WEBHOOK_TOKEN`. Sandbox → produção = trocar os secrets e
+  rodar a limpeza comentada no fim da migration (o banco é o mesmo).
+- Descontos (padrão provisório, a confirmar com o Raver; `_shared/asaas/regras.ts`):
+  cupom na 1ª cobrança; bônus de indicação em uma mensalidade da próxima renovação.
+- Inadimplente paga a fatura vencida, nunca assina de novo. Excluir conta
+  remove a assinatura no Asaas antes; se falhar, não exclui.
+- Depois de várias falhas seguidas o Asaas PAUSA a fila do webhook: conferir
+  os logs do `asaas-webhook` e reativar no painel do Asaas.
+- Preços na tabela `planos_precos` (por software e ciclo, editável pelo admin)
+  — NUNCA valor fixo no código. `SITE_URL` (config não secreta) fica em
+  `integracao_config`, lida por `_shared/config.ts`.
 
 **NOTA:** Não existe `analyze-message` — está implementado como `chamar-ia`.
 
