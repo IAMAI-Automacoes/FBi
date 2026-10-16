@@ -7,6 +7,7 @@ import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
 import { buscarCiclo, ehCiclo, recursosDaArea } from '@/components/vendas/ciclos-plano'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { CaixaCupom } from '@/components/compra/CaixaCupom'
+import { CampoIndicacao, conferirCodigoIndicacao } from '@/components/compra/CampoIndicacao'
 import { usePrecos } from '@/hooks/use-precos'
 import { useArea } from '@/lib/area'
 import { buscarDocumentoSalvo, criarCheckout, ErroCobranca, type Modalidade } from '@/lib/queries/cobranca'
@@ -50,6 +51,8 @@ export default function Checkout() {
 
   // CPF/CNPJ de quem paga — o Asaas exige. Preenche com o da última compra.
   const [documento, setDocumento] = useState('')
+  // Código de indicação: começa vazio (o do link fica guardado sem aparecer).
+  const [codigoIndicacao, setCodigoIndicacao] = useState('')
   const [aceite, setAceite] = useState(false)
   useEffect(() => {
     let vivo = true
@@ -68,6 +71,12 @@ export default function Checkout() {
     setErro(null)
     setRegularizarUrl(null)
     try {
+      const trava = await conferirCodigoIndicacao(codigoIndicacao)
+      if (trava) {
+        setErro(trava)
+        setEnviando(false)
+        return
+      }
       const url = await criarCheckout(ciclo, {
         modalidade: parcelado ? 'parcelado' : 'recorrente',
         cpfCnpj: somenteDigitos(documento),
@@ -302,6 +311,13 @@ export default function Checkout() {
             </div>
           )}
 
+          <CampoIndicacao
+            valor={codigoIndicacao}
+            onChange={(v) => { setCodigoIndicacao(v); setErro(null) }}
+            disabled={enviando}
+            marginBottom="18px"
+          />
+
           <label htmlFor="documento" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: cores.corpoForte, marginBottom: '6px' }}>
             CPF ou CNPJ de quem paga
           </label>
@@ -418,7 +434,7 @@ export default function Checkout() {
               : 'Pagamento seguro pelo Asaas · cancele quando quiser'}
           </p>
 
-          {/* Cupom de acesso — libera sem passar pelo pagamento */}
+          {/* Cupom de acesso — em segundo plano, recolhido */}
           <CaixaCupom />
 
           <div style={{ height: '1px', background: cores.borda, marginBottom: '20px' }} />

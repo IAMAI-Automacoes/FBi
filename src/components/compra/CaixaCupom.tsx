@@ -9,7 +9,9 @@ import { textoDoDesconto } from '@/lib/cupons'
 /* Cupom de acesso — libera sem depender do pagamento (o resgate é no servidor,
    função `resgatar-cupom`). Usado no /checkout e no /assinatura.
    Cupom de acesso: atualiza o usuário e entra no app. Cupom só de desconto:
-   fica guardado na conta e a pessoa continua na tela para assinar. */
+   fica guardado na conta e a pessoa continua na tela para assinar.
+   Fica em segundo plano: começa recolhida num link discreto (o campo principal
+   das telas de compra é o código de indicação). */
 export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string }) {
   const navigate = useNavigate()
   const { refetchUsuario } = useAuth()
@@ -18,6 +20,7 @@ export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string })
   const [erroCupom, setErroCupom] = useState<string | null>(null)
   // Cupom só de desconto: ficou guardado na conta (não libera o acesso agora).
   const [descontoGuardado, setDescontoGuardado] = useState<string | null>(null)
+  const [aberta, setAberta] = useState(false)
 
   const aplicarCupom = async () => {
     const codigo = cupom.trim()
@@ -44,6 +47,20 @@ export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string })
     }
   }
 
+  if (!aberta) {
+    return (
+      <div className="text-center" style={{ marginBottom }}>
+        <button
+          type="button"
+          onClick={() => setAberta(true)}
+          style={{ fontSize: '12.5px', fontWeight: 500, color: cores.corpoSuave, background: 'none', border: 'none', padding: 0, textDecoration: 'underline', cursor: 'pointer' }}
+        >
+          Tem um cupom de acesso?
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -67,6 +84,7 @@ export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string })
           onKeyDown={(e) => { if (e.key === 'Enter') aplicarCupom() }}
           placeholder="Digite o código"
           disabled={aplicandoCupom}
+          autoFocus
           aria-label="Código do cupom"
           style={{
             flex: 1,

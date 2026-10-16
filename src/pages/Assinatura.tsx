@@ -7,11 +7,11 @@ import { useArea } from '@/lib/area'
 import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { CaixaCupom } from '@/components/compra/CaixaCupom'
+import { CampoIndicacao, conferirCodigoIndicacao } from '@/components/compra/CampoIndicacao'
 import { usePrecos } from '@/hooks/use-precos'
 import { buscarFaturaEmAberto } from '@/lib/queries/cobranca'
-import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
+import { lerCodigoIndicacao } from '@/lib/indicacao'
 import { registrarIndicacao } from '@/lib/queries/indicacoes'
-import { RECUSA_QUE_TRAVA } from '@/lib/indicacoes'
 import { Check, Loader2, LogOut } from 'lucide-react'
 
 /* Destino de toda conta sem plano ativo. Cobre três situações com uma tela só:
@@ -58,15 +58,11 @@ export default function Assinatura() {
     try {
       // O código digitado agora é o que vale. Só o próprio código trava a
       // compra; qualquer outra recusa (ou erro) segue para o pagamento.
-      if (codigo.trim()) {
-        guardarCodigoIndicacao(codigo)
-        const indicacao = await registrarIndicacao(codigo)
-        const trava = indicacao.motivo ? RECUSA_QUE_TRAVA[indicacao.motivo] : undefined
-        if (trava) {
-          setErroCheckout(trava)
-          setAbrindo(null)
-          return
-        }
+      const trava = await conferirCodigoIndicacao(codigo)
+      if (trava) {
+        setErroCheckout(trava)
+        setAbrindo(null)
+        return
       }
       navigate(`/checkout?ciclo=${ciclo}`)
     } catch (e) {
@@ -175,26 +171,9 @@ export default function Assinatura() {
           </p>
         )}
 
-        {/* Cupom de acesso — libera a conta sem passar pelo pagamento. */}
+        {/* Código de indicação (afiliado) — o campo principal; validado no servidor. */}
         <div className="mx-auto" style={{ maxWidth: '480px' }}>
-          <CaixaCupom marginBottom="26px" />
-        </div>
-
-        {/* Código de indicação (afiliado) — opcional, validado no servidor. */}
-        <div className="mx-auto flex items-center" style={{ maxWidth: '420px', gap: '10px', marginBottom: '22px' }}>
-          <label htmlFor="codigo-indicacao" style={{ fontSize: '13px', fontWeight: 600, color: cores.corpoSuave, whiteSpace: 'nowrap' }}>
-            Código de indicação
-          </label>
-          <input
-            id="codigo-indicacao"
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-            placeholder="opcional"
-            maxLength={30}
-            disabled={abrindo !== null}
-            autoComplete="off"
-            style={{ flex: 1, height: '40px', padding: '0 12px', fontSize: '14px', fontWeight: 600, letterSpacing: '0.04em', color: cores.tinta, background: '#FFFFFF', border: `1px solid ${cores.borda}`, borderRadius: '10px', outline: 'none' }}
-          />
+          <CampoIndicacao valor={codigo} onChange={setCodigo} disabled={abrindo !== null} marginBottom="26px" />
         </div>
 
         {/* Ciclos — cada card abre o pagamento já com o plano escolhido.
@@ -257,6 +236,11 @@ export default function Assinatura() {
               </button>
             )
           })}
+        </div>
+
+        {/* Cupom de acesso — em segundo plano, recolhido abaixo dos planos. */}
+        <div className="mx-auto" style={{ maxWidth: '480px' }}>
+          <CaixaCupom marginBottom="28px" />
         </div>
 
         <div style={{ background: 'rgba(255,255,255,0.75)', border: `1px solid ${cores.borda}`, borderRadius: '18px', padding: '24px' }}>
