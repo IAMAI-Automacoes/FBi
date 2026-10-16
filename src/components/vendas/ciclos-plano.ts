@@ -68,6 +68,10 @@ export interface PlanoCiclo extends DefinicaoCiclo {
   totalCobrado: string
   descricao: string
   descontoPercentual: number | null
+  /** Parcelado no cartão pelo mesmo total: em quantas vezes (null = não parcela). */
+  parcelas: number | null
+  /** "147" — valor de cada parcela, sem "R$". */
+  valorParcela: string | null
 }
 
 const fmtInteiro = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
@@ -92,5 +96,7 @@ export function montarPlano(p: PrecoPublico): PlanoCiclo {
     totalCobrado: total,
     descricao: def.descricaoCobranca(total),
     descontoPercentual: p.desconto_percentual,
+    parcelas: p.parcelas_max,
+    valorParcela: p.parcelas_max ? formatarReais(Math.round(p.total_centavos / p.parcelas_max)) : null,
   }
 }

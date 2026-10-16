@@ -38,6 +38,9 @@ export interface UsuarioDados {
   assinatura_expira_em?: string | null
   assinatura_cancelada_em?: string | null
   plano_ciclo?: 'mensal' | 'semestral' | 'anual' | null
+  /** De onde vem o acesso: 'asaas_recorrente' (renova sozinho), 'asaas_parcelado'
+      (pré-pago, não renova), 'cupom' ou 'manual'. Só o servidor escreve. */
+  assinatura_origem?: 'asaas_recorrente' | 'asaas_parcelado' | 'cupom' | 'manual' | null
 }
 
 interface AuthContextType {

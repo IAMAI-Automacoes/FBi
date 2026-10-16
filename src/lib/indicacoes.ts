@@ -4,8 +4,9 @@
  * Decisões do Raver (15/10/2026): a conta pega o link de cadastro dela e manda
  * para outro restaurante (ou empresa, no RH). Quem indica ganha a porcentagem
  * do afiliado dele como DESCONTO na própria mensalidade, por indicado, depois
- * que o indicado paga o 2º mês. Até o pagamento novo (Asaas), o admin aplica à
- * mão. A página mostra quantos entraram, usam até hoje, usaram e pararam, e
+ * que o indicado paga o 2º mês. O desconto entra sozinho na próxima renovação
+ * da assinatura no Asaas (no parcelado, o admin aplica à
+ * mão). A página mostra quantos entraram, usam até hoje, usaram e pararam, e
  * quantos ainda esperam o 2º mês.
  * Quem guarda e decide é o banco (migration 20261027000000).
  */

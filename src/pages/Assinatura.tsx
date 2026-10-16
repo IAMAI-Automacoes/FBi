@@ -8,7 +8,7 @@ import { cores, orbe } from '@/components/vendas/tokens'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { CaixaCupom } from '@/components/compra/CaixaCupom'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout, ErroCobranca } from '@/lib/queries/cobranca'
+import { buscarFaturaEmAberto } from '@/lib/queries/cobranca'
 import { guardarCodigoIndicacao, lerCodigoIndicacao } from '@/lib/indicacao'
 import { registrarIndicacao } from '@/lib/queries/indicacoes'
 import { RECUSA_QUE_TRAVA } from '@/lib/indicacoes'
@@ -23,8 +23,10 @@ export default function Assinatura() {
   const status = usuario?.assinatura_status ?? 'sem_assinatura'
   // Mesmos planos nas duas versões; mudam as palavras e a lista do que vem junto.
   const { area, ehRh } = useArea()
-  const { planos, carregando, erro, porCiclo, recarregar } = usePrecos()
+  const { planos, carregando, erro, porCiclo, recarregar } = usePrecos(ehRh ? 'rh' : 'restaurante')
   const [abrindo, setAbrindo] = useState<Ciclo | null>(null)
+  // Inadimplente: a fatura vencida da assinatura que já existe.
+  const [faturaEmAberto, setFaturaEmAberto] = useState<string | null>(null)
   const [erroCheckout, setErroCheckout] = useState<string | null>(null)
   const [codigo, setCodigo] = useState(() => lerCodigoIndicacao())
 
@@ -36,8 +38,17 @@ export default function Assinatura() {
     if (guardado) void registrarIndicacao(guardado)
   }, [])
 
-  // Usuário logado: abre o pagamento do plano. Enquanto não houver meio de
-  // pagamento online, a recusa traz a mensagem do WhatsApp.
+  useEffect(() => {
+    if (status !== 'inadimplente') return
+    let vivo = true
+    buscarFaturaEmAberto()
+      .then((url) => { if (vivo) setFaturaEmAberto(url) })
+      .catch(() => { /* sem a fatura, fica o suporte */ })
+    return () => { vivo = false }
+  }, [status])
+
+  // Usuário logado: confere o código de indicação e leva à tela de pagamento
+  // do plano (CPF/CNPJ, à vista ou parcelado, e a fatura do Asaas).
   const assinar = async (ciclo: Ciclo) => {
     if (abrindo) return
     setAbrindo(ciclo)
@@ -45,8 +56,7 @@ export default function Assinatura() {
     try {
       guardarCodigoIndicacao(codigo)
       // O código digitado agora é o que vale. Só o próprio código trava a
-      // compra; qualquer outra recusa (ou erro) segue para o checkout, que
-      // confere o código de novo.
+      // compra; qualquer outra recusa (ou erro) segue para o pagamento.
       if (codigo.trim()) {
         const indicacao = await registrarIndicacao(codigo)
         const trava = indicacao.motivo ? RECUSA_QUE_TRAVA[indicacao.motivo] : undefined
@@ -56,14 +66,9 @@ export default function Assinatura() {
           return
         }
       }
-      const url = await criarCheckout(ciclo, { codigoAfiliado: codigo || undefined })
-      window.location.assign(url)
+      navigate(`/checkout?ciclo=${ciclo}`)
     } catch (e) {
-      const invalido = e instanceof ErroCobranca && Boolean(e.corpo?.codigo_afiliado_invalido)
-      setErroCheckout(
-        invalido ? 'Código de indicação inválido. Confira ou deixe em branco.'
-        : e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.',
-      )
+      setErroCheckout(e instanceof Error ? e.message : 'Não foi possível seguir para o pagamento.')
       setAbrindo(null)
     }
   }
@@ -81,7 +86,7 @@ export default function Assinatura() {
       ? {
           titulo: 'Não conseguimos renovar sua assinatura',
           texto:
-            'O último pagamento não foi aprovado. Escolha um plano abaixo para regularizar e recuperar o acesso — seus dados continuam guardados.',
+            'O último pagamento não foi aprovado. Pague a fatura em aberto para recuperar o acesso — seus dados continuam guardados.',
         }
       : status === 'cancelada'
         ? {
@@ -140,13 +145,35 @@ export default function Assinatura() {
             </button>
           </div>
         )}
+        {/* Inadimplente regulariza a assinatura que já existe — nunca assina de novo. */}
+        {status === 'inadimplente' && (
+          <div className="text-center" style={{ marginBottom: '24px' }}>
+            {faturaEmAberto ? (
+              <a
+                href={faturaEmAberto}
+                className="inline-flex items-center justify-center"
+                style={{ height: '50px', padding: '0 26px', fontSize: '15px', fontWeight: 600, color: '#FFFFFF', background: cores.azul, borderRadius: '13px', textDecoration: 'none', boxShadow: '0 12px 30px rgba(37,99,235,0.30)' }}
+              >
+                Pagar fatura em aberto
+              </a>
+            ) : (
+              <p style={{ fontSize: '13.5px', color: cores.corpoSuave }}>
+                Não encontramos a fatura em aberto. Fale com o suporte pelo WhatsApp abaixo.
+              </p>
+            )}
+            <p style={{ fontSize: '12.5px', color: cores.corpoSuave, marginTop: '8px' }}>
+              Na fatura dá para pagar com outro cartão.
+            </p>
+          </div>
+        )}
+
         {erroCheckout && (
           <p role="alert" className="text-center" style={{ fontSize: '13.5px', color: '#B91C1C', marginBottom: '16px' }}>
             {erroCheckout}
           </p>
         )}
 
-        {/* Cupom de acesso — libera a conta sem passar pelo pagamento online. */}
+        {/* Cupom de acesso — libera a conta sem passar pelo pagamento. */}
         <div className="mx-auto" style={{ maxWidth: '480px' }}>
           <CaixaCupom marginBottom="26px" />
         </div>
@@ -212,7 +239,7 @@ export default function Assinatura() {
                     <p style={{ fontSize: '12.5px', color: cores.corpoSuave }}>
                       {abrindo === c.id ? (
                         <span className="inline-flex items-center" style={{ gap: '6px' }}>
-                          <Loader2 className="h-3 w-3 animate-spin" /> Abrindo pagamento...
+                          <Loader2 className="h-3 w-3 animate-spin" /> Abrindo...
                         </span>
                       ) : (
                         plano.descricao

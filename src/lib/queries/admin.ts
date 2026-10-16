@@ -326,8 +326,8 @@ export async function excluirAfiliado(id: string): Promise<void> {
  * R$ para a cobrança. É de um software só e escolhe o tipo de conta que cria.
  * A regra do que ele dá é a mesma do resgate (supabase/functions/_shared/cupom.ts).
  * Até 15/10/2026 o desconto não existia de verdade (o resgate não lia as
- * colunas); agora fica guardado em `cupons_usos` e entra na cobrança quando o
- * pagamento novo (Asaas) chegar.
+ * colunas); agora fica guardado em `cupons_usos` e entra na 1ª cobrança do
+ * Asaas (`cupons_usos.aplicado_em`).
  */
 export interface Cupon {
   id: number
@@ -346,7 +346,7 @@ export interface Cupon {
   area: 'restaurante' | 'rh'
   /** O que a conta vira ao resgatar. */
   tipo_conta: 'normal' | 'vendedor' | 'admin'
-  /** Desconto guardado para a cobrança (entra com o pagamento novo). Um ou outro. */
+  /** Desconto guardado para a cobrança (entra na 1ª cobrança do Asaas). Um ou outro. */
   porcentagem_desconto: number | null
   valor_desconto: number | null
   created_at: string
@@ -516,10 +516,12 @@ export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappA
   }))
 }
 
+/** Liberação/bloqueio manual pelo admin. Não mexe no Asaas: bloquear aqui não
+    para uma assinatura que esteja cobrando (isso é pelo cancelamento). */
 export async function definirAssinatura(id: number, status: AssinaturaStatus): Promise<void> {
   const { error } = await supabase
     .from('restaurantes')
-    .update({ assinatura_status: status } as never)
+    .update((status === 'ativa' ? { assinatura_status: status, assinatura_origem: 'manual' } : { assinatura_status: status }) as never)
     .eq('id', id)
   if (error) throw error
 }

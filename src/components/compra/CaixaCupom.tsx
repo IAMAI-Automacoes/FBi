@@ -26,8 +26,8 @@ export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string })
     setErroCupom(null)
     try {
       const r = await resgatarCupom(codigo)
-      // Só desconto: fica guardado e entra na cobrança quando o pagamento novo
-      // chegar. A pessoa continua aqui para assinar.
+      // Só desconto: fica guardado e entra na 1ª cobrança do Asaas.
+      // A pessoa continua aqui para assinar.
       if (!r.acesso) {
         setDescontoGuardado(r.desconto ? textoDoDesconto(r.desconto) : 'O desconto')
         setCupom('')
@@ -114,8 +114,8 @@ export function CaixaCupom({ marginBottom = '22px' }: { marginBottom?: string })
       )}
       {descontoGuardado && (
         <p role="status" style={{ fontSize: '12.5px', color: '#047857', marginTop: '9px', lineHeight: 1.5 }}>
-          Cupom guardado na sua conta: {descontoGuardado}. Ele entra na sua mensalidade quando o novo sistema de
-          pagamento começar; por enquanto a cobrança segue o valor normal.
+          Cupom guardado na sua conta: {descontoGuardado}. Ele entra na sua primeira cobrança quando você
+          assinar.
         </p>
       )}
       <p style={{ fontSize: '11.5px', color: cores.corpoSuave, marginTop: '9px', lineHeight: 1.5 }}>

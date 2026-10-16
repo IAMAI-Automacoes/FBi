@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 /* Admin → Afiliados, por software (decisões do Raver, 15/10/2026): a
    porcentagem padrão de cada software (vem em todo afiliado novo), trazer
    afiliados do outro software e, para quem é conta EasyFeed indicando, os
-   descontos já liberados para aplicar à mão. */
+   descontos liberados (entram sozinhos na próxima renovação da assinatura). */
 
 const COR: Record<StatusPremio, string> = {
   pendente: 'bg-amber-50 text-amber-700',
@@ -173,7 +173,7 @@ export function TrazerDoOutroSoftware({ area, aoTrazer }: { area: Area; aoTrazer
   )
 }
 
-/** Quem é conta EasyFeed indicando: o que trouxe e os descontos para aplicar à mão. */
+/** Quem é conta EasyFeed indicando: o que trouxe e os descontos liberados. */
 export function DescontosDeQuemIndica({ afiliado, numeros, aoFechar, aoMudar }: {
   afiliado: Afiliado | null
   numeros: NumerosDoAfiliado | undefined
@@ -238,7 +238,7 @@ export function DescontosDeQuemIndica({ afiliado, numeros, aoFechar, aoMudar }: 
                   ))}
                 </ul>
               )}
-              <p className="mt-1.5 text-[11.5px] text-gray-500">Até o pagamento novo (Asaas), o desconto é dado à mão na cobrança e marcado aqui.</p>
+              <p className="mt-1.5 text-[11.5px] text-gray-500">O desconto entra sozinho na próxima renovação da assinatura (Asaas). Marque aqui só se der o desconto à mão (ex.: plano parcelado).</p>
             </div>
           </div>
         )}

@@ -9,11 +9,11 @@ import { EtapasCompra } from '@/components/compra/EtapasCompra'
 
    A confirmação do pagamento chega ao servidor pelo webhook do provedor, que
    costuma chegar DEPOIS do redirect: `assinatura_status` pode estar defasado.
-   Faz polling até virar 'ativa' (Pix/boleto podem levar alguns minutos). */
+   Faz polling até virar 'ativa' (o webhook do Asaas leva alguns segundos). */
 type Estado = 'verificando' | 'ativa' | 'erro'
 
 const POLL_MS = 3000
-/** Cartão confirma em segundos; Pix/boleto podem levar minutos. */
+/** Cartão confirma em segundos; a margem cobre atraso do webhook. */
 const LIMITE_MS = 10 * 60_000
 
 export default function CheckoutSucesso() {
@@ -160,8 +160,8 @@ export default function CheckoutSucesso() {
                 Liberando seu acesso
               </h1>
               <p style={{ fontSize: '14.5px', lineHeight: 1.6, color: cores.corpoSuave }}>
-                Estamos confirmando o pagamento. Cartão leva alguns segundos; Pix e boleto podem levar
-                alguns minutos. Esta tela libera o acesso sozinha quando isso acontecer.
+                Estamos confirmando o pagamento com o Asaas. No cartão leva alguns segundos. Esta tela
+                libera o acesso sozinha quando isso acontecer.
               </p>
             </>
           ) : (

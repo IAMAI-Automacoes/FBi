@@ -424,6 +424,24 @@ export default function MyAccount() {
                       </span>
                       . Depois o painel é bloqueado; seus dados ficam guardados.
                     </>
+                  ) : usuario.assinatura_status === 'ativa' && usuario.assinatura_origem === 'asaas_recorrente' ? (
+                    <>
+                      Ativa · renova automaticamente no cartão
+                      {usuario.assinatura_expira_em
+                        ? ` (próxima cobrança em ${new Date(usuario.assinatura_expira_em).toLocaleDateString('pt-BR')})`
+                        : ''}
+                      .
+                    </>
+                  ) : usuario.assinatura_status === 'ativa' && usuario.assinatura_origem === 'asaas_parcelado' ? (
+                    <>
+                      Ativa · paga até{' '}
+                      <span className="font-medium text-gray-800">
+                        {usuario.assinatura_expira_em
+                          ? new Date(usuario.assinatura_expira_em).toLocaleDateString('pt-BR')
+                          : 'o fim do período'}
+                      </span>
+                      , sem renovação automática. Perto do fim você renova pela tela de planos.
+                    </>
                   ) : usuario.assinatura_status === 'ativa' ? (
                     <>
                       Ativa
@@ -435,7 +453,12 @@ export default function MyAccount() {
                   ) : usuario.assinatura_status === 'cancelada' ? (
                     <>Cancelada. Reative quando quiser para voltar a usar o painel.</>
                   ) : usuario.assinatura_status === 'inadimplente' ? (
-                    <>Pagamento pendente.</>
+                    <>
+                      Pagamento pendente.{' '}
+                      <Link to="/assinatura" className="font-medium text-[#1D4ED8] hover:underline">
+                        Pagar fatura em aberto
+                      </Link>
+                    </>
                   ) : (
                     <>Sem assinatura ativa.</>
                   )}
@@ -453,7 +476,9 @@ export default function MyAccount() {
               <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                 {(usuario.assinatura_status === 'ativa' ||
                   usuario.assinatura_status === 'inadimplente') &&
-                  !usuario.assinatura_cancelada_em && (
+                  !usuario.assinatura_cancelada_em &&
+                  // Parcelado é pré-pago e não renova: não há o que cancelar.
+                  usuario.assinatura_origem !== 'asaas_parcelado' && (
                     <Button
                       variant="destrutivoVazado"
                       onClick={handleCancelarAssinatura}

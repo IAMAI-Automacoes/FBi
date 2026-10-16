@@ -1,38 +1,81 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Check, Loader2, LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark } from '@/components/auth/AuthLayout'
 import { cores, orbe, TRANSICAO } from '@/components/vendas/tokens'
-import { RECURSOS_INCLUSOS, buscarCiclo, ehCiclo } from '@/components/vendas/ciclos-plano'
+import { buscarCiclo, ehCiclo, recursosDaArea } from '@/components/vendas/ciclos-plano'
 import { EtapasCompra } from '@/components/compra/EtapasCompra'
 import { CaixaCupom } from '@/components/compra/CaixaCupom'
 import { usePrecos } from '@/hooks/use-precos'
-import { criarCheckout } from '@/lib/queries/cobranca'
+import { useArea } from '@/lib/area'
+import { buscarDocumentoSalvo, criarCheckout, ErroCobranca, type Modalidade } from '@/lib/queries/cobranca'
+import { documentoValido, somenteDigitos } from '../../supabase/functions/_shared/asaas/regras.ts'
+
+/** 52998224725 → 529.982.247-25; 14 dígitos → 00.000.000/0000-00. */
+function mascaraDocumento(v: string): string {
+  const d = somenteDigitos(v).slice(0, 14)
+  if (d.length <= 11) {
+    return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2')
+}
 
 /* Confirmação do plano antes de ir para o pagamento. Rota protegida: quem
-   chega aqui está autenticado (a landing manda criar a conta antes). Enquanto
-   não houver meio de pagamento online, `criarCheckout` recusa com a mensagem
-   do WhatsApp; o cupom de acesso continua funcionando. */
+   chega aqui está autenticado (a landing manda criar a conta antes).
+   O botão cria a cobrança no Asaas (`criar-cobranca`) e leva para a fatura,
+   onde a pessoa põe o cartão. Semestral e anual podem ser à vista (renova
+   sozinho) ou parcelados pelo mesmo total (não renova). O cupom de acesso
+   continua funcionando. */
 export default function Checkout() {
   const [params] = useSearchParams()
   const { usuario, logout } = useAuth()
+  const { area, ehRh } = useArea()
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  // Fatura vencida de uma assinatura atrasada: o caminho é pagar essa.
+  const [regularizarUrl, setRegularizarUrl] = useState<string | null>(null)
 
   const cicloParam = params.get('ciclo')
   const ciclo = ehCiclo(cicloParam) ? cicloParam : 'mensal'
   const definicao = buscarCiclo(ciclo)
-  const { porCiclo, carregando: carregandoPreco } = usePrecos()
+  const { porCiclo, carregando: carregandoPreco } = usePrecos(ehRh ? 'rh' : 'restaurante')
   const plano = porCiclo(ciclo)
+  const [modalidade, setModalidade] = useState<Modalidade>('recorrente')
+  const parcelado = modalidade === 'parcelado' && Boolean(plano?.parcelas)
+
+  // CPF/CNPJ de quem paga — o Asaas exige. Preenche com o da última compra.
+  const [documento, setDocumento] = useState('')
+  const [aceite, setAceite] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    buscarDocumentoSalvo()
+      .then((d) => { if (vivo && d) setDocumento((atual) => atual || mascaraDocumento(d)) })
+      .catch(() => { /* só preenchimento */ })
+    return () => { vivo = false }
+  }, [])
+  const documentoOk = documentoValido(documento) !== null
+  const documentoErrado = somenteDigitos(documento).length >= 11 && !documentoOk && somenteDigitos(documento).length !== 12 && somenteDigitos(documento).length !== 13
+  const podePagar = !enviando && Boolean(plano) && documentoOk && aceite
 
   const irParaPagamento = async () => {
+    if (!podePagar) return
     setEnviando(true)
     setErro(null)
+    setRegularizarUrl(null)
     try {
-      const url = await criarCheckout(ciclo)
+      const url = await criarCheckout(ciclo, {
+        modalidade: parcelado ? 'parcelado' : 'recorrente',
+        cpfCnpj: somenteDigitos(documento),
+      })
       window.location.assign(url)
     } catch (e) {
+      const url = e instanceof ErroCobranca && typeof e.corpo?.regularizar_url === 'string' ? e.corpo.regularizar_url : null
+      setRegularizarUrl(url)
       setErro(e instanceof Error ? e.message : 'Não foi possível iniciar o pagamento.')
       setEnviando(false)
     }
@@ -170,14 +213,16 @@ export default function Checkout() {
                       color: cores.tinta,
                     }}
                   >
-                    {plano.mensalEquivalente}
+                    {parcelado ? plano.valorParcela : plano.mensalEquivalente}
                   </span>
                   <span style={{ fontSize: '15px', fontWeight: 500, color: cores.corpoSuave }}>
-                    /mês
+                    {parcelado ? `× ${plano.parcelas}` : '/mês'}
                   </span>
                 </div>
                 <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginTop: '8px' }}>
-                  {plano.descricao}
+                  {parcelado
+                    ? `${plano.totalCobrado} em ${plano.parcelas}x sem juros no cartão · não renova sozinho`
+                    : plano.descricao}
                   {plano.descontoPercentual !== null && (
                     <span style={{ color: cores.verde, fontWeight: 600 }}>
                       {' '}
@@ -198,6 +243,114 @@ export default function Checkout() {
             )}
           </div>
 
+          {/* À vista (renova) ou parcelado (mesmo total, não renova) */}
+          {plano?.parcelas && (
+            <div role="radiogroup" aria-label="Forma de pagamento" style={{ display: 'grid', gap: '8px', marginBottom: '18px' }}>
+              {[
+                {
+                  id: 'recorrente' as const,
+                  titulo: `À vista · ${plano.totalCobrado}`,
+                  texto: `No cartão, renova sozinho a cada ${ciclo === 'anual' ? '12' : '6'} meses`,
+                },
+                {
+                  id: 'parcelado' as const,
+                  titulo: `${plano.parcelas}x de R$ ${plano.valorParcela} sem juros`,
+                  texto: 'No cartão, pelo mesmo total · não renova sozinho',
+                },
+              ].map((op) => {
+                const marcado = modalidade === op.id
+                return (
+                  <button
+                    key={op.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={marcado}
+                    onClick={() => setModalidade(op.id)}
+                    disabled={enviando}
+                    className="flex items-start text-left"
+                    style={{
+                      gap: '10px',
+                      width: '100%',
+                      padding: '13px 14px',
+                      background: marcado ? 'rgba(37,99,235,0.06)' : '#FFFFFF',
+                      border: `1.5px solid ${marcado ? cores.azul : cores.borda}`,
+                      borderRadius: '13px',
+                      cursor: enviando ? 'not-allowed' : 'pointer',
+                      transition: TRANSICAO,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        marginTop: '2px',
+                        flexShrink: 0,
+                        borderRadius: '50%',
+                        border: `2px solid ${marcado ? cores.azul : cores.borda}`,
+                        boxShadow: marcado ? 'inset 0 0 0 3px #FFFFFF' : 'none',
+                        background: marcado ? cores.azul : '#FFFFFF',
+                      }}
+                    />
+                    <span>
+                      <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: cores.tinta }}>{op.titulo}</span>
+                      <span style={{ display: 'block', fontSize: '12.5px', color: cores.corpoSuave, marginTop: '2px' }}>{op.texto}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <label htmlFor="documento" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: cores.corpoForte, marginBottom: '6px' }}>
+            CPF ou CNPJ de quem paga
+          </label>
+          <input
+            id="documento"
+            value={documento}
+            onChange={(e) => { setDocumento(mascaraDocumento(e.target.value)); setErro(null) }}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+            disabled={enviando}
+            aria-invalid={documentoErrado}
+            style={{
+              width: '100%',
+              height: '46px',
+              padding: '0 14px',
+              fontSize: '15px',
+              fontWeight: 500,
+              color: cores.tinta,
+              background: '#FFFFFF',
+              border: `1px solid ${documentoErrado ? 'rgba(239,68,68,0.6)' : cores.borda}`,
+              borderRadius: '11px',
+              outline: 'none',
+              marginBottom: '6px',
+            }}
+          />
+          <p style={{ fontSize: '12px', lineHeight: 1.5, color: documentoErrado ? '#B91C1C' : cores.corpoSuave, marginBottom: '16px' }}>
+            {documentoErrado
+              ? 'Confira os números: este CPF ou CNPJ não é válido.'
+              : 'Vai na fatura. O cartão você informa na próxima tela, no ambiente seguro do Asaas.'}
+          </p>
+
+          <label className="flex items-start" style={{ gap: '9px', fontSize: '13px', lineHeight: 1.5, color: cores.corpo, marginBottom: '18px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={aceite}
+              onChange={(e) => setAceite(e.target.checked)}
+              disabled={enviando}
+              style={{ marginTop: '3px', width: '15px', height: '15px', accentColor: cores.azul, flexShrink: 0 }}
+            />
+            <span>
+              Concordo com a cobrança descrita acima e com a{' '}
+              <a href="/privacidade" target="_blank" rel="noopener noreferrer" style={{ color: cores.azul, textDecoration: 'underline' }}>
+                política de privacidade
+              </a>
+              .
+            </span>
+          </label>
+
           {erro && (
             <div
               role="alert"
@@ -213,13 +366,22 @@ export default function Checkout() {
               }}
             >
               {erro}
+              {regularizarUrl && (
+                <a
+                  href={regularizarUrl}
+                  className="flex items-center justify-center"
+                  style={{ marginTop: '10px', height: '42px', borderRadius: '10px', background: '#B91C1C', color: '#FFFFFF', fontWeight: 600, textDecoration: 'none' }}
+                >
+                  Pagar fatura em aberto
+                </a>
+              )}
             </div>
           )}
 
           <button
             type="button"
             onClick={irParaPagamento}
-            disabled={enviando}
+            disabled={!podePagar}
             className="flex items-center justify-center"
             style={{
               width: '100%',
@@ -231,8 +393,8 @@ export default function Checkout() {
               background: cores.azul,
               border: 'none',
               borderRadius: '13px',
-              cursor: enviando ? 'not-allowed' : 'pointer',
-              opacity: enviando ? 0.7 : 1,
+              cursor: podePagar ? 'pointer' : 'not-allowed',
+              opacity: podePagar ? 1 : 0.6,
               boxShadow: '0 12px 30px rgba(37,99,235,0.30)',
               transition: TRANSICAO,
             }}
@@ -251,16 +413,18 @@ export default function Checkout() {
             className="text-center"
             style={{ fontSize: '12.5px', color: cores.corpoSuave, margin: '10px 0 22px' }}
           >
-            Pagamento seguro · cancele quando quiser
+            {parcelado
+              ? 'Pagamento seguro pelo Asaas · parcelas no cartão, sem juros'
+              : 'Pagamento seguro pelo Asaas · cancele quando quiser'}
           </p>
 
-          {/* Cupom de acesso — funciona mesmo sem o pagamento online */}
+          {/* Cupom de acesso — libera sem passar pelo pagamento */}
           <CaixaCupom />
 
           <div style={{ height: '1px', background: cores.borda, marginBottom: '20px' }} />
 
           <ul style={{ display: 'grid', gap: '10px', listStyle: 'none', padding: 0, margin: 0 }}>
-            {RECURSOS_INCLUSOS.map((r) => (
+            {recursosDaArea(area).map((r) => (
               <li key={r} className="flex items-start" style={{ gap: '9px' }}>
                 <span
                   className="flex items-center justify-center shrink-0"

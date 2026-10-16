@@ -17,7 +17,7 @@ import { CrudTable, Td, Th } from './tabela'
 
 /* Admin → Cupons, do software na tela (decisões do Raver, 15/10/2026): cada
    cupom é de um software; dá acesso (dias ou sem fim) e/ou um desconto em % ou
-   R$ guardado para a cobrança (entra com o pagamento novo); e escolhe o tipo de
+   R$ guardado para a cobrança (entra na 1ª cobrança do Asaas); e escolhe o tipo de
    conta que cria. O de admin sempre tem limite de usos e validade. */
 
 type Desconto = 'nenhum' | 'porcentagem' | 'valor'
@@ -231,7 +231,7 @@ export function PainelCupons() {
                   <span className="text-sm text-gray-500">{form.desconto === 'porcentagem' ? '%' : 'reais por mensalidade'}</span>
                 </div>
               )}
-              {form.desconto !== 'nenhum' && <p className="text-[11.5px] text-gray-500">Fica guardado na conta de quem usar e entra na cobrança quando o novo pagamento (Asaas) começar.</p>}
+              {form.desconto !== 'nenhum' && <p className="text-[11.5px] text-gray-500">Fica guardado na conta de quem usar e entra sozinho na 1ª cobrança do Asaas.</p>}
             </div>
 
             <div className="space-y-1.5">

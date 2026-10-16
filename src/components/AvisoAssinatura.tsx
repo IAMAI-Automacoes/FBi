@@ -11,7 +11,8 @@ import { CABECALHO_PUBLICO } from '@/lib/publico-rota'
  *    (acabou de ser criada, ou pulou a etapa no onboarding), "reconectar" para
  *    quem já recebia (ex.: depois de reassinar, a instância foi derrubada)
  *  - Assinatura cancelada mas com acesso até a data paga
- *  - Assinatura prestes a acabar (cupom/plano vencendo)
+ *  - Assinatura prestes a acabar (cupom, liberação ou parcelado vencendo).
+ *    A recorrente do Asaas renova sozinha: não ganha esse aviso.
  *
  * O aviso de "acabou" de vez não fica aqui: quando a assinatura encerra, o
  * RotaProtegida manda pra /assinatura (que mostra "Sua assinatura foi encerrada").
@@ -48,6 +49,7 @@ export function AvisoAssinatura() {
 
   const expira = usuario.assinatura_expira_em ? new Date(usuario.assinatura_expira_em) : null
   const cancelada = !!usuario.assinatura_cancelada_em
+  const renovaSozinha = usuario.assinatura_origem === 'asaas_recorrente'
   const dias = expira ? Math.ceil((expira.getTime() - Date.now()) / 86_400_000) : null
   const fmt = (d: Date) => d.toLocaleDateString('pt-BR')
 
@@ -70,7 +72,7 @@ export function AvisoAssinatura() {
     Icon = Clock
     texto = <>Você cancelou a assinatura. Seu acesso continua até <b>{fmt(expira)}</b>.</>
     cta = { to: '/assinatura', label: 'Reativar' }
-  } else if (!cancelada && expira && dias !== null && dias >= 0 && dias <= 7) {
+  } else if (!cancelada && !renovaSozinha && expira && dias !== null && dias >= 0 && dias <= 7) {
     Icon = Clock
     texto = (
       <>

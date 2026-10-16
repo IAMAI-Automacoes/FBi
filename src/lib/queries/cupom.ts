@@ -8,7 +8,7 @@ export interface ResultadoCupom {
   expira_em: string | null
   /** Dias de acesso liberados, ou null (sem expiração). */
   dias: number | null
-  /** O desconto que ficou guardado (entra na cobrança com o pagamento novo). */
+  /** O desconto que ficou guardado (entra na 1ª cobrança do Asaas). */
   desconto: { tipo: 'porcentagem' | 'valor'; valor: number } | null
   tipo_conta: 'normal' | 'vendedor' | 'admin'
 }
