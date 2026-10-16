@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { paginaSobDemanda } from './lib/pagina-sob-demanda'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider } from '@/hooks/use-auth'
@@ -17,32 +18,32 @@ import Vendas from './pages/Vendas'
 // Páginas pesadas (painel, admin, relatórios com gráficos/PDF, QR) — carregadas
 // sob demanda (code-splitting) para o bundle inicial ficar pequeno e o primeiro
 // paint ser rápido, inclusive na página de vendas.
-const Index = lazy(() => import('./pages/Index'))
+const Index = paginaSobDemanda(() => import('./pages/Index'))
 // EasyFeed Influencers: área escondida, com login separado (só carrega em /influencers).
-const AreaInfluencers = lazy(() => import('./pages/influencers/AreaInfluencers'))
-const Feedbacks = lazy(() => import('./pages/Feedbacks'))
-const Insights = lazy(() => import('./pages/Insights'))
-const Actions = lazy(() => import('./pages/Actions'))
-const AcoesArquivadas = lazy(() => import('./pages/AcoesArquivadas'))
-const Reports = lazy(() => import('./pages/Reports'))
-const Google = lazy(() => import('./pages/Google'))
-const Missoes = lazy(() => import('./pages/Missoes'))
-const MissoesHistorico = lazy(() => import('./pages/MissoesHistorico'))
-const Indicacoes = lazy(() => import('./pages/Indicacoes'))
-const Equipe = lazy(() => import('./pages/Equipe'))
-const Privacidade = lazy(() => import('./pages/Privacidade'))
-const QRCodes = lazy(() => import('./pages/QRCodes'))
-const Garcons = lazy(() => import('./pages/Garcons'))
-const Settings = lazy(() => import('./pages/Settings'))
-const Onboarding = lazy(() => import('./pages/auth/Onboarding'))
-const MyAccount = lazy(() => import('./pages/MyAccount'))
-const Sugestoes = lazy(() => import('./pages/Sugestoes'))
-const WhatsApp = lazy(() => import('./pages/WhatsApp'))
-const Admin = lazy(() => import('./pages/Admin'))
-const Checkout = lazy(() => import('./pages/Checkout'))
-const Assinatura = lazy(() => import('./pages/Assinatura'))
-const EscolherArea = lazy(() => import('./pages/auth/EscolherArea'))
-const CheckoutSucesso = lazy(() => import('./pages/CheckoutSucesso'))
+const AreaInfluencers = paginaSobDemanda(() => import('./pages/influencers/AreaInfluencers'))
+const Feedbacks = paginaSobDemanda(() => import('./pages/Feedbacks'))
+const Insights = paginaSobDemanda(() => import('./pages/Insights'))
+const Actions = paginaSobDemanda(() => import('./pages/Actions'))
+const AcoesArquivadas = paginaSobDemanda(() => import('./pages/AcoesArquivadas'))
+const Reports = paginaSobDemanda(() => import('./pages/Reports'))
+const Google = paginaSobDemanda(() => import('./pages/Google'))
+const Missoes = paginaSobDemanda(() => import('./pages/Missoes'))
+const MissoesHistorico = paginaSobDemanda(() => import('./pages/MissoesHistorico'))
+const Indicacoes = paginaSobDemanda(() => import('./pages/Indicacoes'))
+const Equipe = paginaSobDemanda(() => import('./pages/Equipe'))
+const Privacidade = paginaSobDemanda(() => import('./pages/Privacidade'))
+const QRCodes = paginaSobDemanda(() => import('./pages/QRCodes'))
+const Garcons = paginaSobDemanda(() => import('./pages/Garcons'))
+const Settings = paginaSobDemanda(() => import('./pages/Settings'))
+const Onboarding = paginaSobDemanda(() => import('./pages/auth/Onboarding'))
+const MyAccount = paginaSobDemanda(() => import('./pages/MyAccount'))
+const Sugestoes = paginaSobDemanda(() => import('./pages/Sugestoes'))
+const WhatsApp = paginaSobDemanda(() => import('./pages/WhatsApp'))
+const Admin = paginaSobDemanda(() => import('./pages/Admin'))
+const Checkout = paginaSobDemanda(() => import('./pages/Checkout'))
+const Assinatura = paginaSobDemanda(() => import('./pages/Assinatura'))
+const EscolherArea = paginaSobDemanda(() => import('./pages/auth/EscolherArea'))
+const CheckoutSucesso = paginaSobDemanda(() => import('./pages/CheckoutSucesso'))
 import { RotaProtegida } from './components/RotaProtegida'
 import { RotaPermitida } from './components/RotaPermitida'
 import { AdminNotificacoes } from './components/AdminNotificacoes'
