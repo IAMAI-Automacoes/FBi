@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import type { Area } from '@/lib/areas'
+import { novoUuid } from '@/lib/uuid'
 
 export interface DocumentoIA {
   id: string
@@ -19,7 +20,7 @@ export interface DocumentoIA {
 /** Sobe o arquivo original para o Storage e devolve a URL pública (para ver depois). */
 export async function subirArquivoConhecimento(restauranteId: number, file: File): Promise<string> {
   const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-  const caminho = `${restauranteId}/${crypto.randomUUID()}.${ext}`
+  const caminho = `${restauranteId}/${novoUuid()}.${ext}`
   const { error } = await supabase.storage
     .from('conhecimento')
     .upload(caminho, file, { contentType: file.type || undefined, upsert: false })

@@ -13,6 +13,7 @@ import {
   pesquisarNaWeb, lerPaginaWeb, curarConhecimento,
 } from '@/lib/ia/agentes'
 import { parsearComando, removerComandos, ehComandoMaterial } from '@/lib/ia/comandos'
+import { novoUuid } from '@/lib/uuid'
 
 export interface AtualizacaoConfig {
   campo: string
@@ -92,7 +93,7 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
     if (saved && savedTime && Date.now() - parseInt(savedTime) < 24 * 60 * 60 * 1000) {
       return saved
     }
-    const newId = crypto.randomUUID()
+    const newId = novoUuid()
     localStorage.setItem(`${guarda}_id`, newId)
     localStorage.setItem(`${guarda}_time`, Date.now().toString())
     return newId
@@ -385,7 +386,7 @@ export function useChat(contextoPagina: string, contextoDadosIniciais: any = {})
   }
 
   const novaConversa = () => {
-    const newId = crypto.randomUUID()
+    const newId = novoUuid()
     localStorage.setItem(`${guarda}_id`, newId)
     localStorage.setItem(`${guarda}_time`, Date.now().toString())
     setSessaoId(newId)
