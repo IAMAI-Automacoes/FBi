@@ -17,13 +17,22 @@ type Db = any
 
 export interface ConfigGoogle { clientId: string; clientSecret: string; redirectUri: string }
 
-/** Credenciais do cliente OAuth (segredos do Supabase). Sem elas: null. */
+/**
+ * Credenciais do cliente OAuth (segredos do Supabase). Sem elas: null.
+ *
+ * O endereço de volta do Google: `GOOGLE_REDIRECT_URI` quando existe (o do
+ * nosso domínio, https://easyfeed.com.br/google/retorno, que repassa para esta
+ * função; a verificação do app exige um domínio nosso), senão o da própria
+ * função no Supabase. Precisa ser IGUAL a um dos "URIs de redirecionamento
+ * autorizados" do cliente OAuth no Google Cloud.
+ */
 export function configGoogle(): ConfigGoogle | null {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID')?.trim()
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')?.trim()
   const base = Deno.env.get('SUPABASE_URL')?.trim().replace(/\/+$/, '')
   if (!clientId || !clientSecret || !base) return null
-  return { clientId, clientSecret, redirectUri: `${base}/functions/v1/google-oauth-callback` }
+  const proprio = Deno.env.get('GOOGLE_REDIRECT_URI')?.trim()
+  return { clientId, clientSecret, redirectUri: proprio || `${base}/functions/v1/google-oauth-callback` }
 }
 
 export function clienteGoogle(cfg: ConfigGoogle): ClienteGoogle {

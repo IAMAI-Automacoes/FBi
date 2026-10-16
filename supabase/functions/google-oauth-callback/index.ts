@@ -4,8 +4,11 @@
 //
 // Publicar SEM verificação de JWT — quem chama é o navegador voltando do Google:
 //   npx supabase functions deploy google-oauth-callback --no-verify-jwt --project-ref lixrcruilisncfhfhndo
-// URL cadastrada como "URI de redirecionamento autorizado" no cliente OAuth:
+// URLs cadastradas como "URI de redirecionamento autorizado" no cliente OAuth:
 //   https://lixrcruilisncfhfhndo.supabase.co/functions/v1/google-oauth-callback
+//   https://easyfeed.com.br/google/retorno  (o nosso domínio, exigido na
+//     verificação do app; o site repassa para cá com o mesmo ?code&state.
+//     Vale quando o segredo GOOGLE_REDIRECT_URI aponta para ele.)
 
 import { clienteAdmin } from '../_shared/auth.ts'
 import { siteUrl } from '../_shared/config.ts'

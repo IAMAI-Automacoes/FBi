@@ -31,6 +31,7 @@ const MissoesHistorico = lazy(() => import('./pages/MissoesHistorico'))
 const Indicacoes = lazy(() => import('./pages/Indicacoes'))
 const Equipe = lazy(() => import('./pages/Equipe'))
 const Privacidade = lazy(() => import('./pages/Privacidade'))
+const GoogleRetorno = lazy(() => import('./pages/GoogleRetorno'))
 const QRCodes = lazy(() => import('./pages/QRCodes'))
 const Garcons = lazy(() => import('./pages/Garcons'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -127,6 +128,8 @@ const App = () => (
               {/* Política de privacidade — pública; o Google exige o link na tela
                   de permissão do login com Google e na página inicial. */}
               <Route path="/privacidade" element={<Privacidade />} />
+              {/* Volta do login com o Google (endereço do nosso domínio): segue para a função. */}
+              <Route path="/google/retorno" element={<GoogleRetorno />} />
               {/* EasyFeed Influencers — fora do RotaProtegida: login próprio, separado do painel dos restaurantes. */}
               <Route path="/influencers/*" element={<AreaInfluencers />} />
             </>
