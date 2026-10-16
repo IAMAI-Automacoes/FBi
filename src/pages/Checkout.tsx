@@ -29,8 +29,8 @@ function mascaraDocumento(v: string): string {
    chega aqui está autenticado (a landing manda criar a conta antes).
    O botão cria a cobrança no Asaas (`criar-cobranca`) e leva para a fatura,
    onde a pessoa põe o cartão. Semestral e anual podem ser à vista (renova
-   sozinho) ou parcelados pelo mesmo total (não renova). O cupom de acesso
-   continua funcionando. */
+   sozinho) ou parcelados com o acréscimo do cartão parcelado (não renova). O
+   cupom de acesso continua funcionando. */
 export default function Checkout() {
   const [params] = useSearchParams()
   const { usuario, logout } = useAuth()
@@ -221,7 +221,7 @@ export default function Checkout() {
                 </div>
                 <p style={{ fontSize: '13.5px', color: cores.corpoSuave, marginTop: '8px' }}>
                   {parcelado
-                    ? `${plano.totalCobrado} em ${plano.parcelas}x sem juros no cartão · não renova sozinho`
+                    ? `${plano.parcelas}x no cartão · total ${plano.totalParcelado} · não renova sozinho`
                     : plano.descricao}
                   {plano.descontoPercentual !== null && (
                     <span style={{ color: cores.verde, fontWeight: 600 }}>
@@ -243,7 +243,7 @@ export default function Checkout() {
             )}
           </div>
 
-          {/* À vista (renova) ou parcelado (mesmo total, não renova) */}
+          {/* À vista (renova) ou parcelado (com acréscimo, não renova) */}
           {plano?.parcelas && (
             <div role="radiogroup" aria-label="Forma de pagamento" style={{ display: 'grid', gap: '8px', marginBottom: '18px' }}>
               {[
@@ -254,8 +254,8 @@ export default function Checkout() {
                 },
                 {
                   id: 'parcelado' as const,
-                  titulo: `${plano.parcelas}x de R$ ${plano.valorParcela} sem juros`,
-                  texto: 'No cartão, pelo mesmo total · não renova sozinho',
+                  titulo: `${plano.parcelas}x de R$ ${plano.valorParcela} (total ${plano.totalParcelado})`,
+                  texto: 'No cartão · não renova sozinho',
                 },
               ].map((op) => {
                 const marcado = modalidade === op.id
@@ -414,7 +414,7 @@ export default function Checkout() {
             style={{ fontSize: '12.5px', color: cores.corpoSuave, margin: '10px 0 22px' }}
           >
             {parcelado
-              ? 'Pagamento seguro pelo Asaas · parcelas no cartão, sem juros'
+              ? 'Pagamento seguro pelo Asaas · parcelado no cartão'
               : 'Pagamento seguro pelo Asaas · cancele quando quiser'}
           </p>
 

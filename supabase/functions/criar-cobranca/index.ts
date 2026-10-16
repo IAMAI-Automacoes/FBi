@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
     // ── Preço (do banco, nunca do cliente) ──
     const { data: preco } = await db
       .from('planos_precos')
-      .select('total_centavos, parcelas_max')
+      .select('total_centavos, parcelas_max, total_parcelado_centavos')
       .eq('area', area)
       .eq('ciclo', ciclo)
       .eq('ativo', true)
@@ -90,7 +90,11 @@ Deno.serve(async (req: Request) => {
     if (!preco?.total_centavos) return json({ error: 'Este plano não está disponível agora.' }, 409)
     const parcelas = modalidade === 'parcelado' ? Number(preco.parcelas_max) || null : null
     if (modalidade === 'parcelado' && !parcelas) return json({ error: 'Este plano não pode ser parcelado.' }, 400)
-    const total = Number(preco.total_centavos)
+    // O parcelado tem o próprio total (com o acréscimo da taxa do cartão
+    // parcelado, que vai para o cliente); sem ele, é o mesmo do à vista.
+    const total = modalidade === 'parcelado' && Number(preco.total_parcelado_centavos) > 0
+      ? Number(preco.total_parcelado_centavos)
+      : Number(preco.total_centavos)
 
     // ── Travas ──
     const trava = await conferirTravas(db, rest.id, ciclo, modalidade)

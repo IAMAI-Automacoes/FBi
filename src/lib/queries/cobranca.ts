@@ -18,14 +18,16 @@ export interface PrecoPublico {
   mensal_equivalente_centavos: number
   /** Economia sobre o mensal (inteiro), ou null no mensal / sem economia. */
   desconto_percentual: number | null
-  /** Em quantas vezes dá para parcelar no cartão, pelo mesmo total; null = não parcela. */
+  /** Em quantas vezes dá para parcelar no cartão; null = não parcela. */
   parcelas_max: number | null
+  /** Total do parcelado (com o acréscimo do cartão parcelado), em centavos. */
+  total_parcelado_centavos: number | null
 }
 
 /** Converte as linhas de `planos_precos` no formato da tela. O desconto é
     calculado dos valores reais — nenhum número fixo. */
 export function montarPrecosPublicos(
-  linhas: { ciclo: string; total_centavos: number; parcelas_max?: number | null }[],
+  linhas: { ciclo: string; total_centavos: number; parcelas_max?: number | null; total_parcelado_centavos?: number | null }[],
 ): PrecoPublico[] {
   const linha = (c: Ciclo) => linhas.find((l) => l.ciclo === c)
   const total = (c: Ciclo) => linha(c)?.total_centavos
@@ -41,12 +43,14 @@ export function montarPrecosPublicos(
       if (desconto <= 0) desconto = null
     }
     const parcelas = linha(ciclo)?.parcelas_max
+    const totalParcelado = linha(ciclo)?.total_parcelado_centavos
     saida.push({
       ciclo,
       total_centavos: t,
       mensal_equivalente_centavos: mensalEq,
       desconto_percentual: desconto,
       parcelas_max: typeof parcelas === 'number' && parcelas > 1 ? parcelas : null,
+      total_parcelado_centavos: typeof totalParcelado === 'number' && totalParcelado > 0 ? totalParcelado : t,
     })
   }
   return saida
@@ -56,11 +60,13 @@ export function montarPrecosPublicos(
 export async function buscarPrecos(area: 'restaurante' | 'rh' = 'restaurante'): Promise<PrecoPublico[]> {
   const { data, error } = await supabase
     .from('planos_precos')
-    .select('ciclo, total_centavos, parcelas_max')
+    .select('ciclo, total_centavos, parcelas_max, total_parcelado_centavos')
     .eq('area', area)
     .eq('ativo', true)
   if (error) throw new Error('Não foi possível carregar os preços.')
-  return montarPrecosPublicos((data ?? []) as { ciclo: string; total_centavos: number; parcelas_max: number | null }[])
+  return montarPrecosPublicos(
+    (data ?? []) as { ciclo: string; total_centavos: number; parcelas_max: number | null; total_parcelado_centavos: number | null }[],
+  )
 }
 
 /** Erro tipado da cobrança: carrega o corpo para a tela decidir o que fazer. */

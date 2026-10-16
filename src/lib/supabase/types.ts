@@ -2931,6 +2931,7 @@ export type Database = {
           ciclo: string
           parcelas_max: number | null
           total_centavos: number
+          total_parcelado_centavos: number | null
         }
         Insert: {
           area: string
@@ -2940,6 +2941,7 @@ export type Database = {
           ciclo: string
           parcelas_max?: number | null
           total_centavos: number
+          total_parcelado_centavos?: number | null
         }
         Update: {
           area?: string
@@ -2949,6 +2951,7 @@ export type Database = {
           ciclo?: string
           parcelas_max?: number | null
           total_centavos?: number
+          total_parcelado_centavos?: number | null
         }
         Relationships: []
       }
