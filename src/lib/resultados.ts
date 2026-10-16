@@ -1,6 +1,6 @@
 /**
- * Resultados: a evolução de cada restaurante desde que entrou no EasyFeed
- * (aba "Resultados" do painel do admin) e as frases de marketing que saem dela.
+ * Acompanhamento: a evolução de cada restaurante desde que entrou no EasyFeed
+ * (aba "Acompanhamento" do painel do admin) e as frases de marketing que saem dela.
  *
  * A matéria-prima são as contagens diárias de `metricas_diarias` (migration
  * 20261029000000). Aqui só se soma e compara — sem React e sem Supabase, para

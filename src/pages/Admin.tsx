@@ -2005,8 +2005,8 @@ export default function Admin() {
         {/* ── MOTOR DE RESPOSTA ── */}
         {abaAtual === 'motor' && <PainelMotorResposta />}
 
-        {/* ── RESULTADOS (evolução dos restaurantes, para o marketing) ── */}
-        {abaAtual === 'resultados' && <PainelResultados />}
+        {/* ── ACOMPANHAMENTO (evolução dos restaurantes, para o marketing) ── */}
+        {abaAtual === 'acompanhamento' && <PainelResultados />}
 
         {/* ── CONHECIMENTO GLOBAL ── */}
         {abaAtual === 'conhecimento' && <ConhecimentoGlobal />}

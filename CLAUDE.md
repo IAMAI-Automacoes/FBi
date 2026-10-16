@@ -196,7 +196,7 @@ ação. É o que faz o botão "Feedbacks Relacionados" levar a
 `feedbacks_relacionados` deixou de ser um número inventado pela IA: agora é o
 tamanho de `feedback_ids`.
 
-### Resultados (aba do admin, para o marketing)
+### Acompanhamento (aba do admin, para o marketing)
 
 `metricas_diarias` guarda CONTAGENS por restaurante e dia (Brasília): mensagens,
 pontos por sentimento, por categoria, clientes novos/retornos, aberturas do QR,

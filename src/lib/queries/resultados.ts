@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import type { AutorizacaoMarketing, DiaMetricas } from '@/lib/resultados'
 
-// `metricas_diarias`, `autorizacoes_marketing` e as RPCs da aba Resultados não
+// `metricas_diarias`, `autorizacoes_marketing` e as RPCs da aba Acompanhamento não
 // estão nos tipos gerados; acesso destipado (mesmo jeito de uso-ia.ts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any

@@ -30,7 +30,7 @@ function culinariasSeguras(restaurantes: RestauranteResultados[]): Set<string> {
 }
 
 /**
- * Aba "Resultados": a evolução de cada restaurante desde que entrou no
+ * Aba "Acompanhamento": a evolução de cada restaurante desde que entrou no
  * EasyFeed, os números da base e as frases prontas para o marketing.
  * Regras das contas em `src/lib/resultados.ts`.
  */
@@ -129,7 +129,7 @@ export function PainelResultados() {
       <div className="max-w-5xl mx-auto space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">Resultados</h2>
+            <h2 className="text-base font-semibold text-gray-800">Acompanhamento</h2>
             <p className="mt-1 text-[12px] text-gray-500">
               Como cada restaurante evoluiu desde o primeiro feedback no EasyFeed: os primeiros 30 dias contra os
               últimos 30. Só feedback de cliente. Atualiza sozinho todo dia de madrugada.

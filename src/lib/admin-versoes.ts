@@ -21,22 +21,22 @@ import { areaDe, type Area } from './areas.ts'
 
 export type AbaAdmin =
   | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'videos' | 'pagamentos' | 'cupons'
-  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor' | 'resultados'
+  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor' | 'acompanhamento'
 
 /** Todas as abas, na ordem do menu. */
 export const TODAS_AS_ABAS: readonly AbaAdmin[] = [
   'suporte', 'whatsapp', 'contas', 'vendedores', 'influenciadores', 'videos', 'pagamentos', 'cupons',
-  'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor', 'resultados',
+  'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor', 'acompanhamento',
 ]
 
 /**
  * Abas que só existem no Restaurante: vendedores (demonstração do produto de
  * restaurante), EasyFeed Influencers, o motor de resposta (o aviso aos
  * CLIENTES quando o problema deles foi resolvido; no RH o aviso à equipe é
- * outro, e o dono revisa antes de mandar) e Resultados (a evolução da
+ * outro, e o dono revisa antes de mandar) e Acompanhamento (a evolução da
  * satisfação dos CLIENTES de cada restaurante, para o marketing).
  */
-const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor', 'resultados'])
+const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor', 'acompanhamento'])
 
 /**
  * O admin parceiro (decisão do Raver, 16/10/2026: só o Anderson) vê três abas,
