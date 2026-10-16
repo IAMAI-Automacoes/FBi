@@ -48,6 +48,7 @@ import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { nomeDeArquivoSeguro } from '@/lib/nome-arquivo'
 import { CampoTelefone } from '@/components/CampoTelefone'
 import { telefoneNacionalValido, formatarExibicaoTelefone } from '@/lib/telefone'
+import { novoUuid } from '@/lib/uuid'
 
 interface Garcom {
   id: number
@@ -747,7 +748,7 @@ export default function Garcons() {
       const ehNova = !regraForm.id
       let regraFinal: RegraBonificacao = {
         ...regraForm,
-        id: regraForm.id || crypto.randomUUID(),
+        id: regraForm.id || novoUuid(),
         // Primeira vez que a regra é salva: define onde o período começa
         // (agora, ou alinhado ao calendário — ver `calcularInicioRegra`).
         periodo_inicio: regraForm.periodo_inicio ?? calcularInicioRegra(regraForm),

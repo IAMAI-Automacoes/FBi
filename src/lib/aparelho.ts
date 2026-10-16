@@ -9,12 +9,14 @@
  * (silencios_aparelho.aparelho).
  */
 
+import { novoUuid } from '@/lib/uuid'
+
 const CHAVE = 'easyfeed:aparelho'
 let emMemoria: string | null = null
 
 function novoId(): string {
   try {
-    return crypto.randomUUID()
+    return novoUuid()
   } catch {
     return `ap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
   }
