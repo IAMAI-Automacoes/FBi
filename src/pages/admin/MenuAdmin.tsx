@@ -36,7 +36,7 @@ export const ABAS_ADMIN: { key: AbaAdmin; label: string; icon: React.ComponentTy
   { key: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
   { key: 'uso_ia', label: 'Uso de IA', icon: Gauge },
   { key: 'motor', label: 'Motor de resposta', icon: Workflow },
-  { key: 'resultados', label: 'Resultados', icon: TrendingUp },
+  { key: 'acompanhamento', label: 'Acompanhamento', icon: TrendingUp },
 ]
 
 export const ROTULO_ABA_ADMIN = Object.fromEntries(ABAS_ADMIN.map((a) => [a.key, a.label])) as Record<AbaAdmin, string>

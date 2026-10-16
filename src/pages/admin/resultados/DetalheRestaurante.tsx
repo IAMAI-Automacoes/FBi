@@ -131,7 +131,7 @@ export function DetalheRestaurante({
   }
 
   const baixarCsv = () =>
-    baixarArquivo(`${nomeDeArquivoSeguro(`resultados-${nome}`, 'resultados')}.csv`, serializarCsv(linhasCsvMensal(resumo)))
+    baixarArquivo(`${nomeDeArquivoSeguro(`acompanhamento-${nome}`, 'acompanhamento')}.csv`, serializarCsv(linhasCsvMensal(resumo)))
 
   const motivoSemComparacao =
     resumo.diasDeCasa < MIN_DIAS_DE_CASA

@@ -1998,8 +1998,8 @@ export default function Admin() {
         {/* ── MOTOR DE RESPOSTA ── */}
         {activeTab === 'motor' && <PainelMotorResposta />}
 
-        {/* ── RESULTADOS (evolução dos restaurantes, para o marketing) ── */}
-        {activeTab === 'resultados' && <PainelResultados />}
+        {/* ── ACOMPANHAMENTO (evolução dos restaurantes, para o marketing) ── */}
+        {activeTab === 'acompanhamento' && <PainelResultados />}
 
         {/* ── CONHECIMENTO GLOBAL ── */}
         {activeTab === 'conhecimento' && <ConhecimentoGlobal />}
