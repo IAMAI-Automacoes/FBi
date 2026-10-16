@@ -19,7 +19,7 @@ function ok(nome: string, cond: boolean, detalhe?: unknown) {
 // ── Abas ─────────────────────────────────────────────────────────────────────
 ok('o restaurante continua com todas as abas, na mesma ordem', abasDaVersao('restaurante').join() === TODAS_AS_ABAS.join())
 const doRh = abasDaVersao('rh')
-ok('o RH não tem vendedores, influenciadores nem motor de resposta', !['vendedores', 'influenciadores', 'motor'].some((a) => doRh.includes(a as never)), doRh)
+ok('o RH não tem vendedores, influenciadores, motor de resposta nem resultados', !['vendedores', 'influenciadores', 'motor', 'resultados'].some((a) => doRh.includes(a as never)), doRh)
 ok('o RH mantém o que controla as duas versões', ['pagamentos', 'cupons', 'afiliados', 'videos', 'agentes', 'conhecimento'].every((a) => doRh.includes(a as never)), doRh)
 ok('o RH mantém o que é de cada conta', ['suporte', 'whatsapp', 'contas', 'uso_ia'].every((a) => doRh.includes(a as never)), doRh)
 ok('o RH segue a ordem do menu', doRh.join() === TODAS_AS_ABAS.filter((a) => doRh.includes(a)).join())

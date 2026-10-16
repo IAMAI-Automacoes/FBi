@@ -37,6 +37,7 @@ import { PainelWhatsappAdmin } from '@/pages/admin/PainelWhatsappAdmin'
 import { PainelMotorResposta } from '@/pages/admin/PainelMotorResposta'
 import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
 import { PainelUsoIA } from '@/pages/admin/PainelUsoIA'
+import { PainelResultados } from '@/pages/admin/PainelResultados'
 import { PainelPagamentos } from '@/pages/admin/PainelPagamentos'
 import { PainelCupons } from '@/pages/admin/PainelCupons'
 import {
@@ -1996,6 +1997,9 @@ export default function Admin() {
 
         {/* ── MOTOR DE RESPOSTA ── */}
         {activeTab === 'motor' && <PainelMotorResposta />}
+
+        {/* ── RESULTADOS (evolução dos restaurantes, para o marketing) ── */}
+        {activeTab === 'resultados' && <PainelResultados />}
 
         {/* ── CONHECIMENTO GLOBAL ── */}
         {activeTab === 'conhecimento' && <ConhecimentoGlobal />}

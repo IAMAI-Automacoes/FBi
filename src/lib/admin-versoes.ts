@@ -21,21 +21,22 @@ import { areaDe, type Area } from './areas.ts'
 
 export type AbaAdmin =
   | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'videos' | 'pagamentos' | 'cupons'
-  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor'
+  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor' | 'resultados'
 
 /** Todas as abas, na ordem do menu. */
 export const TODAS_AS_ABAS: readonly AbaAdmin[] = [
   'suporte', 'whatsapp', 'contas', 'vendedores', 'influenciadores', 'videos', 'pagamentos', 'cupons',
-  'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor',
+  'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor', 'resultados',
 ]
 
 /**
  * Abas que só existem no Restaurante: vendedores (demonstração do produto de
- * restaurante), EasyFeed Influencers e o motor de resposta (o aviso aos
+ * restaurante), EasyFeed Influencers, o motor de resposta (o aviso aos
  * CLIENTES quando o problema deles foi resolvido; no RH o aviso à equipe é
- * outro, e o dono revisa antes de mandar).
+ * outro, e o dono revisa antes de mandar) e Resultados (a evolução da
+ * satisfação dos CLIENTES de cada restaurante, para o marketing).
  */
-const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor'])
+const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor', 'resultados'])
 
 export function abasDaVersao(area: Area): AbaAdmin[] {
   return TODAS_AS_ABAS.filter((a) => area === 'restaurante' || !SO_NO_RESTAURANTE.has(a))
