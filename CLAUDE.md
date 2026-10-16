@@ -136,8 +136,9 @@ cobrança pela API do Asaas com o nosso id (`externalReference`) e manda a
 pessoa para a fatura do Asaas; o cartão nunca passa por nós. Quem libera o
 acesso é o `asaas-webhook`. Detalhes em `supabase/migrations/20261029100000_cobranca_asaas.sql`.
 - Modalidades: recorrente no cartão (mensal, semestral, anual) ou parcelado
-  pelo mesmo total (semestral 6x, anual 12x; `planos_precos.parcelas_max`),
-  que não renova e tem 7 dias de carência.
+  (semestral 6x, anual 12x; `planos_precos.parcelas_max`), que não renova e tem
+  7 dias de carência. O parcelado custa mais: a taxa a mais do cartão
+  parcelado vai para o cliente (`planos_precos.total_parcelado_centavos`).
 - `restaurantes.assinatura_origem`: `asaas_recorrente` (o webhook rege, o cron
   não toca), `asaas_parcelado`, `cupom`, `manual`.
 - Contas do Asaas em `contas_cobranca` (hoje só `mei`). Secrets por conta:
