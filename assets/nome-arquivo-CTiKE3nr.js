@@ -1,0 +1,1 @@
+function e(e,t=`arquivo`){return(e??``).normalize(`NFD`).replace(/[̀-ͯ]/g,``).replace(/[^a-zA-Z0-9]+/g,`-`).replace(/^-+|-+$/g,``).toLowerCase()||t}export{e as t};
