@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, Loader2, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { BrandMark, WhatsAppIcon } from '@/components/auth/AuthLayout'
@@ -9,7 +9,8 @@ import { EtapasCompra } from '@/components/compra/EtapasCompra'
 
    A confirmação do pagamento chega ao servidor pelo webhook do provedor, que
    costuma chegar DEPOIS do redirect: `assinatura_status` pode estar defasado.
-   Faz polling até virar 'ativa' (o webhook do Asaas leva alguns segundos). */
+   Faz polling até virar 'ativa' (o webhook do Asaas leva alguns segundos) e
+   então segue sozinha para o onboarding (quem já configurou cai no painel). */
 type Estado = 'verificando' | 'ativa' | 'erro'
 
 const POLL_MS = 3000
@@ -18,6 +19,7 @@ const LIMITE_MS = 10 * 60_000
 
 export default function CheckoutSucesso() {
   const { usuario, logout, refetchUsuario } = useAuth()
+  const navigate = useNavigate()
   const [estado, setEstado] = useState<Estado>(usuario?.assinatura_status === 'ativa' ? 'ativa' : 'verificando')
   const [mensagem, setMensagem] = useState<string | null>(null)
   const inicio = useRef(Date.now())
@@ -25,6 +27,13 @@ export default function CheckoutSucesso() {
   useEffect(() => {
     if (usuario?.assinatura_status === 'ativa') setEstado('ativa')
   }, [usuario?.assinatura_status])
+
+  // Confirmado: mostra o "Pagamento confirmado" por um instante e segue.
+  useEffect(() => {
+    if (estado !== 'ativa') return
+    const t = setTimeout(() => navigate('/onboarding', { replace: true }), 1800)
+    return () => clearTimeout(t)
+  }, [estado, navigate])
 
   useEffect(() => {
     if (estado !== 'verificando') return

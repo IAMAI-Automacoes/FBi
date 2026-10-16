@@ -147,8 +147,11 @@ Deno.serve(async (req: Request) => {
       .single()
     if (errIns) throw new Error(`cobranca_assinaturas: ${errIns.message}`)
 
+    // Volta automática depois de pagar: para o site de onde a pessoa veio
+    // (no sandbox, também localhost); se o Asaas recusar, tenta o SITE_URL.
     const site = await siteUrl(db)
-    const callback = { successUrl: `${site}/checkout/sucesso?pedido=${pedido}`, autoRedirect: true }
+    const voltas = [...new Set([origemDeRetorno(req, site, cli.ambiente), site])]
+      .map((o) => ({ successUrl: `${o}/checkout/sucesso?pedido=${pedido}`, autoRedirect: true }))
     const descricao = `EasyFeed — plano ${ROTULO[ciclo]}${parcelas ? ` em ${parcelas}x` : ''}`
 
     let asaasId: string | null = null
@@ -156,7 +159,7 @@ Deno.serve(async (req: Request) => {
       // deno-lint-ignore no-explicit-any
       let pagamento: any
       if (modalidade === 'recorrente') {
-        const sub = await comCallback(callback, (cb) =>
+        const sub = await comCallback(voltas, (cb) =>
           cli.post('/subscriptions', {
             customer: customerId,
             billingType: 'CREDIT_CARD',
@@ -172,7 +175,7 @@ Deno.serve(async (req: Request) => {
         // Cupom: só a 1ª cobrança sai com desconto; a assinatura segue cheia.
         if (primeira !== total) pagamento = await cli.put(`/payments/${pagamento.id}`, { value: reais(primeira) })
       } else {
-        pagamento = await comCallback(callback, (cb) =>
+        pagamento = await comCallback(voltas, (cb) =>
           cli.post('/payments', {
             customer: customerId,
             billingType: 'CREDIT_CARD',
@@ -319,24 +322,38 @@ async function garantirCliente(
 }
 
 /**
- * Cria com o `callback` (volta automática para o site depois de pagar). Se o
- * Asaas recusar o callback (domínio do site ainda não cadastrado na conta),
- * cria sem ele: a pessoa volta pelo botão do e-mail ou entra de novo no app.
+ * De onde a pessoa veio (header `Origin`), se for um endereço nosso: o
+ * SITE_URL sempre; localhost só no sandbox (teste local). Senão, o SITE_URL.
+ */
+function origemDeRetorno(req: Request, site: string, ambiente: 'sandbox' | 'producao'): string {
+  const origem = (req.headers.get('Origin') ?? '').replace(/\/+$/, '')
+  if (origem === site) return origem
+  if (ambiente === 'sandbox' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origem)) return origem
+  return site
+}
+
+/**
+ * Cria com o `callback` (volta automática para o site depois de pagar),
+ * tentando cada endereço em ordem. O Asaas só aceita o domínio cadastrado na
+ * conta (Minha Conta → Informações → Site); se recusar todos, cria sem volta
+ * automática e a pessoa volta ao app por conta própria.
  * Recusa com 400 não cria nada, então repetir o POST é seguro.
  */
-async function comCallback<T>(
-  callback: { successUrl: string; autoRedirect: boolean },
-  criar: (cb: typeof callback | null) => Promise<T>,
-): Promise<T> {
-  try {
-    return await criar(callback)
-  } catch (e) {
-    if (e instanceof ErroAsaas && e.status === 400 && /callback|dom[ií]nio|successUrl|url/i.test(e.message)) {
-      console.warn('[criar-cobranca] callback recusado, criando sem ele:', e.message)
-      return await criar(null)
+type Volta = { successUrl: string; autoRedirect: boolean }
+async function comCallback<T>(voltas: Volta[], criar: (cb: Volta | null) => Promise<T>): Promise<T> {
+  for (const volta of voltas) {
+    try {
+      return await criar(volta)
+    } catch (e) {
+      if (e instanceof ErroAsaas && e.status === 400 && /callback|dom[ií]nio|successUrl|url|site/i.test(e.message)) {
+        console.warn(`[criar-cobranca] volta ${new URL(volta.successUrl).origin} recusada:`, e.message)
+        continue
+      }
+      throw e
     }
-    throw e
   }
+  console.warn('[criar-cobranca] nenhuma volta aceita: criando sem redirecionamento')
+  return await criar(null)
 }
 
 /** A 1ª cobrança de uma assinatura recém-criada. */
