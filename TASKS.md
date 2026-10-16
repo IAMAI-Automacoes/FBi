@@ -246,6 +246,24 @@ Conta sem plano (/assinatura) → mesma função com JWT → webhook vincula soz
 
 ---
 
+## Sessão 12 — Resultados (métricas para marketing)
+
+**Objetivo:** ver a evolução de cada restaurante desde a entrada no EasyFeed e tirar números reais para o marketing.
+
+- [x] Migration `20261029000000_metricas_resultados.sql`: `metricas_diarias`, `autorizacoes_marketing`, cálculo, cron diário e carga do histórico
+- [x] `src/lib/resultados.ts` (regras e frases) + `src/lib/__testes__/resultados.teste.ts`
+- [x] Aba "Resultados" no Painel Admin (lista, detalhe, frases, planilha, autorização)
+- [x] Aplicar a migration no Supabase e conferir os números com a Visão Geral
+- [x] Fase 2: o próprio dono autoriza em Configurações → Divulgação (migration `20261029010000_autorizacao_pelo_dono.sql`)
+- [ ] Aplicar `20261029010000_autorizacao_pelo_dono.sql` no Supabase
+- [ ] Validar com advogado o texto de autorização (versão `2026-10-15`)
+- [ ] ⏸️ Fase 2: avaliações do Google — PAUSADO até o Google liberar o acesso à API (depois: opt-in do dono + revisão da política de privacidade)
+- [ ] Fase 2: cartão PNG para redes sociais
+- [ ] Fase 2: página "Evolução" para o dono
+- [ ] Validar com advogado o texto sobre cases autorizados nos termos
+
+---
+
 ## Notas Importantes
 
 ### Discrepâncias SRS vs Código Real

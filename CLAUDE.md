@@ -213,3 +213,21 @@ ação. É o que faz o botão "Feedbacks Relacionados" levar a
 `feedbacks_restaurante.origem_id → feedbacks_originais.id` (ambos uuid).
 `feedbacks_relacionados` deixou de ser um número inventado pela IA: agora é o
 tamanho de `feedback_ids`.
+
+### Resultados (aba do admin, para o marketing)
+
+`metricas_diarias` guarda CONTAGENS por restaurante e dia (Brasília): mensagens,
+pontos por sentimento, por categoria, clientes novos/retornos, aberturas do QR,
+ações e insights. Só público `cliente`; `invalidado_em` não tira o ponto da
+conta (bate com a Visão Geral). Cron `metricas-diarias-atualizar` (04:10)
+recalcula os últimos 35 dias; dia mais antigo fica congelado e nunca é zerado,
+para o histórico sobreviver ao expurgo de feedbacks. Índices são calculados na
+leitura (`src/lib/resultados.ts`, com testes). Leitura só para admin.
+`autorizacoes_marketing`: case com o nome do restaurante só com autorização
+registrada (quem, canal, prova, escopo). Nada do Google entra aqui.
+O dono autoriza sozinho em Configurações → Divulgação
+(`definir_minha_autorizacao_marketing`, `origem = 'dono'`, canal `painel`): só a
+conta dona (`restaurantes.auth_user_id`) e nunca o admin dentro da conta
+(`acesso_admin_atual`). O texto aceito é versionado em
+`textos_autorizacao_marketing` — mudou o texto, insira versão NOVA, não edite.
+Toda mudança vai para `autorizacoes_marketing_historico` (gatilho).
