@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabase/client'
-import { lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type PremioIndicacao, type StatusPremio } from '@/lib/indicacoes'
+import { lerNiveis, lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type StatusPremio } from '@/lib/indicacoes'
 
-/* Indicações: tudo passa por funções do banco (migrations 20261017010000 e
-   20261027000000), que conferem por dentro quem pode. */
+/* Indicações: tudo passa por funções do banco (migrations 20261017010000,
+   20261027000000 e 20261030030000), que conferem por dentro quem pode. */
 
-/** A subpágina Indicações: código, porcentagem, números e benefícios da conta logada. */
+/** A subpágina Indicações: código, números e a escada de benefícios da conta logada. */
 export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
   const { data, error } = await supabase.rpc('indicacao_minha')
   if (error) throw error
@@ -15,9 +15,8 @@ export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
     area: r.area === 'rh' ? 'rh' : 'restaurante',
     codigo: typeof r.codigo === 'string' ? r.codigo : null,
     ativo: r.ativo !== false,
-    porcentagem: Number(r.porcentagem) || 0,
     numeros: lerNumeros(r.numeros),
-    premios: Array.isArray(r.premios) ? (r.premios as PremioIndicacao[]).map((p) => ({ ...p, porcentagem: p.porcentagem != null ? Number(p.porcentagem) : null })) : [],
+    niveis: lerNiveis(r.niveis),
   }
 }
 
@@ -53,14 +52,50 @@ export async function salvarPorcentagemPadrao(area: AreaDaIndicacao, porcentagem
   if (error) throw error
 }
 
-export interface PremioDoAfiliado { id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null; indicado: string }
-export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; premios: PremioDoAfiliado[] }
+export interface PremioDoAfiliado {
+  id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null
+  /** O nível da escada que liberou (null = benefício antigo, por indicado). */
+  nivel: number | null
+  /** Por quem (só no benefício antigo, por indicado). */
+  indicado: string | null
+}
+/** `contam`: indicados que já pagaram 2 meses (os que valem para a escada). */
+export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; contam: number; premios: PremioDoAfiliado[] }
 
 /** O que cada afiliado de um software trouxe (por id do afiliado). */
 export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<Record<string, NumerosDoAfiliado>> {
   const { data, error } = await supabase.rpc('afiliados_numeros', { p_area: area })
   if (error) throw error
   return (data ?? {}) as unknown as Record<string, NumerosDoAfiliado>
+}
+
+// ── A escada de benefícios (Admin → Afiliados, por software) ─────────────────
+
+export interface NivelDaEscada { indicacoes: number; beneficio: string }
+
+export async function buscarNiveis(area: AreaDaIndicacao): Promise<NivelDaEscada[]> {
+  const { data, error } = await supabase.from('indicacao_niveis').select('indicacoes, beneficio').eq('area', area).order('indicacoes')
+  if (error) throw error
+  return (data ?? []) as NivelDaEscada[]
+}
+
+/**
+ * Grava um nível. `antes`: quantas indicações ele pedia (mudar o número troca
+ * a chave, então sai o antigo e entra o novo).
+ */
+export async function salvarNivel(area: AreaDaIndicacao, nivel: NivelDaEscada, antes?: number): Promise<void> {
+  const { data: u } = await supabase.auth.getUser()
+  const { error } = await supabase.from('indicacao_niveis').upsert({
+    area, indicacoes: nivel.indicacoes, beneficio: nivel.beneficio.trim(),
+    atualizado_por: u.user?.email ?? null, atualizado_em: new Date().toISOString(),
+  })
+  if (error) throw error
+  if (antes != null && antes !== nivel.indicacoes) await removerNivel(area, antes)
+}
+
+export async function removerNivel(area: AreaDaIndicacao, indicacoes: number): Promise<void> {
+  const { error } = await supabase.from('indicacao_niveis').delete().eq('area', area).eq('indicacoes', indicacoes)
+  if (error) throw error
 }
 
 /** O admin marca que já deu o benefício, cancela ou volta para pendente. */

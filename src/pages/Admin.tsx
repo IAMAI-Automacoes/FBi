@@ -27,7 +27,7 @@ import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
-import { DescontosDeQuemIndica, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
+import { DescontosDeQuemIndica, EscadaDeIndicacao, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
 import { buscarNumerosDosAfiliados, buscarPorcentagemPadrao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
 import { textoDaPorcentagem } from '@/lib/indicacoes'
 import { PainelVersoes } from '@/pages/admin/PainelVersoes'
@@ -1924,7 +1924,7 @@ export default function Admin() {
                     <div>
                       <h2 className="text-base font-semibold text-gray-800">Afiliados <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
                       <p className="mt-1 text-[12px] text-gray-500">
-                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha a % como desconto na própria mensalidade, depois do 2º mês pago do indicado.
+                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha pela escada de benefícios, contando quem já pagou o 2º mês.
                       </p>
                     </div>
                   </div>
@@ -1933,8 +1933,9 @@ export default function Admin() {
                     <Button size="sm" onClick={openAddAfil} className="shrink-0"><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
                   </div>
                 </div>
-                <div className="mb-5">
+                <div className="mb-5 space-y-3">
                   <PorcentagemPadrao area={area} valor={pctPadrao} aoSalvar={setPctPadrao} />
+                  <EscadaDeIndicacao area={area} aoMudar={loadAfiliados} />
                 </div>
                 {loadingAfil ? (
                   <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { PeriodInfo, DashboardData } from '@/lib/queries/visao-geral'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
-import { KpiCards } from '@/components/dashboard/KpiCards'
+import { CELULA_COM_DIVISOR, KpiCards } from '@/components/dashboard/KpiCards'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { RecentFeedbacks } from '@/components/dashboard/RecentFeedbacks'
 import { TemasFeedback } from '@/components/dashboard/TemasFeedback'
@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { usePublico } from '@/lib/publico'
-import { ResumoPedidos } from '@/components/equipe/ResumoPedidos'
+import { ItensDaEquipe, ResumoPedidos } from '@/components/equipe/ResumoPedidos'
 
 export default function Index() {
   // A mesma página serve aos clientes (/) e à equipe (/equipe): os números
@@ -79,8 +79,9 @@ export default function Index() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
-      {/* Só a equipe: quem está cadastrado e como foram os pedidos de feedback. */}
-      {ehEquipe && <ResumoPedidos />}
+      {/* Só a equipe, antes do primeiro feedback: quem está cadastrado e como
+          foram os pedidos. Depois, os dois números vão para a fileira de cima. */}
+      {ehEquipe && isNeverUsed && <ResumoPedidos />}
 
       {/* Filtro de período — no topo da página, não escondido dentro do
           card de tendência (que tem o próprio título pra disputar espaço).
@@ -164,7 +165,7 @@ export default function Index() {
               Nenhum feedback recebido neste período. Altere o intervalo ou aguarde novos feedbacks.
             </div>
           )}
-          <KpiCards data={data.kpis} period={period} />
+          <KpiCards data={data.kpis} period={period} depois={ehEquipe ? <ItensDaEquipe celula={CELULA_COM_DIVISOR} /> : undefined} />
 
           {/* Como as avaliações se dividem — mesmo bloco (e mesma lógica) da
               aba Relatórios, só que sempre visível aqui na Visão Geral. */}

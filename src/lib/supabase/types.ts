@@ -2385,6 +2385,30 @@ export type Database = {
         }
         Relationships: []
       }
+      indicacao_niveis: {
+        Row: {
+          area: string
+          atualizado_em: string
+          atualizado_por: string | null
+          beneficio: string
+          indicacoes: number
+        }
+        Insert: {
+          area: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          beneficio: string
+          indicacoes: number
+        }
+        Update: {
+          area?: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          beneficio?: string
+          indicacoes?: number
+        }
+        Relationships: []
+      }
       indicacao_premios: {
         Row: {
           aplicado_em: string | null
@@ -2393,6 +2417,7 @@ export type Database = {
           criado_em: string
           id: string
           indicado_restaurante_id: number | null
+          nivel: number | null
           porcentagem: number | null
           restaurante_id: number
           status: string
@@ -2404,6 +2429,7 @@ export type Database = {
           criado_em?: string
           id?: string
           indicado_restaurante_id?: number | null
+          nivel?: number | null
           porcentagem?: number | null
           restaurante_id: number
           status?: string
@@ -2415,6 +2441,7 @@ export type Database = {
           criado_em?: string
           id?: string
           indicado_restaurante_id?: number | null
+          nivel?: number | null
           porcentagem?: number | null
           restaurante_id?: number
           status?: string
@@ -4974,12 +5001,17 @@ export type Database = {
         Returns: Json
       }
       indicacao_codigo_novo: { Args: { p_nome: string }; Returns: string }
+      indicacao_contam: { Args: { p_afiliado: string }; Returns: number }
       indicacao_eh_admin: { Args: never; Returns: boolean }
       indicacao_ja_pagou: {
         Args: { p_restaurante_id: number }
         Returns: boolean
       }
       indicacao_liberada: { Args: never; Returns: boolean }
+      indicacao_liberar_niveis: {
+        Args: { p_restaurante_id: number }
+        Returns: number
+      }
       indicacao_meses_pagos: {
         Args: { p_restaurante_id: number }
         Returns: number

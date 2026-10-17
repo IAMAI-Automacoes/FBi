@@ -1,13 +1,12 @@
 /* Indicações (Descontos → Indicações), nos dois softwares: as regras que a tela
  * usa. Sem banco aqui.
  *
- * Decisões do Raver (15/10/2026): a conta pega o link de cadastro dela e manda
- * para outro restaurante (ou empresa, no RH). Quem indica ganha a porcentagem
- * do afiliado dele como DESCONTO na própria mensalidade, por indicado, depois
- * que o indicado paga o 2º mês. Até o pagamento novo (Asaas), o admin aplica à
- * mão. A página mostra quantos entraram, usam até hoje, usaram e pararam, e
- * quantos ainda esperam o 2º mês.
- * Quem guarda e decide é o banco (migration 20261027000000).
+ * Decisões do Raver: a conta pega o link de cadastro dela e manda para outro
+ * restaurante (ou empresa, no RH). Uma indicação conta depois que o indicado
+ * paga o 2º mês. Desde 17/10/2026 o que a conta ganha é uma ESCADA de níveis
+ * por software ("com N indicações, tal benefício"), cadastrada no Admin →
+ * Afiliados; até a cobrança aplicar sozinha, o admin dá o benefício à mão.
+ * Quem guarda e decide é o banco (migrations 20261027000000 e 20261030030000).
  */
 
 export type StatusPremio = 'pendente' | 'aplicado' | 'cancelado'
@@ -29,14 +28,23 @@ export interface NumerosDaIndicacao {
   entraram: number
   /** Entraram e ainda não pagaram nenhuma mensalidade. */
   nao_pagaram: number
-  /** Já pagaram e usam até hoje. */
-  usam: number
-  /** Já pagaram e pararam. */
-  pararam: number
-  /** Usam, mas o benefício ainda não saiu: só conta depois do 2º mês pago. */
-  aguardando: number
+  /** Pagaram 1 mês e seguem assinando: contam quando pagarem o 2º. */
+  a_caminho: number
+  /** Já pagaram 2 meses: contam para a escada. */
+  contam: number
   /** Benefícios já liberados (a receber ou recebidos). */
   liberados: number
+}
+
+/** Um degrau da escada, com o que a conta já ganhou nele. */
+export interface NivelDaIndicacao {
+  /** Quantas indicações o nível pede. */
+  indicacoes: number
+  beneficio: string
+  /** Situação do benefício, quando já foi liberado; null = ainda não alcançou. */
+  status: StatusPremio | null
+  liberado_em: string | null
+  aplicado_em: string | null
 }
 
 /** O que a subpágina Indicações recebe (função `indicacao_minha`). */
@@ -48,13 +56,12 @@ export interface MinhaIndicacao {
   codigo: string | null
   /** O código está ativo (o admin pode desligar um afiliado). */
   ativo: boolean
-  /** O desconto, em %, por indicado que pagar o 2º mês. */
-  porcentagem: number
   numeros: NumerosDaIndicacao
-  premios: PremioIndicacao[]
+  /** A escada do software, do menor para o maior. */
+  niveis: NivelDaIndicacao[]
 }
 
-const NUMEROS_ZERO: NumerosDaIndicacao = { entraram: 0, nao_pagaram: 0, usam: 0, pararam: 0, aguardando: 0, liberados: 0 }
+const NUMEROS_ZERO: NumerosDaIndicacao = { entraram: 0, nao_pagaram: 0, a_caminho: 0, contam: 0, liberados: 0 }
 
 /** Lê os números do banco sem confiar no formato. */
 export function lerNumeros(v: unknown): NumerosDaIndicacao {
@@ -63,8 +70,39 @@ export function lerNumeros(v: unknown): NumerosDaIndicacao {
     const x = Number(o[k])
     return Number.isFinite(x) && x > 0 ? Math.floor(x) : 0
   }
-  return { ...NUMEROS_ZERO, entraram: n('entraram'), nao_pagaram: n('nao_pagaram'), usam: n('usam'), pararam: n('pararam'), aguardando: n('aguardando'), liberados: n('liberados') }
+  return { ...NUMEROS_ZERO, entraram: n('entraram'), nao_pagaram: n('nao_pagaram'), a_caminho: n('a_caminho'), contam: n('contam'), liberados: n('liberados') }
 }
+
+const STATUS_VALIDOS: readonly StatusPremio[] = ['pendente', 'aplicado', 'cancelado']
+
+/** Lê a escada do banco sem confiar no formato; fica em ordem e sem repetir o nível. */
+export function lerNiveis(v: unknown): NivelDaIndicacao[] {
+  const lista = Array.isArray(v) ? v : []
+  const vistos = new Set<number>()
+  return lista
+    .map((x) => (x && typeof x === 'object' ? x : {}) as Record<string, unknown>)
+    .map((o) => ({
+      indicacoes: Math.floor(Number(o.indicacoes)),
+      beneficio: typeof o.beneficio === 'string' ? o.beneficio.trim() : '',
+      status: STATUS_VALIDOS.includes(o.status as StatusPremio) ? (o.status as StatusPremio) : null,
+      liberado_em: typeof o.liberado_em === 'string' ? o.liberado_em : null,
+      aplicado_em: typeof o.aplicado_em === 'string' ? o.aplicado_em : null,
+    }))
+    .filter((n) => Number.isFinite(n.indicacoes) && n.indicacoes > 0 && n.beneficio && !vistos.has(n.indicacoes) && vistos.add(n.indicacoes))
+    .sort((a, b) => a.indicacoes - b.indicacoes)
+}
+
+/**
+ * Já alcançou o nível? O benefício liberado manda (cancelado pelo admin = não);
+ * sem ele, vale a conta de quantas indicações já contam.
+ */
+export function nivelAlcancado(n: Pick<NivelDaIndicacao, 'indicacoes' | 'status'>, contam: number): boolean {
+  if (n.status) return n.status !== 'cancelado'
+  return contam >= n.indicacoes
+}
+
+/** Quantas indicações faltam para o nível (0 = já alcançou). */
+export const faltamParaONivel = (n: Pick<NivelDaIndicacao, 'indicacoes'>, contam: number): number => Math.max(0, n.indicacoes - contam)
 
 /** O código como o link e o checkout aceitam. */
 export const CODIGO_VALIDO = /^[A-Z0-9_-]{2,30}$/
@@ -78,18 +116,6 @@ export function linkDeIndicacao(site: string, codigo: string, area: AreaDaIndica
   const c = encodeURIComponent(codigo)
   const base = `${site.replace(/\/+$/, '')}/cadastro?ref=${c}`
   return area === 'rh' ? `${base}&area=rh&convite=${c}` : base
-}
-
-/** A mensagem pronta para mandar junto com o link. */
-export function mensagemDeIndicacao(link: string, area: AreaDaIndicacao = 'restaurante'): string {
-  return area === 'rh'
-    ? `Estou usando o EasyFeed para ouvir a minha equipe pelo WhatsApp, com a opção de cada um ficar anônimo, e recomendo. Crie a sua conta por aqui: ${link}`
-    : `Estou usando o EasyFeed para ouvir os clientes do meu restaurante pelo WhatsApp e recomendo. Crie a sua conta por aqui: ${link}`
-}
-
-/** Abre o WhatsApp com a mensagem escrita, para a pessoa escolher para quem mandar. */
-export function linkDoWhatsapp(mensagem: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(mensagem)}`
 }
 
 /** "10%" ou "12,5%". */
