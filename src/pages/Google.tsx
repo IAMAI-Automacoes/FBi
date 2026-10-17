@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { Brush, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
 import {
-  AlertTriangle, ExternalLink, Loader2, MessageSquareText, Pencil, RefreshCw, Reply, Send, Star, Trash2, Unplug, X,
+  AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Loader2, MessageSquareText, Pencil, RefreshCw, Reply, Send, Star,
+  Trash2, Unplug, X,
 } from 'lucide-react'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Button } from '@/components/ui/button'
@@ -15,12 +16,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { FiltroPeriodo, rotuloPeriodo, type IntervaloDatas } from '@/components/FiltroPeriodo'
 import { useAuth } from '@/hooks/use-auth'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import {
-  contarFiltros, filtrarAvaliacoes, FILTROS_FIXOS, LIMITE_RESPOSTA_BYTES, bytesUtf8, respostaPublicavel, taxaDeResposta,
-  type FiltroAvaliacoes,
+  FILTROS_FIXOS, LIMITE_RESPOSTA_BYTES, bytesUtf8, intervaloDoPeriodo, respostaPublicavel, totalDoFiltro,
+  type FiltroAvaliacoes, type PeriodoGoogle,
 } from '@/lib/google-avaliacoes'
 import {
   acaoGoogle, buscarAvaliacoes, buscarConexaoGoogle, buscarMediasMensais, buscarResumoGoogle, MENSAGENS_GOOGLE,
@@ -34,6 +37,9 @@ const configGrafico: ChartConfig = {
 
 /** Quantas avaliações a lista mostra de cada vez. */
 const POR_PAGINA = 10
+
+/** Quantos meses o gráfico mostra de uma vez (a barra embaixo rola para trás). */
+const mesesNaTela = () => (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches ? 6 : 12)
 
 function Cartao({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn('rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6', className)}>{children}</div>
@@ -226,25 +232,41 @@ export default function Google() {
   const [ocupado, setOcupado] = useState<AcaoGoogle | null>(null)
   const [filtro, setFiltro] = useState<FiltroAvaliacoes>('todas')
   const [mostrar, setMostrar] = useState(POR_PAGINA)
+  // Filtro de data: o mesmo das outras telas, e lembrado ao sair e voltar.
+  // Vale para os números, as estrelas e a lista; o gráfico mostra o histórico.
+  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoGoogle>('google:periodo', 'all')
+  const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>('google:datas', undefined)
+  const intervalo = useMemo(() => intervaloDoPeriodo(periodo, datas), [periodo, datas])
+  // Os meses à vista no gráfico; null = os mais recentes (até o mês atual).
+  const [janela, setJanela] = useState<{ inicio: number; fim: number } | null>(null)
   const listaRef = useRef<HTMLDivElement>(null)
+  // Uma resposta que chega atrasada (filtro trocado no meio) não sobrescreve a atual.
+  const pedidoRef = useRef(0)
 
   const carregar = useCallback(async () => {
     if (!restauranteId) return
+    const pedido = ++pedidoRef.current
     try {
       const c = await buscarConexaoGoogle(restauranteId)
+      if (pedido !== pedidoRef.current) return
       setConexao(c)
       if (c?.status === 'conectado') {
-        const [m, r, a] = await Promise.all([buscarMediasMensais(24), buscarResumoGoogle(), buscarAvaliacoes(restauranteId)])
+        const [m, r, a] = await Promise.all([
+          buscarMediasMensais(),
+          buscarResumoGoogle(intervalo),
+          buscarAvaliacoes(restauranteId, { ...intervalo, filtro, limite: mostrar }),
+        ])
+        if (pedido !== pedidoRef.current) return
         setMedias(m)
         setResumo(r)
         setAvaliacoes(a)
       }
     } catch {
-      toast.error('Não foi possível carregar as avaliações do Google.')
+      if (pedido === pedidoRef.current) toast.error('Não foi possível carregar as avaliações do Google.')
     } finally {
-      setCarregando(false)
+      if (pedido === pedidoRef.current) setCarregando(false)
     }
-  }, [restauranteId])
+  }, [restauranteId, intervalo, filtro, mostrar])
 
   useEffect(() => { carregar() }, [carregar])
   useRealtimeReload(['google_conexoes', 'google_avaliacoes'], restauranteId, carregar)
@@ -275,8 +297,6 @@ export default function Google() {
         else toast.error(msg)
       } else if (acao === 'desconectar') {
         toast.success('Google desconectado. As avaliações guardadas foram apagadas.')
-      } else if (acao === 'sincronizar') {
-        toast.success('Avaliações atualizadas.')
       }
       await carregar()
     } finally {
@@ -294,6 +314,8 @@ export default function Google() {
     }
     setAvaliacoes((lista) => lista.map((a) => (a.id === id ? { ...a, resposta: r.resposta ?? null, resposta_em: r.resposta_em ?? null } : a)))
     toast.success(texto === null ? 'Resposta apagada do Google.' : 'Resposta publicada no Google.')
+    // Os números (respondidas, sem resposta) já contam a resposta.
+    buscarResumoGoogle(intervalo).then(setResumo).catch(() => {})
     return true
   }
 
@@ -303,9 +325,8 @@ export default function Google() {
     if (rolar) listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const contagens = useMemo(() => contarFiltros(avaliacoes), [avaliacoes])
-  const filtradas = useMemo(() => filtrarAvaliacoes(avaliacoes, filtro), [avaliacoes, filtro])
-  const taxa = useMemo(() => taxaDeResposta(avaliacoes), [avaliacoes])
+  const mudarPeriodo = (p: PeriodoGoogle) => { setPeriodo(p); setMostrar(POR_PAGINA) }
+  const mudarDatas = (d: IntervaloDatas | undefined) => { setDatas(d); setMostrar(POR_PAGINA) }
 
   if (carregando) {
     return (
@@ -428,20 +449,28 @@ export default function Google() {
   }
 
   // ── Conectado ──
-  const totalEstrelas = resumo ? resumo.estrelas.reduce((s, n) => s + n, 0) : 0
+  const totalEstrelas = resumo ? resumo.estrelas.reduce((soma, n) => soma + n, 0) : 0
   const dadosGrafico = medias.map((m) => ({ ...m, rotulo: rotuloMes(m.mes) }))
-  const ultima = avaliacoes[0]?.criada_em ?? null
-  const visiveis = filtradas.slice(0, mostrar)
+  const cabe = mesesNaTela()
+  const ultimoMes = Math.max(0, dadosGrafico.length - 1)
+  const verMeses = janela && janela.fim <= ultimoMes ? janela : { inicio: Math.max(0, dadosGrafico.length - cabe), fim: ultimoMes }
+  const rotulo = rotuloPeriodo(periodo, datas)
+  // ‹ › andam um bloco de meses (no celular a janela da barra é fina para o dedo).
+  const tamanhoJanela = verMeses.fim - verMeses.inicio
+  const moverMeses = (passo: number) => {
+    const inicio = Math.min(Math.max(0, verMeses.inicio + passo), Math.max(0, ultimoMes - tamanhoJanela))
+    setJanela({ inicio, fim: inicio + tamanhoJanela })
+  }
+  const taxa = resumo && resumo.quantidade ? resumo.respondidas / resumo.quantidade : null
+  const totalNoFiltro = resumo ? totalDoFiltro(resumo, filtro) : 0
+  const vazioNoPeriodo = !!resumo && resumo.quantidade === 0
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         {titulo}
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => executar('sincronizar')} disabled={!!ocupado}>
-            {ocupado === 'sincronizar' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-            Atualizar agora
-          </Button>
+          <FiltroPeriodo periodo={periodo} datas={datas} onPeriodo={mudarPeriodo} onDatas={mudarDatas} />
           {desconectar}
         </div>
       </div>
@@ -450,13 +479,14 @@ export default function Google() {
       <div className="flex flex-col gap-y-1 text-sm text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
         <span className="font-medium text-gray-800">{conexao.local_nome}</span>
         {conexao.endereco && <span><span className="hidden sm:inline">· </span>{conexao.endereco}</span>}
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {conexao.maps_uri && (
-            <a href={conexao.maps_uri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-              Ver no Google Maps <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-          {conexao.ultima_sincronizacao && <span>· atualizado {haQuanto(conexao.ultima_sincronizacao)}</span>}
+        {conexao.maps_uri && (
+          <a href={conexao.maps_uri} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1 text-primary hover:underline">
+            Ver no Google Maps <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+        <span>
+          <span className="hidden sm:inline">· </span>atualiza sozinho a cada 2 minutos
+          {conexao.ultima_sincronizacao && ` (a última vez ${haQuanto(conexao.ultima_sincronizacao)})`}
         </span>
       </div>
 
@@ -465,69 +495,122 @@ export default function Google() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Cartao className="p-4 sm:p-6">
           <p className="text-sm text-gray-500">Nota no Google</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums sm:text-3xl text-gray-900">{conexao.nota_media?.toFixed(1).replace('.', ',') ?? '—'}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{conexao.nota_media?.toFixed(1).replace('.', ',') ?? '—'}</p>
           {conexao.nota_media !== null && <div className="mt-1"><Estrelas nota={conexao.nota_media} /></div>}
+          <p className="mt-1 text-xs text-gray-400">a oficial do perfil</p>
         </Cartao>
         <Cartao className="p-4 sm:p-6">
-          <p className="text-sm text-gray-500">Avaliações no Google</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums sm:text-3xl text-gray-900">{conexao.total_avaliacoes?.toLocaleString('pt-BR') ?? '—'}</p>
-          {ultima && <p className="mt-1 text-xs text-gray-400">a última {haQuanto(ultima)}</p>}
+          <p className="text-sm text-gray-500">Avaliações</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{resumo?.quantidade.toLocaleString('pt-BR') ?? '—'}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {rotulo}
+            {resumo?.ultimaEm && ` · a última ${haQuanto(resumo.ultimaEm)}`}
+          </p>
+        </Cartao>
+        <Cartao className="p-4 sm:p-6">
+          <p className="text-sm text-gray-500">Média</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{resumo?.media?.toFixed(1).replace('.', ',') ?? '—'}</p>
+          {resumo?.media != null
+            ? <div className="mt-1"><Estrelas nota={resumo.media} /></div>
+            : <p className="mt-1 text-xs text-gray-400">nenhuma avaliação no período</p>}
+          {resumo?.media != null && <p className="mt-1 text-xs text-gray-400">{rotulo}</p>}
         </Cartao>
         <Cartao className="p-4 sm:p-6">
           <p className="text-sm text-gray-500">Respondidas</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums sm:text-3xl text-gray-900">{taxa === null ? '—' : `${Math.round(taxa * 100)}%`}</p>
-          {contagens.sem_resposta > 0 ? (
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{taxa === null ? '—' : `${Math.round(taxa * 100)}%`}</p>
+          {resumo && resumo.semResposta > 0 ? (
             <button
               type="button"
               onClick={() => escolherFiltro('sem_resposta', true)}
               className="mt-1 text-left text-xs font-medium text-amber-700 underline-offset-2 hover:underline"
             >
-              {contagens.sem_resposta} sem resposta · responder
+              {resumo.semResposta} sem resposta · responder
             </button>
           ) : (
-            <p className="mt-1 text-xs text-gray-400">{avaliacoes.length ? 'todas respondidas' : 'nenhuma avaliação ainda'}</p>
+            <p className="mt-1 text-xs text-gray-400">{resumo?.quantidade ? 'todas respondidas' : 'nenhuma avaliação no período'}</p>
           )}
-        </Cartao>
-        <Cartao className="p-4 sm:p-6">
-          <p className="text-sm text-gray-500">Últimos 30 dias</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums sm:text-3xl text-gray-900">{resumo?.media30d?.toFixed(1).replace('.', ',') ?? '—'}</p>
-          <p className="mt-1 text-xs text-gray-400">
-            {resumo?.quantidade30d
-              ? `${resumo.quantidade30d} avaliaç${resumo.quantidade30d === 1 ? 'ão' : 'ões'}`
-              : 'nenhuma avaliação no período'}
-          </p>
         </Cartao>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-5">
         <Cartao className="lg:col-span-3">
           <h3 className="text-base font-bold text-gray-900">Evolução da nota</h3>
-          <p className="mt-0.5 text-xs text-gray-500">Média das avaliações de cada mês e a média geral até aquele mês.</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+            Mês a mês, desde a primeira avaliação. <b className="font-medium text-gray-600">Média do mês</b>: as estrelas das
+            avaliações que chegaram naquele mês. <b className="font-medium text-gray-600">Média geral</b>: todas as avaliações,
+            da primeira até aquele mês.
+          </p>
           {dadosGrafico.length === 0 ? (
             <p className="mt-6 text-sm text-gray-400">Ainda não há avaliações para mostrar.</p>
           ) : (
-            <ChartContainer config={configGrafico} className="mt-4 h-[240px] w-full">
-              <LineChart data={dadosGrafico} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <ChartContainer config={configGrafico} className="mt-4 h-[300px] w-full">
+              <LineChart data={dadosGrafico} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
                 <XAxis dataKey="rotulo" axisLine={false} tickLine={false} dy={10} tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  interval={dadosGrafico.length > 12 ? Math.ceil(dadosGrafico.length / 8) : 0} />
+                  interval="preserveStartEnd" minTickGap={10} />
                 <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
                 <ChartTooltip content={<TooltipNota />} />
                 <Line type="monotone" dataKey="media_acumulada" stroke="var(--color-media_acumulada)" strokeWidth={2} dot={false} connectNulls />
                 <Line type="monotone" dataKey="media" stroke="var(--color-media)" strokeWidth={2.5} connectNulls
                   dot={{ r: 3.5, fill: 'var(--color-media)', stroke: 'white', strokeWidth: 2 }} />
+                {/* A barra embaixo: começa nos meses mais recentes e arrasta para trás. */}
+                {dadosGrafico.length > cabe && (
+                  <Brush
+                    dataKey="rotulo"
+                    height={32}
+                    travellerWidth={10}
+                    startIndex={verMeses.inicio}
+                    endIndex={verMeses.fim}
+                    onChange={(e) => {
+                      if (typeof e?.startIndex === 'number' && typeof e?.endIndex === 'number') setJanela({ inicio: e.startIndex, fim: e.endIndex })
+                    }}
+                    tickFormatter={() => ''}
+                    // A janela e os puxadores saem na cor do `stroke` (a janela, mais clara).
+                    stroke="#1D4ED8"
+                    fill="#f1f5f9"
+                  >
+                    <LineChart data={dadosGrafico}>
+                      <Line type="monotone" dataKey="media_acumulada" stroke="#f59e0b" strokeWidth={1} dot={false} connectNulls isAnimationActive={false} />
+                    </LineChart>
+                  </Brush>
+                )}
               </LineChart>
             </ChartContainer>
           )}
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
             <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full" style={{ background: 'hsl(var(--chart-1))' }} /> Média do mês</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-amber-500" /> Média geral</span>
+            {dadosGrafico.length > cabe && (
+              <span className="ml-auto inline-flex items-center gap-1">
+                <span className="mr-1 hidden text-gray-400 sm:inline">Arraste a barra ou use as setas</span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => moverMeses(-(tamanhoJanela + 1))}
+                  disabled={verMeses.inicio === 0}
+                  aria-label="Meses anteriores"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => moverMeses(tamanhoJanela + 1)}
+                  disabled={verMeses.fim >= ultimoMes}
+                  aria-label="Meses seguintes"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </span>
+            )}
           </div>
         </Cartao>
 
         <Cartao className="lg:col-span-2">
           <h3 className="text-base font-bold text-gray-900">Estrelas</h3>
-          <p className="mt-0.5 text-xs text-gray-500">Toque numa linha para ver só essas avaliações.</p>
+          <p className="mt-0.5 text-xs text-gray-500">{rotulo} · toque numa linha para ver só essas avaliações.</p>
           <div className="mt-3 space-y-1">
             {[5, 4, 3, 2, 1].map((n) => {
               const qtd = resumo?.estrelas[n - 1] ?? 0
@@ -538,7 +621,7 @@ export default function Google() {
                   key={n}
                   type="button"
                   onClick={() => escolherFiltro(ativo ? 'todas' : (n as FiltroAvaliacoes), !ativo)}
-                  disabled={qtd === 0}
+                  disabled={qtd === 0 && !ativo}
                   aria-pressed={ativo}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors disabled:cursor-default',
@@ -555,13 +638,28 @@ export default function Google() {
               )
             })}
           </div>
+          {resumo && totalEstrelas > 0 && (() => {
+            const positivas = Math.round(((resumo.estrelas[3] + resumo.estrelas[4]) / totalEstrelas) * 100)
+            return (
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+                <div>
+                  <p className="text-xs text-gray-500">4 e 5 estrelas</p>
+                  <p className="text-lg font-semibold tabular-nums text-emerald-700">{positivas}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">1 a 3 estrelas</p>
+                  <p className="text-lg font-semibold tabular-nums text-red-600">{100 - positivas}%</p>
+                </div>
+              </div>
+            )
+          })()}
         </Cartao>
       </div>
 
       <div ref={listaRef} className="scroll-mt-20">
         <Cartao>
           <div className="flex flex-col gap-1">
-            <h3 className="text-base font-bold text-gray-900">Avaliações</h3>
+            <h3 className="text-base font-bold text-gray-900">Avaliações <span className="font-normal text-gray-400">· {rotulo}</span></h3>
             <p className="text-xs text-gray-500">Responda por aqui: a resposta vai direto para o Google, com o nome do restaurante.</p>
           </div>
 
@@ -580,7 +678,7 @@ export default function Google() {
                   )}
                 >
                   {f.rotulo}
-                  <span className={cn('tabular-nums', ativo ? 'text-gray-300' : 'text-gray-400')}>{contagens[f.chave]}</span>
+                  <span className={cn('tabular-nums', ativo ? 'text-gray-300' : 'text-gray-400')}>{resumo ? totalDoFiltro(resumo, f.chave) : 0}</span>
                 </button>
               )
             })}
@@ -596,15 +694,17 @@ export default function Google() {
             )}
           </div>
 
-          {avaliacoes.length === 0 ? (
-            <p className="mt-6 text-sm text-gray-400">Nenhuma avaliação ainda.</p>
-          ) : filtradas.length === 0 ? (
+          {vazioNoPeriodo ? (
             <p className="mt-6 text-sm text-gray-400">
-              {filtro === 'sem_resposta' ? 'Todas as avaliações já têm resposta.' : 'Nenhuma avaliação neste filtro.'}
+              {periodo === 'all' && !datas ? 'Nenhuma avaliação ainda.' : 'Nenhuma avaliação neste período. Escolha outro no filtro de data.'}
+            </p>
+          ) : avaliacoes.length === 0 ? (
+            <p className="mt-6 text-sm text-gray-400">
+              {filtro === 'sem_resposta' ? 'Todas as avaliações do período já têm resposta.' : 'Nenhuma avaliação neste filtro.'}
             </p>
           ) : (
             <div className="mt-2 divide-y divide-gray-100">
-              {visiveis.map((a) => (
+              {avaliacoes.map((a) => (
                 <div key={a.id} className="py-4">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Estrelas nota={a.nota} tamanho="h-3.5 w-3.5" />
@@ -629,10 +729,10 @@ export default function Google() {
             </div>
           )}
 
-          {filtradas.length > visiveis.length && (
+          {totalNoFiltro > avaliacoes.length && avaliacoes.length >= mostrar && (
             <div className="mt-2 flex justify-center border-t border-gray-100 pt-4">
               <Button variant="outline" size="sm" onClick={() => setMostrar((n) => n + POR_PAGINA)}>
-                Mostrar mais ({filtradas.length - visiveis.length} restante{filtradas.length - visiveis.length === 1 ? '' : 's'})
+                Mostrar mais ({totalNoFiltro - avaliacoes.length} restante{totalNoFiltro - avaliacoes.length === 1 ? '' : 's'})
               </Button>
             </div>
           )}
@@ -640,7 +740,7 @@ export default function Google() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        Dados do Google, atualizados a cada 2 minutos. O EasyFeed só publica no seu perfil as respostas que você escreve aqui.{' '}
+        Os dados do Google se atualizam sozinhos a cada 2 minutos. O EasyFeed só publica no seu perfil as respostas que você escreve aqui.{' '}
         <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">Política de privacidade</a>
       </p>
     </div>

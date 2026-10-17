@@ -4938,6 +4938,23 @@ export type Database = {
           quantidade_30d: number
         }[]
       }
+      google_resumo_periodo: {
+        Args: { p_ate?: string; p_de?: string }
+        Returns: {
+          com_comentario: number
+          estrelas_1: number
+          estrelas_2: number
+          estrelas_3: number
+          estrelas_4: number
+          estrelas_5: number
+          media: number
+          negativas: number
+          quantidade: number
+          respondidas: number
+          sem_resposta: number
+          ultima_em: string
+        }[]
+      }
       indicacao_admin: { Args: never; Returns: Json }
       indicacao_admin_premio: {
         Args: { p_id: string; p_status: string }

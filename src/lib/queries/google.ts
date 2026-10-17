@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import type { FiltroAvaliacoes, NumerosDoPeriodo } from '@/lib/google-avaliacoes'
 
 /**
  * Avaliações do Google (página /google).
@@ -40,12 +41,11 @@ export interface MediaMensal {
   media_acumulada: number | null
 }
 
-export interface ResumoGoogle {
-  /** Quantidade de avaliações com 1, 2, 3, 4 e 5 estrelas (índice 0 = 1 estrela). */
-  estrelas: number[]
-  media30d: number | null
-  quantidade30d: number
-}
+/** Os números do período do filtro de data (lib/google-avaliacoes.ts). */
+export type ResumoGoogle = NumerosDoPeriodo
+
+/** O recorte do filtro de data, em [de, ate). null = sem corte daquele lado. */
+export interface IntervaloGoogle { de: Date | null; ate: Date | null }
 
 export interface AvaliacaoGoogle {
   id: string
@@ -71,7 +71,8 @@ export async function buscarConexaoGoogle(restauranteId: number): Promise<Conexa
   return { ...data, nota_media: data.nota_media === null ? null : Number(data.nota_media) } as ConexaoGoogle
 }
 
-export async function buscarMediasMensais(meses = 24): Promise<MediaMensal[]> {
+/** Mês a mês, desde a primeira avaliação (o gráfico rola para trás). */
+export async function buscarMediasMensais(meses = 600): Promise<MediaMensal[]> {
   const { data, error } = await db.rpc('google_medias_mensais', { p_meses: meses })
   if (error) throw error
   return (data ?? []).map((r: any) => ({
@@ -82,25 +83,49 @@ export async function buscarMediasMensais(meses = 24): Promise<MediaMensal[]> {
   }))
 }
 
-export async function buscarResumoGoogle(): Promise<ResumoGoogle> {
-  const { data, error } = await db.rpc('google_resumo')
+/** Os números do período (calculados no banco: a lista vem aos poucos). */
+export async function buscarResumoGoogle(intervalo: IntervaloGoogle): Promise<ResumoGoogle> {
+  const { data, error } = await db.rpc('google_resumo_periodo', {
+    p_de: intervalo.de?.toISOString() ?? null,
+    p_ate: intervalo.ate?.toISOString() ?? null,
+  })
   if (error) throw error
   const r = (Array.isArray(data) ? data[0] : data) ?? {}
+  const n = (v: unknown) => Number(v ?? 0)
   return {
-    estrelas: [r.estrelas_1, r.estrelas_2, r.estrelas_3, r.estrelas_4, r.estrelas_5].map((n: unknown) => Number(n ?? 0)),
-    media30d: r.media_30d === null || r.media_30d === undefined ? null : Number(r.media_30d),
-    quantidade30d: Number(r.quantidade_30d ?? 0),
+    estrelas: [r.estrelas_1, r.estrelas_2, r.estrelas_3, r.estrelas_4, r.estrelas_5].map(n),
+    quantidade: n(r.quantidade),
+    media: r.media === null || r.media === undefined ? null : Number(r.media),
+    respondidas: n(r.respondidas),
+    semResposta: n(r.sem_resposta),
+    negativas: n(r.negativas),
+    comComentario: n(r.com_comentario),
+    ultimaEm: r.ultima_em ?? null,
   }
 }
 
-/** As avaliações da cópia, da mais nova para a mais antiga (a lista filtra na tela). */
-export async function buscarAvaliacoes(restauranteId: number, limite = 1000): Promise<AvaliacaoGoogle[]> {
-  const { data, error } = await db
+/**
+ * As avaliações do período e do filtro da lista, da mais nova para a mais
+ * antiga — as `limite` primeiras ("Mostrar mais" pede mais).
+ */
+export async function buscarAvaliacoes(
+  restauranteId: number,
+  op: IntervaloGoogle & { filtro: FiltroAvaliacoes; limite: number },
+): Promise<AvaliacaoGoogle[]> {
+  let q = db
     .from('google_avaliacoes')
     .select('id, nota, comentario, autor, anonimo, resposta, resposta_em, criada_em')
     .eq('restaurante_id', restauranteId)
+  if (op.de) q = q.gte('criada_em', op.de.toISOString())
+  if (op.ate) q = q.lt('criada_em', op.ate.toISOString())
+  if (typeof op.filtro === 'number') q = q.eq('nota', op.filtro)
+  else if (op.filtro === 'sem_resposta') q = q.is('resposta', null)
+  else if (op.filtro === 'negativas') q = q.lte('nota', 3)
+  else if (op.filtro === 'com_comentario') q = q.not('comentario', 'is', null)
+  const { data, error } = await q
     .order('criada_em', { ascending: false })
-    .limit(limite)
+    .order('id', { ascending: true })
+    .limit(op.limite)
   if (error) throw error
   return (data ?? []) as AvaliacaoGoogle[]
 }

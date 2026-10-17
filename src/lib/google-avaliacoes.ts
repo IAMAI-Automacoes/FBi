@@ -1,14 +1,9 @@
 /**
- * As avaliações do Google na página /google: os filtros da lista, as contagens
- * e o limite da resposta do dono. Sem React nem Supabase, para os testes
- * rodarem no Node.
+ * As avaliações do Google na página /google: os filtros da lista, o filtro de
+ * data e o limite da resposta do dono. Quem filtra e conta é o banco
+ * (google_resumo_periodo e a consulta da lista); aqui fica a regra que a tela
+ * usa para montar o pedido. Sem React nem Supabase, para os testes rodarem no Node.
  */
-
-export interface AvaliacaoParaFiltro {
-  nota: number
-  comentario: string | null
-  resposta: string | null
-}
 
 /** Os filtros da lista; um número = só as avaliações com aquelas estrelas. */
 export type FiltroAvaliacoes = 'todas' | 'sem_resposta' | 'negativas' | 'com_comentario' | 1 | 2 | 3 | 4 | 5
@@ -20,34 +15,48 @@ export const FILTROS_FIXOS: ReadonlyArray<{ chave: Exclude<FiltroAvaliacoes, num
   { chave: 'com_comentario', rotulo: 'Com comentário' },
 ]
 
-/** Negativa: de 1 a 3 estrelas — a que mais pede uma resposta. */
-export const ehNegativa = (a: Pick<AvaliacaoParaFiltro, 'nota'>): boolean => a.nota <= 3
+// ── Filtro de data (o mesmo das outras telas) ───────────────────────────────
 
-export function passaNoFiltro(a: AvaliacaoParaFiltro, f: FiltroAvaliacoes): boolean {
-  if (typeof f === 'number') return a.nota === f
-  if (f === 'sem_resposta') return !a.resposta
-  if (f === 'negativas') return ehNegativa(a)
-  if (f === 'com_comentario') return !!a.comentario
-  return true
+export type PeriodoGoogle = 'all' | '7d' | '30d' | '90d'
+const DIAS_DO_PERIODO: Record<Exclude<PeriodoGoogle, 'all'>, number> = { '7d': 7, '30d': 30, '90d': 90 }
+
+/**
+ * O recorte do filtro em [de, ate), igual a /feedbacks: o atalho conta do
+ * início do dia de N dias atrás; o intervalo do calendário vai do início do
+ * primeiro dia até o fim do último. null = sem corte daquele lado.
+ */
+export function intervaloDoPeriodo(
+  periodo: PeriodoGoogle,
+  datas?: { from: Date; to?: Date },
+  agora: Date = new Date(),
+): { de: Date | null; ate: Date | null } {
+  const inicioDoDia = (d: Date, mais = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + mais)
+  if (datas) return { de: inicioDoDia(datas.from), ate: inicioDoDia(datas.to ?? datas.from, 1) }
+  if (periodo === 'all') return { de: null, ate: null }
+  return { de: inicioDoDia(agora, -DIAS_DO_PERIODO[periodo]), ate: null }
 }
 
-export const filtrarAvaliacoes = <T extends AvaliacaoParaFiltro>(lista: readonly T[], f: FiltroAvaliacoes): T[] =>
-  lista.filter((a) => passaNoFiltro(a, f))
-
-/** Quantas avaliações cada filtro fixo mostra (o número no botão). */
-export function contarFiltros(lista: readonly AvaliacaoParaFiltro[]): Record<Exclude<FiltroAvaliacoes, number>, number> {
-  return {
-    todas: lista.length,
-    sem_resposta: lista.filter((a) => passaNoFiltro(a, 'sem_resposta')).length,
-    negativas: lista.filter((a) => passaNoFiltro(a, 'negativas')).length,
-    com_comentario: lista.filter((a) => passaNoFiltro(a, 'com_comentario')).length,
-  }
+/** Os números do período (vêm do banco: google_resumo_periodo). */
+export interface NumerosDoPeriodo {
+  /** Índice 0 = 1 estrela. */
+  estrelas: number[]
+  quantidade: number
+  media: number | null
+  respondidas: number
+  semResposta: number
+  negativas: number
+  comComentario: number
+  /** A avaliação mais recente de todas, sem o filtro. */
+  ultimaEm: string | null
 }
 
-/** Parte das avaliações que já têm resposta (0 a 1); null sem avaliações. */
-export function taxaDeResposta(lista: readonly AvaliacaoParaFiltro[]): number | null {
-  if (lista.length === 0) return null
-  return lista.filter((a) => !!a.resposta).length / lista.length
+/** Quantas avaliações o filtro mostra no período (o número no botão e o "restam N"). */
+export function totalDoFiltro(n: NumerosDoPeriodo, f: FiltroAvaliacoes): number {
+  if (typeof f === 'number') return n.estrelas[f - 1] ?? 0
+  if (f === 'sem_resposta') return n.semResposta
+  if (f === 'negativas') return n.negativas
+  if (f === 'com_comentario') return n.comComentario
+  return n.quantidade
 }
 
 /** O Google aceita resposta de até 4096 bytes (UTF-8: acento conta 2). */
