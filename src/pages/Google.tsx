@@ -569,8 +569,10 @@ export default function Google() {
         </Cartao>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-5">
-        <Cartao className="lg:col-span-3">
+      {/* `grid-cols-1` (minmax(0, 1fr)) e `min-w-0`: sem eles, no celular a coluna
+          crescia até a largura do gráfico rolável e a página passava da tela. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <Cartao className="min-w-0 lg:col-span-3">
           <h3 className="text-base font-bold text-gray-900">Evolução da nota</h3>
           <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
             Mês a mês, no período do filtro. <b className="font-medium text-gray-600">Média do mês</b>: as estrelas das
@@ -590,13 +592,17 @@ export default function Google() {
           </div>
         </Cartao>
 
-        <Cartao className="lg:col-span-2">
+        {/* `flex flex-col`: no computador o cartão estica até a altura do gráfico,
+            e as linhas se espalham por ele em vez de ficarem amontoadas em cima. */}
+        <Cartao className="flex min-w-0 flex-col lg:col-span-2">
           <h3 className="text-base font-bold text-gray-900">Estrelas</h3>
           <p className="mt-0.5 text-xs text-gray-500">{rotulo} · toque numa linha para ver só essas avaliações.</p>
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 flex flex-1 flex-col justify-evenly gap-1">
             {[5, 4, 3, 2, 1].map((n) => {
               const qtd = resumo?.estrelas[n - 1] ?? 0
-              const pct = totalEstrelas ? Math.round((qtd / totalEstrelas) * 100) : 0
+              // O comprimento é a parte do total (o número ao lado diz quanto).
+              const parte = totalEstrelas ? (qtd / totalEstrelas) * 100 : 0
+              const pct = qtd === 0 ? '0%' : parte < 1 ? '<1%' : `${Math.round(parte)}%`
               const ativo = filtro === n
               return (
                 <button
@@ -605,17 +611,25 @@ export default function Google() {
                   onClick={() => escolherFiltro(ativo ? 'todas' : (n as FiltroAvaliacoes), !ativo)}
                   disabled={qtd === 0 && !ativo}
                   aria-pressed={ativo}
+                  aria-label={`${n} estrela${n === 1 ? '' : 's'}: ${qtd} (${pct})`}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors disabled:cursor-default',
+                    'grid w-full grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors disabled:cursor-default',
                     ativo ? 'bg-amber-50' : 'hover:bg-gray-50 disabled:hover:bg-transparent',
                   )}
                 >
-                  <span className="w-3 text-right font-medium text-gray-700">{n}</span>
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                    <span className="block h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                  <span className="inline-flex items-center gap-1 font-medium tabular-nums text-gray-700">
+                    {n} <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                   </span>
-                  <span className="w-12 text-right tabular-nums text-gray-500">{qtd}</span>
+                  <span className="block h-2 overflow-hidden rounded-full bg-gray-100">
+                    {/* Pelo menos uma pílula curta (mais larga que alta): fina demais, ela virava um ponto. */}
+                    {qtd > 0 && (
+                      <span className="block h-full rounded-full bg-amber-400" style={{ width: `max(0.875rem, ${parte}%)` }} />
+                    )}
+                  </span>
+                  <span className="flex min-w-[4.5rem] items-baseline justify-end gap-1.5 tabular-nums">
+                    <span className="font-medium text-gray-700">{qtd}</span>
+                    <span className="w-9 text-right text-xs text-gray-400">{pct}</span>
+                  </span>
                 </button>
               )
             })}
