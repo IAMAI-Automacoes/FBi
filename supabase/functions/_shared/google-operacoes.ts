@@ -103,6 +103,69 @@ export async function marcarAguardandoGoogle(db: Db, restauranteId: number): Pro
   await atualizarConexao(db, restauranteId, { status: 'aguardando_google', erro: 'acesso_nao_liberado' })
 }
 
+export type ResultadoResposta =
+  | { ok: true; resposta: string | null; resposta_em: string | null }
+  | { ok: false; motivo: string }
+
+/**
+ * Publica (`texto`) ou apaga (`null`) a resposta do dono a uma avaliação, no
+ * Google, e já acerta a cópia daqui (a tela mostra na hora). Só a pedido do
+ * dono, na página Google.
+ */
+export async function responderAvaliacao(
+  db: Db,
+  google: ClienteGoogle,
+  restauranteId: number,
+  avaliacaoId: string,
+  texto: string | null,
+): Promise<ResultadoResposta> {
+  const { data: c } = await db
+    .from('google_conexoes')
+    .select('status, conta, local')
+    .eq('restaurante_id', restauranteId)
+    .maybeSingle()
+  if (!c || c.status !== 'conectado' || !c.conta || !c.local) return { ok: false, motivo: 'nao_conectado' }
+  // Só avaliação do perfil deste restaurante (a que está na cópia dele).
+  const { data: a } = await db
+    .from('google_avaliacoes')
+    .select('id')
+    .eq('restaurante_id', restauranteId)
+    .eq('id', avaliacaoId)
+    .maybeSingle()
+  if (!a) return { ok: false, motivo: 'avaliacao_nao_encontrada' }
+
+  try {
+    const refresh = await lerToken(db, restauranteId)
+    if (!refresh) throw new ErroGoogle(401, 'precisa_reconectar', 'Sem token guardado.')
+    const accessToken = await google.renovar(refresh)
+    let resposta: string | null = null
+    let respostaEm: string | null = null
+    if (texto !== null) {
+      const r = await google.responder(accessToken, c.conta, c.local, avaliacaoId, texto)
+      resposta = r.comentario
+      respostaEm = r.atualizadaEm ?? new Date().toISOString()
+    } else {
+      await google.apagarResposta(accessToken, c.conta, c.local, avaliacaoId)
+    }
+    const { error } = await db
+      .from('google_avaliacoes')
+      .update({ resposta, resposta_em: respostaEm })
+      .eq('restaurante_id', restauranteId)
+      .eq('id', avaliacaoId)
+    if (error) throw error
+    return { ok: true, resposta, resposta_em: respostaEm }
+  } catch (e) {
+    if (e instanceof ErroGoogle) {
+      if (e.motivo === 'precisa_reconectar') {
+        await atualizarConexao(db, restauranteId, { status: 'precisa_reconectar', erro: 'precisa_reconectar' }).catch(() => {})
+      }
+      return { ok: false, motivo: e.motivo === 'nao_encontrado' ? 'avaliacao_nao_encontrada' : e.motivo }
+    }
+    console.error('google: falha ao responder', restauranteId, e)
+    return { ok: false, motivo: 'erro' }
+  }
+}
+
 export type ResultadoSincronizacao =
   | { ok: true; quantidade: number; completa: boolean }
   | { ok: false; motivo: string }

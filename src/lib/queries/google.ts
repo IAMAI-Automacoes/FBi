@@ -93,7 +93,8 @@ export async function buscarResumoGoogle(): Promise<ResumoGoogle> {
   }
 }
 
-export async function buscarUltimasAvaliacoes(restauranteId: number, limite = 20): Promise<AvaliacaoGoogle[]> {
+/** As avaliações da cópia, da mais nova para a mais antiga (a lista filtra na tela). */
+export async function buscarAvaliacoes(restauranteId: number, limite = 1000): Promise<AvaliacaoGoogle[]> {
   const { data, error } = await db
     .from('google_avaliacoes')
     .select('id, nota, comentario, autor, anonimo, resposta, resposta_em, criada_em')
@@ -104,7 +105,7 @@ export async function buscarUltimasAvaliacoes(restauranteId: number, limite = 20
   return (data ?? []) as AvaliacaoGoogle[]
 }
 
-export type AcaoGoogle = 'conectar' | 'escolher_local' | 'descobrir' | 'sincronizar' | 'desconectar'
+export type AcaoGoogle = 'conectar' | 'escolher_local' | 'descobrir' | 'sincronizar' | 'responder' | 'apagar_resposta' | 'desconectar'
 
 export interface RespostaGoogle {
   ok: boolean
@@ -112,6 +113,9 @@ export interface RespostaGoogle {
   motivo?: string
   mensagem?: string
   status?: StatusGoogle
+  /** responder / apagar_resposta: a resposta como ficou no Google (null = apagada). */
+  resposta?: string | null
+  resposta_em?: string | null
 }
 
 /** Chama a função google-perfil. Erros de rede viram { ok: false, motivo: 'rede' }. */
@@ -141,6 +145,12 @@ export const MENSAGENS_GOOGLE: Record<string, string> = {
   sem_local: 'Essa conta Google não administra nenhum perfil de empresa.',
   aguarde: 'As avaliações acabaram de ser atualizadas. Tente de novo daqui a 1 minuto.',
   local_invalido: 'Esse restaurante não está na lista da sua conta Google.',
+  resposta_vazia: 'Escreva a resposta antes de publicar.',
+  resposta_longa: 'A resposta passou do tamanho que o Google aceita. Encurte um pouco.',
+  avaliacao_nao_encontrada: 'O Google não encontrou essa avaliação. Ela pode ter sido apagada.',
+  nao_conectado: 'O Google não está conectado. Conecte de novo.',
+  demo: 'Responder fica bloqueado durante a demonstração.',
+  nao_encontrado: 'O Google não encontrou esse perfil ou avaliação.',
   google: 'O Google respondeu com um erro. Tente de novo.',
   rede: 'Não foi possível falar com o servidor. Confira a internet.',
   erro: 'Algo deu errado. Tente de novo.',

@@ -4,9 +4,10 @@
  *   node --experimental-strip-types supabase/functions/_shared/__testes__/google-perfil.teste.ts
  */
 import {
-  criarClienteGoogle, ErroGoogle, ESCOPO, lerAvaliacao, locaisDeTodasAsContas, motivoDoErro, notaEmNumero,
-  textoOriginal, urlAutorizacao, URL_TOKEN,
+  criarClienteGoogle, ErroGoogle, ESCOPO, idAvaliacaoValido, lerAvaliacao, LIMITE_RESPOSTA_BYTES, locaisDeTodasAsContas,
+  motivoDoErro, notaEmNumero, textoOriginal, urlAutorizacao, URL_TOKEN, validarResposta,
 } from '../google-perfil.ts'
+import { responderAvaliacao } from '../google-operacoes.ts'
 import { criarCallback, VALIDADE_ESTADO_MS, type DepsCallback } from '../../google-oauth-callback/handler.ts'
 
 let falhas = 0
@@ -146,6 +147,100 @@ function googleFalso(rotas: Record<string, Resp | Resp[]>) {
   let erro: unknown = null
   try { await g.cliente.avaliacoes('acc', 'accounts/1', 'locations/10') } catch (e) { erro = e }
   ok('cota 0 nas avaliações: ErroGoogle acesso_nao_liberado', erro instanceof ErroGoogle && erro.motivo === 'acesso_nao_liberado')
+}
+
+// ── Resposta do dono a uma avaliação ────────────────────────────────────────
+ok('404: não encontrado', motivoDoErro(404, { error: { code: 404, status: 'NOT_FOUND' } }) === 'nao_encontrado')
+{
+  const v = validarResposta('  Obrigado pela visita, Maria!\r\nVolte sempre.  ')
+  ok('resposta: tira os espaços das pontas e normaliza a quebra de linha', v.ok && v.texto === 'Obrigado pela visita, Maria!\nVolte sempre.', v)
+  ok('resposta vazia ou só espaços: recusada', [undefined, null, '', '   \n '].every((t) => { const r = validarResposta(t); return !r.ok && r.motivo === 'resposta_vazia' }))
+  ok('resposta no limite de bytes passa; 1 a mais, não', validarResposta('a'.repeat(LIMITE_RESPOSTA_BYTES)).ok && !validarResposta('a'.repeat(LIMITE_RESPOSTA_BYTES + 1)).ok)
+  const acentos = validarResposta('é'.repeat(LIMITE_RESPOSTA_BYTES / 2 + 1))
+  ok('acento conta 2 bytes (o limite do Google é em bytes)', !acentos.ok && acentos.motivo === 'resposta_longa')
+  ok('id da avaliação: só letras, números, - e _', idAvaliacaoValido('AbC-12_x') && !idAvaliacaoValido('a/b') && !idAvaliacaoValido('../x') && !idAvaliacaoValido('') && !idAvaliacaoValido(12))
+}
+{
+  const g = googleFalso({ '/v4/accounts/1/locations/10/reviews/r1/reply': { corpo: { comment: 'Valeu, Maria!', updateTime: '2026-10-16T12:00:00Z' } } })
+  const r = await g.cliente.responder('acc', 'accounts/1', 'locations/10', 'r1', 'Valeu, Maria!')
+  const ch = g.chamadas[0]
+  ok('responder: PUT no …/reviews/{id}/reply com o texto em JSON', ch.init?.method === 'PUT' && new URL(ch.url).pathname === '/v4/accounts/1/locations/10/reviews/r1/reply'
+    && JSON.parse(String(ch.init?.body)).comment === 'Valeu, Maria!' && (ch.init?.headers as Record<string, string>)['Content-Type'] === 'application/json', ch)
+  ok('responder: devolve como o Google gravou', r.comentario === 'Valeu, Maria!' && r.atualizadaEm === '2026-10-16T12:00:00Z')
+}
+{
+  const g = googleFalso({ '/reviews/r1/reply': { corpo: {} } })
+  await g.cliente.apagarResposta('acc', 'accounts/1', 'locations/10', 'r1')
+  ok('apagar resposta: DELETE no mesmo endereço', g.chamadas[0].init?.method === 'DELETE' && g.chamadas[0].url.endsWith('/reviews/r1/reply'))
+  const sem = googleFalso({ '/reviews/r1/reply': { status: 404, corpo: { error: { code: 404 } } } })
+  let erro: unknown = 'nenhum'
+  try { await sem.cliente.apagarResposta('acc', 'accounts/1', 'locations/10', 'r1') } catch (e) { erro = e }
+  ok('apagar resposta que já não existia (404): está feito', erro === 'nenhum')
+  const proibido = googleFalso({ '/reviews/r1/reply': { status: 403, corpo: { error: { code: 403, status: 'PERMISSION_DENIED' } } } })
+  try { await proibido.cliente.apagarResposta('acc', 'accounts/1', 'locations/10', 'r1') } catch (e) { erro = e }
+  ok('apagar resposta sem permissão: erro', erro instanceof ErroGoogle && erro.motivo === 'sem_permissao')
+}
+{
+  // Banco de mentira: só o que responderAvaliacao usa.
+  function dbFalso(estado: { conexao: Record<string, unknown> | null; avaliacoes: Record<string, Record<string, unknown>>; token: string | null }) {
+    const gravado: Array<{ tabela: string; campos: Record<string, unknown>; filtros: Record<string, unknown> }> = []
+    const db = {
+      rpc: async (fn: string) => ({ data: fn === 'google_ler_token' ? estado.token : null, error: null }),
+      from(tabela: string) {
+        const filtros: Record<string, unknown> = {}
+        let campos: Record<string, unknown> | null = null
+        // deno-lint-ignore no-explicit-any
+        const q: any = {
+          select: () => q,
+          update: (c: Record<string, unknown>) => { campos = c; return q },
+          eq: (col: string, v: unknown) => { filtros[col] = v; return q },
+          maybeSingle: async () => ({
+            data: tabela === 'google_conexoes' ? estado.conexao : (estado.avaliacoes[String(filtros.id)] ?? null),
+          }),
+          // `await` de um update
+          then: (ok: (v: unknown) => unknown, falha: (e: unknown) => unknown) => {
+            if (campos) gravado.push({ tabela, campos, filtros: { ...filtros } })
+            return Promise.resolve({ error: null }).then(ok, falha)
+          },
+        }
+        return q
+      },
+    }
+    return { db, gravado }
+  }
+  const conectado = { status: 'conectado', conta: 'accounts/1', local: 'locations/10' }
+  const token = { '/token': { corpo: { access_token: 'acc-2' } } }
+
+  let b = dbFalso({ conexao: null, avaliacoes: {}, token: 'ref' })
+  ok('responder sem conexão: recusa', (await responderAvaliacao(b.db, googleFalso(token).cliente, 29, 'r1', 'Oi')).ok === false)
+
+  b = dbFalso({ conexao: conectado, avaliacoes: {}, token: 'ref' })
+  let g = googleFalso(token)
+  const fora = await responderAvaliacao(b.db, g.cliente, 29, 'r-de-outro', 'Oi')
+  ok('avaliação que não está na cópia deste restaurante: recusa sem falar com o Google', !fora.ok && fora.motivo === 'avaliacao_nao_encontrada' && g.chamadas.length === 0)
+
+  b = dbFalso({ conexao: conectado, avaliacoes: { r1: { id: 'r1' } }, token: 'ref' })
+  g = googleFalso({ ...token, '/reviews/r1/reply': { corpo: { comment: 'Valeu!', updateTime: '2026-10-16T12:00:00Z' } } })
+  const pub = await responderAvaliacao(b.db, g.cliente, 29, 'r1', 'Valeu!')
+  ok('publica no Google e acerta a cópia daqui na hora', pub.ok && pub.resposta === 'Valeu!' && pub.resposta_em === '2026-10-16T12:00:00Z'
+    && b.gravado.some((x) => x.tabela === 'google_avaliacoes' && x.campos.resposta === 'Valeu!' && x.filtros.restaurante_id === 29 && x.filtros.id === 'r1'), { pub, gravado: b.gravado })
+
+  b = dbFalso({ conexao: conectado, avaliacoes: { r1: { id: 'r1' } }, token: 'ref' })
+  g = googleFalso({ ...token, '/reviews/r1/reply': { corpo: {} } })
+  const apagou = await responderAvaliacao(b.db, g.cliente, 29, 'r1', null)
+  ok('apagar: tira a resposta da cópia também', apagou.ok && apagou.resposta === null
+    && b.gravado.some((x) => x.tabela === 'google_avaliacoes' && x.campos.resposta === null) && g.chamadas.some((c) => c.init?.method === 'DELETE'))
+
+  b = dbFalso({ conexao: conectado, avaliacoes: { r1: { id: 'r1' } }, token: 'ref' })
+  g = googleFalso({ '/token': { status: 400, corpo: { error: 'invalid_grant' } } })
+  const caiu = await responderAvaliacao(b.db, g.cliente, 29, 'r1', 'Oi')
+  ok('conexão desfeita no Google: avisa e marca para reconectar', !caiu.ok && caiu.motivo === 'precisa_reconectar'
+    && b.gravado.some((x) => x.tabela === 'google_conexoes' && x.campos.status === 'precisa_reconectar'))
+
+  b = dbFalso({ conexao: conectado, avaliacoes: { r1: { id: 'r1' } }, token: 'ref' })
+  g = googleFalso({ ...token, '/reviews/r1/reply': { status: 404, corpo: { error: { code: 404 } } } })
+  const sumiu = await responderAvaliacao(b.db, g.cliente, 29, 'r1', 'Oi')
+  ok('avaliação apagada no Google: avisa', !sumiu.ok && sumiu.motivo === 'avaliacao_nao_encontrada')
 }
 
 // ── Volta do Google (callback) ──────────────────────────────────────────────

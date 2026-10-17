@@ -12,7 +12,7 @@ import { cores } from '@/components/vendas/tokens'
  * Mudou o que o sistema guarda ou com quem compartilha? Atualize aqui e a data.
  */
 
-const ATUALIZADA_EM = '8 de outubro de 2026'
+const ATUALIZADA_EM = '16 de outubro de 2026'
 const EMAIL = 'oficial@iamai.ia.br'
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -123,7 +123,8 @@ export default function Privacidade() {
           </p>
           <Lista itens={[
             <><b>O que acessamos:</b> com a permissão de gerenciar o Perfil da Empresa (business.manage), lemos as contas e os perfis da empresa que o dono administra (nome, endereço e link do Google Maps) e as avaliações do perfil escolhido: nota, texto, data, nome de quem avaliou quando público e a resposta do restaurante, além da nota média e do total de avaliações.</>,
-            <><b>Para que:</b> mostrar ao próprio dono, no painel do EasyFeed, a nota do restaurante, a evolução mês a mês e as últimas avaliações. O EasyFeed só lê: não publica, não edita e não exclui nada no perfil.</>,
+            <><b>Para que:</b> mostrar ao próprio dono, no painel do EasyFeed, a nota do restaurante, a evolução mês a mês e as avaliações, e deixar que ele responda cada avaliação por ali.</>,
+            <><b>O que publicamos:</b> só a resposta que o dono escreve e manda publicar na página Google do EasyFeed (ou a troca e a exclusão dessa resposta, quando ele pede). Ela aparece no Google, pública, com o nome do restaurante. O EasyFeed não publica nada sozinho, não muda as informações do perfil e não exclui avaliações. Desconectar não apaga as respostas já publicadas: o dono as edita ou apaga pelo EasyFeed, enquanto estiver conectado, ou pelo próprio Google.</>,
             <><b>Por quanto tempo:</b> as avaliações ficam guardadas como cópia temporária, renovada a cada atualização e apagada se ficar 30 dias sem ser renovada. A chave de acesso fornecida pelo Google fica guardada de forma criptografada.</>,
             <><b>O que não fazemos:</b> não usamos esses dados para publicidade, não os vendemos, não os compartilhamos com terceiros além da infraestrutura necessária para o serviço funcionar, não os enviamos para inteligência artificial e não os usamos para treinar modelos de IA. Ninguém da nossa equipe lê esses dados, a não ser com autorização do dono (por exemplo, num atendimento de suporte), por segurança ou por obrigação legal.</>,
             <><b>Como desconectar:</b> pelo botão "Desconectar" na página Google do EasyFeed, que cancela o acesso e apaga as avaliações guardadas na hora, ou em <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" style={linkEstilo}>myaccount.google.com/permissions</a>.</>,

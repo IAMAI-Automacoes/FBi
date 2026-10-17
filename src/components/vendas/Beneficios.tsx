@@ -173,13 +173,14 @@ export function Beneficios() {
           </div>
           <div style={{ maxWidth: '760px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.01em', color: cores.tinta, marginBottom: '8px' }}>
-              As avaliações do Google no mesmo painel
+              As avaliações do Google no mesmo painel, e a resposta dali mesmo
             </h3>
             <p style={{ fontSize: '14px', lineHeight: 1.6, color: cores.corpoSuave }}>
               Se quiser, conecte o Perfil da Empresa no Google com o login oficial do Google. O EasyFeed lê a nota, as
               estrelas e as avaliações do perfil que você escolher e mostra a evolução mês a mês, ao lado dos feedbacks
-              do WhatsApp. Ele só lê: não publica, não responde e não muda nada no seu perfil. Você desconecta quando
-              quiser, e as avaliações guardadas são apagadas na hora. Veja como esses dados são usados na{' '}
+              do WhatsApp. Você responde cada avaliação pelo próprio painel: o EasyFeed só publica no seu perfil a
+              resposta que você escrever e mandar publicar, e mais nada. Você desconecta quando quiser, e as avaliações
+              guardadas são apagadas na hora. Veja como esses dados são usados na{' '}
               <Link to="/privacidade" style={{ color: cores.azul, fontWeight: 600 }}>Política de Privacidade</Link>.
             </p>
           </div>
