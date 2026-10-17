@@ -71,9 +71,15 @@ export async function buscarConexaoGoogle(restauranteId: number): Promise<Conexa
   return { ...data, nota_media: data.nota_media === null ? null : Number(data.nota_media) } as ConexaoGoogle
 }
 
-/** Mês a mês, desde a primeira avaliação (o gráfico rola para trás). */
-export async function buscarMediasMensais(meses = 600): Promise<MediaMensal[]> {
-  const { data, error } = await db.rpc('google_medias_mensais', { p_meses: meses })
+/**
+ * Mês a mês, só os meses do período do filtro de data (todo o período = desde
+ * a primeira avaliação). A média geral conta desde a primeira avaliação.
+ */
+export async function buscarMediasMensais(intervalo: IntervaloGoogle): Promise<MediaMensal[]> {
+  const { data, error } = await db.rpc('google_medias_periodo', {
+    p_de: intervalo.de?.toISOString() ?? null,
+    p_ate: intervalo.ate?.toISOString() ?? null,
+  })
   if (error) throw error
   return (data ?? []).map((r: any) => ({
     mes: r.mes,

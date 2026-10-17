@@ -4926,6 +4926,15 @@ export type Database = {
           quantidade: number
         }[]
       }
+      google_medias_periodo: {
+        Args: { p_ate?: string; p_de?: string }
+        Returns: {
+          media: number
+          media_acumulada: number
+          mes: string
+          quantidade: number
+        }[]
+      }
       google_resumo: {
         Args: never
         Returns: {

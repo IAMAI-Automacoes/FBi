@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Brush, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
 import {
-  AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Loader2, MessageSquareText, Pencil, RefreshCw, Reply, Send, Star,
-  Trash2, Unplug, X,
+  AlertTriangle, ExternalLink, Loader2, MessageSquareText, Pencil, RefreshCw, Reply, Send, Star, Trash2, Unplug, X,
 } from 'lucide-react'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Button } from '@/components/ui/button'
@@ -38,8 +37,11 @@ const configGrafico: ChartConfig = {
 /** Quantas avaliações a lista mostra de cada vez. */
 const POR_PAGINA = 10
 
-/** Quantos meses o gráfico mostra de uma vez (a barra embaixo rola para trás). */
-const mesesNaTela = () => (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches ? 6 : 12)
+/** O gráfico mês a mês: cada mês ocupa isto; passando da largura do cartão, a barra embaixo rola. */
+const LARGURA_MES = 56
+const ALTURA_GRAFICO = 260
+const TOPO_GRAFICO = 12
+const ALTURA_EIXO_X = 30
 
 function Cartao({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn('rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6', className)}>{children}</div>
@@ -216,6 +218,52 @@ function RespostaDaAvaliacao({ a, aoSalvar }: {
 }
 
 /**
+ * O gráfico mês a mês. As notas (1 a 5) ficam paradas à esquerda e os meses
+ * rolam na barra de baixo, que abre no mês mais recente do período (e volta
+ * para lá quando o período muda).
+ */
+function GraficoMensal({ dados }: { dados: Array<MediaMensal & { rotulo: string }> }) {
+  const rolagemRef = useRef<HTMLDivElement>(null)
+  const quais = `${dados[0]?.mes ?? ''}|${dados.length}`
+  useLayoutEffect(() => {
+    const el = rolagemRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [quais])
+  const area = ALTURA_GRAFICO - TOPO_GRAFICO - ALTURA_EIXO_X
+  return (
+    <div className="mt-4 flex">
+      <div className="relative w-6 shrink-0" style={{ height: ALTURA_GRAFICO }} aria-hidden="true">
+        {[5, 4, 3, 2, 1].map((v) => (
+          <span
+            key={v}
+            className="absolute right-1.5 -translate-y-1/2 text-[10px] tabular-nums text-gray-400"
+            style={{ top: TOPO_GRAFICO + ((5 - v) / 4) * area }}
+          >
+            {v}
+          </span>
+        ))}
+      </div>
+      <div ref={rolagemRef} className="barra-rolagem-visivel min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
+        <div style={{ width: dados.length * LARGURA_MES, minWidth: '100%', height: ALTURA_GRAFICO }}>
+          <ChartContainer config={configGrafico} className="aspect-auto h-full w-full">
+            <LineChart data={dados} margin={{ top: TOPO_GRAFICO, right: 16, left: 16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
+              <XAxis dataKey="rotulo" height={ALTURA_EIXO_X} axisLine={false} tickLine={false} dy={10} interval={0}
+                tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <YAxis hide domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} />
+              <ChartTooltip content={<TooltipNota />} />
+              <Line type="monotone" dataKey="media_acumulada" stroke="var(--color-media_acumulada)" strokeWidth={2} dot={false} connectNulls />
+              <Line type="monotone" dataKey="media" stroke="var(--color-media)" strokeWidth={2.5} connectNulls
+                dot={{ r: 3.5, fill: 'var(--color-media)', stroke: 'white', strokeWidth: 2 }} />
+            </LineChart>
+          </ChartContainer>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Avaliações do Google: o dono conecta a conta Google (login oficial, OAuth),
  * e a página mostra a nota, a evolução mês a mês e as avaliações — que ele
  * responde daqui mesmo (a resposta vai para o Google).
@@ -233,12 +281,10 @@ export default function Google() {
   const [filtro, setFiltro] = useState<FiltroAvaliacoes>('todas')
   const [mostrar, setMostrar] = useState(POR_PAGINA)
   // Filtro de data: o mesmo das outras telas, e lembrado ao sair e voltar.
-  // Vale para os números, as estrelas e a lista; o gráfico mostra o histórico.
+  // Vale para a página inteira, menos a nota oficial do Google (que é dele).
   const [periodo, setPeriodo] = useFiltroPersistente<PeriodoGoogle>('google:periodo', 'all')
   const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>('google:datas', undefined)
   const intervalo = useMemo(() => intervaloDoPeriodo(periodo, datas), [periodo, datas])
-  // Os meses à vista no gráfico; null = os mais recentes (até o mês atual).
-  const [janela, setJanela] = useState<{ inicio: number; fim: number } | null>(null)
   const listaRef = useRef<HTMLDivElement>(null)
   // Uma resposta que chega atrasada (filtro trocado no meio) não sobrescreve a atual.
   const pedidoRef = useRef(0)
@@ -252,7 +298,7 @@ export default function Google() {
       setConexao(c)
       if (c?.status === 'conectado') {
         const [m, r, a] = await Promise.all([
-          buscarMediasMensais(),
+          buscarMediasMensais(intervalo),
           buscarResumoGoogle(intervalo),
           buscarAvaliacoes(restauranteId, { ...intervalo, filtro, limite: mostrar }),
         ])
@@ -451,16 +497,7 @@ export default function Google() {
   // ── Conectado ──
   const totalEstrelas = resumo ? resumo.estrelas.reduce((soma, n) => soma + n, 0) : 0
   const dadosGrafico = medias.map((m) => ({ ...m, rotulo: rotuloMes(m.mes) }))
-  const cabe = mesesNaTela()
-  const ultimoMes = Math.max(0, dadosGrafico.length - 1)
-  const verMeses = janela && janela.fim <= ultimoMes ? janela : { inicio: Math.max(0, dadosGrafico.length - cabe), fim: ultimoMes }
   const rotulo = rotuloPeriodo(periodo, datas)
-  // ‹ › andam um bloco de meses (no celular a janela da barra é fina para o dedo).
-  const tamanhoJanela = verMeses.fim - verMeses.inicio
-  const moverMeses = (passo: number) => {
-    const inicio = Math.min(Math.max(0, verMeses.inicio + passo), Math.max(0, ultimoMes - tamanhoJanela))
-    setJanela({ inicio, fim: inicio + tamanhoJanela })
-  }
   const taxa = resumo && resumo.quantidade ? resumo.respondidas / resumo.quantidade : null
   const totalNoFiltro = resumo ? totalDoFiltro(resumo, filtro) : 0
   const vazioNoPeriodo = !!resumo && resumo.quantidade === 0
@@ -536,75 +573,20 @@ export default function Google() {
         <Cartao className="lg:col-span-3">
           <h3 className="text-base font-bold text-gray-900">Evolução da nota</h3>
           <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
-            Mês a mês, desde a primeira avaliação. <b className="font-medium text-gray-600">Média do mês</b>: as estrelas das
+            Mês a mês, no período do filtro. <b className="font-medium text-gray-600">Média do mês</b>: as estrelas das
             avaliações que chegaram naquele mês. <b className="font-medium text-gray-600">Média geral</b>: todas as avaliações,
             da primeira até aquele mês.
           </p>
           {dadosGrafico.length === 0 ? (
-            <p className="mt-6 text-sm text-gray-400">Ainda não há avaliações para mostrar.</p>
+            <p className="mt-6 text-sm text-gray-400">
+              {periodo === 'all' && !datas ? 'Ainda não há avaliações para mostrar.' : 'Nenhuma avaliação neste período.'}
+            </p>
           ) : (
-            <ChartContainer config={configGrafico} className="mt-4 h-[300px] w-full">
-              <LineChart data={dadosGrafico} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
-                <XAxis dataKey="rotulo" axisLine={false} tickLine={false} dy={10} tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  interval="preserveStartEnd" minTickGap={10} />
-                <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                <ChartTooltip content={<TooltipNota />} />
-                <Line type="monotone" dataKey="media_acumulada" stroke="var(--color-media_acumulada)" strokeWidth={2} dot={false} connectNulls />
-                <Line type="monotone" dataKey="media" stroke="var(--color-media)" strokeWidth={2.5} connectNulls
-                  dot={{ r: 3.5, fill: 'var(--color-media)', stroke: 'white', strokeWidth: 2 }} />
-                {/* A barra embaixo: começa nos meses mais recentes e arrasta para trás. */}
-                {dadosGrafico.length > cabe && (
-                  <Brush
-                    dataKey="rotulo"
-                    height={32}
-                    travellerWidth={10}
-                    startIndex={verMeses.inicio}
-                    endIndex={verMeses.fim}
-                    onChange={(e) => {
-                      if (typeof e?.startIndex === 'number' && typeof e?.endIndex === 'number') setJanela({ inicio: e.startIndex, fim: e.endIndex })
-                    }}
-                    tickFormatter={() => ''}
-                    // A janela e os puxadores saem na cor do `stroke` (a janela, mais clara).
-                    stroke="#1D4ED8"
-                    fill="#f1f5f9"
-                  >
-                    <LineChart data={dadosGrafico}>
-                      <Line type="monotone" dataKey="media_acumulada" stroke="#f59e0b" strokeWidth={1} dot={false} connectNulls isAnimationActive={false} />
-                    </LineChart>
-                  </Brush>
-                )}
-              </LineChart>
-            </ChartContainer>
+            <GraficoMensal dados={dadosGrafico} />
           )}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
             <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full" style={{ background: 'hsl(var(--chart-1))' }} /> Média do mês</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-amber-500" /> Média geral</span>
-            {dadosGrafico.length > cabe && (
-              <span className="ml-auto inline-flex items-center gap-1">
-                <span className="mr-1 hidden text-gray-400 sm:inline">Arraste a barra ou use as setas</span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => moverMeses(-(tamanhoJanela + 1))}
-                  disabled={verMeses.inicio === 0}
-                  aria-label="Meses anteriores"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => moverMeses(tamanhoJanela + 1)}
-                  disabled={verMeses.fim >= ultimoMes}
-                  aria-label="Meses seguintes"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </span>
-            )}
           </div>
         </Cartao>
 
