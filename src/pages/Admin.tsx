@@ -27,7 +27,7 @@ import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
 import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
-import { DescontosDeQuemIndica, EscadaDeIndicacao, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
+import { DescontosDeQuemIndica, MesesParaRenovacao, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
 import { buscarNumerosDosAfiliados, buscarPorcentagemPadrao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
 import { textoDaPorcentagem } from '@/lib/indicacoes'
 import { PainelVersoes } from '@/pages/admin/PainelVersoes'
@@ -1924,7 +1924,7 @@ export default function Admin() {
                     <div>
                       <h2 className="text-base font-semibold text-gray-800">Afiliados <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
                       <p className="mt-1 text-[12px] text-gray-500">
-                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha pela escada de benefícios, contando quem já pagou o 2º mês.
+                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha 1 mês grátis por indicado que pagar o 2º mês, usado um por mês enquanto o indicado seguir assinando.
                       </p>
                     </div>
                   </div>
@@ -1935,7 +1935,7 @@ export default function Admin() {
                 </div>
                 <div className="mb-5 space-y-3">
                   <PorcentagemPadrao area={area} valor={pctPadrao} aoSalvar={setPctPadrao} />
-                  <EscadaDeIndicacao area={area} aoMudar={loadAfiliados} />
+                  <MesesParaRenovacao />
                 </div>
                 {loadingAfil ? (
                   <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>
@@ -1970,7 +1970,7 @@ export default function Admin() {
                             <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-gray-500">
                               {a.restaurante_id != null && <span className="rounded bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">Conta EasyFeed · desconto</span>}
                               <span>{n?.entraram ?? 0} criaram conta · {n?.usam ?? 0} {n?.usam === 1 ? 'usa' : 'usam'}</span>
-                              {pendentes > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">{pendentes} desconto{pendentes > 1 ? 's' : ''} para aplicar</span>}
+                              {pendentes > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">{pendentes} {pendentes > 1 ? 'meses grátis' : 'mês grátis'} na fila</span>}
                             </p>
                           )
                         })()}

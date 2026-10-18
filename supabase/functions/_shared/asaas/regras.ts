@@ -23,15 +23,19 @@ export const ehModalidade = (v: unknown): v is Modalidade => v === 'recorrente' 
 export const VALOR_MINIMO_CENTAVOS = 500
 
 /**
- * Onde cada desconto entra. PADRÃO PROVISÓRIO (15/10/2026), a confirmar com o
- * Raver — mudar aqui muda o comportamento inteiro:
- *   - cupom: só na 1ª cobrança da compra;
- *   - bônus de indicação: X% de UMA mensalidade, na próxima cobrança da
- *     assinatura recorrente (um bônus por cobrança, o mais antigo primeiro).
+ * Onde cada desconto entra:
+ *   - cupom: só na 1ª cobrança da compra (padrão provisório de 15/10/2026);
+ *   - bônus de indicação ("proteção de caixa", regra do Raver em 17/10/2026):
+ *     cada indicado que paga o 2º mês dá 1 mensalidade grátis ao padrinho,
+ *     numa fila. Na renovação recorrente, o banco confere os indicados
+ *     (`indicacao_reservar_bonus`): no mensal, 1 bônus por mês (indicado
+ *     ativo); no semestral/anual, todos os de indicado ativo que já pagou o
+ *     mínimo de meses, até os meses do plano. Cada bônus abate 1 mensalidade
+ *     (`valorComMesesGratis`).
  */
 export const POLITICA_DESCONTOS = {
   cupom: 'primeira_cobranca',
-  bonusIndicacao: 'uma_mensalidade_por_cobranca',
+  bonusIndicacao: 'fila_validada_pelo_indicado',
 } as const
 
 export interface Desconto {
@@ -61,6 +65,22 @@ export function comBonusDeIndicacao(valorCentavos: number, totalCicloCentavos: n
   const mensalidade = Math.round(totalCicloCentavos / MESES[ciclo])
   const abatido = Math.round((mensalidade * Math.min(pct, 100)) / 100)
   return limitar(valorCentavos - abatido, valorCentavos)
+}
+
+/**
+ * A cobrança com `meses` mensalidades grátis (o total do ciclo dividido pelos
+ * meses, uma por bônus, até os meses do ciclo). 0 = a cobrança inteira sai:
+ * o Asaas não aceita valor abaixo de R$ 5, então ela é removida e o período
+ * anda como se tivesse sido paga. Sobra entre R$ 0 e R$ 5 vira R$ 5.
+ */
+export function valorComMesesGratis(valorCentavos: number, totalCicloCentavos: number, ciclo: Ciclo, meses: number): number {
+  const n = Math.min(Math.max(0, Math.floor(Number(meses) || 0)), MESES[ciclo])
+  if (n === 0) return valorCentavos
+  if (n >= MESES[ciclo]) return 0
+  const mensalidade = Math.round(totalCicloCentavos / MESES[ciclo])
+  const resto = Math.round(valorCentavos - mensalidade * n)
+  if (resto <= 0) return 0
+  return Math.min(valorCentavos, Math.max(VALOR_MINIMO_CENTAVOS, resto))
 }
 
 function limitar(valor: number, teto: number): number {

@@ -2,11 +2,13 @@
  * usa. Sem banco aqui.
  *
  * Decisões do Raver: a conta pega o link de cadastro dela e manda para outro
- * restaurante (ou empresa, no RH). Uma indicação conta depois que o indicado
- * paga o 2º mês. Desde 17/10/2026 o que a conta ganha é uma ESCADA de níveis
- * por software ("com N indicações, tal benefício"), cadastrada no Admin →
- * Afiliados; até a cobrança aplicar sozinha, o admin dá o benefício à mão.
- * Quem guarda e decide é o banco (migrations 20261027000000 e 20261030030000).
+ * restaurante (ou empresa, no RH). Desde 17/10/2026 ("proteção de caixa"):
+ * cada indicado que paga o 2º mês dá ao padrinho 1 mensalidade grátis, numa
+ * FILA; a cobrança do Asaas usa um por mês, só se o indicado daquele bônus
+ * segue assinando (o de quem cancelou é descartado). No semestral/anual, a
+ * renovação abate de uma vez os bônus de indicados que já pagaram o mínimo de
+ * meses. Quem guarda e decide é o banco (migration 20261030040000) e o
+ * webhook do Asaas.
  */
 
 export type StatusPremio = 'pendente' | 'aplicado' | 'cancelado'
@@ -30,21 +32,24 @@ export interface NumerosDaIndicacao {
   nao_pagaram: number
   /** Pagaram 1 mês e seguem assinando: contam quando pagarem o 2º. */
   a_caminho: number
-  /** Já pagaram 2 meses: contam para a escada. */
+  /** Já pagaram 2 meses: cada um virou 1 mês grátis na fila. */
   contam: number
   /** Benefícios já liberados (a receber ou recebidos). */
   liberados: number
 }
 
-/** Um degrau da escada, com o que a conta já ganhou nele. */
-export interface NivelDaIndicacao {
-  /** Quantas indicações o nível pede. */
-  indicacoes: number
-  beneficio: string
-  /** Situação do benefício, quando já foi liberado; null = ainda não alcançou. */
-  status: StatusPremio | null
-  liberado_em: string | null
+/** Um mês grátis da fila (um por indicado que pagou o 2º mês). */
+export interface BonusDaIndicacao {
+  id: string
+  /** pendente = na fila; aplicado = usado; cancelado = descartado. */
+  status: StatusPremio
+  criado_em: string
   aplicado_em: string | null
+  descartado_em: string | null
+  /** 'indicado_cancelou' ou 'admin'. */
+  motivo: string | null
+  /** Já está na próxima cobrança (ainda não paga). */
+  reservado: boolean
 }
 
 /** O que a subpágina Indicações recebe (função `indicacao_minha`). */
@@ -57,8 +62,8 @@ export interface MinhaIndicacao {
   /** O código está ativo (o admin pode desligar um afiliado). */
   ativo: boolean
   numeros: NumerosDaIndicacao
-  /** A escada do software, do menor para o maior. */
-  niveis: NivelDaIndicacao[]
+  /** A fila primeiro (na ordem de uso), depois os usados e os descartados. */
+  bonus: BonusDaIndicacao[]
 }
 
 const NUMEROS_ZERO: NumerosDaIndicacao = { entraram: 0, nao_pagaram: 0, a_caminho: 0, contam: 0, liberados: 0 }
@@ -75,34 +80,26 @@ export function lerNumeros(v: unknown): NumerosDaIndicacao {
 
 const STATUS_VALIDOS: readonly StatusPremio[] = ['pendente', 'aplicado', 'cancelado']
 
-/** Lê a escada do banco sem confiar no formato; fica em ordem e sem repetir o nível. */
-export function lerNiveis(v: unknown): NivelDaIndicacao[] {
+/** Lê os meses grátis do banco sem confiar no formato (mantém a ordem que veio). */
+export function lerBonus(v: unknown): BonusDaIndicacao[] {
   const lista = Array.isArray(v) ? v : []
-  const vistos = new Set<number>()
+  const texto = (x: unknown) => (typeof x === 'string' && x ? x : null)
   return lista
     .map((x) => (x && typeof x === 'object' ? x : {}) as Record<string, unknown>)
+    .filter((o) => typeof o.id === 'string' && STATUS_VALIDOS.includes(o.status as StatusPremio) && typeof o.criado_em === 'string')
     .map((o) => ({
-      indicacoes: Math.floor(Number(o.indicacoes)),
-      beneficio: typeof o.beneficio === 'string' ? o.beneficio.trim() : '',
-      status: STATUS_VALIDOS.includes(o.status as StatusPremio) ? (o.status as StatusPremio) : null,
-      liberado_em: typeof o.liberado_em === 'string' ? o.liberado_em : null,
-      aplicado_em: typeof o.aplicado_em === 'string' ? o.aplicado_em : null,
+      id: o.id as string,
+      status: o.status as StatusPremio,
+      criado_em: o.criado_em as string,
+      aplicado_em: texto(o.aplicado_em),
+      descartado_em: texto(o.descartado_em),
+      motivo: texto(o.motivo),
+      reservado: o.reservado === true,
     }))
-    .filter((n) => Number.isFinite(n.indicacoes) && n.indicacoes > 0 && n.beneficio && !vistos.has(n.indicacoes) && vistos.add(n.indicacoes))
-    .sort((a, b) => a.indicacoes - b.indicacoes)
 }
 
-/**
- * Já alcançou o nível? O benefício liberado manda (cancelado pelo admin = não);
- * sem ele, vale a conta de quantas indicações já contam.
- */
-export function nivelAlcancado(n: Pick<NivelDaIndicacao, 'indicacoes' | 'status'>, contam: number): boolean {
-  if (n.status) return n.status !== 'cancelado'
-  return contam >= n.indicacoes
-}
-
-/** Quantas indicações faltam para o nível (0 = já alcançou). */
-export const faltamParaONivel = (n: Pick<NivelDaIndicacao, 'indicacoes'>, contam: number): number => Math.max(0, n.indicacoes - contam)
+/** Quantos meses grátis estão na fila. */
+export const mesesNaFila = (bonus: readonly Pick<BonusDaIndicacao, 'status'>[]): number => bonus.filter((b) => b.status === 'pendente').length
 
 /** O código como o link e o checkout aceitam. */
 export const CODIGO_VALIDO = /^[A-Z0-9_-]{2,30}$/
@@ -121,10 +118,10 @@ export function linkDeIndicacao(site: string, codigo: string, area: AreaDaIndica
 /** "10%" ou "12,5%". */
 export const textoDaPorcentagem = (n: number) => `${String(Math.round(n * 100) / 100).replace('.', ',')}%`
 
-/** A situação do benefício, do jeito que a conta entende. */
-export const ROTULO_PREMIO: Record<StatusPremio, string> = { pendente: 'A receber', aplicado: 'Recebido', cancelado: 'Cancelado' }
-/** A mesma situação, do lado de quem aplica. */
-export const ROTULO_PREMIO_ADMIN: Record<StatusPremio, string> = { pendente: 'Pendente', aplicado: 'Aplicado', cancelado: 'Cancelado' }
+/** A situação do mês grátis, do jeito que a conta entende. */
+export const ROTULO_PREMIO: Record<StatusPremio, string> = { pendente: 'Na fila', aplicado: 'Usado', cancelado: 'Descartado' }
+/** A mesma situação, do lado do admin. */
+export const ROTULO_PREMIO_ADMIN: Record<StatusPremio, string> = { pendente: 'Na fila', aplicado: 'Usado', cancelado: 'Descartado' }
 
 /** Quantos benefícios ainda faltam ser aplicados. */
 export function premiosPendentes(premios: readonly { status: StatusPremio }[]): number {

@@ -2368,6 +2368,7 @@ export type Database = {
           atualizado_por: string | null
           beneficio: string
           id: boolean
+          meses_para_renovacao: number
         }
         Insert: {
           ativo?: boolean
@@ -2375,6 +2376,7 @@ export type Database = {
           atualizado_por?: string | null
           beneficio?: string
           id?: boolean
+          meses_para_renovacao?: number
         }
         Update: {
           ativo?: boolean
@@ -2382,67 +2384,53 @@ export type Database = {
           atualizado_por?: string | null
           beneficio?: string
           id?: boolean
-        }
-        Relationships: []
-      }
-      indicacao_niveis: {
-        Row: {
-          area: string
-          atualizado_em: string
-          atualizado_por: string | null
-          beneficio: string
-          indicacoes: number
-        }
-        Insert: {
-          area: string
-          atualizado_em?: string
-          atualizado_por?: string | null
-          beneficio: string
-          indicacoes: number
-        }
-        Update: {
-          area?: string
-          atualizado_em?: string
-          atualizado_por?: string | null
-          beneficio?: string
-          indicacoes?: number
+          meses_para_renovacao?: number
         }
         Relationships: []
       }
       indicacao_premios: {
         Row: {
           aplicado_em: string | null
+          aplicado_pagamento: string | null
           aplicado_por: string | null
           beneficio: string
           criado_em: string
+          descartado_em: string | null
           id: string
           indicado_restaurante_id: number | null
-          nivel: number | null
+          motivo: string | null
           porcentagem: number | null
+          reservado_pagamento: string | null
           restaurante_id: number
           status: string
         }
         Insert: {
           aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           aplicado_por?: string | null
           beneficio: string
           criado_em?: string
+          descartado_em?: string | null
           id?: string
           indicado_restaurante_id?: number | null
-          nivel?: number | null
+          motivo?: string | null
           porcentagem?: number | null
+          reservado_pagamento?: string | null
           restaurante_id: number
           status?: string
         }
         Update: {
           aplicado_em?: string | null
+          aplicado_pagamento?: string | null
           aplicado_por?: string | null
           beneficio?: string
           criado_em?: string
+          descartado_em?: string | null
           id?: string
           indicado_restaurante_id?: number | null
-          nivel?: number | null
+          motivo?: string | null
           porcentagem?: number | null
+          reservado_pagamento?: string | null
           restaurante_id?: number
           status?: string
         }
@@ -4992,6 +4980,10 @@ export type Database = {
         }[]
       }
       indicacao_admin: { Args: never; Returns: Json }
+      indicacao_admin_meses_renovacao: {
+        Args: { p_meses: number }
+        Returns: number
+      }
       indicacao_admin_premio: {
         Args: { p_id: string; p_status: string }
         Returns: Json
@@ -5001,17 +4993,21 @@ export type Database = {
         Returns: Json
       }
       indicacao_codigo_novo: { Args: { p_nome: string }; Returns: string }
+      indicacao_confirmar_bonus: {
+        Args: { p_pagamento: string }
+        Returns: number
+      }
       indicacao_contam: { Args: { p_afiliado: string }; Returns: number }
       indicacao_eh_admin: { Args: never; Returns: boolean }
+      indicacao_indicado_firme: {
+        Args: { p_meses: number; p_restaurante_id: number }
+        Returns: boolean
+      }
       indicacao_ja_pagou: {
         Args: { p_restaurante_id: number }
         Returns: boolean
       }
       indicacao_liberada: { Args: never; Returns: boolean }
-      indicacao_liberar_niveis: {
-        Args: { p_restaurante_id: number }
-        Returns: number
-      }
       indicacao_meses_pagos: {
         Args: { p_restaurante_id: number }
         Returns: number
@@ -5022,6 +5018,15 @@ export type Database = {
         Args: { p_restaurante_id: number }
         Returns: string
       }
+      indicacao_reservar_bonus: {
+        Args: { p_ciclo: string; p_pagamento: string; p_restaurante_id: number }
+        Returns: Json
+      }
+      indicacao_situacao_do_indicado: {
+        Args: { p_restaurante_id: number }
+        Returns: string
+      }
+      indicacao_soltar_bonus: { Args: { p_pagamento: string }; Returns: number }
       influencer_conta: {
         Args: { p_email: string }
         Returns: {

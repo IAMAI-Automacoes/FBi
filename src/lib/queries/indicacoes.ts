@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabase/client'
-import { lerNiveis, lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type StatusPremio } from '@/lib/indicacoes'
+import { lerBonus, lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type StatusPremio } from '@/lib/indicacoes'
 
 /* Indicações: tudo passa por funções do banco (migrations 20261017010000,
-   20261027000000 e 20261030030000), que conferem por dentro quem pode. */
+   20261027000000 e 20261030040000), que conferem por dentro quem pode. */
 
-/** A subpágina Indicações: código, números e a escada de benefícios da conta logada. */
+/** A subpágina Indicações: código, números e os meses grátis da conta logada. */
 export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
   const { data, error } = await supabase.rpc('indicacao_minha')
   if (error) throw error
@@ -16,7 +16,7 @@ export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
     codigo: typeof r.codigo === 'string' ? r.codigo : null,
     ativo: r.ativo !== false,
     numeros: lerNumeros(r.numeros),
-    niveis: lerNiveis(r.niveis),
+    bonus: lerBonus(r.bonus),
   }
 }
 
@@ -54,12 +54,17 @@ export async function salvarPorcentagemPadrao(area: AreaDaIndicacao, porcentagem
 
 export interface PremioDoAfiliado {
   id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null
-  /** O nível da escada que liberou (null = benefício antigo, por indicado). */
-  nivel: number | null
-  /** Por quem (só no benefício antigo, por indicado). */
-  indicado: string | null
+  descartado_em: string | null
+  /** 'indicado_cancelou' ou 'admin'. */
+  motivo: string | null
+  /** Já está numa cobrança do Asaas ainda não paga. */
+  reservado: boolean
+  /** 'asaas' (automático) ou o e-mail do admin. */
+  aplicado_por: string | null
+  /** O indicado que gerou o mês grátis. */
+  indicado: string
 }
-/** `contam`: indicados que já pagaram 2 meses (os que valem para a escada). */
+/** `contam`: indicados que já pagaram 2 meses (cada um virou 1 mês grátis). */
 export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; contam: number; premios: PremioDoAfiliado[] }
 
 /** O que cada afiliado de um software trouxe (por id do afiliado). */
@@ -69,36 +74,20 @@ export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<
   return (data ?? {}) as unknown as Record<string, NumerosDoAfiliado>
 }
 
-// ── A escada de benefícios (Admin → Afiliados, por software) ─────────────────
+// ── Semestral/anual: quantos meses o indicado precisa ter pago ───────────────
 
-export interface NivelDaEscada { indicacoes: number; beneficio: string }
-
-export async function buscarNiveis(area: AreaDaIndicacao): Promise<NivelDaEscada[]> {
-  const { data, error } = await supabase.from('indicacao_niveis').select('indicacoes, beneficio').eq('area', area).order('indicacoes')
+export async function buscarMesesParaRenovacao(): Promise<number> {
+  const { data, error } = await supabase.from('indicacao_config').select('meses_para_renovacao').limit(1).maybeSingle()
   if (error) throw error
-  return (data ?? []) as NivelDaEscada[]
+  return Number(data?.meses_para_renovacao) || 4
 }
 
-/**
- * Grava um nível. `antes`: quantas indicações ele pedia (mudar o número troca
- * a chave, então sai o antigo e entra o novo).
- */
-export async function salvarNivel(area: AreaDaIndicacao, nivel: NivelDaEscada, antes?: number): Promise<void> {
-  const { data: u } = await supabase.auth.getUser()
-  const { error } = await supabase.from('indicacao_niveis').upsert({
-    area, indicacoes: nivel.indicacoes, beneficio: nivel.beneficio.trim(),
-    atualizado_por: u.user?.email ?? null, atualizado_em: new Date().toISOString(),
-  })
-  if (error) throw error
-  if (antes != null && antes !== nivel.indicacoes) await removerNivel(area, antes)
-}
-
-export async function removerNivel(area: AreaDaIndicacao, indicacoes: number): Promise<void> {
-  const { error } = await supabase.from('indicacao_niveis').delete().eq('area', area).eq('indicacoes', indicacoes)
+export async function salvarMesesParaRenovacao(meses: number): Promise<void> {
+  const { error } = await supabase.rpc('indicacao_admin_meses_renovacao', { p_meses: meses })
   if (error) throw error
 }
 
-/** O admin marca que já deu o benefício, cancela ou volta para pendente. */
+/** O admin marca à mão: usado, descartado ou de volta para a fila. */
 export async function mudarPremioDaIndicacao(id: string, status: StatusPremio): Promise<void> {
   const { data, error } = await supabase.rpc('indicacao_admin_premio', { p_id: id, p_status: status })
   if (error) throw error

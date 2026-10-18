@@ -26,7 +26,6 @@ import { asaas, ErroAsaas, removerNoAsaas, type ClienteAsaas } from '../_shared/
 import { acharAssinatura, espelharPagamento } from '../_shared/asaas/espelho.ts'
 import {
   centavos,
-  comBonusDeIndicacao,
   contaValida,
   pagamentoAtrasado,
   pagamentoEstornado,
@@ -35,6 +34,7 @@ import {
   periodoFimRecorrente,
   reais,
   tokenIgual,
+  valorComMesesGratis,
   type Ciclo,
 } from '../_shared/asaas/regras.ts'
 
@@ -161,15 +161,16 @@ async function aoMudarPagamento(db: Db, contaId: string, evento: Evento) {
     return
   }
 
-  // Renovação de recorrente ainda em aberto: bônus de indicação entra nela.
-  let premioId: string | null | undefined
+  // Renovação de recorrente ainda em aberto: os meses grátis de indicação entram nela.
   if (evento.event === 'PAYMENT_CREATED' && a.modalidade === 'recorrente' && pag.status === 'PENDING' && !pag.deleted) {
-    const r = await aplicarBonus(db, cli, a, pag)
-    pag = r.pag
-    premioId = r.premioId
+    pag = await aplicarBonus(db, cli, a, pag)
   }
 
-  const linha = await espelharPagamento(db, contaId, a, pag, premioId ? { premio_id: premioId } : {})
+  const linha = await espelharPagamento(db, contaId, a, pag)
+
+  // Cobrança removida ou estornada sem ser paga: os bônus que estavam nela
+  // voltam para a fila (o mês grátis que nós removemos já foi marcado usado).
+  if (pag.deleted || pagamentoEstornado(pag.status)) await soltarBonus(db, pag.id)
 
   if (pagamentoPago(pag.status) && !pag.deleted) {
     await aoPagar(db, a, linha, pag)
@@ -243,6 +244,8 @@ async function aoPagar(db: Db, a: any, linha: any, pag: any) {
     await db.from('indicacao_premios').update({ status: 'aplicado', aplicado_em: agora(), aplicado_por: 'asaas' })
       .eq('id', linha.premio_id).eq('status', 'pendente')
   }
+  // Meses grátis de indicação abatidos nesta cobrança: usados.
+  await confirmarBonus(db, pag.id)
 
   // Indicações: 1ª mensalidade e, no 2º mês pago, o benefício de quem indicou.
   if (a.restaurante_id) {
@@ -266,10 +269,20 @@ async function aoEstornar(db: Db, cli: ClienteAsaas, a: any, pag: any) {
     .eq('id', a.id)
 }
 
-/** Bônus de indicação pendente → abate de uma mensalidade nesta renovação. */
+/**
+ * Meses grátis de indicação nesta renovação ("proteção de caixa", regra do
+ * Raver em 17/10/2026). O banco confere o indicado de cada bônus da fila e
+ * reserva os que valem (`indicacao_reservar_bonus`): no mensal, 1 por mês, de
+ * indicado ativo (o de quem cancelou é descartado); no semestral/anual, os de
+ * indicado ativo que já pagou o mínimo de meses. Cada um abate 1 mensalidade.
+ * Coberta a cobrança inteira (o mensal com 1 bônus), ela sai do Asaas — que
+ * não aceita cobrança abaixo de R$ 5 — e o período anda como se tivesse sido
+ * paga. O bônus é marcado usado ANTES de a cobrança sair: se o Asaas falhar,
+ * ele volta para a fila; nunca sai um mês grátis sem gastar um bônus.
+ */
 // deno-lint-ignore no-explicit-any
-async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<{ pag: any; premioId?: string }> {
-  if (!a.restaurante_id) return { pag }
+async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<any> {
+  if (!a.restaurante_id) return pag
 
   // A 1ª cobrança é da compra (o cupom cuida dela); o bônus é para renovações.
   const { count: pagas } = await db
@@ -277,39 +290,71 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
     .select('id', { count: 'exact', head: true })
     .eq('assinatura_id', a.id)
     .in('status', ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH'])
-  if (!pagas) return { pag }
+  if (!pagas) return pag
 
-  // Esta cobrança já recebeu um bônus (evento repetido).
-  const { data: ja } = await db
-    .from('cobranca_pagamentos')
-    .select('premio_id')
-    .eq('conta_id', a.conta_id)
-    .eq('asaas_payment_id', String(pag.id))
-    .maybeSingle()
-  if (ja?.premio_id) return { pag }
-
-  // O bônus pendente mais antigo que ainda não está preso a outra cobrança.
-  const { data: presos } = await db
-    .from('cobranca_pagamentos')
-    .select('premio_id')
-    .eq('restaurante_id', a.restaurante_id)
-    .not('premio_id', 'is', null)
-    .not('status', 'in', '(DELETED,REFUNDED)')
-  const ocupados = new Set((presos ?? []).map((p: { premio_id: string }) => p.premio_id))
-  const { data: pendentes } = await db
-    .from('indicacao_premios')
-    .select('id, porcentagem')
-    .eq('restaurante_id', a.restaurante_id)
-    .eq('status', 'pendente')
-    .order('criado_em', { ascending: true })
-  const premio = (pendentes ?? []).find((p: { id: string }) => !ocupados.has(p.id))
-  if (!premio) return { pag }
+  const { data: r, error } = await db.rpc('indicacao_reservar_bonus', {
+    p_restaurante_id: a.restaurante_id,
+    p_ciclo: a.ciclo,
+    p_pagamento: String(pag.id),
+  })
+  if (error) throw new Error(`indicacao_reservar_bonus: ${error.message}`)
+  const meses = Number(r?.meses ?? 0)
+  // Nenhum bônus valeu, ou evento repetido (o abatimento já foi feito).
+  if (!(meses > 0) || r?.repetido) return pag
 
   const atual = centavos(pag.value)
-  const novo = comBonusDeIndicacao(atual, a.valor_centavos, a.ciclo as Ciclo, Number(premio.porcentagem) || 0)
-  if (novo >= atual) return { pag }
-  const atualizado = await cli.put(`/payments/${pag.id}`, { value: reais(novo) })
-  return { pag: atualizado, premioId: premio.id }
+  const novo = valorComMesesGratis(atual, a.valor_centavos, a.ciclo as Ciclo, meses)
+  if (novo >= atual) {
+    await soltarBonus(db, pag.id)
+    return pag
+  }
+
+  if (novo > 0) {
+    try {
+      return await cli.put(`/payments/${pag.id}`, { value: reais(novo) })
+    } catch (e) {
+      await soltarBonus(db, pag.id).catch(() => {})
+      throw e
+    }
+  }
+
+  // A cobrança inteira é grátis.
+  await confirmarBonus(db, pag.id)
+  try {
+    await removerNoAsaas(cli, `/payments/${pag.id}`)
+  } catch (e) {
+    // A cobrança continua: o bônus volta para a fila.
+    await db
+      .from('indicacao_premios')
+      .update({ status: 'pendente', aplicado_em: null, aplicado_por: null, aplicado_pagamento: null, reservado_pagamento: null })
+      .eq('aplicado_pagamento', String(pag.id))
+      .eq('aplicado_por', 'asaas')
+    throw e
+  }
+  await andarPeriodo(db, a, pag)
+  return { ...pag, deleted: true }
+}
+
+async function confirmarBonus(db: Db, pagamentoId: unknown) {
+  const { error } = await db.rpc('indicacao_confirmar_bonus', { p_pagamento: String(pagamentoId) })
+  if (error) throw new Error(`indicacao_confirmar_bonus: ${error.message}`)
+}
+
+async function soltarBonus(db: Db, pagamentoId: unknown) {
+  const { error } = await db.rpc('indicacao_soltar_bonus', { p_pagamento: String(pagamentoId) })
+  if (error) throw new Error(`indicacao_soltar_bonus: ${error.message}`)
+}
+
+/** Mês grátis: o período da assinatura anda como se a cobrança tivesse sido paga. */
+// deno-lint-ignore no-explicit-any
+async function andarPeriodo(db: Db, a: any, pag: any) {
+  const candidato = periodoFimRecorrente(String(pag.dueDate).slice(0, 10), a.ciclo as Ciclo)
+  if (a.periodo_fim && new Date(candidato) <= new Date(a.periodo_fim)) return
+  const { error } = await db
+    .from('cobranca_assinaturas')
+    .update({ periodo_fim: candidato, atualizada_em: agora() })
+    .eq('id', a.id)
+  if (error) throw new Error(`cobranca_assinaturas: ${error.message}`)
 }
 
 async function aoMudarAssinatura(db: Db, contaId: string, tipo: string, subId: string) {
