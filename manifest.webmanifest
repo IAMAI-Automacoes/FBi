@@ -1,11 +1,17 @@
 {
+  "id": "/",
   "name": "Easy Feed",
   "short_name": "Easy Feed",
   "description": "Colete e entenda os feedbacks dos seus clientes, com ajuda de IA.",
   "lang": "pt-BR",
-  "start_url": "/",
+  "start_url": "/?app=easyfeed",
   "scope": "/",
   "display": "standalone",
+  "related_applications": [
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest.webmanifest" },
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest-whatsapp.webmanifest" },
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest-mensagens.webmanifest" }
+  ],
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "icons": [
