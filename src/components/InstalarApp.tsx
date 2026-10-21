@@ -25,15 +25,17 @@ const Passo = ({ icone, children }: { icone: React.ReactNode; children: React.Re
  * OUTRO app já instalado (`endereco`: lá só dá para instalar pelo navegador).
  *
  * `jaTem`: o app já está instalado neste aparelho. Em vez dos passos, diz
- * isso e onde achar o ícone; os passos ficam atrás de "Não encontro o ícone"
- * (para quem apagou o app e o aparelho ainda não percebeu).
+ * isso e onde achar o ícone. "Desinstalei — instalar de novo" é para quem
+ * apagou o app e o aparelho ainda não percebeu: `aoInstalarDeNovo` tenta
+ * instalar de verdade (sem ele, mostra os passos).
  */
-export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(), endereco, jaTem = false }: {
+export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(), endereco, jaTem = false, aoInstalarDeNovo }: {
   aoFechar: () => void
   nome: string
   jeito?: Jeito
   endereco?: string
   jaTem?: boolean
+  aoInstalarDeNovo?: () => void
 }) {
   const [verPassos, setVerPassos] = useState(!jaTem)
   const [copiado, setCopiado] = useState(false)
@@ -62,8 +64,12 @@ export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(),
             {jeito === 'outro' ? ', no menu Iniciar ou na área de trabalho.' : ', na tela inicial do celular.'}
           </p>
           <button type="button" onClick={aoFechar} className={cn(BOTAO_PILULA_AZUL, 'mt-4 w-full')}>Entendi</button>
-          <button type="button" onClick={() => setVerPassos(true)} className="mt-2 h-9 text-[13px] font-medium text-gray-500 hover:text-gray-800">
-            Não encontro o ícone
+          <button
+            type="button"
+            onClick={() => (aoInstalarDeNovo ? aoInstalarDeNovo() : setVerPassos(true))}
+            className="mt-2 h-9 text-[13px] font-medium text-gray-500 hover:text-gray-800"
+          >
+            Desinstalei — instalar de novo
           </button>
         </div>
       </div>
@@ -157,6 +163,12 @@ function useInstalar(app: AppInstalavel, nome: string) {
   const clicar = async () => {
     // Já tem o app: avisa, em vez de mandar procurar o menu do navegador.
     if (await instaladoNoAparelho(app)) { setInstalado(true); setPasso({ jaTem: true }); return }
+    await tentarInstalar()
+  }
+
+  // Instala de verdade, sem olhar o "já instalado" (o clique de "instalar de
+  // novo": a marca deste aparelho pode estar velha, de um app já apagado).
+  const tentarInstalar = async () => {
     if (ehAppInstalado()) { setPasso({ endereco: enderecoDoApp(app) }); return }
     if (!navegadorInstalaComUmToque()) {
       // iPhone: o Safari adiciona à Tela de Início a PÁGINA aberta. Pedido de
@@ -177,7 +189,13 @@ function useInstalar(app: AppInstalavel, nome: string) {
     else if (r === 'indisponivel') abrirPassos()
   }
   const passoAPasso = passo && (
-    <PassoAPassoInstalar nome={nome} endereco={passo.endereco} jaTem={passo.jaTem} aoFechar={fechar} />
+    <PassoAPassoInstalar
+      nome={nome}
+      endereco={passo.endereco}
+      jaTem={passo.jaTem}
+      aoFechar={fechar}
+      aoInstalarDeNovo={() => { setPasso(null); tentarInstalar() }}
+    />
   )
   return { clicar, passoAPasso, instalado, abrindo }
 }

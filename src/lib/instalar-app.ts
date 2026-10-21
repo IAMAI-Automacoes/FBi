@@ -149,17 +149,19 @@ interface AppRelacionado { platform: string; url?: string; id?: string }
  */
 export async function instaladoNoAparelho(app: AppInstalavel): Promise<boolean> {
   if (podeInstalarAqui(app)) return false
-  if (jaInstalado(app)) return true
   try {
     const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<AppRelacionado[]> }
-    if (!nav.getInstalledRelatedApps) return false
-    const apps = await nav.getInstalledRelatedApps()
-    const achou = apps.some((a) => a.platform === 'webapp' && !!a.url?.endsWith(MANIFESTO_DO_APP[app]))
-    if (achou) marcarInstalado(app)
-    return achou
-  } catch {
-    return false
-  }
+    if (nav.getInstalledRelatedApps) {
+      const apps = await nav.getInstalledRelatedApps()
+      const achou = apps.some((a) => a.platform === 'webapp' && !!a.url?.endsWith(MANIFESTO_DO_APP[app]))
+      if (achou) { marcarInstalado(app); return true }
+      // No Android a resposta do Chrome vale: não achou = foi desinstalado,
+      // e a marca deste aparelho estava velha. (No computador ele nem sempre
+      // enxerga os apps instalados; lá a marca continua valendo.)
+      if (/Android/i.test(navigator.userAgent)) { desmarcarInstalado(app); return false }
+    }
+  } catch { /* sem resposta do navegador: vale a marca */ }
+  return jaInstalado(app)
 }
 
 export function ehIphone(): boolean {
