@@ -11,6 +11,8 @@
  *
  * Três apps no mesmo site (ver ManifestPorRota): o painel ("Easy Feed"), a
  * tela WhatsApp ("ZapFeed") e o chat de suporte do admin ("Mensagens").
+ * O ZapFeed é SÓ a tela WhatsApp: aberto pelo ícone dele, o resto do painel
+ * não aparece (ver `noZapFeed` e o Layout).
  */
 
 export type AppInstalavel = 'easyfeed' | 'whatsapp' | 'mensagens'
@@ -29,6 +31,13 @@ const ROTA_DO_APP: Record<AppInstalavel, string> = {
   mensagens: '/admin',
 }
 
+// O manifest de cada app (o `related_applications` dos três aponta para eles).
+const MANIFESTO_DO_APP: Record<AppInstalavel, string> = {
+  easyfeed: '/manifest.webmanifest',
+  whatsapp: '/manifest-whatsapp.webmanifest',
+  mensagens: '/manifest-mensagens.webmanifest',
+}
+
 interface EventoInstalar extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
@@ -45,6 +54,12 @@ function marcarInstalado(app: AppInstalavel) {
   try { localStorage.setItem(chaveInstalado(app), '1') } catch { /* sem armazenamento */ }
 }
 
+function desmarcarInstalado(app: AppInstalavel) {
+  try { localStorage.removeItem(chaveInstalado(app)) } catch { /* sem armazenamento */ }
+}
+
+const ehApp = (v: string | null): v is AppInstalavel => v === 'easyfeed' || v === 'whatsapp' || v === 'mensagens'
+
 /** Rodando como app instalado (aberto pelo ícone)? Qualquer um dos três. */
 export function ehAppInstalado(): boolean {
   try {
@@ -59,6 +74,9 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     pedido = e as EventoInstalar
+    // O navegador só oferece o que NÃO está instalado: se estava marcado
+    // como instalado, a pessoa apagou o ícone. O botão volta a aparecer.
+    desmarcarInstalado(appInicial)
     window.dispatchEvent(new Event('easyfeed:pode-instalar'))
   })
   window.addEventListener('appinstalled', () => {
@@ -67,16 +85,15 @@ if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('easyfeed:pode-instalar'))
   })
   // Aberto pelo ícone: lembra QUAL app é esta janela. O ?app= do start_url
-  // diz na primeira carga (a tela limpa a URL depois); recargas na mesma
-  // janela mantêm o que já estava gravado.
+  // de cada manifest diz na primeira carga (a tela limpa a URL depois) e
+  // vale mais que o gravado; recargas na mesma janela mantêm o gravado. Sem
+  // nenhum dos dois (janela aberta por uma notificação), vale a rota.
   if (ehAppInstalado()) {
     try {
-      let aberto = sessionStorage.getItem(CHAVE_ABERTO) as AppInstalavel | null
-      if (!aberto) {
-        const doParam = new URLSearchParams(window.location.search).get('app')
-        aberto = doParam === 'whatsapp' || doParam === 'mensagens' ? doParam : appInicial
-        sessionStorage.setItem(CHAVE_ABERTO, aberto)
-      }
+      const doParam = new URLSearchParams(window.location.search).get('app')
+      const gravado = sessionStorage.getItem(CHAVE_ABERTO)
+      const aberto: AppInstalavel = ehApp(doParam) ? doParam : ehApp(gravado) ? gravado : appInicial
+      sessionStorage.setItem(CHAVE_ABERTO, aberto)
       marcarInstalado(aberto)
     } catch { /* sem armazenamento */ }
   }
@@ -92,9 +109,36 @@ export function abertoComoApp(app: AppInstalavel): boolean {
   }
 }
 
+/** Esta janela é o ZapFeed (só a tela WhatsApp, sem o resto do painel)? */
+export function noZapFeed(): boolean {
+  return abertoComoApp('whatsapp')
+}
+
 /** Este aparelho já instalou (ou abriu pelo ícone) o app `app`? */
 export function jaInstalado(app: AppInstalavel): boolean {
   try { return localStorage.getItem(chaveInstalado(app)) === '1' } catch { return false }
+}
+
+interface AppRelacionado { platform: string; url?: string; id?: string }
+
+/**
+ * `jaInstalado` + o que o navegador sabe: o Chrome (Android e computador)
+ * responde, pelo `related_applications` dos manifests, quais dos três apps
+ * estão instalados — inclusive os instalados antes deste aviso existir.
+ */
+export async function instaladoNoAparelho(app: AppInstalavel): Promise<boolean> {
+  if (podeInstalarAqui(app)) return false
+  if (jaInstalado(app)) return true
+  try {
+    const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<AppRelacionado[]> }
+    if (!nav.getInstalledRelatedApps) return false
+    const apps = await nav.getInstalledRelatedApps()
+    const achou = apps.some((a) => a.platform === 'webapp' && !!a.url?.endsWith(MANIFESTO_DO_APP[app]))
+    if (achou) marcarInstalado(app)
+    return achou
+  } catch {
+    return false
+  }
 }
 
 export function ehIphone(): boolean {

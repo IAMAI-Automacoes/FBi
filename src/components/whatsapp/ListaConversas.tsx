@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { Loader2, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { noZapFeed } from '@/lib/instalar-app'
 import { BotaoSino, MarcasConversa, MenuConversa, useSeguraParaMenu } from '@/components/ControlesConversa'
 import { BotaoInstalarApp } from '@/components/InstalarApp'
 import {
@@ -171,7 +172,8 @@ export function ListaConversas({
         // No admin, o topo da tela é o cabeçalho do painel: não desconta a área segura.
         style={{ background: WA.TEAL, paddingTop: somenteLeitura ? undefined : 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
       >
-        {!somenteLeitura && <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />}
+        {/* No ZapFeed não há menu: o app é só esta tela. */}
+        {!somenteLeitura && !noZapFeed() && <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />}
         <p className="min-w-0 flex-1 truncate text-[17px] font-semibold text-white">WhatsApp</p>
         {!somenteLeitura && (
           <>

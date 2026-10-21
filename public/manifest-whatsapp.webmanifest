@@ -7,6 +7,11 @@
   "start_url": "/whatsapp?app=whatsapp",
   "scope": "/",
   "display": "standalone",
+  "related_applications": [
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest.webmanifest" },
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest-whatsapp.webmanifest" },
+    { "platform": "webapp", "url": "https://easyfeed.com.br/manifest-mensagens.webmanifest" }
+  ],
   "background_color": "#128c7e",
   "theme_color": "#128c7e",
   "icons": [

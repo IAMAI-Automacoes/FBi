@@ -82,10 +82,12 @@ export function TopHeader() {
   // o botão fica em destaque (o navegador só instala com um toque) e a URL limpa.
   const [params, setParams] = useSearchParams()
   const [destacarInstalar] = useState(() => params.get('instalar') === '1')
+  // `?app=easyfeed` (start_url do app instalado) também sai: já foi lido no carregamento.
   useEffect(() => {
-    if (!params.has('instalar')) return
+    if (!params.has('instalar') && !params.has('app')) return
     const limpo = new URLSearchParams(params)
     limpo.delete('instalar')
+    limpo.delete('app')
     setParams(limpo, { replace: true })
   }, [params, setParams])
   const [adminUnread, setAdminUnread] = useState(0)

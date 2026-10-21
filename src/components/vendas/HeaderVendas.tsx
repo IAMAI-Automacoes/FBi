@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BrandMark } from '@/components/auth/AuthLayout'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cores, TRANSICAO } from './tokens'
 
 const LINKS = [
@@ -14,6 +15,7 @@ export function HeaderVendas() {
   // A borda inferior só entra depois que a página sai do topo — no topo o header
   // precisa parecer parte do hero, não uma barra colada por cima dele.
   const [rolou, setRolou] = useState(false)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const aoRolar = () => setRolou(window.scrollY > 12)
@@ -37,10 +39,10 @@ export function HeaderVendas() {
     >
       <div
         className="mx-auto flex items-center justify-between"
-        style={{ maxWidth: '1180px', padding: '14px 24px' }}
+        style={{ maxWidth: '1180px', padding: '14px clamp(16px, 4vw, 24px)' }}
       >
-        <a href="#topo" className="flex items-center" style={{ textDecoration: 'none' }}>
-          <BrandMark size={64} />
+        <a href="#topo" className="flex shrink-0 items-center" style={{ textDecoration: 'none' }}>
+          <BrandMark size={isMobile ? 48 : 64} />
         </a>
 
         <nav className="hidden md:flex items-center" style={{ gap: '28px' }}>
@@ -63,17 +65,20 @@ export function HeaderVendas() {
           ))}
         </nav>
 
-        <div className="flex items-center" style={{ gap: '10px' }}>
+        {/* "Entrar" aparece no celular também: quem já tem conta entra por aqui.
+            No celular ganha contorno, para não parecer texto solto. */}
+        <div className="flex items-center" style={{ gap: isMobile ? '8px' : '10px' }}>
           <Link
             to="/login"
-            className="hidden sm:inline-flex"
+            className="inline-flex"
             style={{
               alignItems: 'center',
               height: '40px',
-              padding: '0 16px',
+              padding: isMobile ? '0 14px' : '0 16px',
               fontSize: '14px',
-              fontWeight: 500,
+              fontWeight: isMobile ? 600 : 500,
               color: cores.corpo,
+              border: isMobile ? `1px solid ${cores.borda}` : '1px solid transparent',
               borderRadius: '10px',
               textDecoration: 'none',
               transition: 'background-color 0.18s ease',
@@ -89,7 +94,7 @@ export function HeaderVendas() {
             className="inline-flex items-center"
             style={{
               height: '40px',
-              padding: '0 18px',
+              padding: isMobile ? '0 14px' : '0 18px',
               fontSize: '14px',
               fontWeight: 600,
               color: '#FFFFFF',

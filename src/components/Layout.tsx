@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { noZapFeed } from '@/lib/instalar-app'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { HeaderExtraProvider } from '@/hooks/use-header-extra'
@@ -190,13 +191,18 @@ export default function Layout() {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [pathname])
 
+  // ZapFeed (app instalado da tela WhatsApp) é SÓ o WhatsApp: sem menu
+  // lateral nem chat de IA, e qualquer outra página do painel volta para lá.
+  const zapFeed = noZapFeed()
+  if (zapFeed && !pathname.startsWith('/whatsapp')) return <Navigate to="/whatsapp" replace />
+
   return (
     <SidebarProvider open={sidebarAberto} onOpenChange={setSidebarAberto}>
       <HeaderExtraProvider>
         {/* `100dvh`, não `100vh`: no celular o `vh` conta a área por trás da
             barra do navegador, e o fim de toda página ficava escondido nela. */}
         <div className="flex h-[100dvh] w-full bg-background overflow-hidden">
-          <AppSidebar />
+          {!zapFeed && <AppSidebar />}
           <main
             className="flex flex-1 flex-col w-full min-w-0 min-h-0 transition-[margin] duration-300 ease-in-out"
             style={{ marginRight: chatDesktop ? LARGURA_CHAT : 0 }}
@@ -226,7 +232,7 @@ export default function Layout() {
           </main>
           {/* A `key` remonta o chat ao entrar ou sair das páginas da equipe: a
               conversa de lá é outra, com outro histórico e outro contexto. */}
-          {chatDisponivel && <ChatFab key={ehRotaDaEquipe(pathname) ? 'equipe' : 'clientes'} open={chatAberto} onOpenChange={setChatAberto} />}
+          {chatDisponivel && !zapFeed && <ChatFab key={ehRotaDaEquipe(pathname) ? 'equipe' : 'clientes'} open={chatAberto} onOpenChange={setChatAberto} />}
         </div>
       </HeaderExtraProvider>
     </SidebarProvider>

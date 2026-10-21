@@ -7,6 +7,7 @@ import { TelaWhatsapp, type RestauranteDaTela } from '@/components/whatsapp/Tela
 import { WhatsappDesconectado } from '@/components/whatsapp/WhatsappDesconectado'
 import { WA } from '@/components/whatsapp/pecas'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { noZapFeed } from '@/lib/instalar-app'
 
 /** De quanto em quanto tempo a página confere se o WhatsApp continua conectado. */
 const CONFERIR_A_CADA_MS = 120_000
@@ -86,7 +87,8 @@ export default function WhatsApp() {
   // Carregando ou desconectado: a tela não tem o cabeçalho da lista (onde
   // fica o botão do menu no celular), e o cabeçalho do painel some nesta rota.
   // Sem isto, no app instalado não havia como sair dali.
-  const menuNoCelular = (
+  // (No ZapFeed não há menu: o app é só esta tela.)
+  const menuNoCelular = noZapFeed() ? null : (
     <SidebarTrigger
       className="fixed left-2 z-40 bg-white/80 shadow-sm md:hidden"
       style={{ top: 'max(env(safe-area-inset-top, 0px), 0.5rem)' }}

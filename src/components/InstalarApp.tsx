@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { useToast } from '@/hooks/use-toast'
 import {
-  abertoComoApp, ehAppInstalado, enderecoDoApp, existePedidoDeInstalar, instalar, jaInstalado,
-  jeitoDeInstalar, podeInstalarAqui, type AppInstalavel,
+  abertoComoApp, ehAppInstalado, enderecoDoApp, existePedidoDeInstalar, instalar, instaladoNoAparelho,
+  jaInstalado, jeitoDeInstalar, podeInstalarAqui, type AppInstalavel,
 } from '@/lib/instalar-app'
 
 type Jeito = ReturnType<typeof jeitoDeInstalar>
@@ -21,13 +21,19 @@ const Passo = ({ icone, children }: { icone: React.ReactNode; children: React.Re
  * Passo a passo para instalar quando o navegador não oferece com um toque:
  * no iPhone (lá não existe), no Android sem o pedido do Chrome, ou dentro de
  * OUTRO app já instalado (`endereco`: lá só dá para instalar pelo navegador).
+ *
+ * `jaTem`: o app já está instalado neste aparelho. Em vez dos passos, diz
+ * isso e onde achar o ícone; os passos ficam atrás de "Não encontro o ícone"
+ * (para quem apagou o app e o aparelho ainda não percebeu).
  */
-export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(), endereco }: {
+export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(), endereco, jaTem = false }: {
   aoFechar: () => void
   nome: string
   jeito?: Jeito
   endereco?: string
+  jaTem?: boolean
 }) {
+  const [verPassos, setVerPassos] = useState(!jaTem)
   const [copiado, setCopiado] = useState(false)
   const copiar = async () => {
     if (!endereco) return
@@ -39,6 +45,28 @@ export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(),
       <span>Abra pelo ícone: você já entra logado, e as notificações passam a funcionar.</span>
     </li>
   )
+
+  if (!verPassos) {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={aoFechar} role="dialog" aria-modal="true" aria-label={`${nome} já instalado`}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl" onClick={(e) => e.stopPropagation()}
+          style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white">
+            <Check className="h-6 w-6" />
+          </span>
+          <p className="mt-3 text-[16px] font-semibold text-gray-900">O {nome} já está instalado</p>
+          <p className="mt-1 text-[14px] leading-snug text-gray-600">
+            Não precisa instalar de novo: abra pelo ícone <b>{nome}</b>
+            {jeito === 'outro' ? ', no menu Iniciar ou na área de trabalho.' : ', na tela inicial do celular.'}
+          </p>
+          <button type="button" onClick={aoFechar} className={cn(BOTAO_PILULA_AZUL, 'mt-4 w-full')}>Entendi</button>
+          <button type="button" onClick={() => setVerPassos(true)} className="mt-2 h-9 text-[13px] font-medium text-gray-500 hover:text-gray-800">
+            Não encontro o ícone
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={aoFechar} role="dialog" aria-modal="true" aria-label={`Instalar ${nome}`}>
@@ -99,22 +127,33 @@ export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(),
 function useInstalar(app: AppInstalavel, nome: string) {
   const { toast } = useToast()
   const [, renovar] = useState(0)
-  const [passo, setPasso] = useState<{ endereco?: string } | null>(null)
+  const [passo, setPasso] = useState<{ endereco?: string; jaTem?: boolean } | null>(null)
+  // Já instalado neste aparelho? (marcado aqui ou respondido pelo navegador)
+  const [instalado, setInstalado] = useState(() => jaInstalado(app))
   useEffect(() => {
-    const f = () => renovar((n) => n + 1)
-    window.addEventListener('easyfeed:pode-instalar', f)
-    return () => window.removeEventListener('easyfeed:pode-instalar', f)
-  }, [])
+    let ativo = true
+    const conferir = () => {
+      renovar((n) => n + 1)
+      instaladoNoAparelho(app).then((sim) => { if (ativo) setInstalado(sim) })
+    }
+    conferir()
+    window.addEventListener('easyfeed:pode-instalar', conferir)
+    return () => { ativo = false; window.removeEventListener('easyfeed:pode-instalar', conferir) }
+  }, [app])
 
   const clicar = async () => {
+    // Já tem o app: avisa, em vez de mandar procurar o menu do navegador.
+    if (await instaladoNoAparelho(app)) { setInstalado(true); setPasso({ jaTem: true }); return }
     if (ehAppInstalado()) { setPasso({ endereco: enderecoDoApp(app) }); return }
     if (!existePedidoDeInstalar()) { setPasso({}); return }
     const r = await instalar(app)
     if (r === 'aceito') toast({ title: `${nome} instalado`, description: 'Abra pelo ícone na tela inicial.' })
     else if (r === 'indisponivel') setPasso({})
   }
-  const passoAPasso = passo && <PassoAPassoInstalar nome={nome} endereco={passo.endereco} aoFechar={() => setPasso(null)} />
-  return { clicar, passoAPasso }
+  const passoAPasso = passo && (
+    <PassoAPassoInstalar nome={nome} endereco={passo.endereco} jaTem={passo.jaTem} aoFechar={() => setPasso(null)} />
+  )
+  return { clicar, passoAPasso, instalado }
 }
 
 /**
@@ -134,12 +173,12 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
   destacar?: boolean
   variante?: 'claro' | 'escuro'
 }) {
-  const { clicar, passoAPasso } = useInstalar(app, nome)
+  const { clicar, passoAPasso, instalado } = useInstalar(app, nome)
 
   if (abertoComoApp(app)) return null
   // Fora de um app instalado, "já instalado" esconde: o Chrome para de
   // oferecer e o botão cairia no passo a passo à toa.
-  if (!ehAppInstalado() && jaInstalado(app)) return null
+  if (!ehAppInstalado() && instalado) return null
 
   const forte = destacar || podeInstalarAqui(app)
   return (
@@ -167,13 +206,15 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
 
 /** Uma linha do cartão do Perfil: o app, para que serve e o botão (sempre à mostra). */
 function LinhaInstalar({ app, nome, descricao }: { app: AppInstalavel; nome: string; descricao: string }) {
-  const { clicar, passoAPasso } = useInstalar(app, nome)
+  const { clicar, passoAPasso, instalado } = useInstalar(app, nome)
   const aberto = abertoComoApp(app)
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0">
         <p className="text-sm font-medium text-gray-900">{nome}</p>
-        <p className="text-[13px] text-gray-600">{aberto ? 'Você está usando este app agora.' : descricao}</p>
+        <p className="text-[13px] text-gray-600">
+          {aberto ? 'Você está usando este app agora.' : instalado ? 'Já instalado neste aparelho.' : descricao}
+        </p>
       </div>
       <button
         type="button"
@@ -198,7 +239,7 @@ export function CartaoInstalarApps({ comZapFeed }: { comZapFeed: boolean }) {
     <ul className="divide-y divide-gray-100">
       <LinhaInstalar app="easyfeed" nome="Easy Feed" descricao="O painel inteiro na tela inicial, com notificações." />
       {comZapFeed && (
-        <LinhaInstalar app="whatsapp" nome="ZapFeed" descricao="Só as conversas do WhatsApp do restaurante, num app à parte." />
+        <LinhaInstalar app="whatsapp" nome="ZapFeed" descricao="App separado só com o WhatsApp do restaurante: abre direto nas conversas." />
       )}
     </ul>
   )
