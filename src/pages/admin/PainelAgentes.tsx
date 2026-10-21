@@ -654,14 +654,14 @@ export function PainelAgentes() {
 
   if (agenteAberto) {
     return (
-      <div className="flex-1 overflow-y-auto sem-barra p-6">
+      <div className="flex-1 overflow-y-auto sem-barra p-4 sm:p-6">
         <AgenteDetalhe agente={agenteAberto} onVoltar={() => setVista({ t: 'lista' })} modelos={modelos} />
       </div>
     )
   }
   if (vista.t === 'modelo' || vista.t === 'memoria') {
     return (
-      <div className="flex-1 overflow-y-auto sem-barra p-6">
+      <div className="flex-1 overflow-y-auto sem-barra p-4 sm:p-6">
         <button onClick={() => setVista({ t: 'lista' })} className="max-w-3xl mx-auto mb-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
@@ -671,7 +671,7 @@ export function PainelAgentes() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto sem-barra p-6">
+    <div className="flex-1 overflow-y-auto sem-barra p-4 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-5">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Agentes de IA <span className="text-base font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>

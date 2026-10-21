@@ -13,7 +13,8 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragOverlay,
@@ -307,11 +308,21 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
    */
   const [veioDosDetalhes, setVeioDosDetalhes] = useState(false)
 
+  // Mouse: arrasta depois de 5px. Toque: segurar o card ~1/4 de segundo
+  // antes de arrastar — senão o dedo que só queria rolar a lista puxava o
+  // card (e com o PointerSensor o navegador cancelava o arraste para rolar).
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 5 },
     }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    }),
   )
+
+  // Celular: uma coluna por vez, escolhida nas abas acima do quadro (as três
+  // empilhadas faziam "Concluído" ficar lá embaixo, depois de todas as outras).
+  const [colunaNoCelular, setColunaNoCelular] = useState<ActionStatus>('PENDENTE')
 
   /**
    * `silencioso`: recarrega os dados SEM trocar a tela por skeletons.
@@ -931,6 +942,28 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
+      <div className="mb-3 flex rounded-full bg-gray-100 p-1 md:hidden" role="tablist" aria-label="Coluna">
+        {columns.map((col) => {
+          const ativa = colunaNoCelular === col.status
+          const total = tasks.filter((t) => t.status === col.status).length
+          return (
+            <button
+              key={col.status}
+              type="button"
+              role="tab"
+              aria-selected={ativa}
+              onClick={() => setColunaNoCelular(col.status)}
+              className={cn(
+                'flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[12px] font-semibold transition-colors',
+                ativa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500',
+              )}
+            >
+              <span className="truncate">{col.title}</span>
+              <span className="tabular-nums text-gray-400">{total}</span>
+            </button>
+          )
+        })}
+      </div>
       <div className="flex flex-col md:grid md:grid-cols-3 gap-6 w-full h-full min-h-[600px] pb-4">
         {columns.map((col) => {
           const colTasks = ordenarColuna(tasks.filter((t) => t.status === col.status))
@@ -947,8 +980,8 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
           const dentroDaJanelaDeDesfazer = !!desfazerOrganizar[col.status]
           const organizarDesabilitado = !dentroDaJanelaDeDesfazer && jaEstaOrganizada(colTasks)
           return (
+            <div key={col.status} className={cn('contents', col.status !== colunaNoCelular && 'max-md:hidden')}>
             <DroppableColumn
-              key={col.status}
               id={col.status}
               title={col.title}
               count={colTasks.length}
@@ -1031,6 +1064,7 @@ export function TaskBoard({ refreshTrigger = 0 }: TaskBoardProps) {
 
               {colTasks.length === 0 && <EstadoVazioColuna status={col.status} />}
             </DroppableColumn>
+            </div>
           )
         })}
 

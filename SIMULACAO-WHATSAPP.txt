@@ -686,7 +686,7 @@ Contador do menu (item WhatsApp): quantas conversas (contatos e grupos)
 têm mensagem não lida. Abrir a página não zera; cada conversa aberta e
 lida tira 1 na hora. Conversa silenciada continua contando.
 
-App "Whatsapp EasyFeed" (tela inicial): manifest próprio
+App "ZapFeed" (tela inicial): manifest próprio
 (public/manifest-whatsapp.webmanifest, ícones public/icons/whatsapp-*.png),
 escolhido pelo index.html e pelo ManifestPorRota quando a rota é /whatsapp.
 Botão "Instalar app" no topo da lista (Chrome/Edge no Android e no PC); no

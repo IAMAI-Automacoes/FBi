@@ -154,8 +154,9 @@ export function InsightCard({
       <CardContent className="px-4 sm:px-5 pb-1 sm:pb-1 flex-1 space-y-1.5">
         <p className="text-sm text-slate-600 leading-snug line-clamp-2">{insight.descricao}</p>
         {/* `max-w-[66.6667%]` (2/3 do card) é só nessa caixa — o card em si
-            continua ocupando a linha inteira. */}
-        <div className="flex max-w-[66.6667%] items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/70 p-3 rounded-lg border border-blue-100">
+            continua ocupando a linha inteira. No celular, largura toda (2/3
+            dava ~190px, e a sugestão virava uma coluna fina e comprida). */}
+        <div className="flex sm:max-w-[66.6667%] items-start gap-2 text-sm font-bold text-gray-900 bg-blue-50/70 p-3 rounded-lg border border-blue-100">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 shrink-0">
             <Lightbulb className="h-3.5 w-3.5 text-white" />
           </span>

@@ -33,7 +33,7 @@ export function CampoBusca({
   inputClassName,
 }: CampoBuscaProps) {
   return (
-    <div className={cn('relative w-56 shrink-0', className)}>
+    <div className={cn('relative w-full shrink-0 sm:w-56', className)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
       <Input
         className={cn('h-10 border-gray-200 bg-white pl-9 pr-8 shadow-sm', inputClassName)}
@@ -46,7 +46,7 @@ export function CampoBusca({
           type="button"
           aria-label="Limpar busca"
           onClick={() => onChange('')}
-          className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"
         >
           <X className="h-3.5 w-3.5" />
         </button>

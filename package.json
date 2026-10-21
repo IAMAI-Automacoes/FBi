@@ -2,7 +2,7 @@
   "name": "easy-feed",
   "description": "Easy Feed — SaaS de feedback para restaurantes: coleta avaliacoes pelo WhatsApp, analisa com IA e entrega insights no painel.",
   "private": true,
-  "version": "0.0.197",
+  "version": "0.0.198",
   "type": "module",
   "scripts": {
     "start": "vite dev",

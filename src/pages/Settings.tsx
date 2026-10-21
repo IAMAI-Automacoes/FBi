@@ -271,7 +271,9 @@ export default function Settings() {
     setActiveSection(id)
     const element = document.getElementById(id)
     if (element) {
-      const y = element.getBoundingClientRect().top + window.scrollY - 100
+      // Celular: desconta também a fileira de seções grudada embaixo do cabeçalho.
+      const folga = window.innerWidth < 768 ? 124 : 100
+      const y = element.getBoundingClientRect().top + window.scrollY - folga
       window.scrollTo({ top: y, behavior: 'smooth' })
       setTimeout(() => {
         isManualScroll.current = false
@@ -293,11 +295,11 @@ export default function Settings() {
   if (loading || carregandoDados) {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 sm:gap-4 border-b bg-white px-4 sm:px-6 shadow-sm">
           <div className="p-2 rounded-md bg-gray-100 h-9 w-9" />
           <div className="h-6 w-32 bg-gray-100 rounded" />
         </header>
-        <main className="flex-1 p-6 md:p-10">
+        <main className="flex-1 p-4 sm:p-6 md:p-10">
           <div className="max-w-5xl mx-auto space-y-6 pb-12 animate-fade-in">
             <Skeleton className="h-10 w-1/3 mb-6" />
             <div className="flex gap-10">
@@ -335,17 +337,37 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-2 sm:gap-4 border-b bg-white px-4 sm:px-6 shadow-sm">
         <Link
           to={inicioDa(area)}
           className="text-muted-foreground hover:text-foreground hover:bg-secondary p-2 rounded-md transition-colors"
         >
           <ChevronLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-lg font-semibold text-foreground">Configurações {ehRh ? 'da Empresa' : 'do Restaurante'}</h1>
+        <h1 className="truncate text-lg font-semibold text-foreground">Configurações {ehRh ? 'da Empresa' : 'do Restaurante'}</h1>
       </header>
 
-      <main className="flex-1 p-6 md:p-10">
+      {/* Celular: o menu lateral de seções não cabe; vira uma fileira que rola
+          de lado, grudada embaixo do cabeçalho. */}
+      <nav className="sem-barra sticky top-16 z-20 flex gap-1.5 overflow-x-auto border-b bg-white px-4 py-2 md:hidden" aria-label="Seções">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => scrollTo(item.id)}
+            className={cn(
+              'flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors',
+              activeSection === item.id ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-600',
+            )}
+          >
+            {item.label}
+            {item.id === 'perfil' && perfilFaltando > 0 && (
+              <PontoPendente titulo={`Faltam ${perfilFaltando} campos obrigatórios`} />
+            )}
+          </button>
+        ))}
+      </nav>
+
+      <main className="flex-1 p-4 sm:p-6 md:p-10">
         <div className="max-w-6xl mx-auto space-y-10 animate-fade-in-up">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-gray-900">Configurações</h2>
@@ -446,13 +468,18 @@ export default function Settings() {
       {/* Barra única de salvar — aparece quando há alterações pendentes */}
       {alterado && (
         <div className="sticky bottom-0 z-30 border-t bg-white/95 backdrop-blur shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]">
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 px-6 md:px-10 py-4">
+          {/* Celular: o aviso em cima e os botões embaixo, dividindo a largura
+              (lado a lado passavam da tela), acima da barra do iPhone. */}
+          <div
+            className="max-w-6xl mx-auto flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 sm:py-4 md:px-10"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}
+          >
             <p className="text-sm text-muted-foreground">Você tem alterações não salvas.</p>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={handleDescartar} disabled={salvando}>
+              <Button variant="ghost" onClick={handleDescartar} disabled={salvando} className="flex-1 sm:flex-none">
                 Descartar
               </Button>
-              <Button onClick={handleSalvar} disabled={!alterado || salvando || enviandoArquivo} className="min-w-[160px]">
+              <Button onClick={handleSalvar} disabled={!alterado || salvando || enviandoArquivo} className="flex-1 sm:flex-none sm:min-w-[160px]">
                 {salvando ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...

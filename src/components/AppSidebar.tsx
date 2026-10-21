@@ -21,6 +21,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { getIniciais } from '@/lib/iniciais'
@@ -84,6 +85,10 @@ const navegacaoDoRh: ItemDaBarra[] = MENU_DO_RH.map((i) => ({ name: i.nome, href
 
 export function AppSidebar() {
   const location = useLocation()
+  // Celular: o menu é uma gaveta por cima da página. Trocou de página (por
+  // qualquer link, inclusive fora do menu), a gaveta fecha.
+  const { isMobile, setOpenMobile } = useSidebar()
+  useEffect(() => { if (isMobile) setOpenMobile(false) }, [location.pathname, isMobile, setOpenMobile])
   const { nomeRestaurante, logoUrl } = useRestauranteConfig()
   const { podeVer } = usePermissoes()
   const { usuario, ehAdminPlataforma, ehAdminParceiro } = useAuth()
@@ -219,8 +224,8 @@ export function AppSidebar() {
               <span className="text-lg font-bold">{getIniciais(nomeRestaurante, 2)}</span>
             )}
           </div>
-          <div className="flex flex-col">
-            <span className="fonte-marca text-lg font-semibold text-foreground leading-tight">
+          <div className="flex min-w-0 flex-col">
+            <span className="fonte-marca line-clamp-2 break-words text-lg font-semibold text-foreground leading-tight">
               {nomeRestaurante}
             </span>
           </div>
@@ -228,11 +233,12 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-1">
-        {/* `gap-0.5`/`h-8`: só o espaçamento entre as linhas do menu (e a
+        {/* `gap-0.5`/`md:h-8`: só o espaçamento entre as linhas do menu (e a
             altura de cada uma) encolhe aqui — o texto continua `text-[15px]`
             e o ícone `h-5 w-5`, do tamanho de sempre, sem diminuir (pedido
             explícito do Raver). É o espaço em volta que fica menor, sobrando
-            mais altura pra rodapé/resto da barra lateral. */}
+            mais altura pra rodapé/resto da barra lateral. No celular a linha volta
+            a `h-10`: é tocada com o dedo. */}
         {ehAdminPlataforma && usuario?.restaurante_id && <TrocaDeVersao restauranteId={usuario.restaurante_id} area={area} />}
         <SidebarMenu className="gap-0.5">
           {itens
@@ -251,8 +257,8 @@ export function AppSidebar() {
                     isActive={isActive}
                     className={
                       isActive
-                        ? 'h-8 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
-                        : 'h-8 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'h-10 md:h-8 text-[15px] font-medium transition-colors bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#EFF6FF] hover:text-[#1D4ED8]'
+                        : 'h-10 md:h-8 text-[15px] font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }
                   >
                     <Link to={item.href}>

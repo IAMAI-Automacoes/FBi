@@ -159,7 +159,7 @@ export function TaskCard({
               }}
               title={task.fixado ? 'Desafixar' : 'Fixar no topo da coluna'}
               className={cn(
-                'h-6 w-6 flex items-center justify-center rounded transition-colors',
+                'h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded transition-colors',
                 task.fixado ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700',
               )}
             >
@@ -262,7 +262,7 @@ export function TaskCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 w-8 p-0 shrink-0 text-slate-500 hover:text-slate-700"
+              className="h-9 w-9 md:h-8 md:w-8 p-0 shrink-0 text-slate-500 hover:text-slate-700"
               onClick={(e) => {
                 e.stopPropagation()
                 onVoltar()
@@ -276,7 +276,7 @@ export function TaskCard({
             <Button
               size="sm"
               className={cn(
-                'h-8 px-3 text-xs flex-1 transition-all',
+                'h-9 md:h-8 px-3 text-xs flex-1 transition-all',
                 task.status === 'PENDENTE'
                   ? 'bg-blue-600 hover:bg-blue-700 text-white'
                   : 'bg-green-600 hover:bg-green-700 text-white',

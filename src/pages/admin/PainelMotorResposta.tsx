@@ -167,7 +167,7 @@ export function PainelMotorResposta() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6">
       <div className="max-w-2xl space-y-6">
         <div>
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -200,7 +200,7 @@ export function PainelMotorResposta() {
           </Select>
         </div>
 
-        <div className="rounded-lg border p-4 flex items-center justify-between">
+        <div className="rounded-lg border p-4 flex items-center justify-between gap-3">
           <div>
             <p className="font-medium text-sm">Motor ativo</p>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -213,7 +213,7 @@ export function PainelMotorResposta() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="cooldown">Dias de espera entre mensagens</Label>
             <Input

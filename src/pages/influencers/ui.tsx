@@ -11,7 +11,7 @@ export { authInputStyle, authInputFocus, authInputBlur } from '@/components/auth
 /** Logo do EasyFeed com "Influencers" ao lado. */
 export function MarcaInfluencers({ altura = 56 }: { altura?: number }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <BrandMark size={altura} />
       <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#2563EB]">Influencers</span>
     </div>

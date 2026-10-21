@@ -88,7 +88,7 @@ export function MenuConversa({ fixada, silenciada, aoFixar, aoSilenciar, aberto,
       <DropdownMenuTrigger
         className={cn(
           'flex h-6 w-6 items-center justify-center rounded-full text-gray-500 hover:bg-black/5',
-          'opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
+          'opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100',
           className,
         )}
         aria-label="Opções da conversa"

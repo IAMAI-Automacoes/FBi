@@ -432,7 +432,7 @@ export function PainelVideosAdmin() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+    <div className="flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6">
       {dialogo}
       <div className="mx-auto max-w-5xl">
         <div className="mb-4 flex items-start justify-between gap-4">

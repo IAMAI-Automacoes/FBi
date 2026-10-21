@@ -361,7 +361,7 @@ export function Conversa({
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Cabeçalho */}
       <div className="flex shrink-0 items-stretch" style={{ background: WA.TEAL, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <button type="button" onClick={aoVoltar} className="flex items-center pl-2 pr-1 text-white/90 hover:text-white md:hidden" aria-label="Voltar para as conversas">
+        <button type="button" onClick={aoVoltar} className="flex w-10 shrink-0 items-center justify-center text-white/90 hover:text-white md:hidden" aria-label="Voltar para as conversas">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <button type="button" onClick={aoAbrirContato} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:brightness-95" title="Dados do contato">

@@ -1,7 +1,7 @@
 {
   "id": "/whatsapp?app=whatsapp",
-  "name": "Whatsapp EasyFeed",
-  "short_name": "Whatsapp EasyFeed",
+  "name": "ZapFeed",
+  "short_name": "ZapFeed",
   "description": "As conversas do WhatsApp do seu restaurante, com fotos, áudios e documentos.",
   "lang": "pt-BR",
   "start_url": "/whatsapp?app=whatsapp",

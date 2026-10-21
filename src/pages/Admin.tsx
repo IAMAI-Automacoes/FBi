@@ -1016,7 +1016,7 @@ function ConversaView({
       </div>
 
       {selectMode ? (
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white border-t border-gray-200">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white border-t border-gray-200" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)' }}>
           <button onClick={exitSelect} className="text-sm font-medium text-gray-600 hover:text-gray-800 px-3 py-2">
             Cancelar
           </button>
@@ -1633,7 +1633,7 @@ export default function Admin() {
           const contasFiltradas = contasBusca.filter((c) => casaFiltro(c, filtroConta))
 
           return (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
               <h2 className="mb-4 text-base font-semibold text-gray-800">
                 Contas <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span>
@@ -1810,7 +1810,7 @@ export default function Admin() {
 
         {/* ── VENDEDORES ── */}
         {abaAtual === 'vendedores' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
             <div className="max-w-4xl mx-auto">
               <div className="mb-4">
                 <h2 className="text-base font-semibold text-gray-800">Vendedores</h2>
@@ -1904,7 +1904,7 @@ export default function Admin() {
 
         {/* ── AFILIADOS ── */}
         {abaAtual === 'afiliados' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
             {afilDetailId ? (
               <AfiliadoDetalhe
                 novo={afilDetailId === 'new'}
@@ -2014,7 +2014,7 @@ export default function Admin() {
 
         {/* ── USO E CUSTO DE IA ── */}
         {abaAtual === 'uso_ia' && (
-          <div className="flex-1 overflow-y-auto sem-barra p-6">
+          <div className="flex-1 overflow-y-auto sem-barra p-4 sm:p-6">
             <PainelUsoIA />
           </div>
         )}
@@ -2061,7 +2061,7 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className={cn('h-14 w-14 rounded-full flex items-center justify-center text-white text-lg font-semibold shrink-0', avatarColor(form.nome || '?'))}>
             {initials(form.nome || '?', form.email)}
@@ -2072,7 +2072,7 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
         {/* Dados */}
         <div>
           <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Dados</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo label="Nome *"><Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="João Silva" className="mt-1" /></Campo>
             <Campo label="Código único *"><Input value={form.codigo} onChange={(e) => set({ codigo: e.target.value.toUpperCase() })} placeholder="JOAO10" className="mt-1 font-mono" /></Campo>
             <Campo label="E-mail"><Input type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="joao@email.com" className="mt-1" /></Campo>
@@ -2087,7 +2087,7 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
         {/* Comissão */}
         <div>
           <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Comissão por venda</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo label="Tipo">
               <Select value={form.comissao_tipo} onValueChange={(v) => set({ comissao_tipo: v as 'porcentagem' | 'valor_fixo' })}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -2109,11 +2109,11 @@ function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack
           <div className="space-y-3">
             <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
             <Campo label="Chave PIX"><Input value={form.chave_pix} onChange={(e) => set({ chave_pix: e.target.value })} placeholder="CPF, e-mail, telefone…" className="mt-1" /></Campo>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Banco (nome)"><Input value={form.banco} onChange={(e) => set({ banco: e.target.value })} placeholder="Nubank" className="mt-1" /></Campo>
               <Campo label="Código do banco"><Input value={form.codigo_banco} onChange={(e) => set({ codigo_banco: e.target.value })} placeholder="260" className="mt-1 font-mono" /></Campo>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Campo label="Agência"><Input value={form.agencia} onChange={(e) => set({ agencia: e.target.value })} placeholder="0001" className="mt-1" /></Campo>
               <Campo label="Conta"><Input value={form.conta} onChange={(e) => set({ conta: e.target.value })} placeholder="12345-6" className="mt-1" /></Campo>
               <Campo label="Tipo">

@@ -786,6 +786,10 @@ export default function QRCodes() {
    */
   const arrastarElemento = (id: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
+    // No toque não existe "dois cliques" confiável (o celular dá zoom ou
+    // nem dispara): tocar de novo, sem arrastar, num texto JÁ selecionado
+    // entra na edição.
+    const tocarDeNovo = e.pointerType !== 'mouse' && selecionado === id
     setSelecionado(id)
 
     const camada = camadaRef.current
@@ -810,8 +814,10 @@ export default function QRCodes() {
     alvo.setPointerCapture(e.pointerId)
     const inicio = { px: e.clientX, py: e.clientY, x: partida.x, y: partida.y }
     iniciarGesto()
+    let moveu = false
 
     const mover = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - inicio.px) > 4 || Math.abs(ev.clientY - inicio.py) > 4) moveu = true
       const nx = Math.min(1, Math.max(0, inicio.x + (ev.clientX - inicio.px) / area.width))
       const ny = forcarForaDaMarca(nx, inicio.y + (ev.clientY - inicio.py) / area.height, AREA_DA_MARCA_CARTAZ)
       const g = gestoRef.current
@@ -826,6 +832,7 @@ export default function QRCodes() {
       alvo.removeEventListener('pointermove', mover)
       alvo.removeEventListener('pointerup', soltar)
       terminarGesto()
+      if (tocarDeNovo && !moveu && (fixo || el?.tipo === 'texto')) setEditandoId(id)
     }
     alvo.addEventListener('pointermove', mover)
     alvo.addEventListener('pointerup', soltar)
@@ -1639,7 +1646,8 @@ export default function QRCodes() {
                   descia, e o segundo clique dos dois-cliques caía 54px acima
                   do que a pessoa mirou: clicar na mensagem abria o nome do
                   restaurante. Reservando a faixa, o cartaz não sai do lugar. */}
-              <div className="min-h-[48px]">
+              {/* Celular: a barra quebra em duas linhas, então reserva as duas. */}
+              <div className="min-h-[80px] sm:min-h-[48px]">
               {elementoSelecionado && (
                 <BarraElemento
                   elemento={elementoSelecionado}
@@ -1775,7 +1783,7 @@ export default function QRCodes() {
                                     ref={abrirSelecionandoTudo}
                                     onBlur={() => setEditandoId(null)}
                                     onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
-                                    className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left outline-none"
+                                    className="tamanho-livre h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left outline-none"
                                     style={{
                                       fontFamily: fixo.estilo.familia,
                                       fontSize: (fixo.estilo.tamanho * larguraPreview) / POSTER_W || 12,
@@ -1835,7 +1843,7 @@ export default function QRCodes() {
                                     onClick={() => { fixo.alterar(''); setEditandoId(null) }}
                                     aria-label="Tirar do cartaz"
                                     title="Tirar do cartaz"
-                                    className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex"
+                                    className="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex [@media(hover:none)]:flex"
                                   >
                                     <X className="h-3 w-3" />
                                   </button>
@@ -1877,7 +1885,7 @@ export default function QRCodes() {
                                   ref={abrirSelecionandoTudo}
                                   onBlur={() => setEditandoId(null)}
                                   onKeyDown={(e) => { if (e.key === 'Escape') setEditandoId(null) }}
-                                  className="h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
+                                  className="tamanho-livre h-full w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-left leading-[1.2] outline-none"
                                   style={{
                                     fontFamily: fonteCss(el.fonte),
                                     fontSize: (el.tamanho * larguraPreview) / POSTER_W || 12,
@@ -1910,7 +1918,7 @@ export default function QRCodes() {
                                   onClick={() => removerElemento(c.id)}
                                   aria-label="Excluir o elemento"
                                   title="Excluir"
-                                  className="absolute -right-2 -top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex"
+                                  className="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-white group-hover:flex [@media(hover:none)]:flex"
                                 >
                                   <X className="h-3 w-3" />
                                 </button>

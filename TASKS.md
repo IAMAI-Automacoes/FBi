@@ -185,6 +185,9 @@
 - [ ] Verificar todos os estados de loading e erro nas páginas
 - [ ] Verificar estados vazios (sem feedbacks, sem insights, etc.)
 - [ ] Testar fluxo completo em modo mobile (responsividade)
+  - [x] Ajustes de celular no código (21/10/2026): altura 100dvh, menu fecha ao navegar, chat e diálogos no celular, ações visíveis no toque, campos sem zoom no iPhone, filtros/cabeçalhos de Feedbacks, Insights, Ações (abas por coluna), Relatórios, QR Code, Garçons, Configurações, WhatsApp, login e admin
+  - [x] "Instalar App" ao lado da foto de perfil e "Instalar ZapFeed" na tela WhatsApp (app renomeado para ZapFeed); passo a passo quando o navegador não oferece instalar
+  - [ ] Conferir no aparelho (Android e iPhone) com o roteiro de teste
 - [ ] Revisar `preferencias_notificacao` em configurações de conta
 - [ ] Verificar que `SUPABASE_SERVICE_ROLE_KEY` não aparece no bundle (`npm run build`)
 - [ ] Verificar que `OPENROUTER_API_KEY` não aparece no bundle

@@ -82,7 +82,7 @@ export function FeedbackOriginalCard({
       <div className="sm:w-[152px] shrink-0">
         <span
           className={cn(
-            'flex w-full items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap',
+            'flex w-fit items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap sm:w-full',
             cor.badge,
           )}
         >

@@ -224,7 +224,7 @@ export function AuthLayout({ children, vitrine }: { children: ReactNode; vitrine
       <ShowcasePanel conteudo={vitrine} />
 
       {/* ─── PAINEL DIREITO ─── */}
-      <div className="flex-1 flex items-center justify-center" style={{ position: 'relative', padding: '32px 24px', background: 'linear-gradient(155deg, #EAF1FF 0%, #F0F4FF 40%, #EAF7FB 100%)', overflow: 'hidden' }}>
+      <div className="flex-1 flex items-center justify-center" style={{ position: 'relative', padding: '32px clamp(12px, 4vw, 24px)', background: 'linear-gradient(155deg, #EAF1FF 0%, #F0F4FF 40%, #EAF7FB 100%)', overflow: 'hidden' }}>
 
         {/* Blur orbs ambientais */}
         <div style={{ position: 'absolute', top: '-80px', right: '-60px', width: '380px', height: '380px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.20) 0%, transparent 65%)', filter: 'blur(28px)', pointerEvents: 'none' }} />
@@ -248,7 +248,8 @@ export function AuthLayout({ children, vitrine }: { children: ReactNode; vitrine
               backgroundColor: '#FFFFFF',
               border: '1px solid rgba(255,255,255,0.9)',
               borderRadius: '24px',
-              padding: '40px',
+              // Celular: 40px de cada lado deixavam o formulário com ~240px.
+              padding: 'clamp(20px, 6vw, 40px)',
               boxShadow: '0 1px 0 rgba(255,255,255,0.9) inset, 0 30px 70px rgba(37,99,235,0.16), 0 12px 28px rgba(15,23,42,0.08), 0 0 0 1px rgba(37,99,235,0.06)',
             }}
           >
