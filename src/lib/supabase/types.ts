@@ -198,19 +198,28 @@ export type Database = {
           area: string
           atualizado_em: string
           atualizado_por: string | null
+          comissao_entrada_pct: number
           comissao_padrao: number
+          comissao_recorrente_meses: number
+          comissao_recorrente_pct: number
         }
         Insert: {
           area: string
           atualizado_em?: string
           atualizado_por?: string | null
+          comissao_entrada_pct?: number
           comissao_padrao?: number
+          comissao_recorrente_meses?: number
+          comissao_recorrente_pct?: number
         }
         Update: {
           area?: string
           atualizado_em?: string
           atualizado_por?: string | null
+          comissao_entrada_pct?: number
           comissao_padrao?: number
+          comissao_recorrente_meses?: number
+          comissao_recorrente_pct?: number
         }
         Relationships: []
       }
@@ -3551,6 +3560,51 @@ export type Database = {
         }
         Relationships: []
       }
+      receita_contas: {
+        Row: {
+          agencia: string | null
+          area: string
+          atualizado_em: string
+          atualizado_por: string | null
+          banco: string | null
+          chave_pix: string | null
+          codigo_banco: string | null
+          conta: string | null
+          cpf_cnpj: string | null
+          observacoes: string | null
+          tipo_conta: string | null
+          titular: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          area: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          banco?: string | null
+          chave_pix?: string | null
+          codigo_banco?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          observacoes?: string | null
+          tipo_conta?: string | null
+          titular?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          area?: string
+          atualizado_em?: string
+          atualizado_por?: string | null
+          banco?: string | null
+          chave_pix?: string | null
+          codigo_banco?: string | null
+          conta?: string | null
+          cpf_cnpj?: string | null
+          observacoes?: string | null
+          tipo_conta?: string | null
+          titular?: string | null
+        }
+        Relationships: []
+      }
       recuperacoes_senha: {
         Row: {
           criado_em: string
@@ -4123,18 +4177,21 @@ export type Database = {
           atualizado_em: string
           id: boolean
           max_por_ano: number | null
+          saldo_pct_mensalidade: number
         }
         Insert: {
           area?: string
           atualizado_em?: string
           id?: boolean
           max_por_ano?: number | null
+          saldo_pct_mensalidade?: number
         }
         Update: {
           area?: string
           atualizado_em?: string
           id?: boolean
           max_por_ano?: number | null
+          saldo_pct_mensalidade?: number
         }
         Relationships: []
       }
@@ -4276,6 +4333,7 @@ export type Database = {
           recompensa_ordem: number
           restaurante_id: number
           status: string
+          valor_centavos: number | null
         }
         Insert: {
           ano: number
@@ -4288,6 +4346,7 @@ export type Database = {
           recompensa_ordem: number
           restaurante_id: number
           status?: string
+          valor_centavos?: number | null
         }
         Update: {
           ano?: number
@@ -4300,6 +4359,7 @@ export type Database = {
           recompensa_ordem?: number
           restaurante_id?: number
           status?: string
+          valor_centavos?: number | null
         }
         Relationships: [
           {

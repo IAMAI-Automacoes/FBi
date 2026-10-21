@@ -5,15 +5,18 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useConfirmacao } from '@/hooks/use-confirmacao'
 import { cn } from '@/lib/utils'
+import { useArea } from '@/lib/area'
 import { AREAS, areaDe, DEFINICOES, linkDoConvite, type Area } from '@/lib/areas'
 import type { ContaAdmin } from '@/lib/queries/admin'
 import { buscarConfigDeArea, definirAreaDaConta, salvarConfigDeArea, type ConfigDeArea, type ModoDoRh } from '@/lib/queries/areas'
 
 /* Admin → Contas, em cima: as versões do EasyFeed (Restaurante e RH).
-   - O link de convite: por enquanto só quem chega por ele vê a opção RH no
-     cadastro (o cadastro comum continua virando Restaurante).
-   - Quem pode escolher RH: só por convite, ou todo mundo.
-   - Trocar a versão de uma conta: a escolha do dono vale uma vez; depois só aqui. */
+   - Só no painel do RH (pedido do Raver, 21/10/2026): o link de convite (por
+     enquanto só quem chega por ele vê a opção RH no cadastro; o cadastro comum
+     continua virando Restaurante) e quem pode escolher RH (só por convite, ou
+     todo mundo).
+   - Nas duas: trocar a versão de uma conta (a escolha do dono vale uma vez;
+     depois só aqui). */
 
 /** O endereço público do site: é para lá que o link de convite aponta. */
 function siteDoEasyFeed(): string {
@@ -22,6 +25,8 @@ function siteDoEasyFeed(): string {
 
 export function PainelVersoes({ contas, aoMudar }: { contas: ContaAdmin[]; aoMudar: () => void }) {
   const { confirmar, dialogo } = useConfirmacao()
+  const { area } = useArea()
+  const noRh = area === 'rh'
   const [config, setConfig] = useState<ConfigDeArea | null>(null)
   const [erro, setErro] = useState(false)
   const [ocupado, setOcupado] = useState(false)
@@ -125,6 +130,7 @@ export function PainelVersoes({ contas, aoMudar }: { contas: ContaAdmin[]; aoMud
         <Loader2 className="mt-4 h-4 w-4 animate-spin text-gray-400" />
       ) : (
         <div className="mt-4 space-y-5">
+          {noRh && (<>
           <div>
             <p className="text-[12px] font-semibold text-gray-600">Quem pode escolher RH no cadastro</p>
             <div className="mt-1.5 inline-flex rounded-lg bg-gray-100 p-1">
@@ -167,6 +173,7 @@ export function PainelVersoes({ contas, aoMudar }: { contas: ContaAdmin[]; aoMud
             </div>
             <p className="mt-1.5 text-[12px] text-gray-500">Quem abrir este link cria a conta e escolhe entre Restaurante e RH. Vale para quantas contas você mandar.</p>
           </div>
+          </>)}
 
           <div>
             <p className="text-[12px] font-semibold text-gray-600">Trocar a versão de uma conta</p>

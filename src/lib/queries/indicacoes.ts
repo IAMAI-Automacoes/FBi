@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import { lerBonus, lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type StatusPremio } from '@/lib/indicacoes'
+import { REGRA_PADRAO, type RegraDeComissao } from '@/lib/vendedores'
 
 /* Indicações: tudo passa por funções do banco (migrations 20261017010000,
    20261027000000 e 20261030040000), que conferem por dentro quem pode. */
@@ -36,19 +37,31 @@ export async function registrarIndicacao(codigo: string): Promise<{ ok: boolean;
   }
 }
 
-// ── Admin (Admin → Afiliados) ────────────────────────────────────────────────
+// ── Admin → Vendedores ───────────────────────────────────────────────────────
 
-/** A porcentagem que já vem em todo afiliado novo deste software. */
-export async function buscarPorcentagemPadrao(area: AreaDaIndicacao): Promise<number> {
-  const { data, error } = await supabase.from('afiliado_config').select('comissao_padrao').eq('area', area).maybeSingle()
+/** A regra de comissão dos vendedores deste software (`afiliado_config`). */
+export async function buscarRegraDeComissao(area: AreaDaIndicacao): Promise<RegraDeComissao> {
+  const { data, error } = await supabase.from('afiliado_config')
+    .select('comissao_entrada_pct, comissao_recorrente_pct, comissao_recorrente_meses').eq('area', area).maybeSingle()
   if (error) throw error
-  return data ? Number(data.comissao_padrao) : 10
+  if (!data) return { ...REGRA_PADRAO }
+  return {
+    entradaPct: Number(data.comissao_entrada_pct),
+    recorrentePct: Number(data.comissao_recorrente_pct),
+    recorrenteMeses: Number(data.comissao_recorrente_meses),
+  }
 }
 
-export async function salvarPorcentagemPadrao(area: AreaDaIndicacao, porcentagem: number): Promise<void> {
+export async function salvarRegraDeComissao(area: AreaDaIndicacao, r: RegraDeComissao): Promise<void> {
   const { data: u } = await supabase.auth.getUser()
-  const { error } = await supabase.from('afiliado_config')
-    .upsert({ area, comissao_padrao: porcentagem, atualizado_por: u.user?.email ?? null, atualizado_em: new Date().toISOString() })
+  const { error } = await supabase.from('afiliado_config').upsert({
+    area,
+    comissao_entrada_pct: r.entradaPct,
+    comissao_recorrente_pct: r.recorrentePct,
+    comissao_recorrente_meses: r.recorrenteMeses,
+    atualizado_por: u.user?.email ?? null,
+    atualizado_em: new Date().toISOString(),
+  }, { onConflict: 'area' })
   if (error) throw error
 }
 
@@ -72,25 +85,4 @@ export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<
   const { data, error } = await supabase.rpc('afiliados_numeros', { p_area: area })
   if (error) throw error
   return (data ?? {}) as unknown as Record<string, NumerosDoAfiliado>
-}
-
-// ── Semestral/anual: quantos meses o indicado precisa ter pago ───────────────
-
-export async function buscarMesesParaRenovacao(): Promise<number> {
-  const { data, error } = await supabase.from('indicacao_config').select('meses_para_renovacao').limit(1).maybeSingle()
-  if (error) throw error
-  return Number(data?.meses_para_renovacao) || 4
-}
-
-export async function salvarMesesParaRenovacao(meses: number): Promise<void> {
-  const { error } = await supabase.rpc('indicacao_admin_meses_renovacao', { p_meses: meses })
-  if (error) throw error
-}
-
-/** O admin marca à mão: usado, descartado ou de volta para a fila. */
-export async function mudarPremioDaIndicacao(id: string, status: StatusPremio): Promise<void> {
-  const { data, error } = await supabase.rpc('indicacao_admin_premio', { p_id: id, p_status: status })
-  if (error) throw error
-  const r = (data ?? {}) as { ok?: boolean; motivo?: string }
-  if (!r.ok) throw new Error(r.motivo ?? 'erro')
 }

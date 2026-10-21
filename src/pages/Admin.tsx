@@ -26,10 +26,8 @@ import { entrarNaConta } from '@/lib/acesso-admin'
 import { PainelAgentes } from '@/pages/admin/PainelAgentes'
 import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 import { PainelInfluenciadores } from '@/pages/admin/PainelInfluenciadores'
-import { PainelVideosAdmin } from '@/pages/admin/PainelVideosAdmin'
-import { DescontosDeQuemIndica, MesesParaRenovacao, PorcentagemPadrao, TrazerDoOutroSoftware } from '@/pages/admin/AfiliadosVersao'
-import { buscarNumerosDosAfiliados, buscarPorcentagemPadrao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
-import { textoDaPorcentagem } from '@/lib/indicacoes'
+import { PainelDescontos } from '@/pages/admin/PainelDescontos'
+import { PainelVendedores } from '@/pages/admin/PainelVendedores'
 import { PainelVersoes } from '@/pages/admin/PainelVersoes'
 import { LARGURA_MENU_ADMIN, MenuAdmin, TopoAdminCelular, type AbaAdmin } from '@/pages/admin/MenuAdmin'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -38,19 +36,18 @@ import { PainelMotorResposta } from '@/pages/admin/PainelMotorResposta'
 import { ConhecimentoGlobal } from '@/pages/admin/ConhecimentoGlobal'
 import { PainelUsoIA } from '@/pages/admin/PainelUsoIA'
 import { PainelResultados } from '@/pages/admin/PainelResultados'
-import { PainelPagamentos } from '@/pages/admin/PainelPagamentos'
+import { PainelReceita } from '@/pages/admin/PainelReceita'
 import { PainelCupons } from '@/pages/admin/PainelCupons'
 import {
   buscarTodasSugestoes, responderSugestao, uploadArquivosResposta,
   editarRespostaAdmin, excluirRespostaAdmin, excluirArquivosAdmin,
   marcarAdminLeu, resetClienteLeu, reagirAdmin,
-  buscarAfiliados, criarAfiliado, atualizarAfiliado, excluirAfiliado,
-  type SugestaoAdmin, type Afiliado, type ReacaoAdmin,
+  type SugestaoAdmin, type ReacaoAdmin,
   buscarContas,
   definirExclusaoConta,
   type ContaAdmin,
 } from '@/lib/queries/admin'
-import { buscarVendedores, definirVendedor, type VendedorAdmin } from '@/lib/queries/demo'
+import { buscarVendedores, type VendedorAdmin } from '@/lib/queries/demo'
 import { getSignedUrls } from '@/lib/queries/sugestoes'
 import { supabase } from '@/lib/supabase/client'
 import { avisarConversaAtiva } from '@/lib/notificacoes-app'
@@ -1134,14 +1131,6 @@ const FILTROS_CONTA: { key: FiltroConta; label: string }[] = [
   { key: 'excluidas', label: 'Excluídas' },
 ]
 
-// Form defaults
-const EMPTY_AFILIADO = {
-  nome: '', email: '', telefone: '', codigo: '',
-  comissao_tipo: 'porcentagem' as 'porcentagem' | 'valor_fixo', comissao_valor: '',
-  cpf_cnpj: '', chave_pix: '',
-  codigo_banco: '', banco: '', agencia: '', conta: '', tipo_conta: 'corrente' as 'corrente' | 'poupanca',
-  observacoes: '', ativo: true,
-}
 export default function Admin() {
   const { confirmar, dialogo } = useConfirmacao()
   const navigate = useNavigate()
@@ -1221,20 +1210,6 @@ export default function Admin() {
     })
   }, [sugestoesDaVersao, prefsSuporte.fixadaEm])
 
-  // ── Afiliados ──
-  const [afiliados, setAfiliados] = useState<Afiliado[]>([])
-  const [loadingAfil, setLoadingAfil] = useState(false)
-  // afilDetailId: null = lista (cards); 'new' = criando; outro = editando aquele afiliado
-  const [afilDetailId, setAfilDetailId] = useState<string | null>(null)
-  const [afilForm, setAfilForm] = useState(EMPTY_AFILIADO)
-  const [savingAfil, setSavingAfil] = useState(false)
-  const [deletingAfilId, setDeletingAfilId] = useState<string | null>(null)
-  // Por software: a porcentagem que vem em todo afiliado novo, o que cada um
-  // trouxe e a conta EasyFeed indicando que está aberta (descontos).
-  const [pctPadrao, setPctPadrao] = useState<number | null>(null)
-  const [numerosAfil, setNumerosAfil] = useState<Record<string, NumerosDoAfiliado>>({})
-  const [quemIndicaAberto, setQuemIndicaAberto] = useState<Afiliado | null>(null)
-
   // ── Contas (assinatura) ──
   const [contas, setContas] = useState<ContaAdmin[]>([])
   const [loadingContas, setLoadingContas] = useState(false)
@@ -1243,10 +1218,8 @@ export default function Admin() {
   const [filtroConta, setFiltroConta] = useState<FiltroConta>('todas')
   const [entrandoContaId, setEntrandoContaId] = useState<number | null>(null)
   const { user: euAdmin } = useAuth()
+  // Só para o rótulo VENDEDOR na lista de contas (a aba Vendedores carrega a dela).
   const [vendedores, setVendedores] = useState<VendedorAdmin[]>([])
-  const [salvandoVendedor, setSalvandoVendedor] = useState<string | null>(null)
-  const [emailNovoVendedor, setEmailNovoVendedor] = useState('')
-  const [loadingVendedores, setLoadingVendedores] = useState(false)
 
 
 
@@ -1298,35 +1271,6 @@ export default function Admin() {
     }
   }, [parceiro])
 
-  // Vendedores: carrega ao entrar na aba. A marca é por email — vale antes de a
-  // pessoa criar a conta.
-  const loadVendedores = useCallback(async () => {
-    setLoadingVendedores(true)
-    try { setVendedores(await buscarVendedores()) } finally { setLoadingVendedores(false) }
-  }, [])
-  useEffect(() => { if (isAdmin && abaAtual === 'vendedores') loadVendedores() }, [isAdmin, abaAtual, loadVendedores])
-
-  const alternarVendedor = useCallback(async (email: string, virar: boolean) => {
-    if (!virar) {
-      const ok = await confirmar({
-        titulo: `Tirar ${email} de vendedor?`,
-        descricao: 'As demonstrações abertas fecham na hora e o código some do perfil. A assinatura da conta não muda.',
-        confirmar: 'Tirar de vendedor',
-        destrutivo: true,
-      })
-      if (!ok) return
-    }
-    setSalvandoVendedor(email)
-    try {
-      await definirVendedor(email, virar)
-      await loadVendedores()
-      setEmailNovoVendedor('')
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Não foi possível alterar o vendedor.')
-    } finally {
-      setSalvandoVendedor(null)
-    }
-  }, [confirmar, loadVendedores])
   useEffect(() => { if (isAdmin && abaAtual === 'contas') loadContas() }, [isAdmin, abaAtual, loadContas])
 
 
@@ -1367,24 +1311,6 @@ export default function Admin() {
       setSalvandoContaId(null)
     }
   }, [])
-
-  // Afiliados: carrega ao entrar na aba (os do software na tela)
-  const loadAfiliados = useCallback(async () => {
-    setLoadingAfil(true)
-    try {
-      const [lista, numeros, pct] = await Promise.all([
-        buscarAfiliados(area),
-        buscarNumerosDosAfiliados(area).catch(() => ({})),
-        buscarPorcentagemPadrao(area).catch(() => 10),
-      ])
-      setAfiliados(lista)
-      setNumerosAfil(numeros)
-      setPctPadrao(pct)
-    } finally { setLoadingAfil(false) }
-  }, [area])
-  useEffect(() => {
-    if (isAdmin && abaAtual === 'afiliados') loadAfiliados()
-  }, [isAdmin, abaAtual, loadAfiliados])
 
   // ── Suporte handlers ──
   const [badgeVersion, setBadgeVersion] = useState(0)
@@ -1463,45 +1389,6 @@ export default function Admin() {
     localStorage.setItem('fib_adm_total', String(total))
     window.dispatchEvent(new CustomEvent('fib-unread-update', { detail: { count: total } }))
   }, [sugestoes, badgeVersion])
-
-  // ── Afiliado handlers ──
-  // O afiliado novo já vem com a porcentagem padrão do software.
-  const openAddAfil = () => { setAfilForm({ ...EMPTY_AFILIADO, comissao_valor: String(pctPadrao ?? 10) }); setAfilDetailId('new') }
-  const openDetailAfil = (a: Afiliado) => {
-    setAfilForm({
-      nome: a.nome, email: a.email ?? '', telefone: a.telefone ?? '', codigo: a.codigo,
-      comissao_tipo: a.comissao_tipo, comissao_valor: String(a.comissao_valor),
-      cpf_cnpj: a.cpf_cnpj ?? '', chave_pix: a.chave_pix ?? '',
-      codigo_banco: a.codigo_banco ?? '', banco: a.banco ?? '', agencia: a.agencia ?? '',
-      conta: a.conta ?? '', tipo_conta: (a.tipo_conta === 'poupanca' ? 'poupanca' : 'corrente'),
-      observacoes: a.observacoes ?? '', ativo: a.ativo,
-    })
-    setAfilDetailId(a.id)
-  }
-  const saveAfil = async () => {
-    if (!afilForm.nome || !afilForm.codigo) return
-    setSavingAfil(true)
-    try {
-      const p = {
-        nome: afilForm.nome, email: afilForm.email || null, telefone: afilForm.telefone || null,
-        codigo: afilForm.codigo.toUpperCase(), comissao_tipo: afilForm.comissao_tipo,
-        comissao_valor: Number(afilForm.comissao_valor) || 0,
-        cpf_cnpj: afilForm.cpf_cnpj || null,
-        chave_pix: afilForm.chave_pix || null, codigo_banco: afilForm.codigo_banco || null,
-        banco: afilForm.banco || null, agencia: afilForm.agencia || null, conta: afilForm.conta || null,
-        tipo_conta: afilForm.tipo_conta || null,
-        observacoes: afilForm.observacoes || null, ativo: afilForm.ativo,
-      }
-      if (afilDetailId && afilDetailId !== 'new') await atualizarAfiliado(afilDetailId, p)
-      else await criarAfiliado({ ...p, area })
-      await loadAfiliados(); setAfilDetailId(null)
-    } catch (err) { console.error(err) } finally { setSavingAfil(false) }
-  }
-  const deleteAfil = async (id: string) => {
-    setDeletingAfilId(id)
-    try { await excluirAfiliado(id); setAfiliados((p) => p.filter((a) => a.id !== id)); setAfilDetailId(null) }
-    catch (err) { console.error(err) } finally { setDeletingAfilId(null) }
-  }
 
   // Busca na lista inteira: a notificação de uma conversa da outra versão ainda abre ela.
   const selectedConv = sugestoes.find((s) => s.id === selectedId) ?? null
@@ -1808,199 +1695,21 @@ export default function Admin() {
           )
         })()}
 
-        {/* ── VENDEDORES ── */}
-        {abaAtual === 'vendedores' && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
-            <div className="max-w-4xl mx-auto">
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-gray-800">Vendedores</h2>
-                <p className="mt-1 text-[12px] text-gray-500">
-                  Têm o código da demonstração no Perfil e podem pular o WhatsApp. Pagam com o cupom VENDEDOR100.
-                </p>
-              </div>
+        {/* ── VENDEDORES (afiliados e vendedores juntos, nos dois softwares) ── */}
+        {abaAtual === 'vendedores' && <PainelVendedores />}
 
-              <form
-                className="mb-4 flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const email = emailNovoVendedor.trim().toLowerCase()
-                  if (email) alternarVendedor(email, true)
-                }}
-              >
-                <input
-                  type="email"
-                  value={emailNovoVendedor}
-                  onChange={(e) => setEmailNovoVendedor(e.target.value)}
-                  placeholder="Email do vendedor"
-                  className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]"
-                />
-                <button
-                  type="submit"
-                  disabled={!emailNovoVendedor.trim() || salvandoVendedor !== null}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white disabled:opacity-40"
-                >
-                  <Plus className="h-4 w-4" /> Adicionar
-                </button>
-              </form>
-
-              {loadingVendedores ? (
-                <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
-              ) : vendedores.length === 0 ? (
-                <p className="text-center py-10 text-sm text-gray-400">Nenhum vendedor ainda.</p>
-              ) : (
-                <CrudTable>
-                  <thead>
-                    <tr>
-                      <Th>Vendedor</Th>
-                      <Th>Conta</Th>
-                      <Th>Última demonstração</Th>
-                      <Th>Ações</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vendedores.map((v) => (
-                      <tr key={v.email} className="border-t border-gray-300">
-                        <Td>
-                          <span className="font-medium text-gray-800">{v.email}</span>
-                        </Td>
-                        <Td>
-                          {v.temConta ? (
-                            <span className="text-[13px] text-gray-700">{v.nomeRestaurante || 'Sem nome'}</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600">
-                              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                              Ainda não criou a conta
-                            </span>
-                          )}
-                        </Td>
-                        <Td className="text-[13px] text-gray-600">
-                          {v.ultimaDemoEm
-                            ? format(new Date(v.ultimaDemoEm), "dd/MM/yyyy 'às' HH:mm")
-                            : <span className="text-gray-400">Nunca</span>}
-                        </Td>
-                        <Td>
-                          <button
-                            onClick={() => alternarVendedor(v.email, false)}
-                            disabled={salvandoVendedor === v.email}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Remover
-                          </button>
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </CrudTable>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── PAGAMENTOS (divisão da receita do software na tela) ── */}
-        {abaAtual === 'pagamentos' && <PainelPagamentos />}
+        {/* ── RECEITA (a conta onde cai o dinheiro do software na tela) ── */}
+        {abaAtual === 'receita' && <PainelReceita />}
 
         {/* ── CUPONS (do software na tela) ── */}
         {abaAtual === 'cupons' && <PainelCupons />}
-
-        {/* ── AFILIADOS ── */}
-        {abaAtual === 'afiliados' && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
-            {afilDetailId ? (
-              <AfiliadoDetalhe
-                novo={afilDetailId === 'new'}
-                form={afilForm}
-                setForm={setAfilForm}
-                saving={savingAfil}
-                deleting={deletingAfilId === afilDetailId}
-                onSave={saveAfil}
-                onBack={() => setAfilDetailId(null)}
-                onDelete={afilDetailId !== 'new' ? () => deleteAfil(afilDetailId) : undefined}
-              />
-            ) : (
-              <div className="max-w-4xl mx-auto">
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                  <div className="flex items-start gap-2">
-                    <Users className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
-                    <div>
-                      <h2 className="text-base font-semibold text-gray-800">Afiliados <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
-                      <p className="mt-1 text-[12px] text-gray-500">
-                        Quem indica o {DEFINICOES[area].nome}. Afiliado de fora ganha a % em dinheiro a cada mensalidade paga; conta EasyFeed que indica ganha 1 mês grátis por indicado que pagar o 2º mês, usado um por mês enquanto o indicado seguir assinando.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <TrazerDoOutroSoftware area={area} aoTrazer={loadAfiliados} />
-                    <Button size="sm" onClick={openAddAfil} className="shrink-0"><Plus className="h-4 w-4 mr-1" /> Novo afiliado</Button>
-                  </div>
-                </div>
-                <div className="mb-5 space-y-3">
-                  <PorcentagemPadrao area={area} valor={pctPadrao} aoSalvar={setPctPadrao} />
-                  <MesesParaRenovacao />
-                </div>
-                {loadingAfil ? (
-                  <p className="text-center py-12 text-sm text-gray-400">Carregando…</p>
-                ) : afiliados.length === 0 ? (
-                  <div className="text-center py-16 text-gray-400">
-                    <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Nenhum afiliado cadastrado.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {afiliados.map((a) => (
-                      <button
-                        key={a.id}
-                        // Conta EasyFeed que indica: os números e os descontos para aplicar.
-                        onClick={() => (a.restaurante_id != null ? setQuemIndicaAberto(a) : openDetailAfil(a))}
-                        className="text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-violet-300 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={cn('h-11 w-11 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0', avatarColor(a.nome))}>
-                            {initials(a.nome, a.email)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-gray-800 truncate">{a.nome}</p>
-                            <p className="text-[12px] text-gray-500 truncate">{a.email ?? a.telefone ?? '—'}</p>
-                          </div>
-                          {!a.ativo && <span className="text-[10px] text-gray-400 shrink-0">inativo</span>}
-                        </div>
-                        {(() => {
-                          const n = numerosAfil[a.id]
-                          const pendentes = n?.premios.filter((x) => x.status === 'pendente').length ?? 0
-                          return (
-                            <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-gray-500">
-                              {a.restaurante_id != null && <span className="rounded bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">Conta EasyFeed · desconto</span>}
-                              <span>{n?.entraram ?? 0} criaram conta · {n?.usam ?? 0} {n?.usam === 1 ? 'usa' : 'usam'}</span>
-                              {pendentes > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">{pendentes} {pendentes > 1 ? 'meses grátis' : 'mês grátis'} na fila</span>}
-                            </p>
-                          )
-                        })()}
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-300">
-                          <span className="font-mono text-[12px] bg-violet-50 text-violet-700 px-2 py-0.5 rounded font-semibold">{a.codigo}</span>
-                          <span className="text-[13px] font-semibold text-gray-700">
-                            {a.comissao_tipo === 'porcentagem' ? textoDaPorcentagem(a.comissao_valor) : `R$ ${Number(a.comissao_valor).toFixed(2)}`}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <DescontosDeQuemIndica
-                  afiliado={quemIndicaAberto}
-                  numeros={quemIndicaAberto ? numerosAfil[quemIndicaAberto.id] : undefined}
-                  aoFechar={() => setQuemIndicaAberto(null)}
-                  aoMudar={loadAfiliados}
-                />
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── AGENTES DE IA ── */}
         {/* ── WHATSAPP (o que o dono vê, só leitura) ── */}
         {abaAtual === 'whatsapp' && <PainelWhatsappAdmin />}
 
         {abaAtual === 'influenciadores' && <PainelInfluenciadores />}
-        {abaAtual === 'videos' && <PainelVideosAdmin />}
+        {abaAtual === 'descontos' && <PainelDescontos />}
         {abaAtual === 'agentes' && <PainelAgentes />}
 
         {/* ── MOTOR DE RESPOSTA ── */}
@@ -2008,9 +1717,6 @@ export default function Admin() {
 
         {/* ── ACOMPANHAMENTO (evolução dos restaurantes, para o marketing) ── */}
         {abaAtual === 'acompanhamento' && <PainelResultados />}
-
-        {/* ── ACOMPANHAMENTO (evolução dos restaurantes, para o marketing) ── */}
-        {activeTab === 'acompanhamento' && <PainelResultados />}
 
         {/* ── CONHECIMENTO GLOBAL ── */}
         {abaAtual === 'conhecimento' && <ConhecimentoGlobal />}
@@ -2025,124 +1731,5 @@ export default function Admin() {
 
       </div>
     </SidebarProvider>
-  )
-}
-
-// ── AfiliadoDetalhe (tela de detalhe/edição — não é popup) ─────────────────────
-type AfilForm = typeof EMPTY_AFILIADO
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <Label className="text-[13px]">{label}</Label>
-      {children}
-    </div>
-  )
-}
-function AfiliadoDetalhe({ novo, form, setForm, saving, deleting, onSave, onBack, onDelete }: {
-  novo: boolean
-  form: AfilForm
-  setForm: React.Dispatch<React.SetStateAction<AfilForm>>
-  saving: boolean
-  deleting: boolean
-  onSave: () => void
-  onBack: () => void
-  onDelete?: () => void
-}) {
-  const set = (patch: Partial<AfilForm>) => setForm((p) => ({ ...p, ...patch }))
-
-
-  return (
-    <div className="max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
-          <ArrowLeft className="h-4 w-4" /> Voltar
-        </button>
-        {onDelete && (
-          <Button variant="destrutivoVazado" size="sm" onClick={onDelete} disabled={deleting}>
-            <Trash2 className="h-4 w-4 mr-1" /> {deleting ? 'Excluindo…' : 'Excluir'}
-          </Button>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className={cn('h-14 w-14 rounded-full flex items-center justify-center text-white text-lg font-semibold shrink-0', avatarColor(form.nome || '?'))}>
-            {initials(form.nome || '?', form.email)}
-          </div>
-          <h2 className="text-lg font-semibold text-gray-800">{novo ? 'Novo afiliado' : (form.nome || 'Afiliado')}</h2>
-        </div>
-
-        {/* Dados */}
-        <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Dados</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Campo label="Nome *"><Input value={form.nome} onChange={(e) => set({ nome: e.target.value })} placeholder="João Silva" className="mt-1" /></Campo>
-            <Campo label="Código único *"><Input value={form.codigo} onChange={(e) => set({ codigo: e.target.value.toUpperCase() })} placeholder="JOAO10" className="mt-1 font-mono" /></Campo>
-            <Campo label="E-mail"><Input type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="joao@email.com" className="mt-1" /></Campo>
-            <Campo label="Telefone"><Input value={form.telefone} onChange={(e) => set({ telefone: e.target.value })} placeholder="(11) 90000-0000" className="mt-1" /></Campo>
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <input type="checkbox" id="afil-ativo" checked={form.ativo} onChange={(e) => set({ ativo: e.target.checked })} className="h-4 w-4 rounded border-gray-300 accent-blue-600" />
-            <Label htmlFor="afil-ativo" className="text-[13px] cursor-pointer">Ativo</Label>
-          </div>
-        </div>
-
-        {/* Comissão */}
-        <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Comissão por venda</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Campo label="Tipo">
-              <Select value={form.comissao_tipo} onValueChange={(v) => set({ comissao_tipo: v as 'porcentagem' | 'valor_fixo' })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="porcentagem">Porcentagem (%)</SelectItem>
-                  <SelectItem value="valor_fixo">Valor fixo (R$)</SelectItem>
-                </SelectContent>
-              </Select>
-            </Campo>
-            <Campo label={form.comissao_tipo === 'porcentagem' ? '% por venda' : 'R$ por venda'}>
-              <Input type="number" value={form.comissao_valor} onChange={(e) => set({ comissao_valor: e.target.value })} placeholder={form.comissao_tipo === 'porcentagem' ? '10' : '50'} className="mt-1" />
-            </Campo>
-          </div>
-        </div>
-
-        {/* Conta bancária (Brasil) */}
-        <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Conta bancária</p>
-          <div className="space-y-3">
-            <Campo label="CPF ou CNPJ"><Input value={form.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" className="mt-1" /></Campo>
-            <Campo label="Chave PIX"><Input value={form.chave_pix} onChange={(e) => set({ chave_pix: e.target.value })} placeholder="CPF, e-mail, telefone…" className="mt-1" /></Campo>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Banco (nome)"><Input value={form.banco} onChange={(e) => set({ banco: e.target.value })} placeholder="Nubank" className="mt-1" /></Campo>
-              <Campo label="Código do banco"><Input value={form.codigo_banco} onChange={(e) => set({ codigo_banco: e.target.value })} placeholder="260" className="mt-1 font-mono" /></Campo>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Campo label="Agência"><Input value={form.agencia} onChange={(e) => set({ agencia: e.target.value })} placeholder="0001" className="mt-1" /></Campo>
-              <Campo label="Conta"><Input value={form.conta} onChange={(e) => set({ conta: e.target.value })} placeholder="12345-6" className="mt-1" /></Campo>
-              <Campo label="Tipo">
-                <Select value={form.tipo_conta} onValueChange={(v) => set({ tipo_conta: v as 'corrente' | 'poupanca' })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="corrente">Corrente</SelectItem>
-                    <SelectItem value="poupanca">Poupança</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Campo>
-            </div>
-          </div>
-        </div>
-
-        {/* Observações */}
-        <Campo label="Observações">
-          <textarea value={form.observacoes} onChange={(e) => set({ observacoes: e.target.value })} rows={3}
-            className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" placeholder="Anotações internas…" />
-        </Campo>
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-300">
-          <Button variant="outline" onClick={onBack}>Cancelar</Button>
-          <Button onClick={onSave} disabled={saving || !form.nome || !form.codigo}>{saving ? 'Salvando…' : 'Salvar'}</Button>
-        </div>
-      </div>
-    </div>
   )
 }

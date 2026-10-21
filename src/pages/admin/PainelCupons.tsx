@@ -258,16 +258,12 @@ export function PainelCupons() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2.5">
-              <label className="flex items-center justify-between gap-3 text-[13px] text-gray-700">
-                Ativo
-                <Switch checked={form.ativo} onCheckedChange={(v) => set({ ativo: v })} />
-              </label>
-              <label className="flex items-center justify-between gap-3 text-[13px] text-gray-700">
-                <span>Só quem já é vendedor pode usar <span className="block text-[11.5px] text-gray-500">Para cupons de nome fácil, como o VENDEDOR100.</span></span>
-                <Switch checked={form.somenteVendedores} onCheckedChange={(v) => set({ somenteVendedores: v })} />
-              </label>
-            </div>
+            {/* O "só quem já é vendedor" saiu daqui (pedido do Raver, 21/10/2026):
+                cupom novo nasce sem a trava, e o que já tinha continua igual. */}
+            <label className="flex items-center justify-between gap-3 text-[13px] text-gray-700">
+              Ativo
+              <Switch checked={form.ativo} onCheckedChange={(v) => set({ ativo: v })} />
+            </label>
 
             {problema && form.cupom.trim() && <p className="text-[12.5px] text-rose-600">{RECUSA_DO_CUPOM[problema]}</p>}
           </div>
