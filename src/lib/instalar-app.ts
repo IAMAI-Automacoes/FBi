@@ -193,6 +193,25 @@ export function jeitoDeInstalar(): 'iphone' | 'samsung' | 'android' | 'outro' {
   return 'outro'
 }
 
+/** A página de onde o app `app` se instala (no iPhone, é preciso estar nela). */
+export function rotaDoApp(app: AppInstalavel): string {
+  return ROTA_DO_APP[app]
+}
+
+/**
+ * Enquanto o passo a passo pelo menu do navegador está aberto, a página
+ * apresenta o manifest do app pedido: o "Instalar app" do menu instala ESTE
+ * app, e não o da página onde a pessoa está (o ZapFeed pedido no Perfil).
+ */
+export function apresentarApp(app: AppInstalavel) {
+  ligarManifest(app)
+}
+
+/** Volta ao manifest da página atual (ao fechar o passo a passo). */
+export function apresentarAppDaPagina() {
+  ligarManifest(appDaRota(window.location.pathname))
+}
+
 /** Endereço completo que abre (e instala) o app `app` no navegador. */
 export function enderecoDoApp(app: AppInstalavel): string {
   return `${window.location.origin}${ROTA_DO_APP[app]}`

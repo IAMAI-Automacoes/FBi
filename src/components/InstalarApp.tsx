@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Check, Copy, Download, EllipsisVertical, Loader2, Menu, Share, SquarePlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { useToast } from '@/hooks/use-toast'
 import {
-  abertoComoApp, ehAppInstalado, enderecoDoApp, instalar, instaladoNoAparelho, jaInstalado,
-  jeitoDeInstalar, navegadorInstalaComUmToque, podeInstalarAqui, type AppInstalavel,
+  abertoComoApp, apresentarApp, apresentarAppDaPagina, appDaRota, ehAppInstalado, enderecoDoApp, instalar,
+  instaladoNoAparelho, jaInstalado, jeitoDeInstalar, navegadorInstalaComUmToque, podeInstalarAqui, rotaDoApp,
+  type AppInstalavel,
 } from '@/lib/instalar-app'
 
 type Jeito = ReturnType<typeof jeitoDeInstalar>
@@ -126,6 +128,7 @@ export function PassoAPassoInstalar({ aoFechar, nome, jeito = jeitoDeInstalar(),
  */
 function useInstalar(app: AppInstalavel, nome: string) {
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [, renovar] = useState(0)
   const [passo, setPasso] = useState<{ endereco?: string; jaTem?: boolean } | null>(null)
   // Já instalado neste aparelho? (marcado aqui ou respondido pelo navegador)
@@ -143,20 +146,38 @@ function useInstalar(app: AppInstalavel, nome: string) {
     return () => { ativo = false; window.removeEventListener('easyfeed:pode-instalar', conferir) }
   }, [app])
 
+  // Passo a passo pelo menu do navegador: enquanto aberto, a página apresenta
+  // o manifest DESTE app (o "Instalar app" do menu instala o certo).
+  const abrirPassos = () => { apresentarApp(app); setPasso({}) }
+  const fechar = () => {
+    if (passo && !passo.endereco && !passo.jaTem) apresentarAppDaPagina()
+    setPasso(null)
+  }
+
   const clicar = async () => {
     // Já tem o app: avisa, em vez de mandar procurar o menu do navegador.
     if (await instaladoNoAparelho(app)) { setInstalado(true); setPasso({ jaTem: true }); return }
     if (ehAppInstalado()) { setPasso({ endereco: enderecoDoApp(app) }); return }
-    if (!navegadorInstalaComUmToque()) { setPasso({}); return }
+    if (!navegadorInstalaComUmToque()) {
+      // iPhone: o Safari adiciona à Tela de Início a PÁGINA aberta. Pedido de
+      // outra página (o ZapFeed no Perfil), vai para a página do app e o passo
+      // a passo abre lá (?instalar=1, ver `abrirSozinho` no BotaoInstalarApp).
+      if (jeitoDeInstalar() === 'iphone' && appDaRota(window.location.pathname) !== app) {
+        navigate(`${rotaDoApp(app)}?instalar=1`)
+        return
+      }
+      abrirPassos()
+      return
+    }
     // Num toque: `instalar` consegue a oferta do navegador mesmo estando na
     // página de outro app; só sem oferta nenhuma cai no passo a passo.
     setAbrindo(true)
     const r = await instalar(app).finally(() => setAbrindo(false))
     if (r === 'aceito') toast({ title: `${nome} instalado`, description: 'Abra pelo ícone na tela inicial.' })
-    else if (r === 'indisponivel') setPasso({})
+    else if (r === 'indisponivel') abrirPassos()
   }
   const passoAPasso = passo && (
-    <PassoAPassoInstalar nome={nome} endereco={passo.endereco} jaTem={passo.jaTem} aoFechar={() => setPasso(null)} />
+    <PassoAPassoInstalar nome={nome} endereco={passo.endereco} jaTem={passo.jaTem} aoFechar={fechar} />
   )
   return { clicar, passoAPasso, instalado, abrindo }
 }
@@ -179,6 +200,16 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
   variante?: 'claro' | 'escuro'
 }) {
   const { clicar, passoAPasso, instalado, abrindo } = useInstalar(app, nome)
+
+  // iPhone vindo do pedido de outra página (?instalar=1 → `destacar`): o passo
+  // a passo já abre aqui, na página certa, sem mais um toque para achá-lo.
+  const abriuSozinho = useRef(false)
+  useEffect(() => {
+    if (!destacar || abriuSozinho.current || jeitoDeInstalar() !== 'iphone') return
+    abriuSozinho.current = true
+    clicar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destacar])
 
   if (abertoComoApp(app)) return null
   // Fora de um app instalado, "já instalado" esconde: o Chrome para de
