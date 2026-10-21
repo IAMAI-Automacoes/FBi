@@ -267,6 +267,31 @@ Conta sem plano (/assinatura) → mesma função com JWT → webhook vincula soz
 
 ---
 
+## Sessão 13 — Cobrança pelo Asaas
+
+**Fase 1 (vender):**
+- [x] Código: `criar-cobranca`, `asaas-webhook`, telas de compra (no ar desde 21/10/2026, conta `mei` em sandbox)
+- [x] Sandbox: mensal recorrente e anual parcelado ativaram (16/10/2026)
+- [ ] Sandbox: cupom de desconto, inadimplência → pagar fatura, cancelar, excluir conta, reenvio de evento, mês grátis de indicação
+
+**Fase 2 (descontos e comissão — 21/10/2026):**
+- [x] Código: split da comissão do vendedor (`_shared/asaas/comissao.ts`), desconto do código do vendedor, saldo do vídeo na cobrança, % da indicação, limite de vídeos por período, `PUT` do Asaas com os campos obrigatórios
+- [ ] Aplicar `20261101000000_asaas_comissoes_e_descontos.sql` no Supabase
+- [ ] Publicar `asaas-webhook` (`--no-verify-jwt`), `criar-cobranca`, `videos-missao` e o site
+- [ ] Cadastrar os nossos custos em Admin → Vendedores (a comissão é sobre o que sobra depois deles)
+- [ ] Webhook do Asaas recebendo também os eventos `PAYMENT_SPLIT_*`
+- [ ] Sandbox: vendedor com walletId de uma 2ª conta sandbox → split na 2ª mensalidade
+- [ ] Contador: o valor do split conta no teto do MEI? O vendedor emite nota/recibo?
+- [x] Vídeo: 50% sobre o valor cheio de uma mensalidade (sem descontar custos), abate a próxima cobrança
+
+**Fase 3:**
+- [ ] Teto do MEI (painel + alertas + pausa de vendas novas)
+- [ ] Alertas de vencimento (faixa + sino)
+- [ ] NFS-e (esperando o código de serviço do contador)
+- [ ] Produção: conta do Guilherme aprovada, trocar os secrets, cadastrar webhook e domínio, rodar a limpeza do sandbox
+
+---
+
 ## Notas Importantes
 
 ### Discrepâncias SRS vs Código Real

@@ -225,6 +225,9 @@ export type Database = {
       }
       afiliados: {
         Row: {
+          asaas_wallet_id: string | null
+          desconto_cobrancas: number
+          desconto_pct: number
           agencia: string | null
           area: string
           ativo: boolean
@@ -246,6 +249,9 @@ export type Database = {
           tipo_conta: string | null
         }
         Insert: {
+          asaas_wallet_id?: string | null
+          desconto_cobrancas?: number
+          desconto_pct?: number
           agencia?: string | null
           area?: string
           ativo?: boolean
@@ -267,6 +273,9 @@ export type Database = {
           tipo_conta?: string | null
         }
         Update: {
+          asaas_wallet_id?: string | null
+          desconto_cobrancas?: number
+          desconto_pct?: number
           agencia?: string | null
           area?: string
           ativo?: boolean
@@ -933,8 +942,112 @@ export type Database = {
           },
         ]
       }
+      cobranca_comissoes: {
+        Row: {
+          base_mes_centavos: number | null
+          afiliado_id: string | null
+          asaas_payment_id: string
+          assinatura_id: string | null
+          atualizado_em: string
+          conta_id: string
+          criado_em: string
+          erro: string | null
+          id: string
+          mes_ate: number | null
+          mes_de: number | null
+          restaurante_id: number | null
+          status: string
+          valor_centavos: number
+          wallet_id: string | null
+        }
+        Insert: {
+          base_mes_centavos?: number | null
+          afiliado_id?: string | null
+          asaas_payment_id: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          mes_ate?: number | null
+          mes_de?: number | null
+          restaurante_id?: number | null
+          status?: string
+          valor_centavos: number
+          wallet_id?: string | null
+        }
+        Update: {
+          base_mes_centavos?: number | null
+          afiliado_id?: string | null
+          asaas_payment_id?: string
+          assinatura_id?: string | null
+          atualizado_em?: string
+          conta_id?: string
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          mes_ate?: number | null
+          mes_de?: number | null
+          restaurante_id?: number | null
+          status?: string
+          valor_centavos?: number
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_comissoes_afiliado_id_fkey"
+            columns: ["afiliado_id"]
+            isOneToOne: false
+            referencedRelation: "afiliados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_comissoes_assinatura_id_fkey"
+            columns: ["assinatura_id"]
+            isOneToOne: false
+            referencedRelation: "cobranca_assinaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comissao_custos: {
+        Row: {
+          area: string
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          nome: string
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          area: string
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          nome: string
+          tipo: string
+          valor: number
+        }
+        Update: {
+          area?: string
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          nome?: string
+          tipo?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       cobranca_pagamentos: {
         Row: {
+          desconto_vendedor_centavos: number | null
+          saldo_video_centavos: number | null
           asaas_payment_id: string
           assinatura_id: string | null
           atualizado_em: string
@@ -954,6 +1067,8 @@ export type Database = {
           vencimento: string | null
         }
         Insert: {
+          desconto_vendedor_centavos?: number | null
+          saldo_video_centavos?: number | null
           asaas_payment_id: string
           assinatura_id?: string | null
           atualizado_em?: string
@@ -973,6 +1088,8 @@ export type Database = {
           vencimento?: string | null
         }
         Update: {
+          desconto_vendedor_centavos?: number | null
+          saldo_video_centavos?: number | null
           asaas_payment_id?: string
           assinatura_id?: string | null
           atualizado_em?: string
@@ -2372,6 +2489,7 @@ export type Database = {
       }
       indicacao_config: {
         Row: {
+          bonus_pct: number
           ativo: boolean
           atualizado_em: string
           atualizado_por: string | null
@@ -2380,6 +2498,7 @@ export type Database = {
           meses_para_renovacao: number
         }
         Insert: {
+          bonus_pct?: number
           ativo?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -2388,6 +2507,7 @@ export type Database = {
           meses_para_renovacao?: number
         }
         Update: {
+          bonus_pct?: number
           ativo?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -4173,6 +4293,7 @@ export type Database = {
       }
       video_config: {
         Row: {
+          periodo_meses: number
           area: string
           atualizado_em: string
           id: boolean
@@ -4180,6 +4301,7 @@ export type Database = {
           saldo_pct_mensalidade: number
         }
         Insert: {
+          periodo_meses?: number
           area?: string
           atualizado_em?: string
           id?: boolean
@@ -4187,6 +4309,7 @@ export type Database = {
           saldo_pct_mensalidade?: number
         }
         Update: {
+          periodo_meses?: number
           area?: string
           atualizado_em?: string
           id?: boolean
@@ -4323,6 +4446,8 @@ export type Database = {
       }
       video_premios: {
         Row: {
+          aplicado_pagamento: string | null
+          reservado_pagamento: string | null
           ano: number
           aplicado_em: string | null
           aplicado_por: string | null
@@ -4336,6 +4461,8 @@ export type Database = {
           valor_centavos: number | null
         }
         Insert: {
+          aplicado_pagamento?: string | null
+          reservado_pagamento?: string | null
           ano: number
           aplicado_em?: string | null
           aplicado_por?: string | null
@@ -4349,6 +4476,8 @@ export type Database = {
           valor_centavos?: number | null
         }
         Update: {
+          aplicado_pagamento?: string | null
+          reservado_pagamento?: string | null
           ano?: number
           aplicado_em?: string | null
           aplicado_por?: string | null
@@ -5040,6 +5169,18 @@ export type Database = {
         }[]
       }
       indicacao_admin: { Args: never; Returns: Json }
+      comissao_marcar_paga: {
+        Args: { p_id: string }
+        Returns: boolean
+      }
+      indicacao_admin_bonus_pct: {
+        Args: { p_pct: number }
+        Returns: number
+      }
+      indicacao_desconto_do_codigo: {
+        Args: { p_codigo: string }
+        Returns: Json
+      }
       indicacao_admin_meses_renovacao: {
         Args: { p_meses: number }
         Returns: number

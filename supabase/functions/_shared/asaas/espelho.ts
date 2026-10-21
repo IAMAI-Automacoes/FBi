@@ -43,7 +43,12 @@ export async function espelharPagamento(
   // deno-lint-ignore no-explicit-any
   assinatura: any | null,
   pag: PagamentoAsaas,
-  extra: { cupom_uso_id?: string | null; premio_id?: string | null } = {},
+  extra: {
+    cupom_uso_id?: string | null
+    premio_id?: string | null
+    desconto_vendedor_centavos?: number | null
+    saldo_video_centavos?: number | null
+  } = {},
 ) {
   const linha: Record<string, unknown> = {
     conta_id: contaId,
@@ -63,6 +68,8 @@ export async function espelharPagamento(
   }
   if (extra.cupom_uso_id !== undefined) linha.cupom_uso_id = extra.cupom_uso_id
   if (extra.premio_id !== undefined) linha.premio_id = extra.premio_id
+  if (extra.desconto_vendedor_centavos !== undefined) linha.desconto_vendedor_centavos = extra.desconto_vendedor_centavos
+  if (extra.saldo_video_centavos !== undefined) linha.saldo_video_centavos = extra.saldo_video_centavos
   const { data, error } = await db
     .from('cobranca_pagamentos')
     .upsert(linha, { onConflict: 'conta_id,asaas_payment_id' })

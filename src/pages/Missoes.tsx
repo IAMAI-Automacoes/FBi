@@ -11,10 +11,10 @@ import { useArea } from '@/lib/area'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import {
-  anoSP, aprovadosNoAno, duracaoDaMissao, formatarDuracao, formatarTamanho, hojeSP, inicioDoAnoSP, mimeDoArquivo,
+  aprovadosNoAno, duracaoDaMissao, formatarDuracao, formatarTamanho, hojeSP, inicioDoPeriodoSP, mimeDoArquivo, nomeDoPeriodo,
   podeMandar, problemaDoArquivo, proximaMissao, rotuloDuracao, situacaoDaMissao, type EnvioVideo, type Missao,
 } from '@/lib/missoes'
-import { acaoVideos, buscarEnvios, buscarMaxPorAno, buscarMissoes, subirVideo } from '@/lib/queries/missoes'
+import { acaoVideos, buscarEnvios, buscarLimiteDosVideos, buscarMissoes, subirVideo } from '@/lib/queries/missoes'
 import { ROTA_DESCONTOS_HISTORICO } from '@/lib/descontos'
 
 /* Missões de vídeo: o restaurante grava um vídeo falando do EasyFeed, do jeito
@@ -159,7 +159,7 @@ function SubirVideo({ missao, onEnviado }: { missao: Missao; onEnviado: () => vo
 function ProximoVideo({ missao, envios, limite, onEnviado }: {
   missao: Missao
   envios: EnvioVideo[]
-  /** Chegou ao limite de vídeos do ano: o porquê (null = pode mandar). */
+  /** Chegou ao limite de vídeos do período: o porquê (null = pode mandar). */
   limite: string | null
   onEnviado: () => void
 }) {
@@ -202,19 +202,21 @@ function ProximoVideo({ missao, envios, limite, onEnviado }: {
 
 export default function Missoes() {
   const { usuario } = useAuth()
-  // As missões e o limite por ano são do software da conta.
+  // As missões e o limite por período são do software da conta.
   const { area } = useArea()
   const restauranteId = usuario?.restaurante_id ?? null
   const [carregando, setCarregando] = useState(true)
   const [missoes, setMissoes] = useState<Missao[]>([])
   const [envios, setEnvios] = useState<EnvioVideo[]>([])
   const [maxPorAno, setMaxPorAno] = useState<number | null>(null)
+  const [periodoMeses, setPeriodoMeses] = useState(12)
 
   const carregar = useCallback(async () => {
     if (!restauranteId) return
     try {
-      const [m, e, max] = await Promise.all([buscarMissoes(), buscarEnvios(restauranteId), buscarMaxPorAno(area)])
-      setMaxPorAno(max)
+      const [m, e, limite] = await Promise.all([buscarMissoes(), buscarEnvios(restauranteId), buscarLimiteDosVideos(area)])
+      setMaxPorAno(limite.max)
+      setPeriodoMeses(limite.meses)
       setMissoes(m)
       setEnvios(e)
     } catch {
@@ -234,17 +236,17 @@ export default function Missoes() {
     return () => clearInterval(t)
   }, [emAnalise, carregar])
 
-  // O limite conta por ano (recomeça em 1º de janeiro, horário de Brasília).
+  // O limite conta por período (ano, semestre ou trimestre; recomeça à meia-noite de Brasília).
   const hoje = hojeSP()
-  const ano = anoSP()
-  const aprovadas = useMemo(() => aprovadosNoAno(envios, inicioDoAnoSP()), [envios])
+  const periodo = nomeDoPeriodo(periodoMeses)
+  const aprovadas = useMemo(() => aprovadosNoAno(envios, inicioDoPeriodoSP(periodoMeses)), [envios, periodoMeses])
   const daVez = useMemo(() => proximaMissao(missoes, envios, hoje), [missoes, envios, hoje])
   const emAnaliseAgora = envios.filter((e) => e.status === 'analisando').length
   const limite = maxPorAno == null || aprovadas + emAnaliseAgora < maxPorAno
     ? null
     : aprovadas >= maxPorAno
-      ? `Você chegou ao limite de ${maxPorAno} ${maxPorAno === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} este ano. Em janeiro dá para mandar de novo.`
-      : `Contando os vídeos em análise, você chegou ao limite de ${maxPorAno} deste ano. Se algum não for aprovado, libera de novo.`
+      ? `Você chegou ao limite de ${maxPorAno} ${maxPorAno === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} neste ${periodo}. No próximo ${periodo} dá para mandar de novo.`
+      : `Contando os vídeos em análise, você chegou ao limite de ${maxPorAno} deste ${periodo}. Se algum não for aprovado, libera de novo.`
   const cumpriuAlguma = envios.some((e) => e.status === 'aprovado')
 
   if (carregando) {
@@ -274,7 +276,7 @@ export default function Missoes() {
       <div className="flex items-baseline gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
         <span className="text-2xl font-bold tabular-nums text-gray-900">{aprovadas}</span>
         <span className="text-sm text-gray-500">
-          {maxPorAno != null ? `de ${maxPorAno} ` : ''}{(maxPorAno ?? aprovadas) === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} em {ano}
+          {maxPorAno != null ? `de ${maxPorAno} ` : ''}{(maxPorAno ?? aprovadas) === 1 ? 'vídeo aprovado' : 'vídeos aprovados'} neste {periodo}
         </span>
       </div>
 

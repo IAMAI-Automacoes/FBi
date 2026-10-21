@@ -35,30 +35,37 @@ export async function buscarMissoes(): Promise<Missao[]> {
   return (data ?? []).map(paraMissao)
 }
 
-/** Vídeos aprovados por ano, por restaurante (somando todas as missões); null = sem limite. */
-export async function buscarMaxPorAno(area: Area): Promise<number | null> {
-  const { data, error } = await supabase.from('video_config').select('max_por_ano').eq('area', area).maybeSingle()
+/** O limite de vídeos aprovados por conta (somando todas as missões): o máximo
+    (null = sem limite) em cada período de `meses` (12 = ano, 6 = semestre, 3 = trimestre). */
+export async function buscarLimiteDosVideos(area: Area): Promise<{ max: number | null; meses: number }> {
+  const { data, error } = await supabase.from('video_config').select('max_por_ano, periodo_meses').eq('area', area).maybeSingle()
   if (error) throw error
-  return data?.max_por_ano ?? null
+  return { max: data?.max_por_ano ?? null, meses: Number(data?.periodo_meses) || 12 }
 }
 
-/** Admin → Descontos → Configurações: o saldo de cada vídeo e o limite por ano. */
+/** Admin → Descontos → Configurações: o saldo de cada vídeo e o limite por período. */
 export interface ConfigDosVideos {
   /** % de UMA mensalidade que cada vídeo aprovado vale de saldo. */
   saldoPct: number
-  /** Vídeos aprovados por ano, por conta; null = sem limite. */
+  /** Vídeos aprovados por período, por conta; null = sem limite. (Coluna max_por_ano.) */
   maxPorAno: number | null
+  /** O período do limite: 12 = ano, 6 = semestre, 3 = trimestre. */
+  periodoMeses: number
 }
 
 export async function buscarConfigDosVideos(area: Area): Promise<ConfigDosVideos> {
-  const { data, error } = await supabase.from('video_config').select('max_por_ano, saldo_pct_mensalidade').eq('area', area).maybeSingle()
+  const { data, error } = await supabase.from('video_config').select('max_por_ano, saldo_pct_mensalidade, periodo_meses').eq('area', area).maybeSingle()
   if (error) throw error
-  return { saldoPct: data ? Number(data.saldo_pct_mensalidade) : 50, maxPorAno: data ? data.max_por_ano ?? null : 6 }
+  return {
+    saldoPct: data ? Number(data.saldo_pct_mensalidade) : 50,
+    maxPorAno: data ? data.max_por_ano ?? null : 6,
+    periodoMeses: Number(data?.periodo_meses) || 12,
+  }
 }
 
 export async function salvarConfigDosVideos(area: Area, c: ConfigDosVideos): Promise<void> {
   const { error } = await supabase.from('video_config')
-    .upsert({ id: true, area, max_por_ano: c.maxPorAno, saldo_pct_mensalidade: c.saldoPct }, { onConflict: 'area' })
+    .upsert({ id: true, area, max_por_ano: c.maxPorAno, saldo_pct_mensalidade: c.saldoPct, periodo_meses: c.periodoMeses }, { onConflict: 'area' })
   if (error) throw error
 }
 

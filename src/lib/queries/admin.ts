@@ -334,7 +334,15 @@ export interface Afiliado {
   /** Preenchido = é uma conta EasyFeed indicando (ganha a % como desconto na
       própria mensalidade, depois do 2º mês pago do indicado). */
   restaurante_id: number | null
+  /** walletId da conta Asaas do vendedor: a comissão vai por split. Vazio = pagar à mão. */
+  asaas_wallet_id: string | null
+  /** Desconto (%) de quem compra com o código, nas `desconto_cobrancas` primeiras cobranças. */
+  desconto_pct: number
+  desconto_cobrancas: number
 }
+
+/** Campos com padrão no banco: dá para criar sem eles. */
+type AfiliadoComPadrao = 'asaas_wallet_id' | 'desconto_pct' | 'desconto_cobrancas'
 
 /** Os afiliados de um software: os de fora (comissão em dinheiro) e as contas
     EasyFeed que pegaram o link em Descontos → Indicações (desconto). */
@@ -356,7 +364,7 @@ export async function buscarCodigosDeAfiliado(): Promise<Set<string>> {
 }
 
 export async function criarAfiliado(
-  input: Omit<Afiliado, 'id' | 'created_at' | 'restaurante_id'>,
+  input: Omit<Afiliado, 'id' | 'created_at' | 'restaurante_id' | AfiliadoComPadrao> & Partial<Pick<Afiliado, AfiliadoComPadrao>>,
 ): Promise<void> {
   const { error } = await supabase.from('afiliados').insert(input)
   if (error) throw error
@@ -372,6 +380,56 @@ export async function atualizarAfiliado(
 
 export async function excluirAfiliado(id: string): Promise<void> {
   const { error } = await supabase.from('afiliados').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** A comissão de um vendedor numa cobrança do indicado (split do Asaas, `cobranca_comissoes`). */
+export interface Comissao {
+  id: string
+  criado_em: string
+  afiliado_id: string | null
+  vendedor: string
+  indicado: string
+  mes_de: number | null
+  mes_ate: number | null
+  valor_centavos: number
+  status: 'agendado' | 'sem_carteira' | 'repassado' | 'pago_manual' | 'cancelado' | 'estornado' | 'bloqueado' | 'erro'
+  erro: string | null
+}
+
+/** As comissões mais recentes dos vendedores de um software. */
+export async function buscarComissoes(area: 'restaurante' | 'rh', limite = 100): Promise<Comissao[]> {
+  const { data, error } = await supabase
+    .from('cobranca_comissoes')
+    .select('id, criado_em, afiliado_id, restaurante_id, mes_de, mes_ate, valor_centavos, status, erro, afiliados!inner(nome, area)')
+    .eq('afiliados.area', area)
+    .order('criado_em', { ascending: false })
+    .limit(limite)
+  if (error) throw error
+  const linhas = data ?? []
+  const ids = [...new Set(linhas.map((l) => l.restaurante_id).filter((id): id is number => id != null))]
+  const nomes = new Map<number, string>()
+  if (ids.length) {
+    const { data: rs } = await supabase.from('restaurantes').select('id, nome_restaurante').in('id', ids)
+    for (const r of rs ?? []) nomes.set(Number(r.id), r.nome_restaurante || `Conta ${r.id}`)
+  }
+  return linhas.map((l) => ({
+    id: l.id,
+    criado_em: l.criado_em,
+    afiliado_id: l.afiliado_id,
+    vendedor: (l.afiliados as unknown as { nome: string } | null)?.nome ?? '—',
+    indicado: l.restaurante_id != null ? nomes.get(Number(l.restaurante_id)) ?? `Conta ${l.restaurante_id}` : '—',
+    mes_de: l.mes_de,
+    mes_ate: l.mes_ate,
+    valor_centavos: l.valor_centavos,
+    status: l.status as Comissao['status'],
+    erro: l.erro,
+  }))
+}
+
+/** O admin pagou a comissão à mão (vendedor sem conta Asaas, ou o split falhou). */
+export async function marcarComissaoPaga(id: string): Promise<void> {
+  const { error } = await supabase.rpc('comissao_marcar_paga', { p_id: id })
   if (error) throw error
 }
 

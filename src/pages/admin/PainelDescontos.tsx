@@ -14,9 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useArea } from '@/lib/area'
 import { DEFINICOES, type Area } from '@/lib/areas'
 import {
-  DURACAO_TETO_S, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito, rotuloDuracao, rotuloPeriodo, type Missao,
+  DURACAO_TETO_S, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito, nomeDoPeriodo, rotuloDuracao, rotuloPeriodo, type Missao,
 } from '@/lib/missoes'
 import { buscarPrecos } from '@/lib/queries/cobranca'
+import { buscarConfigDaIndicacao, salvarConfigDaIndicacao, type ConfigDaIndicacao } from '@/lib/queries/indicacoes'
 import {
   acaoVideos, buscarConfigDosVideos, buscarTodasMissoes, buscarTodosEnvios, buscarTodosPremios, linkDoVideo, salvarConfigDosVideos, salvarMissao,
   type ConfigDosVideos, type EnvioAdmin, type MissaoParaSalvar, type PremioAdmin,
@@ -28,9 +29,11 @@ import { CrudTable, Td, Th } from '@/pages/admin/tabela'
    (21/10/2026): só o essencial, nomes fáceis, sem botão de atualizar.
    - Vídeos: os vídeos que as contas mandam (a IA confere, o admin revisa) e
      as missões (o que gravar). Cada vídeo aprovado vale um saldo de X% de uma
-     mensalidade, até N vídeos por ano: os dois ficam em Configurações (a
-     escada de prêmios e a lista de prêmios saíram).
-   - Indicação: em branco, até a regra do desconto por indicação ser definida. */
+     mensalidade, até N vídeos por período (ano, semestre ou trimestre): ficam
+     em Configurações (a escada de prêmios e a lista de prêmios saíram).
+   - Indicação: quanto de uma mensalidade cada indicado vale para quem indicou
+     e o mínimo de meses pagos que conta na renovação semestral/anual.
+   O saldo e os bônus entram sozinhos na cobrança do Asaas (asaas-webhook). */
 
 const quando = (iso: string) => format(parseISO(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 const campo = 'h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]'
@@ -270,7 +273,7 @@ function EditarMissao({ area, rascunho, onFechar, onSalvo }: { area: Area; rascu
   )
 }
 
-// ── Configurações: saldo por vídeo e limite por ano ──────────────────────────
+// ── Configurações: saldo por vídeo e limite por período ──────────────────────
 
 function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }: {
   area: Area
@@ -282,11 +285,13 @@ function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }:
 }) {
   const [pct, setPct] = useState('')
   const [max, setMax] = useState('')
+  const [periodo, setPeriodo] = useState(12)
   const [salvando, setSalvando] = useState(false)
   useEffect(() => {
     if (!aberto) return
     setPct(String(config.saldoPct).replace('.', ','))
     setMax(config.maxPorAno == null ? '' : String(config.maxPorAno))
+    setPeriodo(config.periodoMeses)
   }, [aberto, config])
 
   const pctLido = Number(pct.replace(',', '.'))
@@ -296,7 +301,7 @@ function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }:
 
   const salvar = async () => {
     if (!pctOk || !maxOk) return
-    const nova = { saldoPct: Math.round(pctLido * 100) / 100, maxPorAno: maxLido }
+    const nova = { saldoPct: Math.round(pctLido * 100) / 100, maxPorAno: maxLido, periodoMeses: periodo }
     setSalvando(true)
     try {
       await salvarConfigDosVideos(area, nova)
@@ -329,12 +334,22 @@ function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }:
             </p>
           </div>
           <div className="space-y-1">
-            <label htmlFor="cfg-max" className="text-[13px] font-medium text-gray-800">Máximo de vídeos aprovados por ano</label>
-            <div className="flex items-center gap-2">
+            <label htmlFor="cfg-max" className="text-[13px] font-medium text-gray-800">Máximo de vídeos aprovados por conta</label>
+            <div className="flex flex-wrap items-center gap-2">
               <Input id="cfg-max" value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Sem limite" className="w-24 text-right tabular-nums" />
-              <span className="text-[13px] text-gray-500">por conta</span>
+              <span className="text-[13px] text-gray-500">a cada</span>
+              <div className="inline-flex rounded-lg bg-gray-100 p-1" role="group" aria-label="Período do limite">
+                {([[3, 'Trimestre'], [6, 'Semestre'], [12, 'Ano']] as const).map(([m, rotulo]) => (
+                  <button key={m} type="button" onClick={() => setPeriodo(m)} aria-pressed={periodo === m}
+                    className={cn('rounded-md px-2.5 py-1 text-[12.5px] font-medium transition-colors', periodo === m ? 'bg-white text-[#1D4ED8] shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
             </div>
-            <p className="text-[12px] text-gray-500">Somando todas as missões. Recomeça em 1º de janeiro.</p>
+            <p className="text-[12px] text-gray-500">
+              Somando todas as missões. {periodo === 12 ? 'Recomeça em 1º de janeiro.' : periodo === 6 ? 'Recomeça em 1º de janeiro e 1º de julho.' : 'Recomeça em 1º de janeiro, abril, julho e outubro.'}
+            </p>
           </div>
           {(!pctOk || !maxOk) && <p className="text-[12px] text-rose-600">{!pctOk ? 'Ponha a porcentagem (0 a 1000).' : 'O máximo vai de 1 a 100 (vazio = sem limite).'}</p>}
         </div>
@@ -344,6 +359,86 @@ function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── Indicação: quanto cada indicado vale para quem indicou ───────────────────
+
+function ConfigIndicacao({ mensalidade }: { mensalidade: number | null }) {
+  const [salva, setSalva] = useState<ConfigDaIndicacao | null>(null)
+  const [pct, setPct] = useState('')
+  const [meses, setMeses] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    buscarConfigDaIndicacao()
+      .then((c) => { setSalva(c); setPct(String(c.bonusPct).replace('.', ',')); setMeses(String(c.mesesParaRenovacao)) })
+      .catch(() => toast.error('Não foi possível carregar a indicação.'))
+  }, [])
+
+  const pctLido = Number(pct.replace(',', '.'))
+  const mesesLido = Number(meses)
+  const pctOk = pct.trim() !== '' && Number.isFinite(pctLido) && pctLido >= 1 && pctLido <= 100
+  const mesesOk = Number.isInteger(mesesLido) && mesesLido >= 1 && mesesLido <= 24
+  const mudou = !!salva && pctOk && mesesOk && (Math.round(pctLido * 100) / 100 !== salva.bonusPct || mesesLido !== salva.mesesParaRenovacao)
+
+  const salvar = async () => {
+    if (!mudou) return
+    const nova = { bonusPct: Math.round(pctLido * 100) / 100, mesesParaRenovacao: mesesLido }
+    setSalvando(true)
+    try {
+      await salvarConfigDaIndicacao(nova)
+      setSalva(nova)
+      toast.success('Indicação salva.')
+    } catch {
+      toast.error('Não foi possível salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!salva) return <Skeleton className="h-48 w-full rounded-xl" />
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white">
+      <div className="border-b border-gray-100 px-4 py-3">
+        <h3 className="text-sm font-semibold text-gray-800">Desconto por indicação</h3>
+        <p className="text-[12px] text-gray-500">
+          Quando o indicado paga a 2ª mensalidade, quem indicou ganha um desconto que entra sozinho na próxima renovação. Vale para os dois softwares.
+        </p>
+      </div>
+      <div className="space-y-4 px-4 py-4">
+        <div className="space-y-1">
+          <label htmlFor="ind-pct" className="text-[13px] font-medium text-gray-800">Cada indicado vale</label>
+          <div className="flex items-center gap-2">
+            <Input id="ind-pct" value={pct} onChange={(e) => setPct(e.target.value.replace(/[^\d,]/g, ''))} inputMode="decimal" className="w-24 text-right tabular-nums" />
+            <span className="text-[13px] text-gray-500">% de uma mensalidade</span>
+          </div>
+          <p className="text-[12px] text-gray-500">
+            {pctOk && mensalidade
+              ? `Hoje dá ${reais(Math.round(mensalidade * pctLido / 100))} por indicado (mensalidade de ${reais(mensalidade)}). 100% = a mensalidade inteira grátis.`
+              : '100% = a mensalidade inteira grátis. Mudar não mexe nos descontos que já foram ganhos.'}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="ind-meses" className="text-[13px] font-medium text-gray-800">No plano semestral ou anual, o indicado precisa ter pago</label>
+          <div className="flex items-center gap-2">
+            <Input id="ind-meses" value={meses} onChange={(e) => setMeses(e.target.value.replace(/\D/g, ''))} inputMode="numeric" className="w-20 text-right tabular-nums" />
+            <span className="text-[13px] text-gray-500">meses</span>
+          </div>
+          <p className="text-[12px] text-gray-500">No mensal, vale 1 desconto por mês. No semestral/anual, entram de uma vez os de indicados que já pagaram esse mínimo.</p>
+        </div>
+        {(!pctOk || !mesesOk) && <p className="text-[12px] text-rose-600">{!pctOk ? 'A porcentagem vai de 1 a 100.' : 'O mínimo vai de 1 a 24 meses.'}</p>}
+      </div>
+      {mudou && (
+        <div className="flex justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
+          <Button variant="ghost" size="sm" disabled={salvando}
+            onClick={() => { setPct(String(salva.bonusPct).replace('.', ',')); setMeses(String(salva.mesesParaRenovacao)) }}>
+            Descartar
+          </Button>
+          <Button size="sm" onClick={salvar} disabled={salvando}>{salvando && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Salvar</Button>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -377,7 +472,7 @@ export function PainelDescontos() {
   const [envios, setEnvios] = useState<EnvioAdmin[]>([])
   const [premios, setPremios] = useState<PremioAdmin[]>([])
   const [missoes, setMissoes] = useState<Missao[]>([])
-  const [config, setConfig] = useState<ConfigDosVideos>({ saldoPct: 50, maxPorAno: 6 })
+  const [config, setConfig] = useState<ConfigDosVideos>({ saldoPct: 50, maxPorAno: 6, periodoMeses: 12 })
   const [mensalidade, setMensalidade] = useState<number | null>(null)
   const [filtro, setFiltro] = useState<(typeof FILTROS)[number]['chave']>('todos')
   const [vista, setVista] = useState<'recebidos' | 'missoes'>('recebidos')
@@ -456,7 +551,7 @@ export function PainelDescontos() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <Numero rotulo="Saldo por vídeo aprovado" valor={saldoPorVideo != null ? reais(saldoPorVideo) : `${String(config.saldoPct).replace('.', ',')}%`} detalhe={`${String(config.saldoPct).replace('.', ',')}% de uma mensalidade`} />
-                  <Numero rotulo="Limite por conta" valor={config.maxPorAno == null ? 'Sem limite' : `${config.maxPorAno} por ano`} />
+                  <Numero rotulo="Limite por conta" valor={config.maxPorAno == null ? 'Sem limite' : `${config.maxPorAno} por ${nomeDoPeriodo(config.periodoMeses)}`} />
                   <Numero rotulo={`Aprovados em ${anoAtual}`} valor={String(aprovadosNoAno)} detalhe="somando todas as contas" />
                   <Numero rotulo="Para revisar" valor={String(paraRevisar)} detalhe={paraRevisar ? 'a IA não conseguiu decidir' : 'nada parado'} />
                 </div>
@@ -567,11 +662,7 @@ export function PainelDescontos() {
           </TabsContent>
 
           <TabsContent value="indicacao">
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-              <UserPlus className="mx-auto mb-3 h-8 w-8 text-gray-300" />
-              <p className="text-sm font-medium text-gray-700">Desconto por indicação</p>
-              <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-gray-500">A regra ainda vai ser definida. Quando estiver pronta, a configuração fica aqui.</p>
-            </div>
+            <ConfigIndicacao mensalidade={mensalidade} />
           </TabsContent>
         </Tabs>
       </div>

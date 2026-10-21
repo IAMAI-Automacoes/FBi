@@ -9,6 +9,9 @@
  *     15% por 12 meses);
  *   - se o indicado cancelar, a comissão acaba; depois dos Z meses, a
  *     mensalidade fica toda com a empresa.
+ * A mensalidade da comissão é a LÍQUIDA (decisão do Caio, 21/10/2026): o que
+ * o Asaas entrega (sem a taxa dele) menos os nossos custos (`comissao_custos`).
+ * O servidor faz a mesma conta em supabase/functions/_shared/asaas/regras.ts.
  * No Restaurante, o vendedor também pode ter o acesso de demonstração (código
  * no Perfil, pula o WhatsApp), que é marcado pelo e-mail (tabela `vendedores`).
  */
@@ -39,13 +42,36 @@ export const reais = (centavos: number) =>
 
 /** A regra em uma frase, para o card e para a lista. */
 export function textoDaRegra(r: RegraDeComissao): string {
-  const entrada = r.entradaPct === 100 ? 'a mensalidade cheia' : `${pct(r.entradaPct)} de uma mensalidade`
+  const entrada = r.entradaPct === 100 ? 'a mensalidade líquida inteira' : `${pct(r.entradaPct)} da mensalidade líquida`
   if (!r.recorrentePct || !r.recorrenteMeses) return `${entrada.charAt(0).toUpperCase()}${entrada.slice(1)} quando o indicado paga a 2ª mensalidade.`
   const meses = r.recorrenteMeses === 1 ? '1 mês' : `${r.recorrenteMeses} meses`
-  return `${entrada.charAt(0).toUpperCase()}${entrada.slice(1)} quando o indicado paga a 2ª mensalidade, depois ${pct(r.recorrentePct)} de cada mensalidade por ${meses}.`
+  return `${entrada.charAt(0).toUpperCase()}${entrada.slice(1)} quando o indicado paga a 2ª mensalidade, depois ${pct(r.recorrentePct)} de cada mensalidade líquida por ${meses}.`
 }
 
-/** Quanto um indicado mensal que fica rende ao vendedor, com a mensalidade dada (em centavos). */
+// ── Os nossos custos, que saem antes da comissão ───────────────────────────
+
+export interface CustoDaComissao {
+  id: string
+  nome: string
+  /** 'valor' = R$ por mês (em reais); 'porcentagem' = % do valor recebido. */
+  tipo: 'valor' | 'porcentagem'
+  valor: number
+  ativo: boolean
+}
+
+/**
+ * A mensalidade líquida da comissão: o valor recebido no mês menos os custos
+ * de % (sobre ele) e depois os de R$. `recebidoCentavos` é o que o Asaas
+ * entrega (no exemplo da tela, o preço — a taxa do Asaas ainda sai).
+ */
+export function mensalidadeLiquida(recebidoCentavos: number, custos: readonly Pick<CustoDaComissao, 'tipo' | 'valor' | 'ativo'>[]): number {
+  const ativos = custos.filter((c) => c.ativo)
+  const pctTotal = Math.min(100, ativos.filter((c) => c.tipo === 'porcentagem').reduce((s, c) => s + (Number(c.valor) || 0), 0))
+  const fixo = ativos.filter((c) => c.tipo === 'valor').reduce((s, c) => s + Math.round((Number(c.valor) || 0) * 100), 0)
+  return Math.max(0, Math.round(recebidoCentavos * (1 - pctTotal / 100) - fixo))
+}
+
+/** Quanto um indicado mensal que fica rende ao vendedor, com a mensalidade líquida dada (em centavos). */
 export function exemploDaRegra(r: RegraDeComissao, mensalidadeCentavos: number): { entrada: number; porMes: number; total: number } {
   const entrada = Math.round(mensalidadeCentavos * r.entradaPct / 100)
   const porMes = Math.round(mensalidadeCentavos * r.recorrentePct / 100)

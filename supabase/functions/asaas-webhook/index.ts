@@ -24,15 +24,18 @@ import { clienteAdmin } from '../_shared/auth.ts'
 import { json } from '../_shared/cors.ts'
 import { asaas, ErroAsaas, removerNoAsaas, type ClienteAsaas } from '../_shared/asaas/cliente.ts'
 import { acharAssinatura, espelharPagamento } from '../_shared/asaas/espelho.ts'
+import { garantirComissao } from '../_shared/asaas/comissao.ts'
+import { confirmarSaldoDoVideo, descontoDoVendedor, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
 import {
   centavos,
   contaValida,
+  corpoDoPut,
+  espacoParaSaldo,
   pagamentoAtrasado,
   pagamentoEstornado,
   pagamentoPago,
   periodoFimParcelado,
   periodoFimRecorrente,
-  reais,
   tokenIgual,
   valorComMesesGratis,
   type Ciclo,
@@ -161,16 +164,21 @@ async function aoMudarPagamento(db: Db, contaId: string, evento: Evento) {
     return
   }
 
-  // Renovação de recorrente ainda em aberto: os meses grátis de indicação entram nela.
+  // Renovação de recorrente ainda em aberto: os meses grátis de indicação, o
+  // saldo dos vídeos e o desconto do código do vendedor entram nela.
   if (evento.event === 'PAYMENT_CREATED' && a.modalidade === 'recorrente' && pag.status === 'PENDING' && !pag.deleted) {
     pag = await aplicarBonus(db, cli, a, pag)
+    if (!pag.deleted) pag = await aplicarSaldoEVendedor(db, cli, a, pag)
   }
 
   const linha = await espelharPagamento(db, contaId, a, pag)
 
-  // Cobrança removida ou estornada sem ser paga: os bônus que estavam nela
-  // voltam para a fila (o mês grátis que nós removemos já foi marcado usado).
-  if (pag.deleted || pagamentoEstornado(pag.status)) await soltarBonus(db, pag.id)
+  // Cobrança removida ou estornada sem ser paga: os bônus e o saldo de vídeo
+  // que estavam nela voltam (o mês grátis que nós removemos já foi marcado usado).
+  if (pag.deleted || pagamentoEstornado(pag.status)) {
+    await soltarBonus(db, pag.id)
+    await soltarSaldoDoVideo(db, String(pag.id))
+  }
 
   if (pagamentoPago(pag.status) && !pag.deleted) {
     await aoPagar(db, a, linha, pag)
@@ -182,6 +190,7 @@ async function aoMudarPagamento(db: Db, contaId: string, evento: Evento) {
       const caminho = a.modalidade === 'recorrente' ? `/subscriptions/${a.asaas_id}` : `/installments/${a.asaas_id}`
       if (a.asaas_id) await removerNoAsaas(cli, caminho)
       await db.from('cobranca_assinaturas').update({ status: 'expirada', atualizada_em: agora() }).eq('id', a.id)
+      await soltarSaldoDoVideo(db, String(a.id))
     }
     // Só a recorrente vira inadimplente. Parcela atrasada do parcelado não
     // tira o período já liberado (o cartão do cliente segue sendo cobrado).
@@ -191,6 +200,9 @@ async function aoMudarPagamento(db: Db, contaId: string, evento: Evento) {
   } else if (pagamentoEstornado(pag.status)) {
     await aoEstornar(db, cli, a, pag)
   }
+
+  // Comissão do vendedor (split). Erro do Asaas fica registrado e não derruba o evento.
+  await garantirComissao(db, cli, a, pag)
 
   if (a.restaurante_id) await aplicar(db, a.restaurante_id)
 }
@@ -244,8 +256,9 @@ async function aoPagar(db: Db, a: any, linha: any, pag: any) {
     await db.from('indicacao_premios').update({ status: 'aplicado', aplicado_em: agora(), aplicado_por: 'asaas' })
       .eq('id', linha.premio_id).eq('status', 'pendente')
   }
-  // Meses grátis de indicação abatidos nesta cobrança: usados.
+  // Meses grátis de indicação e saldo de vídeo abatidos nesta cobrança: usados.
   await confirmarBonus(db, pag.id)
+  await confirmarSaldoDoVideo(db, String(pag.id), String(a.id))
 
   // Indicações: 1ª mensalidade e, no 2º mês pago, o benefício de quem indicou.
   if (a.restaurante_id) {
@@ -298,7 +311,8 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
     p_pagamento: String(pag.id),
   })
   if (error) throw new Error(`indicacao_reservar_bonus: ${error.message}`)
-  const meses = Number(r?.meses ?? 0)
+  // Cada bônus vale a % de uma mensalidade com que nasceu (`bonus_pct`, padrão 100).
+  const meses = r?.pct != null ? Number(r.pct) / 100 : Number(r?.meses ?? 0)
   // Nenhum bônus valeu, ou evento repetido (o abatimento já foi feito).
   if (!(meses > 0) || r?.repetido) return pag
 
@@ -311,7 +325,7 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
 
   if (novo > 0) {
     try {
-      return await cli.put(`/payments/${pag.id}`, { value: reais(novo) })
+      return await cli.put(`/payments/${pag.id}`, corpoDoPut(pag, { valorCentavos: novo }))
     } catch (e) {
       await soltarBonus(db, pag.id).catch(() => {})
       throw e
@@ -345,6 +359,51 @@ async function soltarBonus(db: Db, pagamentoId: unknown) {
   if (error) throw new Error(`indicacao_soltar_bonus: ${error.message}`)
 }
 
+/**
+ * Saldo dos vídeos aprovados e desconto do código do vendedor nesta renovação
+ * (a compra já sai com eles de `criar-cobranca`). Vem depois dos meses grátis.
+ * Uma vez só por cobrança: as colunas `desconto_vendedor_centavos` e
+ * `saldo_video_centavos` preenchidas = já foi feito (evento repetido).
+ */
+// deno-lint-ignore no-explicit-any
+async function aplicarSaldoEVendedor(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<any> {
+  if (!a.restaurante_id) return pag
+  // A linha da cobrança existe antes da reserva (a reserva solta as de cobrança que não está em aberto).
+  const linha = await espelharPagamento(db, cli.contaId, a, pag)
+  if (linha.desconto_vendedor_centavos != null || linha.saldo_video_centavos != null) return pag
+
+  const { count: pagas } = await db
+    .from('cobranca_pagamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('assinatura_id', a.id)
+    .in('status', ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH'])
+  if (!pagas) return pag
+
+  const atual = centavos(pag.value)
+  let novo = atual
+  const pct = await descontoDoVendedor(db, a.restaurante_id, { compra: false, excluirPagamento: String(pag.id) })
+  if (pct > 0) novo = Math.max(500, atual - Math.round((Number(a.valor_centavos) * pct) / 100))
+  const descontoVendedor = atual - novo
+
+  const saldo = await reservarSaldoDoVideo(db, a.restaurante_id, String(pag.id), espacoParaSaldo(novo))
+  if (!saldo.repetido) novo -= saldo.centavos
+
+  // Marca antes de mudar no Asaas: se a função morrer depois do PUT, o evento
+  // repetido não desconta de novo.
+  await espelharPagamento(db, cli.contaId, a, pag, {
+    desconto_vendedor_centavos: descontoVendedor,
+    saldo_video_centavos: saldo.repetido ? 0 : saldo.centavos,
+  })
+  if (novo >= atual) return pag
+  try {
+    return await cli.put(`/payments/${pag.id}`, corpoDoPut(pag, { valorCentavos: novo }))
+  } catch (e) {
+    await espelharPagamento(db, cli.contaId, a, pag, { desconto_vendedor_centavos: null, saldo_video_centavos: null }).catch(() => {})
+    await soltarSaldoDoVideo(db, String(pag.id)).catch(() => {})
+    throw e
+  }
+}
+
 /** Mês grátis: o período da assinatura anda como se a cobrança tivesse sido paga. */
 // deno-lint-ignore no-explicit-any
 async function andarPeriodo(db: Db, a: any, pag: any) {
@@ -376,6 +435,7 @@ async function aoMudarAssinatura(db: Db, contaId: string, tipo: string, subId: s
         atualizada_em: agora(),
       })
       .eq('id', a.id)
+    if (a.status === 'aguardando') await soltarSaldoDoVideo(db, String(a.id))
   }
   if (a.restaurante_id) await aplicar(db, a.restaurante_id)
 }

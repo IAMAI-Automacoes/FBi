@@ -2,7 +2,7 @@
  * Testes de Admin → Vendedores (src/lib/vendedores.ts).
  *   node --experimental-strip-types src/lib/__testes__/vendedores.teste.ts
  */
-import { exemploDaRegra, juntarVendedores, problemaDaRegra, REGRA_PADRAO, reais, textoDaRegra } from '../vendedores.ts'
+import { exemploDaRegra, juntarVendedores, mensalidadeLiquida, problemaDaRegra, REGRA_PADRAO, reais, textoDaRegra } from '../vendedores.ts'
 
 let falhas = 0
 function ok(nome: string, cond: boolean, detalhe?: unknown) {
@@ -15,11 +15,19 @@ function ok(nome: string, cond: boolean, detalhe?: unknown) {
 
 // ── A regra ──────────────────────────────────────────────────────────────────
 ok('padrão: mensalidade cheia na 2ª, depois 15% por 12 meses', REGRA_PADRAO.entradaPct === 100 && REGRA_PADRAO.recorrentePct === 15 && REGRA_PADRAO.recorrenteMeses === 12)
-ok('texto do padrão', textoDaRegra(REGRA_PADRAO) === 'A mensalidade cheia quando o indicado paga a 2ª mensalidade, depois 15% de cada mensalidade por 12 meses.', textoDaRegra(REGRA_PADRAO))
-ok('texto com outra %', textoDaRegra({ entradaPct: 50, recorrentePct: 10, recorrenteMeses: 1 }) === '50% de uma mensalidade quando o indicado paga a 2ª mensalidade, depois 10% de cada mensalidade por 1 mês.')
-ok('texto sem recorrente', textoDaRegra({ entradaPct: 100, recorrentePct: 15, recorrenteMeses: 0 }) === 'A mensalidade cheia quando o indicado paga a 2ª mensalidade.')
+ok('texto do padrão', textoDaRegra(REGRA_PADRAO) === 'A mensalidade líquida inteira quando o indicado paga a 2ª mensalidade, depois 15% de cada mensalidade líquida por 12 meses.', textoDaRegra(REGRA_PADRAO))
+ok('texto com outra %', textoDaRegra({ entradaPct: 50, recorrentePct: 10, recorrenteMeses: 1 }) === '50% da mensalidade líquida quando o indicado paga a 2ª mensalidade, depois 10% de cada mensalidade líquida por 1 mês.')
+ok('texto sem recorrente', textoDaRegra({ entradaPct: 100, recorrentePct: 15, recorrenteMeses: 0 }) === 'A mensalidade líquida inteira quando o indicado paga a 2ª mensalidade.')
 const ex = exemploDaRegra(REGRA_PADRAO, 19700)
 ok('exemplo com R$ 197: R$ 197 + 12 × R$ 29,55 = R$ 551,60', ex.entrada === 19700 && ex.porMes === 2955 && ex.total === 55160, ex)
+// Mensalidade líquida = recebido − custos de % − custos em R$ (decisão do Caio, 21/10/2026).
+const custos = [
+  { tipo: 'porcentagem' as const, valor: 6, ativo: true },
+  { tipo: 'valor' as const, valor: 20, ativo: true },
+  { tipo: 'valor' as const, valor: 99, ativo: false },
+]
+ok('líquida: R$ 197 − 6% − R$ 20 = R$ 165,18 (custo desligado não conta)', mensalidadeLiquida(19700, custos) === 16518, mensalidadeLiquida(19700, custos))
+ok('líquida sem custos = o recebido; nunca negativa', mensalidadeLiquida(19700, []) === 19700 && mensalidadeLiquida(1000, [{ tipo: 'valor', valor: 50, ativo: true }]) === 0)
 ok('reais no formato brasileiro', reais(55160) === 'R$ 551,60' && reais(2955) === 'R$ 29,55', [reais(55160), reais(2955)])
 ok('regra boa passa', problemaDaRegra(REGRA_PADRAO) === null)
 ok('regra fora dos limites não passa', [

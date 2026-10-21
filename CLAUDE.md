@@ -145,8 +145,22 @@ acesso é o `asaas-webhook`. Detalhes em `supabase/migrations/20261029100000_cob
   `ASAAS_CONTA_MEI_API_KEY`, `ASAAS_CONTA_MEI_AMBIENTE` (`sandbox`|`producao`),
   `ASAAS_CONTA_MEI_WEBHOOK_TOKEN`. Sandbox → produção = trocar os secrets e
   rodar a limpeza comentada no fim da migration (o banco é o mesmo).
-- Descontos (padrão provisório, a confirmar com o Raver; `_shared/asaas/regras.ts`):
-  cupom na 1ª cobrança; bônus de indicação em uma mensalidade da próxima renovação.
+- Descontos (`POLITICA_DESCONTOS` em `_shared/asaas/regras.ts`; fase 2, migration
+  `20261101000000_asaas_comissoes_e_descontos.sql`):
+  - 1ª cobrança: o maior entre cupom e o desconto do código do vendedor
+    (`afiliados.desconto_pct` nas `desconto_cobrancas` primeiras), depois o saldo
+    dos vídeos aprovados (`video_premios.valor_centavos`, reservado pelo pedido);
+  - renovação recorrente (`PAYMENT_CREATED`): meses grátis de indicação
+    (`indicacao_config.bonus_pct` de uma mensalidade cada), depois saldo de vídeo
+    e desconto do vendedor. Nunca abaixo de R$ 5 (mínimo do Asaas);
+  - `PUT /payments/{id}` exige `billingType`, `value` e `dueDate`: usar `corpoDoPut`.
+- Comissão do vendedor = split do Asaas (`_shared/asaas/comissao.ts`): em cada
+  evento de cobrança de um indicado por vendedor, calcula pela regra de
+  `afiliado_config` (mês 2 = entrada; meses 3..2+Z = recorrente; os meses vêm de
+  `cobranca_meses_do_pagamento`) SEMPRE sobre a mensalidade líquida = o líquido
+  do Asaas no mês − os nossos custos (`comissao_custos`, % e R$/mês, por software), põe o split para `afiliados.asaas_wallet_id` e
+  grava `cobranca_comissoes`. Erro do Asaas no split NÃO derruba o evento (fica
+  `erro`, pagar à mão em Admin → Vendedores). Sem walletId = `sem_carteira`.
 - Inadimplente paga a fatura vencida, nunca assina de novo. Excluir conta
   remove a assinatura no Asaas antes; se falhar, não exclui.
 - Depois de várias falhas seguidas o Asaas PAUSA a fila do webhook: conferir

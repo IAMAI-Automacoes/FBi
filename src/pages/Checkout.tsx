@@ -11,6 +11,7 @@ import { CampoIndicacao, conferirCodigoIndicacao } from '@/components/compra/Cam
 import { usePrecos } from '@/hooks/use-precos'
 import { useArea } from '@/lib/area'
 import { buscarDocumentoSalvo, criarCheckout, ErroCobranca, type Modalidade } from '@/lib/queries/cobranca'
+import { buscarDescontoDoCodigo } from '@/lib/queries/indicacoes'
 import { documentoValido, somenteDigitos } from '../../supabase/functions/_shared/asaas/regras.ts'
 
 /** 52998224725 → 529.982.247-25; 14 dígitos → 00.000.000/0000-00. */
@@ -53,6 +54,17 @@ export default function Checkout() {
   const [documento, setDocumento] = useState('')
   // Código de indicação: começa vazio (o do link fica guardado sem aparecer).
   const [codigoIndicacao, setCodigoIndicacao] = useState('')
+  // O desconto que o código digitado dá (código de vendedor); entra sozinho na fatura.
+  const [descontoCodigo, setDescontoCodigo] = useState<{ pct: number; cobrancas: number } | null>(null)
+  useEffect(() => {
+    setDescontoCodigo(null)
+    if (codigoIndicacao.trim().length < 2) return
+    let vivo = true
+    const t = setTimeout(() => {
+      buscarDescontoDoCodigo(codigoIndicacao).then((d) => { if (vivo) setDescontoCodigo(d.pct > 0 ? d : null) })
+    }, 400)
+    return () => { vivo = false; clearTimeout(t) }
+  }, [codigoIndicacao])
   const [aceite, setAceite] = useState(false)
   useEffect(() => {
     let vivo = true
@@ -315,8 +327,14 @@ export default function Checkout() {
             valor={codigoIndicacao}
             onChange={(v) => { setCodigoIndicacao(v); setErro(null) }}
             disabled={enviando}
-            marginBottom="18px"
+            marginBottom={descontoCodigo ? '8px' : '18px'}
           />
+          {descontoCodigo && (
+            <p style={{ fontSize: '12.5px', fontWeight: 600, color: '#047857', margin: '0 0 18px 4px' }}>
+              Este código dá {String(descontoCodigo.pct).replace('.', ',')}% de desconto
+              {descontoCodigo.cobrancas > 1 ? ` nas ${descontoCodigo.cobrancas} primeiras cobranças` : ' na primeira cobrança'}. Já sai na fatura.
+            </p>
+          )}
 
           <label htmlFor="documento" style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: cores.corpoForte, marginBottom: '6px' }}>
             CPF ou CNPJ de quem paga

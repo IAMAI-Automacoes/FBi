@@ -208,7 +208,7 @@ ok('login sem restaurante: recusa', r.status === 403 && r.corpo.motivo === 'sem_
 // Aprovados em missões que já saíram da fila (11 a 14).
 const aprovadosEsteAno = [1, 2, 3, 4].map((i) => ({ ...envioC(`a${i}`, 'aprovado', { missao_id: 10 + i, criado_em: '2026-02-01T00:00:00Z' }), aprovado_em: '2026-02-02T00:00:00Z' }))
 r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno }).deps)
-ok('limite do ano (4 aprovados): recusa com a mensagem', r.status === 409 && r.corpo.motivo === 'limite_ano' && String(r.corpo.error).includes('janeiro'))
+ok('limite do ano (4 aprovados): recusa com a mensagem', r.status === 409 && r.corpo.motivo === 'limite_ano' && String(r.corpo.error).includes('próximo'))
 r = await tratarVideos(pedido, cenario({ doAno: aprovadosEsteAno, maxPorAno: null }).deps)
 ok('sem limite configurado: deixa', r.status === 200)
 r = await tratarVideos({ ...pedido, missao_id: 3 }, cenario().deps)

@@ -68,6 +68,10 @@ Deno.serve(async (req: Request) => {
       const { data } = await db.from('video_config').select('max_por_ano').eq('area', areaDaConta).maybeSingle()
       return data?.max_por_ano ?? null
     },
+    periodoMeses: async () => {
+      const { data } = await db.from('video_config').select('periodo_meses').eq('area', areaDaConta).maybeSingle()
+      return Number(data?.periodo_meses) || 12
+    },
     descartarAbandonados: async (restauranteId, missaoId) => {
       const { data } = await db.from('video_envios').select('id, caminho')
         .eq('restaurante_id', restauranteId).eq('missao_id', missaoId).eq('status', 'enviando')

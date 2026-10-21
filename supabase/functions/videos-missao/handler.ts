@@ -14,7 +14,7 @@
 // O prêmio (degrau da escada) quem dá é o banco, quando o envio vira aprovado.
 
 import {
-  ANALISE_TRAVADA_MS, caminhoDoEnvio, contagemDoAno, decidirResultado, hojeSP, inicioDoAnoSP, MENSAGENS_RECUSA,
+  ANALISE_TRAVADA_MS, caminhoDoEnvio, contagemDoAno, decidirResultado, hojeSP, inicioDoPeriodoSP, MENSAGENS_RECUSA,
   mimeDoVideo, podeEnviar, proximaMissao, type EnvioDaFila, type Missao, type MissaoNaFila, type MotivoRecusa,
 } from '../_shared/videos-missao.ts'
 
@@ -46,8 +46,10 @@ export interface DepsVideos {
   missoes: () => Promise<MissaoNaFila[]>
   /** Todos os envios do restaurante, de todas as missões e anos. */
   enviosDoRestaurante: (restauranteId: number) => Promise<EnvioDaFila[]>
-  /** Vídeos aprovados por ano, por restaurante (video_config); null = sem limite. */
+  /** Vídeos aprovados por período, por restaurante (video_config); null = sem limite. */
   maxPorAno: () => Promise<number | null>
+  /** O período do limite em meses (12 = ano, 6 = semestre, 3 = trimestre). Sem = ano. */
+  periodoMeses?: () => Promise<number>
   /** Envios que ficaram em "enviando" (o upload não terminou): apaga linha e arquivo. */
   descartarAbandonados: (restauranteId: number, missaoId: number) => Promise<void>
   criarEnvio: (linha: Record<string, unknown>) => Promise<void>
@@ -133,14 +135,14 @@ export async function tratarVideos(corpo: Record<string, unknown>, deps: DepsVid
       const duracao = Number.isFinite(duracaoBruta) && duracaoBruta > 0 ? Math.round(duracaoBruta * 100) / 100 : null
       const agora = deps.agora()
       const hoje = hojeSP(agora)
-      const [todos, fila, maxPorAno] = missao
-        ? await Promise.all([deps.enviosDoRestaurante(quem.restauranteId), deps.missoes(), deps.maxPorAno()])
-        : [[], [], null] as [EnvioDaFila[], MissaoNaFila[], number | null]
+      const [todos, fila, maxPorAno, periodoMeses] = missao
+        ? await Promise.all([deps.enviosDoRestaurante(quem.restauranteId), deps.missoes(), deps.maxPorAno(), deps.periodoMeses?.() ?? 12])
+        : [[], [], null, 12] as [EnvioDaFila[], MissaoNaFila[], number | null, number]
       const pode = podeEnviar({
         missao,
         envios: todos.filter((e) => e.missao_id === missaoId),
         proximaId: proximaMissao(fila, todos, hoje)?.id ?? null,
-        ano: contagemDoAno(todos, inicioDoAnoSP(agora), agora),
+        ano: contagemDoAno(todos, inicioDoPeriodoSP(agora, periodoMeses), agora),
         maxPorAno, hoje, mime, tamanho, duracao, autorizou: corpo.autorizou_uso === true, agora,
       })
       if (pode.ok === false) return recusaDaMissao(pode.motivo)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ArrowLeft, Briefcase, Copy, Loader2, Plus, Presentation, Trash2 } from 'lucide-react'
+import { ArrowLeft, Briefcase, Copy, Loader2, Plus, Presentation, Trash2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -15,12 +15,18 @@ import { useArea } from '@/lib/area'
 import { DEFINICOES, type Area } from '@/lib/areas'
 import { codigoParaCopia } from '@/lib/indicacoes'
 import { codigoDoBanco, nomeDoBanco } from '@/lib/pagamentos'
-import { buscarAfiliados, buscarCodigosDeAfiliado, atualizarAfiliado, criarAfiliado, excluirAfiliado, type Afiliado } from '@/lib/queries/admin'
+import {
+  buscarAfiliados, buscarCodigosDeAfiliado, buscarComissoes, atualizarAfiliado, criarAfiliado, excluirAfiliado, marcarComissaoPaga, type Afiliado, type Comissao,
+} from '@/lib/queries/admin'
 import { buscarPrecos } from '@/lib/queries/cobranca'
 import { buscarVendedores, definirVendedor } from '@/lib/queries/demo'
-import { buscarNumerosDosAfiliados, buscarRegraDeComissao, salvarRegraDeComissao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
 import {
-  exemploDaRegra, juntarVendedores, problemaDaRegra, reais, REGRA_PADRAO, textoDaRegra, type MarcaDeDemo, type RegraDeComissao, type Vendedor,
+  buscarCustosDaComissao, buscarNumerosDosAfiliados, buscarRegraDeComissao, criarCustoDaComissao, excluirCustoDaComissao, mudarCustoDaComissao,
+  salvarRegraDeComissao, type NumerosDoAfiliado,
+} from '@/lib/queries/indicacoes'
+import {
+  exemploDaRegra, juntarVendedores, mensalidadeLiquida, problemaDaRegra, reais, REGRA_PADRAO, textoDaRegra,
+  type CustoDaComissao, type MarcaDeDemo, type RegraDeComissao, type Vendedor,
 } from '@/lib/vendedores'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +35,10 @@ import { cn } from '@/lib/utils'
    venda e ganha comissão pela regra do software (no topo). No Restaurante,
    o vendedor também pode ter o acesso de demonstração (código no Perfil, pula
    o WhatsApp, paga com o VENDEDOR100), marcado pelo e-mail. A conta EasyFeed
-   que indica outra (padrinho) não é vendedor: o desconto dela é em Descontos. */
+   que indica outra (padrinho) não é vendedor: o desconto dela é em Descontos.
+   Fase 2 do Asaas (20/10/2026): a comissão vai por split para a conta Asaas
+   do vendedor (walletId), e cada vendedor tem o desconto de quem compra com o
+   código dele. A lista de comissões fica no fim da página. */
 
 const CORES = ['bg-blue-500', 'bg-violet-500', 'bg-emerald-500', 'bg-orange-500', 'bg-rose-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500']
 function cor(texto: string) {
@@ -53,10 +62,85 @@ function CampoNumero({ id, valor, aoMudar, sufixo, largura = 'w-20' }: { id: str
   )
 }
 
+// ── Os nossos custos (saem antes da comissão) ────────────────────────────────
+
+function CustosDaComissao({ area, custos, aoMudar }: { area: Area; custos: CustoDaComissao[]; aoMudar: () => void }) {
+  const [nome, setNome] = useState('')
+  const [valor, setValor] = useState('')
+  const [tipo, setTipo] = useState<CustoDaComissao['tipo']>('valor')
+  const [mexendo, setMexendo] = useState<string | null>(null)
+
+  const lido = Number(valor.replace(',', '.'))
+  const ok = nome.trim() !== '' && valor.trim() !== '' && Number.isFinite(lido) && lido >= 0 && (tipo === 'valor' || lido <= 100)
+  const rotulo = (c: Pick<CustoDaComissao, 'tipo' | 'valor'>) =>
+    c.tipo === 'porcentagem' ? `${String(c.valor).replace('.', ',')}% do recebido` : `${reais(Math.round(c.valor * 100))} por mês`
+
+  const fazer = async (chave: string, acao: () => Promise<void>, erro: string) => {
+    setMexendo(chave)
+    try {
+      await acao()
+      aoMudar()
+    } catch {
+      toast.error(erro)
+    } finally {
+      setMexendo(null)
+    }
+  }
+  const adicionar = () => {
+    if (!ok) return
+    fazer('novo', async () => {
+      await criarCustoDaComissao(area, { nome: nome.trim(), tipo, valor: Math.round(lido * 100) / 100 })
+      setNome('')
+      setValor('')
+    }, 'Não foi possível adicionar o custo.')
+  }
+
+  return (
+    <div className="space-y-2 border-t border-gray-100 px-4 py-3">
+      <p className="text-[12.5px] font-medium text-gray-800">Nossos custos <span className="font-normal text-gray-500">· saem antes da comissão</span></p>
+      {custos.length === 0 ? (
+        <p className="text-[12px] text-gray-500">Nenhum custo: a comissão é sobre tudo o que o Asaas entrega.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+          {custos.map((c) => (
+            <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
+              <span className={cn('min-w-0 flex-1 truncate', c.ativo ? 'text-gray-800' : 'text-gray-400 line-through')}>{c.nome}</span>
+              <span className="whitespace-nowrap tabular-nums text-gray-600">{rotulo(c)}</span>
+              <Switch checked={c.ativo} disabled={mexendo === c.id} aria-label={`Custo ${c.nome} ligado`}
+                onCheckedChange={(v) => fazer(c.id, () => mudarCustoDaComissao(c.id, { ativo: v }), 'Não foi possível mudar o custo.')} />
+              <button type="button" title="Excluir" disabled={mexendo === c.id}
+                onClick={() => fazer(c.id, () => excluirCustoDaComissao(c.id), 'Não foi possível excluir o custo.')}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-rose-600">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input aria-label="Nome do custo" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: servidor, WhatsApp, imposto" className="h-9 min-w-0 flex-1 basis-48" />
+        <Input aria-label="Valor do custo" value={valor} onChange={(e) => setValor(e.target.value.replace(/[^\d,]/g, ''))} inputMode="decimal" placeholder="0" className="h-9 w-24 text-right tabular-nums" />
+        <div className="inline-flex rounded-lg bg-gray-100 p-1" role="group" aria-label="Tipo do custo">
+          {([['valor', 'R$ por mês'], ['porcentagem', '% do recebido']] as const).map(([t, r]) => (
+            <button key={t} type="button" onClick={() => setTipo(t)} aria-pressed={tipo === t}
+              className={cn('rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors', tipo === t ? 'bg-white text-[#1D4ED8] shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
+              {r}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" variant="outline" onClick={adicionar} disabled={!ok || mexendo === 'novo'}>
+          {mexendo === 'novo' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />} Adicionar
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function RegraDaComissao({ area }: { area: Area }) {
   const [salva, setSalva] = useState<RegraDeComissao | null>(null)
   const [texto, setTexto] = useState({ entrada: '', recorrente: '', meses: '' })
   const [mensalidade, setMensalidade] = useState<number | null>(null)
+  const [custos, setCustos] = useState<CustoDaComissao[]>([])
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
@@ -66,13 +150,16 @@ function RegraDaComissao({ area }: { area: Area }) {
       setTexto({ entrada: String(r.entradaPct).replace('.', ','), recorrente: String(r.recorrentePct).replace('.', ','), meses: String(r.recorrenteMeses) })
     })
     buscarPrecos(area).then((p) => setMensalidade(p.find((x) => x.ciclo === 'mensal')?.total_centavos ?? null)).catch(() => setMensalidade(null))
+    buscarCustosDaComissao(area).then(setCustos).catch(() => setCustos([]))
   }, [area])
 
   const ler = (t: string) => (t.trim() === '' ? Number.NaN : Number(t.replace(',', '.')))
   const regra: RegraDeComissao = { entradaPct: ler(texto.entrada), recorrentePct: ler(texto.recorrente), recorrenteMeses: ler(texto.meses) }
   const problema = problemaDaRegra(regra)
   const mudou = !!salva && !problema && (regra.entradaPct !== salva.entradaPct || regra.recorrentePct !== salva.recorrentePct || regra.recorrenteMeses !== salva.recorrenteMeses)
-  const exemplo = mensalidade && !problema ? exemploDaRegra(regra, mensalidade) : null
+  // O exemplo usa o preço menos os custos; a taxa do Asaas ainda sai do valor de verdade.
+  const liquida = mensalidade ? mensalidadeLiquida(mensalidade, custos) : null
+  const exemplo = liquida != null && !problema ? exemploDaRegra(regra, liquida) : null
 
   const salvar = async () => {
     setSalvando(true)
@@ -92,28 +179,32 @@ function RegraDaComissao({ area }: { area: Area }) {
     <section className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-4 py-3">
         <h3 className="text-sm font-semibold text-gray-800">Comissão dos vendedores</h3>
-        <p className="text-[12px] text-gray-500">Vale para todos os vendedores do {DEFINICOES[area].nome}. Se o indicado cancelar, a comissão acaba.</p>
+        <p className="text-[12px] text-gray-500">
+          Vale para todos os vendedores do {DEFINICOES[area].nome}. Sempre sobre a <b className="font-medium text-gray-700">mensalidade líquida</b>: o que
+          o Asaas entrega (já sem a taxa dele) menos os nossos custos, abaixo. Se o indicado cancelar, a comissão acaba.
+        </p>
       </div>
       <div className="space-y-3 px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <Label htmlFor="com-entrada" className="w-52 text-[13px] text-gray-700">Na 2ª mensalidade paga</Label>
-          <CampoNumero id="com-entrada" valor={texto.entrada} aoMudar={(v) => setTexto((t) => ({ ...t, entrada: v }))} sufixo="% de uma mensalidade" />
+          <CampoNumero id="com-entrada" valor={texto.entrada} aoMudar={(v) => setTexto((t) => ({ ...t, entrada: v }))} sufixo="% da mensalidade líquida" />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <Label htmlFor="com-recorrente" className="w-52 text-[13px] text-gray-700">Nas mensalidades seguintes</Label>
-          <CampoNumero id="com-recorrente" valor={texto.recorrente} aoMudar={(v) => setTexto((t) => ({ ...t, recorrente: v }))} sufixo="% de cada uma, por" />
+          <CampoNumero id="com-recorrente" valor={texto.recorrente} aoMudar={(v) => setTexto((t) => ({ ...t, recorrente: v }))} sufixo="% de cada líquida, por" />
           <CampoNumero id="com-meses" valor={texto.meses} aoMudar={(v) => setTexto((t) => ({ ...t, meses: v.replace(/\D/g, '') }))} sufixo="meses" largura="w-16" />
         </div>
         {problema ? (
           <p className="text-[12px] text-rose-600">{problema}</p>
         ) : exemplo && (
           <p className="rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
-            Com a mensalidade de {reais(mensalidade!)}: {reais(exemplo.entrada)} na 2ª mensalidade
+            Com a mensalidade de {reais(mensalidade!)}{liquida !== mensalidade && <> menos os custos ({reais(liquida!)} líquida, antes da taxa do Asaas)</>}: {reais(exemplo.entrada)} na 2ª mensalidade
             {regra.recorrentePct > 0 && regra.recorrenteMeses > 0 && <> + {reais(exemplo.porMes)} por mês nos {regra.recorrenteMeses} meses seguintes</>}
             {' '}= até <b className="text-gray-800">{reais(exemplo.total)}</b> por indicado. Depois disso, a mensalidade fica toda com a empresa.
           </p>
         )}
       </div>
+      <CustosDaComissao area={area} custos={custos} aoMudar={() => buscarCustosDaComissao(area).then(setCustos).catch(() => {})} />
       {mudou && (
         <div className="flex justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
           <Button variant="ghost" size="sm" disabled={salvando}
@@ -165,6 +256,7 @@ function TrazerDoOutroSoftware({ area, aoTrazer }: { area: Area; aoTrazer: () =>
           area, codigo, nome: a.nome, email: a.email, telefone: a.telefone, comissao_tipo: a.comissao_tipo, comissao_valor: a.comissao_valor,
           cpf_cnpj: a.cpf_cnpj, chave_pix: a.chave_pix, codigo_banco: a.codigo_banco, banco: a.banco,
           agencia: a.agencia, conta: a.conta, tipo_conta: a.tipo_conta, observacoes: a.observacoes, ativo: a.ativo,
+          asaas_wallet_id: a.asaas_wallet_id, desconto_pct: a.desconto_pct, desconto_cobrancas: a.desconto_cobrancas,
         })
       }
       toast.success(marcados.size === 1 ? '1 vendedor trazido, com código novo.' : `${marcados.size} vendedores trazidos, com código novo.`)
@@ -229,11 +321,14 @@ interface Formulario {
   nome: string; codigo: string; email: string; telefone: string; ativo: boolean; demo: boolean
   cpf_cnpj: string; chave_pix: string; codigo_banco: string; banco: string; agencia: string; conta: string
   tipo_conta: 'corrente' | 'poupanca'; observacoes: string
+  wallet: string; descontoPct: string; descontoCobrancas: string
 }
 const FORM_VAZIO: Formulario = {
   nome: '', codigo: '', email: '', telefone: '', ativo: true, demo: false,
   cpf_cnpj: '', chave_pix: '', codigo_banco: '', banco: '', agencia: '', conta: '', tipo_conta: 'corrente', observacoes: '',
+  wallet: '', descontoPct: '0', descontoCobrancas: '1',
 }
+const WALLET = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 function formDe(v: Vendedor<Afiliado> | null): Formulario {
   const a = v?.cadastro
   if (!a) return { ...FORM_VAZIO, email: v?.email ?? '', demo: !!v?.demo }
@@ -241,6 +336,7 @@ function formDe(v: Vendedor<Afiliado> | null): Formulario {
     nome: a.nome, codigo: a.codigo, email: a.email ?? '', telefone: a.telefone ?? '', ativo: a.ativo, demo: !!v.demo,
     cpf_cnpj: a.cpf_cnpj ?? '', chave_pix: a.chave_pix ?? '', codigo_banco: a.codigo_banco ?? '', banco: a.banco ?? '',
     agencia: a.agencia ?? '', conta: a.conta ?? '', tipo_conta: a.tipo_conta === 'poupanca' ? 'poupanca' : 'corrente', observacoes: a.observacoes ?? '',
+    wallet: a.asaas_wallet_id ?? '', descontoPct: String(a.desconto_pct ?? 0).replace('.', ','), descontoCobrancas: String(a.desconto_cobrancas ?? 1),
   }
 }
 
@@ -267,7 +363,16 @@ function CadastroDoVendedor({ vendedor, area, regra, aoVoltar, aoSalvar }: {
   const comDemo = area === 'restaurante'
   const novo = !vendedor?.cadastro
   const emailLimpo = f.email.trim().toLowerCase()
-  const problema = !f.nome.trim() ? 'Ponha o nome.' : !f.codigo.trim() ? 'Ponha o código de venda.' : f.demo && !emailLimpo ? 'A demonstração precisa do e-mail.' : null
+  const walletLimpo = f.wallet.trim().toLowerCase()
+  const descontoPct = Number(f.descontoPct.replace(',', '.'))
+  const descontoCobrancas = Number(f.descontoCobrancas)
+  const problema = !f.nome.trim() ? 'Ponha o nome.'
+    : !f.codigo.trim() ? 'Ponha o código de venda.'
+    : f.demo && !emailLimpo ? 'A demonstração precisa do e-mail.'
+    : walletLimpo && !WALLET.test(walletLimpo) ? 'O walletId do Asaas tem o formato 00000000-0000-0000-0000-000000000000.'
+    : !(f.descontoPct.trim() !== '' && descontoPct >= 0 && descontoPct <= 100) ? 'O desconto de quem compra vai de 0% a 100%.'
+    : !(Number.isInteger(descontoCobrancas) && descontoCobrancas >= 1 && descontoCobrancas <= 24) ? 'O desconto vale de 1 a 24 cobranças.'
+    : null
 
   const salvar = async () => {
     if (problema) return
@@ -278,6 +383,7 @@ function CadastroDoVendedor({ vendedor, area, regra, aoVoltar, aoSalvar }: {
         nome: f.nome.trim(), codigo: f.codigo.trim().toUpperCase(), email: vazio(f.email)?.toLowerCase() ?? null, telefone: vazio(f.telefone),
         cpf_cnpj: vazio(f.cpf_cnpj), chave_pix: vazio(f.chave_pix), codigo_banco: vazio(f.codigo_banco), banco: vazio(f.banco),
         agencia: vazio(f.agencia), conta: vazio(f.conta), tipo_conta: f.tipo_conta, observacoes: vazio(f.observacoes), ativo: f.ativo,
+        asaas_wallet_id: walletLimpo || null, desconto_pct: Math.round(descontoPct * 100) / 100, desconto_cobrancas: descontoCobrancas,
       }
       if (vendedor?.cadastro) await atualizarAfiliado(vendedor.cadastro.id, dados)
       else await criarAfiliado({ ...dados, area, comissao_tipo: 'porcentagem', comissao_valor: 0 })
@@ -348,7 +454,29 @@ function CadastroDoVendedor({ vendedor, area, regra, aoVoltar, aoSalvar }: {
         <p className="rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600"><b className="text-gray-700">Comissão:</b> {regra}</p>
 
         <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase text-gray-400">Desconto de quem compra com o código</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-gray-600">
+            <span className="inline-flex items-center gap-1.5">
+              <Input aria-label="Desconto (%)" value={f.descontoPct} onChange={(e) => set({ descontoPct: e.target.value.replace(/[^\d,]/g, '') })} inputMode="decimal" className="h-9 w-20 text-right tabular-nums" />
+              % de desconto
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              nas
+              <Input aria-label="Quantas cobranças" value={f.descontoCobrancas} onChange={(e) => set({ descontoCobrancas: e.target.value.replace(/\D/g, '') })} inputMode="numeric" className="h-9 w-16 text-right tabular-nums" />
+              {descontoCobrancas === 1 ? 'primeira cobrança' : 'primeiras cobranças'}
+            </span>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-gray-500">0% = sem desconto. Não soma com cupom: na compra vale o maior. No plano semestral ou anual, a cobrança é o período inteiro.</p>
+        </div>
+
+        <div>
           <p className="mb-2 text-[11px] font-semibold uppercase text-gray-400">Para receber a comissão</p>
+          <Campo rotulo="Carteira do Asaas (walletId)" className="mb-3">
+            <Input value={f.wallet} onChange={(e) => set({ wallet: e.target.value.trim() })} placeholder="00000000-0000-0000-0000-000000000000" className="font-mono" />
+            <span className="block text-[11.5px] text-gray-500">
+              Com a carteira, o Asaas manda a comissão sozinho para a conta Asaas do vendedor quando a mensalidade é paga. Peça ao vendedor o walletId da conta Asaas dele. Sem ela, a comissão fica na lista para pagar à mão.
+            </span>
+          </Campo>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Campo rotulo="CPF ou CNPJ"><Input value={f.cpf_cnpj} onChange={(e) => set({ cpf_cnpj: e.target.value })} placeholder="000.000.000-00" /></Campo>
             <Campo rotulo="Chave Pix"><Input value={f.chave_pix} onChange={(e) => set({ chave_pix: e.target.value })} placeholder="CPF, e-mail, telefone…" /></Campo>
@@ -384,6 +512,113 @@ function CadastroDoVendedor({ vendedor, area, regra, aoVoltar, aoSalvar }: {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── As comissões (split do Asaas) ────────────────────────────────────────────
+
+const SITUACAO: Record<Comissao['status'], { rotulo: string; cor: string }> = {
+  agendado: { rotulo: 'Agendada', cor: 'bg-blue-50 text-blue-700' },
+  repassado: { rotulo: 'Repassada', cor: 'bg-emerald-50 text-emerald-700' },
+  pago_manual: { rotulo: 'Paga à mão', cor: 'bg-emerald-50 text-emerald-700' },
+  sem_carteira: { rotulo: 'Sem carteira: pagar à mão', cor: 'bg-amber-50 text-amber-700' },
+  erro: { rotulo: 'Falhou: pagar à mão', cor: 'bg-rose-50 text-rose-700' },
+  bloqueado: { rotulo: 'Travada no Asaas', cor: 'bg-rose-50 text-rose-700' },
+  cancelado: { rotulo: 'Cancelada', cor: 'bg-gray-100 text-gray-500' },
+  estornado: { rotulo: 'Estornada', cor: 'bg-gray-100 text-gray-500' },
+}
+const PAGAR_A_MAO = new Set<Comissao['status']>(['sem_carteira', 'erro', 'bloqueado', 'cancelado'])
+
+function ListaDeComissoes({ area }: { area: Area }) {
+  const { confirmar, dialogo } = useConfirmacao()
+  const [lista, setLista] = useState<Comissao[] | null>(null)
+  const [marcando, setMarcando] = useState<string | null>(null)
+
+  const carregar = useCallback(() => {
+    buscarComissoes(area).then(setLista).catch(() => setLista([]))
+  }, [area])
+  useEffect(() => { carregar() }, [carregar])
+
+  const marcar = async (c: Comissao) => {
+    if (!(await confirmar({
+      titulo: `Marcar ${reais(c.valor_centavos)} como pago?`,
+      descricao: `Use quando você já pagou ${c.vendedor} por fora (Pix ou transferência). Não manda dinheiro nenhum.`,
+      confirmar: 'Marcar como paga',
+    }))) return
+    setMarcando(c.id)
+    try {
+      await marcarComissaoPaga(c.id)
+      toast.success('Comissão marcada como paga.')
+      carregar()
+    } catch {
+      toast.error('Não foi possível marcar.')
+    } finally {
+      setMarcando(null)
+    }
+  }
+
+  const meses = (c: Comissao) => (c.mes_de == null ? '—' : c.mes_de === c.mes_ate ? `${c.mes_de}º mês` : `${c.mes_de}º a ${c.mes_ate}º mês`)
+  const aPagar = (lista ?? []).filter((c) => c.status === 'sem_carteira' || c.status === 'erro' || c.status === 'bloqueado')
+
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white">
+      {dialogo}
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 px-4 py-3">
+        <div>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-800"><Wallet className="h-4 w-4 text-gray-400" /> Comissões</h3>
+          <p className="text-[12px] text-gray-500">Cada mensalidade paga por um indicado de vendedor. Com a carteira do Asaas, o repasse é automático.</p>
+        </div>
+        {aPagar.length > 0 && (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-medium text-amber-700">
+            {aPagar.length} para pagar à mão · {reais(aPagar.reduce((s, c) => s + c.valor_centavos, 0))}
+          </span>
+        )}
+      </div>
+      {!lista ? (
+        <div className="p-4"><Skeleton className="h-24 w-full rounded-lg" /></div>
+      ) : lista.length === 0 ? (
+        <p className="px-4 py-8 text-center text-[13px] text-gray-500">Nenhuma comissão ainda.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-[13px]">
+            <thead className="bg-gray-50 text-[11.5px] uppercase text-gray-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">Data</th>
+                <th className="px-4 py-2 font-medium">Vendedor</th>
+                <th className="px-4 py-2 font-medium">Indicado</th>
+                <th className="px-4 py-2 font-medium">Cobre</th>
+                <th className="px-4 py-2 text-right font-medium">Valor</th>
+                <th className="px-4 py-2 font-medium">Situação</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {lista.map((c) => (
+                <tr key={c.id}>
+                  <td className="whitespace-nowrap px-4 py-2 text-gray-500">{format(new Date(c.criado_em), 'dd/MM/yyyy')}</td>
+                  <td className="px-4 py-2 font-medium text-gray-800">{c.vendedor}</td>
+                  <td className="px-4 py-2 text-gray-700">{c.indicado}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-gray-500">{meses(c)}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-gray-800">{reais(c.valor_centavos)}</td>
+                  <td className="px-4 py-2">
+                    <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium', SITUACAO[c.status].cor)} title={c.erro ?? undefined}>
+                      {SITUACAO[c.status].rotulo}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {PAGAR_A_MAO.has(c.status) && c.valor_centavos > 0 && (
+                      <Button size="sm" variant="outline" disabled={marcando === c.id} onClick={() => marcar(c)}>
+                        {marcando === c.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />} Paguei
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -499,6 +734,8 @@ export function PainelVendedores() {
             })}
           </div>
         )}
+
+        <ListaDeComissoes key={`comissoes-${area}`} area={area} />
       </div>
     </div>
   )

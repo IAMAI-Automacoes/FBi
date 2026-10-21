@@ -131,6 +131,18 @@ export const anoSP = (agora = Date.now()) => Number(hojeSP(agora).slice(0, 4))
 /** 1º de janeiro deste ano, meia-noite em Brasília (a escada e o limite recomeçam aí). */
 export const inicioDoAnoSP = (agora = Date.now()) => `${anoSP(agora)}-01-01T00:00:00-03:00`
 
+/** Início do período do limite de vídeos (12 = ano, 6 = semestre, 3 = trimestre),
+    meia-noite em Brasília. A mesma conta da função videos-missao e do banco. */
+export function inicioDoPeriodoSP(meses: number, agora = Date.now()): string {
+  const [ano, mes] = hojeSP(agora).split('-').map(Number)
+  const passo = meses === 3 || meses === 6 ? meses : 12
+  const inicio = Math.floor((mes - 1) / passo) * passo + 1
+  return `${ano}-${String(inicio).padStart(2, '0')}-01T00:00:00-03:00`
+}
+
+/** "este ano", "este semestre", "este trimestre". */
+export const nomeDoPeriodo = (meses: number) => (meses === 3 ? 'trimestre' : meses === 6 ? 'semestre' : 'ano')
+
 /** A missão está no período dela hoje? (sem datas = sempre) */
 export function noPeriodo(m: Pick<Missao, 'disponivel_de' | 'disponivel_ate'>, hoje: string): boolean {
   return (!m.disponivel_de || hoje >= m.disponivel_de) && (!m.disponivel_ate || hoje <= m.disponivel_ate)

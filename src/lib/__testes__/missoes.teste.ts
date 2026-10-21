@@ -4,7 +4,7 @@
  */
 import {
   aprovadosNoAno, duracaoDaMissao, escadaDePremios, estadoDoPeriodo, formatarDuracao, formatarTamanho, hojeSP, idDoRequisito,
-  inicioDoAnoSP, lerRequisitos, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, podeMandar,
+  inicioDoAnoSP, inicioDoPeriodoSP, lerRequisitos, nomeDoPeriodo, LIMITE_BYTES, mimeDoArquivo, missaoDisponivel, noPeriodo, podeMandar,
   problemaDoArquivo, proximaMissao, rotuloDuracao, rotuloPeriodo, situacaoDaMissao, type EnvioVideo, type Missao, type PremioVideo,
 } from '../missoes.ts'
 
@@ -39,6 +39,8 @@ ok('rótulo da duração', rotuloDuracao({ duracao_min_s: 30, duracao_max_s: 120
 // Período e datas de Brasília
 ok('hoje em Brasília (23h de 31/12 ainda é 31/12)', hojeSP(Date.parse('2027-01-01T02:00:00Z')) === '2026-12-31')
 ok('o ano começa à meia-noite de Brasília', inicioDoAnoSP(Date.parse('2026-10-10T12:00:00Z')) === '2026-01-01T00:00:00-03:00')
+ok('período do limite: semestre e trimestre', inicioDoPeriodoSP(6, Date.parse('2026-10-10T12:00:00Z')) === '2026-07-01T00:00:00-03:00' && inicioDoPeriodoSP(3, Date.parse('2026-05-10T12:00:00Z')) === '2026-04-01T00:00:00-03:00' && inicioDoPeriodoSP(12, Date.parse('2026-05-10T12:00:00Z')) === '2026-01-01T00:00:00-03:00')
+ok('nome do período', nomeDoPeriodo(3) === 'trimestre' && nomeDoPeriodo(6) === 'semestre' && nomeDoPeriodo(12) === 'ano')
 const m = (over: Partial<Missao> = {}): Missao => ({ id: 1, titulo: 'X', descricao: '', requisitos: [], ordem: 1, ativa: true, duracao_min_s: null, duracao_max_s: null, disponivel_de: null, disponivel_ate: null, ...over })
 ok('período inclusive nas duas pontas', noPeriodo(m({ disponivel_de: '2026-10-01', disponivel_ate: '2026-10-31' }), '2026-10-31') && !noPeriodo(m({ disponivel_ate: '2026-10-31' }), '2026-11-01'))
 ok('disponível: ativa e no período', missaoDisponivel(m(), '2026-10-10') && !missaoDisponivel(m({ ativa: false }), '2026-10-10') && !missaoDisponivel(m({ disponivel_de: '2026-11-01' }), '2026-10-10'))

@@ -99,6 +99,18 @@ export function inicioDoAnoSP(agora: number): string {
   return `${hojeSP(agora).slice(0, 4)}-01-01T00:00:00-03:00`
 }
 
+/**
+ * Início do período do limite de vídeos que contém `agora`, meia-noite em
+ * Brasília: 12 = ano, 6 = semestre (jan/jul), 3 = trimestre (jan/abr/jul/out).
+ * O banco usa a mesma conta (video_envio_premio, `video_config.periodo_meses`).
+ */
+export function inicioDoPeriodoSP(agora: number, meses: number): string {
+  const [ano, mes] = hojeSP(agora).split('-').map(Number)
+  const passo = meses === 3 || meses === 6 ? meses : 12
+  const inicio = Math.floor((mes - 1) / passo) * passo + 1
+  return `${ano}-${String(inicio).padStart(2, '0')}-01T00:00:00-03:00`
+}
+
 /** A missão está no período dela hoje? (sem datas = sempre) */
 export function noPeriodo(m: Pick<Missao, 'disponivel_de' | 'disponivel_ate'>, hoje: string): boolean {
   return (!m.disponivel_de || hoje >= m.disponivel_de) && (!m.disponivel_ate || hoje <= m.disponivel_ate)
@@ -180,7 +192,7 @@ export const MENSAGENS_RECUSA: Record<MotivoRecusa, string> = {
   em_analise: 'Seu vídeo desta missão ainda está sendo analisado. Espere o resultado.',
   limite_tentativas: 'Você chegou ao limite de tentativas desta missão.',
   nao_liberada: 'Esta missão ainda não foi liberada. Cumpra antes a missão da vez.',
-  limite_ano: 'Você chegou ao limite de vídeos deste ano. Em janeiro dá para mandar de novo.',
+  limite_ano: 'Você chegou ao limite de vídeos deste período. No próximo dá para mandar de novo.',
   sem_autorizacao: 'Para mandar o vídeo, é preciso autorizar o uso na divulgação.',
   tipo_invalido: 'Esse arquivo não é um vídeo aceito. Use MP4, MOV ou WEBM.',
   arquivo_vazio: 'O arquivo está vazio.',

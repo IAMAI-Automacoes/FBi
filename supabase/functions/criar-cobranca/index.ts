@@ -19,8 +19,9 @@
  *   - pedido igual aguardando há menos de 24 h → devolve a mesma fatura;
  *     pedido diferente aguardando → é removido no Asaas antes do novo.
  *
- * Preço sempre de `planos_precos` (área da conta), nunca do cliente. Desconto
- * guardado de cupom entra na 1ª cobrança (ver POLITICA_DESCONTOS).
+ * Preço sempre de `planos_precos` (área da conta), nunca do cliente. Na 1ª
+ * cobrança entram o maior entre o desconto guardado de cupom e o do código do
+ * vendedor, e depois o saldo dos vídeos aprovados (ver POLITICA_DESCONTOS).
  */
 import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
 import { json, preflight } from '../_shared/cors.ts'
@@ -28,10 +29,13 @@ import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 import { siteUrl } from '../_shared/config.ts'
 import { asaas, contaDasVendasNovas, ErroAsaas, removerNoAsaas, type ClienteAsaas } from '../_shared/asaas/cliente.ts'
 import { espelharPagamento } from '../_shared/asaas/espelho.ts'
+import { descontoDoVendedor, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
 import {
   CICLO_ASAAS,
   comDescontoDoCupom,
+  corpoDoPut,
   documentoValido,
+  espacoParaSaldo,
   ehCiclo,
   ehModalidade,
   hojeSaoPaulo,
@@ -125,7 +129,15 @@ Deno.serve(async (req: Request) => {
         ? { tipo: 'porcentagem', valor: Number(cupomUso.porcentagem_desconto) }
         : { tipo: 'valor', valor: Number(cupomUso.valor_desconto) }
       : null
-    const primeira = comDescontoDoCupom(total, desconto)
+    // Cupom ou código do vendedor: vale o maior (não somam). O cupom só é
+    // consumido se for ele o usado.
+    const comCupom = comDescontoDoCupom(total, desconto)
+    const pctVendedor = await descontoDoVendedor(db, rest.id, { compra: true })
+    const comVendedor = comDescontoDoCupom(total, pctVendedor > 0 ? { tipo: 'porcentagem', valor: pctVendedor } : null)
+    const usaVendedor = comVendedor < comCupom
+    const usaCupom = !usaVendedor && comCupom < total
+    let primeira = usaVendedor ? comVendedor : comCupom
+    const descontoVendedor = usaVendedor ? total - comVendedor : 0
 
     // ── O pedido nasce antes, para o id ir como externalReference ──
     const pedido = crypto.randomUUID()
@@ -144,12 +156,26 @@ Deno.serve(async (req: Request) => {
         valor_centavos: total,
         primeira_cobranca_centavos: primeira,
         afiliado_id: indicacao?.afiliado_id ?? null,
-        cupom_uso_id: cupomUso?.id ?? null,
+        cupom_uso_id: usaCupom ? cupomUso?.id ?? null : null,
         termos_versao: termos,
       })
       .select('*')
       .single()
     if (errIns) throw new Error(`cobranca_assinaturas: ${errIns.message}`)
+
+    // Saldo dos vídeos aprovados: reservado pelo pedido (vale até o pedido
+    // ser pago, expirar ou ser trocado).
+    let saldoVideo = 0
+    try {
+      saldoVideo = (await reservarSaldoDoVideo(db, rest.id, pedido, espacoParaSaldo(primeira))).centavos
+    } catch (e) {
+      await db.from('cobranca_assinaturas').delete().eq('id', pedido)
+      throw e
+    }
+    if (saldoVideo > 0) {
+      primeira -= saldoVideo
+      await db.from('cobranca_assinaturas').update({ primeira_cobranca_centavos: primeira }).eq('id', pedido)
+    }
 
     // Volta automática depois de pagar: para o site de onde a pessoa veio
     // (no sandbox, também localhost); se o Asaas recusar, tenta o SITE_URL.
@@ -176,8 +202,8 @@ Deno.serve(async (req: Request) => {
           }))
         asaasId = String(sub.id)
         pagamento = await primeiraCobranca(cli, asaasId)
-        // Cupom: só a 1ª cobrança sai com desconto; a assinatura segue cheia.
-        if (primeira !== total) pagamento = await cli.put(`/payments/${pagamento.id}`, { value: reais(primeira) })
+        // Descontos: só a 1ª cobrança sai com eles; a assinatura segue cheia.
+        if (primeira !== total) pagamento = await cli.put(`/payments/${pagamento.id}`, corpoDoPut(pagamento, { valorCentavos: primeira }))
       } else {
         pagamento = await comCallback(voltas, (cb) =>
           cli.post('/payments', {
@@ -195,7 +221,11 @@ Deno.serve(async (req: Request) => {
       }
 
       await db.from('cobranca_assinaturas').update({ asaas_id: asaasId, atualizada_em: new Date().toISOString() }).eq('id', pedido)
-      await espelharPagamento(db, contaId, { ...linha, asaas_id: asaasId }, pagamento, { cupom_uso_id: cupomUso?.id ?? null })
+      await espelharPagamento(db, contaId, { ...linha, asaas_id: asaasId }, pagamento, {
+        cupom_uso_id: usaCupom ? cupomUso?.id ?? null : null,
+        desconto_vendedor_centavos: descontoVendedor,
+        saldo_video_centavos: saldoVideo,
+      })
 
       if (!pagamento.invoiceUrl) throw new Error('Asaas não devolveu a URL da fatura')
       return json({ url: pagamento.invoiceUrl, pedido })
@@ -205,6 +235,7 @@ Deno.serve(async (req: Request) => {
         const caminho = modalidade === 'recorrente' ? `/subscriptions/${asaasId}` : `/installments/${asaasId}`
         await removerNoAsaas(cli, caminho).catch((x) => console.error('[criar-cobranca] desfazer no Asaas', (x as Error).message))
       }
+      await soltarSaldoDoVideo(db, pedido).catch((x) => console.error('[criar-cobranca] soltar saldo', (x as Error).message))
       await db.from('cobranca_pagamentos').delete().eq('assinatura_id', pedido)
       await db.from('cobranca_assinaturas').delete().eq('id', pedido)
       throw e

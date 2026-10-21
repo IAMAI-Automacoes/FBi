@@ -24,7 +24,10 @@ export const VALOR_MINIMO_CENTAVOS = 500
 
 /**
  * Onde cada desconto entra:
- *   - cupom: só na 1ª cobrança da compra (padrão provisório de 15/10/2026);
+ *   - cupom ou código de vendedor: na 1ª cobrança vale o maior dos dois (não
+ *     somam); o do vendedor continua nas renovações até `desconto_cobrancas`;
+ *   - saldo de vídeo aprovado: abate a próxima cobrança (compra ou renovação),
+ *     sem deixar a cobrança abaixo de R$ 5; o que não cabe fica para a próxima;
  *   - bônus de indicação ("proteção de caixa", regra do Raver em 17/10/2026):
  *     cada indicado que paga o 2º mês dá 1 mensalidade grátis ao padrinho,
  *     numa fila. Na renovação recorrente, o banco confere os indicados
@@ -69,12 +72,13 @@ export function comBonusDeIndicacao(valorCentavos: number, totalCicloCentavos: n
 
 /**
  * A cobrança com `meses` mensalidades grátis (o total do ciclo dividido pelos
- * meses, uma por bônus, até os meses do ciclo). 0 = a cobrança inteira sai:
+ * meses, até os meses do ciclo). Pode ser fração: bônus de indicação de 50%
+ * = 0,5 mensalidade (`indicacao_config.bonus_pct`). 0 = a cobrança inteira sai:
  * o Asaas não aceita valor abaixo de R$ 5, então ela é removida e o período
  * anda como se tivesse sido paga. Sobra entre R$ 0 e R$ 5 vira R$ 5.
  */
 export function valorComMesesGratis(valorCentavos: number, totalCicloCentavos: number, ciclo: Ciclo, meses: number): number {
-  const n = Math.min(Math.max(0, Math.floor(Number(meses) || 0)), MESES[ciclo])
+  const n = Math.min(Math.max(0, Number(meses) || 0), MESES[ciclo])
   if (n === 0) return valorCentavos
   if (n >= MESES[ciclo]) return 0
   const mensalidade = Math.round(totalCicloCentavos / MESES[ciclo])
@@ -85,6 +89,104 @@ export function valorComMesesGratis(valorCentavos: number, totalCicloCentavos: n
 
 function limitar(valor: number, teto: number): number {
   return Math.min(teto, Math.max(VALOR_MINIMO_CENTAVOS, Math.round(valor)))
+}
+
+/** O que cabe de saldo (vídeo) numa cobrança sem ela ficar abaixo do mínimo do Asaas. */
+export const espacoParaSaldo = (valorCentavos: number): number => Math.max(0, Math.round(valorCentavos) - VALOR_MINIMO_CENTAVOS)
+
+/**
+ * O corpo do `PUT /payments/{id}`: o Asaas exige `billingType`, `value` e
+ * `dueDate` mesmo para mudar só uma coisa. Repete os da cobrança e troca o
+ * que vier em `mudar`. Sem `split` no corpo, o split da cobrança fica como está.
+ */
+// deno-lint-ignore no-explicit-any
+export function corpoDoPut(pag: any, mudar: { valorCentavos?: number; split?: SplitAsaas[] }): Record<string, unknown> {
+  return {
+    billingType: pag.billingType ?? 'CREDIT_CARD',
+    value: mudar.valorCentavos != null ? reais(mudar.valorCentavos) : pag.value,
+    dueDate: String(pag.dueDate).slice(0, 10),
+    ...(mudar.split ? { split: mudar.split } : {}),
+  }
+}
+
+// ── Comissão do vendedor (split) ──────────────────────────────────────────
+
+/** A regra do software (`afiliado_config`, Admin → Vendedores). */
+export interface RegraDeComissao {
+  /** % de UMA mensalidade quando o indicado paga a 2ª. */
+  entradaPct: number
+  /** % de cada mensalidade depois disso… */
+  recorrentePct: number
+  /** …por quantos meses. */
+  recorrenteMeses: number
+}
+
+export interface SplitAsaas {
+  walletId: string
+  fixedValue: number
+  externalReference?: string
+  description?: string
+}
+
+/** Os custos da empresa que saem antes da comissão (`comissao_custos`, por software). */
+export interface CustosDaComissao {
+  /** Soma dos custos em R$ por mês, em centavos. */
+  fixoCentavosPorMes: number
+  /** Soma dos custos em % do valor recebido. */
+  pct: number
+}
+
+/**
+ * A base da comissão de UM mês (decisão do Caio, 21/10/2026): o que o Asaas
+ * entregou daquele mês (líquido, já sem a taxa do Asaas e com os descontos)
+ * menos os nossos custos — primeiro os de %, depois os de R$ por mês.
+ */
+export function baseDaComissaoPorMes(liquidoCentavos: number, meses: number, custos: CustosDaComissao): number {
+  const n = Math.max(1, Math.floor(meses) || 1)
+  const porMes = Math.max(0, Number(liquidoCentavos) || 0) / n
+  const pct = Math.min(Math.max(0, Number(custos.pct) || 0), 100)
+  return Math.max(0, Math.round(porMes * (1 - pct / 100) - Math.max(0, Number(custos.fixoCentavosPorMes) || 0)))
+}
+
+/**
+ * A comissão de uma cobrança que cobre os meses `de`..`ate` do indicado
+ * (mensal = 1 mês; à vista semestral/anual = 6/12; cada parcela = 1):
+ *   mês 1 → nada; mês 2 → entradaPct da base (100% = a mensalidade líquida inteira);
+ *   meses 3 a 2 + recorrenteMeses → recorrentePct da base.
+ * A base é a de `baseDaComissaoPorMes`. Nunca passa do líquido da cobrança:
+ * split acima do líquido trava a cobrança no Asaas.
+ */
+export function comissaoDoPagamento(p: {
+  de: number
+  ate: number
+  liquidoCentavos: number
+  custos: CustosDaComissao
+  regra: RegraDeComissao
+}): number {
+  const { regra } = p
+  if (!(p.liquidoCentavos > 0)) return 0
+  const de = Math.max(1, Math.floor(p.de))
+  const ate = Math.max(de, Math.floor(p.ate))
+  const base = baseDaComissaoPorMes(p.liquidoCentavos, ate - de + 1, p.custos)
+  let pct = 0
+  for (let m = de; m <= ate; m++) {
+    if (m === 2) pct += regra.entradaPct
+    else if (m >= 3 && m <= 2 + regra.recorrenteMeses) pct += regra.recorrentePct
+  }
+  const valor = Math.round((base * pct) / 100)
+  return Math.max(0, Math.min(valor, Math.round(p.liquidoCentavos)))
+}
+
+/** Status de um item do split (`payment.split[]`) → status da nossa comissão. */
+export function statusDoSplit(status: unknown): 'agendado' | 'repassado' | 'cancelado' | 'estornado' | 'bloqueado' {
+  switch (String(status)) {
+    case 'DONE': return 'repassado'
+    case 'CANCELLED':
+    case 'REFUSED': return 'cancelado'
+    case 'REFUNDED': return 'estornado'
+    case 'BLOCKED_BY_VALUE_DIVERGENCE': return 'bloqueado'
+    default: return 'agendado'
+  }
 }
 
 // ── Status do Asaas ───────────────────────────────────────────────────────
