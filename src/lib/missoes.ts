@@ -65,6 +65,8 @@ export interface PremioVideo {
   /** A escada recomeça todo ano: o ano em que ganhou. */
   ano: number
   descricao: string
+  /** O saldo que o vídeo deu, em centavos (desde 21/10/2026; antes, o texto da escada). */
+  valor_centavos?: number | null
   envio_id: string
   status: StatusPremio
   aplicado_em: string | null

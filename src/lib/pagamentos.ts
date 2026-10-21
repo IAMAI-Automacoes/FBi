@@ -1,16 +1,17 @@
 /**
- * Admin → Pagamentos (sem React, para os testes rodarem no Node).
+ * Admin → Receita (sem React, para os testes rodarem no Node).
  *
- * Pedido do Raver (15/10/2026): Caio, Raver e Guilherme são os donos de todos
- * os softwares (40% / 40% / 20% de padrão). Os dados de cada pessoa valem para
- * todos os softwares; a % é de cada software. A receita de um software se divide
- * entre as pessoas DELE (gerar_repasses_da_fatura, no banco).
+ * Pedido do Raver (21/10/2026): acabou a divisão da receita entre pessoas.
+ * Cada software tem UMA conta onde cai o dinheiro da empresa (tabela
+ * `receita_contas`), e dá para trazer a conta de um software para o outro.
  */
 
-export interface Recebedor {
-  id: string
-  nome: string
-  email: string | null
+export type Software = 'restaurante' | 'rh'
+
+/** A conta onde cai o dinheiro de um software. */
+export interface ContaDaReceita {
+  area: Software
+  titular: string | null
   cpf_cnpj: string | null
   chave_pix: string | null
   codigo_banco: string | null
@@ -21,46 +22,24 @@ export interface Recebedor {
   observacoes: string | null
 }
 
-/** A parte de uma pessoa num software. */
-export interface ParteDaDivisao {
-  id: string
-  recebedor_id: string | null
-  /** O nome que aparece (o da pessoa; nas linhas antigas sem pessoa, o da linha). */
-  nome: string
-  valor: number
-  ativo: boolean
+/** Os campos que se copiam de um software para o outro (tudo menos o software). */
+export const CAMPOS_DA_CONTA = ['titular', 'cpf_cnpj', 'chave_pix', 'codigo_banco', 'banco', 'agencia', 'conta', 'tipo_conta', 'observacoes'] as const
+
+export const contaVazia = (area: Software): ContaDaReceita => ({
+  area, titular: null, cpf_cnpj: null, chave_pix: null, codigo_banco: null, banco: null, agencia: null, conta: null, tipo_conta: 'corrente', observacoes: null,
+})
+
+/** A conta do outro software trazida para este: os mesmos dados, o software continua o deste. */
+export function trazerConta(de: ContaDaReceita, para: Software): ContaDaReceita {
+  return { ...de, area: para }
 }
 
-/** Os donos de padrão, com a % de cada um em todo software novo. */
-export const DONOS_PADRAO: readonly { nome: string; porcentagem: number }[] = [
-  { nome: 'Caio', porcentagem: 40 },
-  { nome: 'Raver', porcentagem: 40 },
-  { nome: 'Guilherme', porcentagem: 20 },
-]
+/** A conta tem algum dado preenchido (para saber se vale trazer). */
+export const contaPreenchida = (c: ContaDaReceita | null | undefined): boolean =>
+  !!c && CAMPOS_DA_CONTA.some((campo) => campo !== 'tipo_conta' && !!String(c[campo] ?? '').trim())
 
-/** A soma das partes ligadas, com duas casas (evita 99,99999). */
-export const somaDasPartes = (partes: readonly ParteDaDivisao[]) =>
-  Math.round(partes.filter((p) => p.ativo).reduce((s, p) => s + (Number(p.valor) || 0), 0) * 100) / 100
-
-/** Como está a soma: certa (100%), faltando ou passando. */
-export function situacaoDaSoma(partes: readonly ParteDaDivisao[]): { soma: number; ok: boolean; texto: string } {
-  const soma = somaDasPartes(partes)
-  if (Math.abs(soma - 100) < 0.01) return { soma, ok: true, texto: 'Soma 100%.' }
-  return soma < 100
-    ? { soma, ok: false, texto: `Soma ${formatarPorcentagem(soma)}: faltam ${formatarPorcentagem(100 - soma)} para dar 100%.` }
-    : { soma, ok: false, texto: `Soma ${formatarPorcentagem(soma)}: passou ${formatarPorcentagem(soma - 100)} de 100%.` }
-}
-
-export const formatarPorcentagem = (n: number) => `${String(Math.round(n * 100) / 100).replace('.', ',')}%`
-
-/** A porcentagem digitada (aceita vírgula), entre 0 e 100; null se não serve. */
-export function lerPorcentagem(texto: string): number | null {
-  const n = Number(String(texto).trim().replace(',', '.'))
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : null
-}
-
-/** O que falta para conseguir pagar a pessoa. */
-export function oQueFalta(r: Pick<Recebedor, 'chave_pix' | 'conta' | 'agencia' | 'codigo_banco' | 'cpf_cnpj'>): string[] {
+/** O que falta para o dinheiro conseguir cair na conta. */
+export function oQueFalta(r: Pick<ContaDaReceita, 'chave_pix' | 'conta' | 'agencia' | 'codigo_banco' | 'cpf_cnpj'>): string[] {
   const tem = (v: string | null) => !!v && !!v.trim()
   const falta: string[] = []
   const temConta = tem(r.conta) && tem(r.agencia) && tem(r.codigo_banco)
@@ -68,6 +47,14 @@ export function oQueFalta(r: Pick<Recebedor, 'chave_pix' | 'conta' | 'agencia' |
   if (!tem(r.cpf_cnpj)) falta.push('CPF ou CNPJ')
   return falta
 }
+
+/** A porcentagem digitada (aceita vírgula), entre 0 e 100; null se não serve. */
+export function lerPorcentagem(texto: string): number | null {
+  const n = Number(String(texto).trim().replace(',', '.'))
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : null
+}
+
+export const formatarPorcentagem = (n: number) => `${String(Math.round(n * 100) / 100).replace('.', ',')}%`
 
 // ── Bancos: digitar o código preenche o nome, e o contrário ──────────────────
 /** Os bancos mais usados (código COMPE de 3 dígitos). */

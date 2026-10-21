@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, BookOpen, Bot, Briefcase, Building2, Clapperboard, Gauge, Handshake, LifeBuoy, Megaphone, ShieldCheck, Ticket, TrendingUp, Wallet, Workflow,
+  ArrowLeft, BadgePercent, BookOpen, Bot, Briefcase, Building2, Gauge, LifeBuoy, Megaphone, ShieldCheck, Ticket, TrendingUp, Wallet, Workflow,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -28,10 +28,9 @@ export const ABAS_ADMIN: { key: AbaAdmin; label: string; icon: React.ComponentTy
   { key: 'contas', label: 'Contas', icon: Building2 },
   { key: 'vendedores', label: 'Vendedores', icon: Briefcase },
   { key: 'influenciadores', label: 'Influenciadores', icon: Megaphone },
-  { key: 'videos', label: 'Vídeos', icon: Clapperboard },
-  { key: 'pagamentos', label: 'Pagamentos', icon: Wallet },
+  { key: 'descontos', label: 'Descontos', icon: BadgePercent },
+  { key: 'receita', label: 'Receita', icon: Wallet },
   { key: 'cupons', label: 'Cupons', icon: Ticket },
-  { key: 'afiliados', label: 'Afiliados', icon: Handshake },
   { key: 'agentes', label: 'Agentes de IA', icon: Bot },
   { key: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
   { key: 'uso_ia', label: 'Uso de IA', icon: Gauge },

@@ -19,18 +19,20 @@ function ok(nome: string, cond: boolean, detalhe?: unknown) {
 // ── Abas ─────────────────────────────────────────────────────────────────────
 ok('o restaurante continua com todas as abas, na mesma ordem', abasDaVersao('restaurante').join() === TODAS_AS_ABAS.join())
 const doRh = abasDaVersao('rh')
-ok('o RH não tem vendedores, influenciadores, motor de resposta nem acompanhamento', !['vendedores', 'influenciadores', 'motor', 'acompanhamento'].some((a) => doRh.includes(a as never)), doRh)
-ok('o RH mantém o que controla as duas versões', ['pagamentos', 'cupons', 'afiliados', 'videos', 'agentes', 'conhecimento'].every((a) => doRh.includes(a as never)), doRh)
+ok('o RH não tem motor de resposta nem acompanhamento', !['motor', 'acompanhamento'].some((a) => doRh.includes(a as never)), doRh)
+ok('o RH tem o que é configurado por software', ['receita', 'cupons', 'vendedores', 'influenciadores', 'descontos', 'agentes', 'conhecimento'].every((a) => doRh.includes(a as never)), doRh)
+ok('Pagamentos, Vídeos e Afiliados saíram do menu (viraram Receita, Descontos e Vendedores)', !['pagamentos', 'videos', 'afiliados'].some((a) => TODAS_AS_ABAS.includes(a as never)))
+ok('endereço antigo de aba cai na padrão', ['pagamentos', 'videos', 'afiliados'].every((a) => abaDaVersao(a, 'restaurante') === 'suporte'))
 ok('o RH mantém o que é de cada conta', ['suporte', 'whatsapp', 'contas', 'uso_ia'].every((a) => doRh.includes(a as never)), doRh)
 ok('o RH segue a ordem do menu', doRh.join() === TODAS_AS_ABAS.filter((a) => doRh.includes(a)).join())
 ok('aba pedida que existe na versão abre', abaDaVersao('contas', 'rh') === 'contas' && abaDaVersao('motor', 'restaurante') === 'motor')
-ok('aba que não existe na versão cai na padrão', abaDaVersao('motor', 'rh') === 'suporte' && abaDaVersao('vendedores', 'rh', 'contas') === 'contas')
+ok('aba que não existe na versão cai na padrão', abaDaVersao('motor', 'rh') === 'suporte' && abaDaVersao('acompanhamento', 'rh', 'contas') === 'contas')
 ok('lixo no endereço cai na padrão', [null, undefined, '', 'xyz', 3, {}].every((v) => abaDaVersao(v, 'restaurante') === 'suporte'))
 
 // Admin parceiro: só Suporte, WhatsApp e Contas, e só no Restaurante.
 ok('parceiro: três abas, na ordem do menu', abasDaVersao('restaurante', true).join() === 'suporte,whatsapp,contas')
 ok('parceiro: nada no RH', abasDaVersao('rh', true).length === 0)
-ok('parceiro: aba de admin pelo endereço cai no Suporte', ['pagamentos', 'cupons', 'afiliados', 'agentes', 'vendedores', 'uso_ia'].every((a) => abaDaVersao(a, 'restaurante', 'suporte', true) === 'suporte'))
+ok('parceiro: aba de admin pelo endereço cai no Suporte', ['receita', 'cupons', 'descontos', 'agentes', 'vendedores', 'uso_ia'].every((a) => abaDaVersao(a, 'restaurante', 'suporte', true) === 'suporte'))
 ok('parceiro: as dele abrem pelo endereço', abaDaVersao('contas', 'restaurante', 'suporte', true) === 'contas' && abaDaVersao('whatsapp', 'restaurante', 'suporte', true) === 'whatsapp')
 
 // ── Contas por versão ────────────────────────────────────────────────────────

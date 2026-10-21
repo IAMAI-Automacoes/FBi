@@ -70,8 +70,10 @@ function CampoValor({ inf, onSalvo }: { inf: InfluenciadorAdmin; onSalvo: () => 
   )
 }
 
-/* Aba "Influenciadores" do painel do admin, no mesmo molde da aba Vendedores:
-   quem entra no EasyFeed Influencers (/influencers) e quanto paga por mês. */
+/* Aba "Influenciadores" do painel do admin, nas duas versões (pedido do Raver,
+   21/10/2026): quem entra no EasyFeed Influencers (/influencers) e quanto paga
+   por mês. O acesso é pela lista daqui; o login é o mesmo cadastro de e-mail e
+   senha do EasyFeed (quem já tem conta usa a mesma senha). */
 export function PainelInfluenciadores() {
   const { confirmar, dialogo } = useConfirmacao()
   const [lista, setLista] = useState<InfluenciadorAdmin[]>([])
@@ -106,6 +108,7 @@ export function PainelInfluenciadores() {
   }, [carregar])
 
   const total = useMemo(() => lista.reduce((s, i) => s + (i.valor_mensal ?? 0), 0), [lista])
+  const ativos = useMemo(() => lista.filter((i) => !!i.onboarding_em).length, [lista])
 
   const adicionar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -166,13 +169,11 @@ export function PainelInfluenciadores() {
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
       {dialogo}
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-gray-800">Influenciadores</h2>
-            <p className="mt-1 text-[12px] text-gray-500">
-              Entram em easyfeed.com.br/influencers e veem, sem identificar ninguém, o que os clientes de restaurante comentam.
-            </p>
+            <p className="mt-0.5 text-[12.5px] text-gray-500">Veem, sem identificar ninguém, o que os clientes dos restaurantes comentam.</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button
@@ -188,40 +189,52 @@ export function PainelInfluenciadores() {
               rel="noopener noreferrer"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-medium text-gray-700 no-underline transition-colors hover:bg-gray-50"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> Abrir link
+              <ExternalLink className="h-3.5 w-3.5" /> Abrir
             </a>
           </div>
         </div>
 
-        <form className="mb-2 flex flex-col gap-2 sm:flex-row" onSubmit={adicionar}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email do influenciador"
-            disabled={adicionando}
-            className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]"
-          />
-          <input
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            placeholder="R$ por mês (opcional)"
-            inputMode="decimal"
-            disabled={adicionando}
-            className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8] sm:w-44"
-          />
-          <button
-            type="submit"
-            disabled={!email.trim() || adicionando}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white disabled:opacity-40"
-          >
-            {adicionando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
-          </button>
-        </form>
-        {erro && <p className="mb-2 text-[12px] text-red-600">{erro}</p>}
-        <p className="mb-4 text-[12px] text-gray-500">
-          {lista.length} {lista.length === 1 ? 'influenciador' : 'influenciadores'} · {formatarReais(total)} por mês (só anotação: ainda não cobra nada). No primeiro acesso, a pessoa recebe um link no e-mail para criar a senha.
-        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { rotulo: 'Na lista', valor: String(lista.length) },
+            { rotulo: 'Já entraram', valor: String(ativos) },
+            { rotulo: 'Por mês (anotação)', valor: formatarReais(total) },
+          ].map((n) => (
+            <div key={n.rotulo} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+              <p className="text-[12px] text-gray-500">{n.rotulo}</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">{n.valor}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <form className="flex flex-col gap-2 sm:flex-row" onSubmit={adicionar}>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="E-mail do influenciador"
+              disabled={adicionando}
+              className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8]"
+            />
+            <input
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="R$ por mês (opcional)"
+              inputMode="decimal"
+              disabled={adicionando}
+              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#1D4ED8] sm:w-44"
+            />
+            <button
+              type="submit"
+              disabled={!email.trim() || adicionando}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white disabled:opacity-40"
+            >
+              {adicionando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+            </button>
+          </form>
+          {erro ? <p className="mt-2 text-[12px] text-red-600">{erro}</p> : <p className="mt-2 text-[12px] text-gray-500">No primeiro acesso, a pessoa recebe no e-mail o link para criar a senha.</p>}
+        </div>
 
         {carregando ? (
           <p className="text-center py-10 text-sm text-gray-400">Carregando…</p>
@@ -233,7 +246,7 @@ export function PainelInfluenciadores() {
               <tr>
                 <Th>Influenciador</Th>
                 <Th>Situação</Th>
-                <Th>Paga por mês</Th>
+                <Th>Valor/mês</Th>
                 <Th>Último acesso</Th>
                 <Th className="w-14" />
               </tr>
@@ -284,9 +297,9 @@ export function PainelInfluenciadores() {
           </CrudTable>
         )}
 
-        <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[12px] text-gray-500">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[12px] text-gray-500" title="As suas, a do Caio e as de demonstração dos vendedores.">
           <Switch checked={incluiTestes === true} disabled={incluiTestes === null} onCheckedChange={alternarTestes} />
-          Incluir nos dados as contas de teste (as suas, a do Caio e as de demonstração dos vendedores).
+          Mostrar também as contas de teste nos dados
         </label>
       </div>
     </div>

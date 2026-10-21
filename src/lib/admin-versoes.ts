@@ -6,37 +6,40 @@ import { areaDe, type Area } from './areas.ts'
  * Decisão do Raver (14/10/2026): o painel do admin segue a versão da conta do
  * próprio admin, a mesma troca Restaurante | RH do menu do cliente. Há três
  * tipos de coisa no painel:
- *   - o que controla as DUAS versões ao mesmo tempo continua igual nas duas
- *     (pagamentos, cupons, afiliados, vídeos, modelos de IA, parâmetros de cada
- *     agente, o convite do RH e a troca de versão de uma conta);
+ *   - o que é configurado por software aparece nas duas, cada uma com os seus
+ *     dados (receita, cupons, vendedores, descontos, modelos de IA, parâmetros
+ *     de cada agente);
  *   - o que é de UMA conta mostra só as contas da versão na tela (suporte,
  *     WhatsApp, contas, uso de IA);
- *   - o que só existe numa versão some da outra (vendedores, influenciadores e
- *     o motor de resposta aos clientes são do restaurante; o aviso de ação
- *     concluída para a equipe é do RH). A base de conhecimento e os prompts
- *     têm uma versão para cada lado.
+ *   - o que só existe numa versão some da outra (o motor de resposta aos
+ *     clientes e o Acompanhamento são do restaurante; o aviso de ação concluída
+ *     para a equipe e o convite do RH são do RH). A base de conhecimento e os
+ *     prompts têm uma versão para cada lado.
+ *
+ * 21/10/2026 (pedido do Raver): Pagamentos virou Receita, Vídeos virou
+ * Descontos, Afiliados entrou em Vendedores, e Vendedores e Influenciadores
+ * passaram a aparecer no RH também.
  *
  * Sem React, para os testes rodarem no Node.
  */
 
 export type AbaAdmin =
-  | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'videos' | 'pagamentos' | 'cupons'
-  | 'afiliados' | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor' | 'acompanhamento'
+  | 'suporte' | 'whatsapp' | 'contas' | 'vendedores' | 'influenciadores' | 'descontos' | 'receita' | 'cupons'
+  | 'agentes' | 'conhecimento' | 'uso_ia' | 'motor' | 'acompanhamento'
 
 /** Todas as abas, na ordem do menu. */
 export const TODAS_AS_ABAS: readonly AbaAdmin[] = [
-  'suporte', 'whatsapp', 'contas', 'vendedores', 'influenciadores', 'videos', 'pagamentos', 'cupons',
-  'afiliados', 'agentes', 'conhecimento', 'uso_ia', 'motor', 'acompanhamento',
+  'suporte', 'whatsapp', 'contas', 'vendedores', 'influenciadores', 'descontos', 'receita', 'cupons',
+  'agentes', 'conhecimento', 'uso_ia', 'motor', 'acompanhamento',
 ]
 
 /**
- * Abas que só existem no Restaurante: vendedores (demonstração do produto de
- * restaurante), EasyFeed Influencers, o motor de resposta (o aviso aos
+ * Abas que só existem no Restaurante: o motor de resposta (o aviso aos
  * CLIENTES quando o problema deles foi resolvido; no RH o aviso à equipe é
  * outro, e o dono revisa antes de mandar) e Acompanhamento (a evolução da
  * satisfação dos CLIENTES de cada restaurante, para o marketing).
  */
-const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor', 'acompanhamento'])
+const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['motor', 'acompanhamento'])
 
 /**
  * O admin parceiro (decisão do Raver, 16/10/2026: só o Anderson) vê três abas,

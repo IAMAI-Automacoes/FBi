@@ -1,14 +1,15 @@
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/client'
 import type { Area } from '@/lib/areas'
 import {
-  lerRequisitos, type AnaliseVideo, type EnvioVideo, type Missao, type PremioVideo, type Recompensa, type Requisito,
+  lerRequisitos, type AnaliseVideo, type EnvioVideo, type Missao, type PremioVideo, type Requisito,
 } from '@/lib/missoes'
 
 /* Missões de vídeo: o restaurante manda um vídeo falando do EasyFeed e a IA
    (Gemini, pela função videos-missao) confere os requisitos. Aprovado, o banco
-   dá o prêmio do degrau seguinte da escada.
-   Desde 15/10/2026 cada software (Restaurante e RH) tem as suas missões, a sua
-   escada e o seu limite por ano: tudo aqui recebe a versão (`area`). */
+   dá o saldo do vídeo (desde 21/10/2026, X% de uma mensalidade; antes era a
+   escada de prêmios).
+   Cada software (Restaurante e RH) tem as suas missões, o seu saldo por vídeo
+   e o seu limite por ano: tudo aqui recebe a versão (`area`). */
 
 const BUCKET = 'videos-clientes'
 
@@ -34,12 +35,6 @@ export async function buscarMissoes(): Promise<Missao[]> {
   return (data ?? []).map(paraMissao)
 }
 
-export async function buscarRecompensas(area: Area): Promise<Recompensa[]> {
-  const { data, error } = await supabase.from('video_recompensas').select('ordem, descricao').eq('area', area).order('ordem')
-  if (error) throw error
-  return data ?? []
-}
-
 /** Vídeos aprovados por ano, por restaurante (somando todas as missões); null = sem limite. */
 export async function buscarMaxPorAno(area: Area): Promise<number | null> {
   const { data, error } = await supabase.from('video_config').select('max_por_ano').eq('area', area).maybeSingle()
@@ -47,8 +42,23 @@ export async function buscarMaxPorAno(area: Area): Promise<number | null> {
   return data?.max_por_ano ?? null
 }
 
-export async function salvarMaxPorAno(area: Area, max: number | null): Promise<void> {
-  const { error } = await supabase.from('video_config').upsert({ id: true, area, max_por_ano: max }, { onConflict: 'area' })
+/** Admin → Descontos → Configurações: o saldo de cada vídeo e o limite por ano. */
+export interface ConfigDosVideos {
+  /** % de UMA mensalidade que cada vídeo aprovado vale de saldo. */
+  saldoPct: number
+  /** Vídeos aprovados por ano, por conta; null = sem limite. */
+  maxPorAno: number | null
+}
+
+export async function buscarConfigDosVideos(area: Area): Promise<ConfigDosVideos> {
+  const { data, error } = await supabase.from('video_config').select('max_por_ano, saldo_pct_mensalidade').eq('area', area).maybeSingle()
+  if (error) throw error
+  return { saldoPct: data ? Number(data.saldo_pct_mensalidade) : 50, maxPorAno: data ? data.max_por_ano ?? null : 6 }
+}
+
+export async function salvarConfigDosVideos(area: Area, c: ConfigDosVideos): Promise<void> {
+  const { error } = await supabase.from('video_config')
+    .upsert({ id: true, area, max_por_ano: c.maxPorAno, saldo_pct_mensalidade: c.saldoPct }, { onConflict: 'area' })
   if (error) throw error
 }
 
@@ -149,15 +159,6 @@ export async function salvarMissao(area: Area, m: MissaoParaSalvar): Promise<voi
   if (error) throw error
 }
 
-export async function salvarRecompensa(area: Area, r: Recompensa): Promise<void> {
-  const { error } = await supabase.from('video_recompensas').upsert({ area, ordem: r.ordem, descricao: r.descricao.trim() }, { onConflict: 'area,ordem' })
-  if (error) throw error
-}
-
-export async function removerRecompensa(area: Area, ordem: number): Promise<void> {
-  const { error } = await supabase.from('video_recompensas').delete().eq('area', area).eq('ordem', ordem)
-  if (error) throw error
-}
 
 export interface EnvioAdmin extends EnvioVideo { restaurante: string; missao: string }
 
@@ -192,14 +193,4 @@ export async function buscarTodosPremios(area: Area): Promise<PremioAdmin[]> {
   return (data ?? []).filter((l: any) => (l.restaurantes?.area === 'rh' ? 'rh' : 'restaurante') === area)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((l: any) => ({ ...l, restaurante: l.restaurantes?.nome_restaurante || `Restaurante ${l.restaurante_id}` }))
-}
-
-/** O admin marca que já deu o prêmio (ou desfaz). Grava quem marcou. */
-export async function marcarPremioAplicado(id: string, aplicado: boolean): Promise<void> {
-  const { data } = await supabase.auth.getUser()
-  const email = (data.user?.email ?? '').toLowerCase() || null
-  const { error } = await supabase.from('video_premios')
-    .update(aplicado ? { status: 'aplicado', aplicado_em: new Date().toISOString(), aplicado_por: email } : { status: 'pendente', aplicado_em: null, aplicado_por: null })
-    .eq('id', id)
-  if (error) throw error
 }
