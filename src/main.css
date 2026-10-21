@@ -163,6 +163,27 @@
   display: none;
 }
 
+/* A exceção: a barra de rolagem embaixo do gráfico da página Google (pedido
+   do Raver). O `!important` e a classe vencem a regra acima, que vale para
+   todo elemento. Chrome e Firefox usam `scrollbar-*`; Safari, o `::-webkit-`. */
+.barra-rolagem-visivel {
+  scrollbar-width: thin !important;
+  scrollbar-color: #94a3b8 #f1f5f9 !important;
+  -ms-overflow-style: auto !important;
+}
+.barra-rolagem-visivel::-webkit-scrollbar {
+  display: block !important;
+  height: 8px !important;
+}
+.barra-rolagem-visivel::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+.barra-rolagem-visivel::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+}
+
 /* Mantida como apelido: já está aplicada em vários pontos do chat. */
 .sem-barra {
   scrollbar-width: none;
@@ -186,4 +207,19 @@ html.tela-fixa body {
    lista — a lista "travava". */
 html.tela-fixa :is(.overflow-auto, .overflow-y-auto, .overflow-y-scroll) {
   overscroll-behavior-y: contain;
+}
+
+/* iPhone/iPad: o Safari dá zoom na tela ao focar um campo com letra menor
+   que 16px, e o zoom não volta sozinho (no chat em tela cheia, a pessoa fica
+   presa nele). Em vez de caçar campo por campo (`text-sm`, `text-[13px]`,
+   estilos inline), os campos de digitar ficam com 16px só no iOS — o
+   `-webkit-touch-callout` só existe lá. No Android e no computador nada muda.
+   `.tamanho-livre` fica de fora: campo que precisa da letra exata (o texto
+   editado em cima do cartaz do QR Code). */
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not(.tamanho-livre),
+  textarea:not(.tamanho-livre),
+  select {
+    font-size: 16px !important;
+  }
 }

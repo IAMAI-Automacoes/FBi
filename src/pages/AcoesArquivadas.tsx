@@ -148,9 +148,9 @@ export default function AcoesArquivadas() {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-[1600px] w-full mx-auto space-y-6 p-6 md:p-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+    <div className="flex flex-col h-full max-w-[1600px] w-full mx-auto space-y-6 p-0 sm:p-6 md:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-2xl font-bold tracking-tight">Ações Arquivadas</h2>
           <p className="text-muted-foreground text-sm mt-1">
             Ações já concluídas que você guardou para consulta.
@@ -167,7 +167,10 @@ export default function AcoesArquivadas() {
       {/* Só aparece quando há o que filtrar: a barra numa lista vazia é um
           controle que não muda nada. */}
       {!loading && acoes.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+        // Celular: a busca numa linha própria, em cima (na fileira rolável
+        // ficava fora da tela).
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-0.5">
           <FiltroPeriodo
             periodo={periodo}
             datas={datas}
@@ -182,7 +185,8 @@ export default function AcoesArquivadas() {
             onChange={setCategorias}
           />
 
-          <CampoBusca value={busca} onChange={setBusca} placeholder="Buscar nas ações" />
+          </div>
+          <CampoBusca className="order-first sm:order-none" value={busca} onChange={setBusca} placeholder="Buscar nas ações" />
         </div>
       )}
 

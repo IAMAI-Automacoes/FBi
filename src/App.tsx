@@ -32,6 +32,7 @@ const MissoesHistorico = paginaSobDemanda(() => import('./pages/MissoesHistorico
 const Indicacoes = paginaSobDemanda(() => import('./pages/Indicacoes'))
 const Equipe = paginaSobDemanda(() => import('./pages/Equipe'))
 const Privacidade = paginaSobDemanda(() => import('./pages/Privacidade'))
+const GoogleRetorno = paginaSobDemanda(() => import('./pages/GoogleRetorno'))
 const QRCodes = paginaSobDemanda(() => import('./pages/QRCodes'))
 const Garcons = paginaSobDemanda(() => import('./pages/Garcons'))
 const Settings = paginaSobDemanda(() => import('./pages/Settings'))
@@ -128,6 +129,8 @@ const App = () => (
               {/* Política de privacidade — pública; o Google exige o link na tela
                   de permissão do login com Google e na página inicial. */}
               <Route path="/privacidade" element={<Privacidade />} />
+              {/* Volta do login com o Google (endereço do nosso domínio): segue para a função. */}
+              <Route path="/google/retorno" element={<GoogleRetorno />} />
               {/* EasyFeed Influencers — fora do RotaProtegida: login próprio, separado do painel dos restaurantes. */}
               <Route path="/influencers/*" element={<AreaInfluencers />} />
             </>
@@ -204,9 +207,9 @@ const App = () => (
               <Route
                 path="/google"
                 element={
-                  // Só o admin até o Google liberar a API (ver SO_ADMIN em google-perfil).
+                  // Só o admin (e o admin parceiro) até o Google verificar o app (ver SO_ADMIN em google-perfil).
                   <RotaPermitida modulo="relatorios">
-                    <SoAdminPlataforma>
+                    <SoAdminPlataforma tambemParceiro>
                       <Google />
                     </SoAdminPlataforma>
                   </RotaPermitida>

@@ -1,22 +1,31 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
-import { AlertTriangle, ExternalLink, Loader2, MessageSquareText, RefreshCw, Star, Unplug } from 'lucide-react'
+import {
+  AlertTriangle, ExternalLink, Loader2, MessageSquareText, Pencil, RefreshCw, Reply, Send, Star, Trash2, Unplug, X,
+} from 'lucide-react'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { FiltroPeriodo, rotuloPeriodo, type IntervaloDatas } from '@/components/FiltroPeriodo'
 import { useAuth } from '@/hooks/use-auth'
+import { useFiltroPersistente } from '@/hooks/use-filtro-persistente'
 import { useRealtimeReload } from '@/hooks/use-realtime-reload'
 import { cn } from '@/lib/utils'
 import {
-  acaoGoogle, buscarConexaoGoogle, buscarMediasMensais, buscarResumoGoogle, buscarUltimasAvaliacoes, MENSAGENS_GOOGLE,
+  FILTROS_FIXOS, LIMITE_RESPOSTA_BYTES, bytesUtf8, intervaloDoPeriodo, respostaPublicavel, totalDoFiltro,
+  type FiltroAvaliacoes, type PeriodoGoogle,
+} from '@/lib/google-avaliacoes'
+import {
+  acaoGoogle, buscarAvaliacoes, buscarConexaoGoogle, buscarMediasMensais, buscarResumoGoogle, MENSAGENS_GOOGLE,
   type AcaoGoogle, type AvaliacaoGoogle, type ConexaoGoogle, type MediaMensal, type ResumoGoogle,
 } from '@/lib/queries/google'
 
@@ -24,6 +33,15 @@ const configGrafico: ChartConfig = {
   media: { label: 'Média do mês', color: 'hsl(var(--chart-1))' },
   media_acumulada: { label: 'Média geral', color: '#f59e0b' },
 }
+
+/** Quantas avaliações a lista mostra de cada vez. */
+const POR_PAGINA = 10
+
+/** O gráfico mês a mês: cada mês ocupa isto; passando da largura do cartão, a barra embaixo rola. */
+const LARGURA_MES = 56
+const ALTURA_GRAFICO = 260
+const TOPO_GRAFICO = 12
+const ALTURA_EIXO_X = 30
 
 function Cartao({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn('rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6', className)}>{children}</div>
@@ -93,10 +111,162 @@ function TooltipNota({ active, payload }: { active?: boolean; payload?: Array<{ 
 
 const rotuloMes = (iso: string) => format(parseISO(iso), 'MMM/yy', { locale: ptBR })
 const dataCurta = (iso: string) => format(parseISO(iso), "dd 'de' MMM 'de' yyyy", { locale: ptBR })
+const haQuanto = (iso: string) => formatDistanceToNow(parseISO(iso), { locale: ptBR, addSuffix: true })
+const nomeDe = (a: AvaliacaoGoogle) => (a.anonimo || !a.autor ? 'Cliente anônimo' : a.autor)
+
+/** Responder, editar e apagar a resposta de uma avaliação (vai direto para o Google). */
+function RespostaDaAvaliacao({ a, aoSalvar }: {
+  a: AvaliacaoGoogle
+  /** texto = publicar/trocar; null = apagar. Devolve se deu certo. */
+  aoSalvar: (texto: string | null) => Promise<boolean>
+}) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const usado = bytesUtf8(texto.trim())
+  const primeiroNome = !a.anonimo && a.autor ? a.autor.split(/\s+/)[0] : null
+
+  const salvar = async (valor: string | null) => {
+    setSalvando(true)
+    try {
+      if (await aoSalvar(valor)) setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (editando) {
+    return (
+      <div className="mt-3 space-y-2">
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && respostaPublicavel(texto) && !salvando) salvar(texto)
+            if (e.key === 'Escape' && !salvando) setEditando(false)
+          }}
+          rows={4}
+          autoFocus
+          disabled={salvando}
+          aria-label={`Resposta à avaliação de ${nomeDe(a)}`}
+          placeholder={primeiroNome ? `Escreva a resposta para ${primeiroNome}…` : 'Escreva a resposta…'}
+          className="bg-white text-[14px] leading-relaxed"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="text-xs text-gray-500">Fica pública no Google, com o nome do restaurante.</p>
+          <span className={cn('text-xs tabular-nums', usado > LIMITE_RESPOSTA_BYTES ? 'font-medium text-red-600' : 'text-gray-400')}>
+            {usado.toLocaleString('pt-BR')} / {LIMITE_RESPOSTA_BYTES.toLocaleString('pt-BR')}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => salvar(texto)} disabled={!respostaPublicavel(texto) || salvando}>
+            {salvando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+            {a.resposta ? 'Salvar resposta' : 'Publicar resposta'}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditando(false)} disabled={salvando}>Cancelar</Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (a.resposta) {
+    return (
+      <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3.5 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <MessageSquareText className="h-3.5 w-3.5 text-gray-400" />
+          <span className="font-medium text-gray-700">Sua resposta</span>
+          {a.resposta_em && <span className="text-gray-400">· {dataCurta(a.resposta_em)}</span>}
+        </div>
+        <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-gray-600">{a.resposta}</p>
+        <div className="mt-2 flex items-center gap-4 text-xs">
+          <button
+            type="button"
+            onClick={() => { setTexto(a.resposta ?? ''); setEditando(true) }}
+            className="inline-flex items-center gap-1 font-medium text-gray-500 transition-colors hover:text-gray-800"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Editar
+          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button type="button" disabled={salvando} className="inline-flex items-center gap-1 font-medium text-gray-500 transition-colors hover:text-red-600 disabled:opacity-50">
+                {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Apagar
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Apagar a resposta?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  A resposta some do Google para todo mundo. A avaliação de {nomeDe(a)} continua lá, sem resposta.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => salvar(null)} className="bg-red-600 hover:bg-red-700">Apagar resposta</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Button variant="outline" size="sm" className="mt-3" onClick={() => { setTexto(''); setEditando(true) }}>
+      <Reply className="mr-1.5 h-4 w-4" /> Responder
+    </Button>
+  )
+}
+
+/**
+ * O gráfico mês a mês. As notas (1 a 5) ficam paradas à esquerda e os meses
+ * rolam na barra de baixo, que abre no mês mais recente do período (e volta
+ * para lá quando o período muda).
+ */
+function GraficoMensal({ dados }: { dados: Array<MediaMensal & { rotulo: string }> }) {
+  const rolagemRef = useRef<HTMLDivElement>(null)
+  const quais = `${dados[0]?.mes ?? ''}|${dados.length}`
+  useLayoutEffect(() => {
+    const el = rolagemRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [quais])
+  const area = ALTURA_GRAFICO - TOPO_GRAFICO - ALTURA_EIXO_X
+  return (
+    <div className="mt-4 flex">
+      <div className="relative w-6 shrink-0" style={{ height: ALTURA_GRAFICO }} aria-hidden="true">
+        {[5, 4, 3, 2, 1].map((v) => (
+          <span
+            key={v}
+            className="absolute right-1.5 -translate-y-1/2 text-[10px] tabular-nums text-gray-400"
+            style={{ top: TOPO_GRAFICO + ((5 - v) / 4) * area }}
+          >
+            {v}
+          </span>
+        ))}
+      </div>
+      <div ref={rolagemRef} className="barra-rolagem-visivel min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-2">
+        <div style={{ width: dados.length * LARGURA_MES, minWidth: '100%', height: ALTURA_GRAFICO }}>
+          <ChartContainer config={configGrafico} className="aspect-auto h-full w-full">
+            <LineChart data={dados} margin={{ top: TOPO_GRAFICO, right: 16, left: 16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
+              <XAxis dataKey="rotulo" height={ALTURA_EIXO_X} axisLine={false} tickLine={false} dy={10} interval={0}
+                tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <YAxis hide domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} />
+              <ChartTooltip content={<TooltipNota />} />
+              <Line type="monotone" dataKey="media_acumulada" stroke="var(--color-media_acumulada)" strokeWidth={2} dot={false} connectNulls />
+              <Line type="monotone" dataKey="media" stroke="var(--color-media)" strokeWidth={2.5} connectNulls
+                dot={{ r: 3.5, fill: 'var(--color-media)', stroke: 'white', strokeWidth: 2 }} />
+            </LineChart>
+          </ChartContainer>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /**
  * Avaliações do Google: o dono conecta a conta Google (login oficial, OAuth),
- * e a página mostra a nota, a evolução mês a mês e as últimas avaliações.
+ * e a página mostra a nota, a evolução mês a mês e as avaliações — que ele
+ * responde daqui mesmo (a resposta vai para o Google).
  */
 export default function Google() {
   const { usuario } = useAuth()
@@ -108,24 +278,41 @@ export default function Google() {
   const [resumo, setResumo] = useState<ResumoGoogle | null>(null)
   const [avaliacoes, setAvaliacoes] = useState<AvaliacaoGoogle[]>([])
   const [ocupado, setOcupado] = useState<AcaoGoogle | null>(null)
+  const [filtro, setFiltro] = useState<FiltroAvaliacoes>('todas')
+  const [mostrar, setMostrar] = useState(POR_PAGINA)
+  // Filtro de data: o mesmo das outras telas, e lembrado ao sair e voltar.
+  // Vale para a página inteira, menos a nota oficial do Google (que é dele).
+  const [periodo, setPeriodo] = useFiltroPersistente<PeriodoGoogle>('google:periodo', 'all')
+  const [datas, setDatas] = useFiltroPersistente<IntervaloDatas | undefined>('google:datas', undefined)
+  const intervalo = useMemo(() => intervaloDoPeriodo(periodo, datas), [periodo, datas])
+  const listaRef = useRef<HTMLDivElement>(null)
+  // Uma resposta que chega atrasada (filtro trocado no meio) não sobrescreve a atual.
+  const pedidoRef = useRef(0)
 
   const carregar = useCallback(async () => {
     if (!restauranteId) return
+    const pedido = ++pedidoRef.current
     try {
       const c = await buscarConexaoGoogle(restauranteId)
+      if (pedido !== pedidoRef.current) return
       setConexao(c)
       if (c?.status === 'conectado') {
-        const [m, r, a] = await Promise.all([buscarMediasMensais(24), buscarResumoGoogle(), buscarUltimasAvaliacoes(restauranteId, 20)])
+        const [m, r, a] = await Promise.all([
+          buscarMediasMensais(intervalo),
+          buscarResumoGoogle(intervalo),
+          buscarAvaliacoes(restauranteId, { ...intervalo, filtro, limite: mostrar }),
+        ])
+        if (pedido !== pedidoRef.current) return
         setMedias(m)
         setResumo(r)
         setAvaliacoes(a)
       }
     } catch {
-      toast.error('Não foi possível carregar as avaliações do Google.')
+      if (pedido === pedidoRef.current) toast.error('Não foi possível carregar as avaliações do Google.')
     } finally {
-      setCarregando(false)
+      if (pedido === pedidoRef.current) setCarregando(false)
     }
-  }, [restauranteId])
+  }, [restauranteId, intervalo, filtro, mostrar])
 
   useEffect(() => { carregar() }, [carregar])
   useRealtimeReload(['google_conexoes', 'google_avaliacoes'], restauranteId, carregar)
@@ -156,14 +343,36 @@ export default function Google() {
         else toast.error(msg)
       } else if (acao === 'desconectar') {
         toast.success('Google desconectado. As avaliações guardadas foram apagadas.')
-      } else if (acao === 'sincronizar') {
-        toast.success('Avaliações atualizadas.')
       }
       await carregar()
     } finally {
       setOcupado(null)
     }
   }
+
+  /** Publica, troca (texto) ou apaga (null) a resposta de uma avaliação no Google. */
+  const salvarResposta = async (id: string, texto: string | null): Promise<boolean> => {
+    const r = await acaoGoogle(texto === null ? 'apagar_resposta' : 'responder', { avaliacao: id, ...(texto === null ? {} : { texto }) })
+    if (!r.ok) {
+      toast.error(MENSAGENS_GOOGLE[r.motivo ?? ''] ?? r.mensagem ?? MENSAGENS_GOOGLE.erro)
+      if (r.motivo === 'precisa_reconectar' || r.motivo === 'nao_conectado') await carregar()
+      return false
+    }
+    setAvaliacoes((lista) => lista.map((a) => (a.id === id ? { ...a, resposta: r.resposta ?? null, resposta_em: r.resposta_em ?? null } : a)))
+    toast.success(texto === null ? 'Resposta apagada do Google.' : 'Resposta publicada no Google.')
+    // Os números (respondidas, sem resposta) já contam a resposta.
+    buscarResumoGoogle(intervalo).then(setResumo).catch(() => {})
+    return true
+  }
+
+  const escolherFiltro = (f: FiltroAvaliacoes, rolar = false) => {
+    setFiltro(f)
+    setMostrar(POR_PAGINA)
+    if (rolar) listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const mudarPeriodo = (p: PeriodoGoogle) => { setPeriodo(p); setMostrar(POR_PAGINA) }
+  const mudarDatas = (d: IntervaloDatas | undefined) => { setDatas(d); setMostrar(POR_PAGINA) }
 
   if (carregando) {
     return (
@@ -178,7 +387,7 @@ export default function Google() {
   const titulo = (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Avaliações do Google</h1>
-      <p className="mt-1 text-sm text-gray-500">A nota do seu restaurante no Google e como ela muda mês a mês.</p>
+      <p className="mt-1 text-sm text-gray-500">A nota do seu restaurante no Google, como ela muda mês a mês e as respostas aos clientes.</p>
     </div>
   )
 
@@ -196,12 +405,14 @@ export default function Google() {
             <h2 className="text-lg font-semibold text-gray-900">Conecte o perfil do seu restaurante no Google</h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-gray-600">
               Entre com a conta Google que administra o perfil do restaurante e autorize o acesso. O EasyFeed busca as
-              avaliações sozinho e mostra a evolução da sua nota. Você pode desconectar quando quiser.
+              avaliações sozinho, mostra a evolução da sua nota e deixa você responder os clientes daqui. Você pode
+              desconectar quando quiser.
             </p>
           </div>
           <BotaoGoogle onClick={() => executar('conectar')} carregando={ocupado === 'conectar'} />
           <p className="text-xs text-gray-400">
-            O EasyFeed só lê as avaliações. Veja como os dados são usados na{' '}
+            O EasyFeed lê as avaliações e só publica no seu perfil as respostas que você escrever aqui. Veja como os
+            dados são usados na{' '}
             <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">política de privacidade</a>.
           </p>
         </Cartao>
@@ -220,7 +431,8 @@ export default function Google() {
         <AlertDialogHeader>
           <AlertDialogTitle>Desconectar o Google?</AlertDialogTitle>
           <AlertDialogDescription>
-            O EasyFeed para de buscar as avaliações e apaga as que estão guardadas aqui. Nada muda no seu perfil do Google.
+            O EasyFeed para de buscar as avaliações e apaga as que estão guardadas aqui. Nada muda no seu perfil do
+            Google: as respostas que você já publicou continuam lá.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -283,133 +495,248 @@ export default function Google() {
   }
 
   // ── Conectado ──
-  const totalEstrelas = resumo ? resumo.estrelas.reduce((s, n) => s + n, 0) : 0
+  const totalEstrelas = resumo ? resumo.estrelas.reduce((soma, n) => soma + n, 0) : 0
   const dadosGrafico = medias.map((m) => ({ ...m, rotulo: rotuloMes(m.mes) }))
+  const rotulo = rotuloPeriodo(periodo, datas)
+  const taxa = resumo && resumo.quantidade ? resumo.respondidas / resumo.quantidade : null
+  const totalNoFiltro = resumo ? totalDoFiltro(resumo, filtro) : 0
+  const vazioNoPeriodo = !!resumo && resumo.quantidade === 0
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         {titulo}
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => executar('sincronizar')} disabled={!!ocupado}>
-            {ocupado === 'sincronizar' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-            Atualizar agora
-          </Button>
+          <FiltroPeriodo periodo={periodo} datas={datas} onPeriodo={mudarPeriodo} onDatas={mudarDatas} />
           {desconectar}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+      {/* No celular cada coisa numa linha (sem o "·" sobrando no começo da linha). */}
+      <div className="flex flex-col gap-y-1 text-sm text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
         <span className="font-medium text-gray-800">{conexao.local_nome}</span>
-        {conexao.endereco && <span>· {conexao.endereco}</span>}
+        {conexao.endereco && <span><span className="hidden sm:inline">· </span>{conexao.endereco}</span>}
         {conexao.maps_uri && (
-          <a href={conexao.maps_uri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+          <a href={conexao.maps_uri} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1 text-primary hover:underline">
             Ver no Google Maps <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
-        {conexao.ultima_sincronizacao && (
-          <span>· atualizado {formatDistanceToNow(parseISO(conexao.ultima_sincronizacao), { locale: ptBR, addSuffix: true })}</span>
-        )}
+        <span>
+          <span className="hidden sm:inline">· </span>atualiza sozinho a cada 2 minutos
+          {conexao.ultima_sincronizacao && ` (a última vez ${haQuanto(conexao.ultima_sincronizacao)})`}
+        </span>
       </div>
 
       {conexao.erro && <Aviso>{MENSAGENS_GOOGLE[conexao.erro] ?? MENSAGENS_GOOGLE.google}</Aviso>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Cartao>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Cartao className="p-4 sm:p-6">
           <p className="text-sm text-gray-500">Nota no Google</p>
-          <p className="mt-1 text-3xl font-bold text-gray-900">{conexao.nota_media?.toFixed(1).replace('.', ',') ?? '—'}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{conexao.nota_media?.toFixed(1).replace('.', ',') ?? '—'}</p>
           {conexao.nota_media !== null && <div className="mt-1"><Estrelas nota={conexao.nota_media} /></div>}
+          <p className="mt-1 text-xs text-gray-400">a oficial do perfil</p>
         </Cartao>
-        <Cartao>
-          <p className="text-sm text-gray-500">Avaliações no Google</p>
-          <p className="mt-1 text-3xl font-bold text-gray-900">{conexao.total_avaliacoes?.toLocaleString('pt-BR') ?? '—'}</p>
-        </Cartao>
-        <Cartao>
-          <p className="text-sm text-gray-500">Últimos 30 dias</p>
-          <p className="mt-1 text-3xl font-bold text-gray-900">{resumo?.media30d?.toFixed(1).replace('.', ',') ?? '—'}</p>
+        <Cartao className="p-4 sm:p-6">
+          <p className="text-sm text-gray-500">Avaliações</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{resumo?.quantidade.toLocaleString('pt-BR') ?? '—'}</p>
           <p className="mt-1 text-xs text-gray-400">
-            {resumo?.quantidade30d ? `${resumo.quantidade30d} avaliaç${resumo.quantidade30d === 1 ? 'ão' : 'ões'}` : 'nenhuma avaliação no período'}
+            {rotulo}
+            {resumo?.ultimaEm && ` · a última ${haQuanto(resumo.ultimaEm)}`}
           </p>
+        </Cartao>
+        <Cartao className="p-4 sm:p-6">
+          <p className="text-sm text-gray-500">Média</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{resumo?.media?.toFixed(1).replace('.', ',') ?? '—'}</p>
+          {resumo?.media != null
+            ? <div className="mt-1"><Estrelas nota={resumo.media} /></div>
+            : <p className="mt-1 text-xs text-gray-400">nenhuma avaliação no período</p>}
+          {resumo?.media != null && <p className="mt-1 text-xs text-gray-400">{rotulo}</p>}
+        </Cartao>
+        <Cartao className="p-4 sm:p-6">
+          <p className="text-sm text-gray-500">Respondidas</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 sm:text-3xl">{taxa === null ? '—' : `${Math.round(taxa * 100)}%`}</p>
+          {resumo && resumo.semResposta > 0 ? (
+            <button
+              type="button"
+              onClick={() => escolherFiltro('sem_resposta', true)}
+              className="mt-1 text-left text-xs font-medium text-amber-700 underline-offset-2 hover:underline"
+            >
+              {resumo.semResposta} sem resposta · responder
+            </button>
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">{resumo?.quantidade ? 'todas respondidas' : 'nenhuma avaliação no período'}</p>
+          )}
         </Cartao>
       </div>
 
-      <Cartao>
-        <h3 className="text-base font-bold text-gray-900">Evolução da nota</h3>
-        <p className="mt-0.5 text-xs text-gray-500">Média das avaliações de cada mês e a média geral até aquele mês.</p>
-        {dadosGrafico.length === 0 ? (
-          <p className="mt-6 text-sm text-gray-400">Ainda não há avaliações para mostrar.</p>
-        ) : (
-          <ChartContainer config={configGrafico} className="mt-4 h-[240px] w-full">
-            <LineChart data={dadosGrafico} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.6} />
-              <XAxis dataKey="rotulo" axisLine={false} tickLine={false} dy={10} tick={{ fontSize: 11, fill: '#9ca3af' }}
-                interval={dadosGrafico.length > 12 ? Math.ceil(dadosGrafico.length / 8) : 0} />
-              <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <ChartTooltip content={<TooltipNota />} />
-              <Line type="monotone" dataKey="media_acumulada" stroke="var(--color-media_acumulada)" strokeWidth={2} dot={false} connectNulls />
-              <Line type="monotone" dataKey="media" stroke="var(--color-media)" strokeWidth={2.5} connectNulls
-                dot={{ r: 3.5, fill: 'var(--color-media)', stroke: 'white', strokeWidth: 2 }} />
-            </LineChart>
-          </ChartContainer>
-        )}
-        <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full" style={{ background: 'hsl(var(--chart-1))' }} /> Média do mês</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-amber-500" /> Média geral</span>
-        </div>
-      </Cartao>
-
-      <div className="grid gap-5 lg:grid-cols-5">
-        <Cartao className="lg:col-span-2">
-          <h3 className="text-base font-bold text-gray-900">Estrelas</h3>
-          <div className="mt-4 space-y-2.5">
-            {[5, 4, 3, 2, 1].map((n) => {
-              const qtd = resumo?.estrelas[n - 1] ?? 0
-              const pct = totalEstrelas ? Math.round((qtd / totalEstrelas) * 100) : 0
-              return (
-                <div key={n} className="flex items-center gap-3 text-sm">
-                  <span className="w-3 text-right font-medium text-gray-700">{n}</span>
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="w-12 text-right tabular-nums text-gray-500">{qtd}</span>
-                </div>
-              )
-            })}
+      {/* `grid-cols-1` (minmax(0, 1fr)) e `min-w-0`: sem eles, no celular a coluna
+          crescia até a largura do gráfico rolável e a página passava da tela. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <Cartao className="min-w-0 lg:col-span-3">
+          <h3 className="text-base font-bold text-gray-900">Evolução da nota</h3>
+          <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+            Mês a mês, no período do filtro. <b className="font-medium text-gray-600">Média do mês</b>: as estrelas das
+            avaliações que chegaram naquele mês. <b className="font-medium text-gray-600">Média geral</b>: todas as avaliações,
+            da primeira até aquele mês.
+          </p>
+          {dadosGrafico.length === 0 ? (
+            <p className="mt-6 text-sm text-gray-400">
+              {periodo === 'all' && !datas ? 'Ainda não há avaliações para mostrar.' : 'Nenhuma avaliação neste período.'}
+            </p>
+          ) : (
+            <GraficoMensal dados={dadosGrafico} />
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full" style={{ background: 'hsl(var(--chart-1))' }} /> Média do mês</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-amber-500" /> Média geral</span>
           </div>
         </Cartao>
 
-        <Cartao className="lg:col-span-3">
-          <h3 className="text-base font-bold text-gray-900">Últimas avaliações</h3>
-          {avaliacoes.length === 0 ? (
-            <p className="mt-4 text-sm text-gray-400">Nenhuma avaliação ainda.</p>
+        {/* `flex flex-col`: no computador o cartão estica até a altura do gráfico,
+            e as linhas se espalham por ele em vez de ficarem amontoadas em cima. */}
+        <Cartao className="flex min-w-0 flex-col lg:col-span-2">
+          <h3 className="text-base font-bold text-gray-900">Estrelas</h3>
+          <p className="mt-0.5 text-xs text-gray-500">{rotulo} · toque numa linha para ver só essas avaliações.</p>
+          <div className="mt-3 flex flex-1 flex-col justify-evenly gap-1">
+            {[5, 4, 3, 2, 1].map((n) => {
+              const qtd = resumo?.estrelas[n - 1] ?? 0
+              // O comprimento é a parte do total (o número ao lado diz quanto).
+              const parte = totalEstrelas ? (qtd / totalEstrelas) * 100 : 0
+              const pct = qtd === 0 ? '0%' : parte < 1 ? '<1%' : `${Math.round(parte)}%`
+              const ativo = filtro === n
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => escolherFiltro(ativo ? 'todas' : (n as FiltroAvaliacoes), !ativo)}
+                  disabled={qtd === 0 && !ativo}
+                  aria-pressed={ativo}
+                  aria-label={`${n} estrela${n === 1 ? '' : 's'}: ${qtd} (${pct})`}
+                  className={cn(
+                    'grid w-full grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors disabled:cursor-default',
+                    ativo ? 'bg-amber-50' : 'hover:bg-gray-50 disabled:hover:bg-transparent',
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1 font-medium tabular-nums text-gray-700">
+                    {n} <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  </span>
+                  <span className="block h-2 overflow-hidden rounded-full bg-gray-100">
+                    {/* Pelo menos uma pílula curta (mais larga que alta): fina demais, ela virava um ponto. */}
+                    {qtd > 0 && (
+                      <span className="block h-full rounded-full bg-amber-400" style={{ width: `max(0.875rem, ${parte}%)` }} />
+                    )}
+                  </span>
+                  <span className="flex min-w-[4.5rem] items-baseline justify-end gap-1.5 tabular-nums">
+                    <span className="font-medium text-gray-700">{qtd}</span>
+                    <span className="w-9 text-right text-xs text-gray-400">{pct}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {resumo && totalEstrelas > 0 && (() => {
+            const positivas = Math.round(((resumo.estrelas[3] + resumo.estrelas[4]) / totalEstrelas) * 100)
+            return (
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+                <div>
+                  <p className="text-xs text-gray-500">4 e 5 estrelas</p>
+                  <p className="text-lg font-semibold tabular-nums text-emerald-700">{positivas}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">1 a 3 estrelas</p>
+                  <p className="text-lg font-semibold tabular-nums text-red-600">{100 - positivas}%</p>
+                </div>
+              </div>
+            )
+          })()}
+        </Cartao>
+      </div>
+
+      <div ref={listaRef} className="scroll-mt-20">
+        <Cartao>
+          <div className="flex flex-col gap-1">
+            <h3 className="text-base font-bold text-gray-900">Avaliações <span className="font-normal text-gray-400">· {rotulo}</span></h3>
+            <p className="text-xs text-gray-500">Responda por aqui: a resposta vai direto para o Google, com o nome do restaurante.</p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar avaliações">
+            {FILTROS_FIXOS.map((f) => {
+              const ativo = filtro === f.chave
+              return (
+                <button
+                  key={f.chave}
+                  type="button"
+                  onClick={() => escolherFiltro(f.chave)}
+                  aria-pressed={ativo}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
+                    ativo ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+                  )}
+                >
+                  {f.rotulo}
+                  <span className={cn('tabular-nums', ativo ? 'text-gray-300' : 'text-gray-400')}>{resumo ? totalDoFiltro(resumo, f.chave) : 0}</span>
+                </button>
+              )
+            })}
+            {typeof filtro === 'number' && (
+              <button
+                type="button"
+                onClick={() => escolherFiltro('todas')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[13px] font-medium text-amber-800"
+                aria-label={`Tirar o filtro de ${filtro} estrelas`}
+              >
+                {filtro} <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {vazioNoPeriodo ? (
+            <p className="mt-6 text-sm text-gray-400">
+              {periodo === 'all' && !datas ? 'Nenhuma avaliação ainda.' : 'Nenhuma avaliação neste período. Escolha outro no filtro de data.'}
+            </p>
+          ) : avaliacoes.length === 0 ? (
+            <p className="mt-6 text-sm text-gray-400">
+              {filtro === 'sem_resposta' ? 'Todas as avaliações do período já têm resposta.' : 'Nenhuma avaliação neste filtro.'}
+            </p>
           ) : (
-            <div className="mt-3 divide-y divide-gray-100">
+            <div className="mt-2 divide-y divide-gray-100">
               {avaliacoes.map((a) => (
-                <div key={a.id} className="py-3">
+                <div key={a.id} className="py-4">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Estrelas nota={a.nota} tamanho="h-3.5 w-3.5" />
-                    <span className="text-sm font-medium text-gray-800">{a.anonimo || !a.autor ? 'Cliente anônimo' : a.autor}</span>
+                    <span className="text-sm font-medium text-gray-800">{nomeDe(a)}</span>
                     <span className="text-xs text-gray-400">{dataCurta(a.criada_em)}</span>
+                    {!a.resposta && (
+                      <span className={cn(
+                        'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        a.nota <= 3 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700',
+                      )}
+                      >
+                        Sem resposta
+                      </span>
+                    )}
                   </div>
-                  <p className={cn('mt-1 text-sm leading-relaxed', a.comentario ? 'text-gray-700' : 'italic text-gray-400')}>
+                  <p className={cn('mt-1.5 whitespace-pre-line text-sm leading-relaxed', a.comentario ? 'text-gray-700' : 'italic text-gray-400')}>
                     {a.comentario ?? 'Avaliou só com estrelas.'}
                   </p>
-                  {a.resposta && (
-                    <div className="mt-2 flex gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                      <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-                      <span><span className="font-medium text-gray-700">Sua resposta:</span> {a.resposta}</span>
-                    </div>
-                  )}
+                  <RespostaDaAvaliacao a={a} aoSalvar={(texto) => salvarResposta(a.id, texto)} />
                 </div>
               ))}
+            </div>
+          )}
+
+          {totalNoFiltro > avaliacoes.length && avaliacoes.length >= mostrar && (
+            <div className="mt-2 flex justify-center border-t border-gray-100 pt-4">
+              <Button variant="outline" size="sm" onClick={() => setMostrar((n) => n + POR_PAGINA)}>
+                Mostrar mais ({totalNoFiltro - avaliacoes.length} restante{totalNoFiltro - avaliacoes.length === 1 ? '' : 's'})
+              </Button>
             </div>
           )}
         </Cartao>
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        Dados do Google, atualizados a cada 2 minutos. O EasyFeed só lê as avaliações; nada é publicado no seu perfil.{' '}
+        Os dados do Google se atualizam sozinhos a cada 2 minutos. O EasyFeed só publica no seu perfil as respostas que você escreve aqui.{' '}
         <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">Política de privacidade</a>
       </p>
     </div>

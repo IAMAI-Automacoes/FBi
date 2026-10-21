@@ -26,7 +26,9 @@ async function usuarioDaSugestao(sugestaoId: string): Promise<string | null> {
  * a permissão já foi dada — quem pede é o cartão PedirNotificacoes).
  */
 export function AdminNotificacoes() {
-  const { ehAdminPlataforma, user } = useAuth()
+  const { ehAdminPlataforma: admin, ehAdminParceiro, user } = useAuth()
+  // O admin parceiro também atende o suporte (das contas ao alcance dele).
+  const ehAdminPlataforma = admin || ehAdminParceiro
   // Silenciar do suporte (sino do topo = tudo; conversa = usuario_id),
   // sincronizado entre abas: vale para o push E para o som.
   const prefs = usePreferencias('suporte_admin')

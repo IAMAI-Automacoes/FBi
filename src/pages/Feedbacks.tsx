@@ -226,10 +226,12 @@ export default function Feedbacks() {
   // Uma linha só: os controles têm larguras próprias (o período pelo texto, os
   // selects fixos, a busca em w-56) e `overflow-x-auto` cuida das telas estreitas.
   // Quebrar em duas linhas empurrava a lista para baixo e escondia os
-  // primeiros feedbacks.
+  // primeiros feedbacks. Exceção no celular: a busca ganha uma linha própria,
+  // em cima — na fileira rolável ela ficava fora da tela, sem sinal de que
+  // existia.
   const barraFiltros = (
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-0.5">
           {/* Período: atalhos (7/30/90 dias, tudo) + calendário de intervalo, num controle só */}
           <FiltroPeriodo
             periodo={filtros.periodo}
@@ -275,12 +277,14 @@ export default function Feedbacks() {
             onChange={(categorias) => setFiltros((prev) => ({ ...prev, categorias }))}
           />
 
-          <CampoBusca
-            value={filtros.busca}
-            placeholder="Buscar nos feedbacks"
-            onChange={(busca) => setFiltros((prev) => ({ ...prev, busca }))}
-          />
         </div>
+
+        <CampoBusca
+          className="order-first sm:order-none"
+          value={filtros.busca}
+          placeholder="Buscar nos feedbacks"
+          onChange={(busca) => setFiltros((prev) => ({ ...prev, busca }))}
+        />
       </div>
   )
 
@@ -307,7 +311,7 @@ export default function Feedbacks() {
           <button
             onClick={limparFiltroInsight}
             title="Limpar filtro"
-            className="ml-auto flex h-6 w-6 items-center justify-center rounded text-blue-700 hover:bg-blue-100"
+            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded text-blue-700 hover:bg-blue-100"
           >
             <X className="h-4 w-4" />
           </button>

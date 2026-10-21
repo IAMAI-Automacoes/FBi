@@ -4,7 +4,7 @@ import { BellRing, X } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { estouDentroDeOutraConta } from '@/lib/acesso-admin'
 import { iphoneSemApp, pedirPermissaoEInscrever, pushSuportado } from '@/lib/push'
-import { PassoAPassoIphone } from '@/components/InstalarApp'
+import { PassoAPassoInstalar } from '@/components/InstalarApp'
 
 /**
  * Pergunta, no computador e no celular, se pode mandar notificações. O
@@ -84,19 +84,19 @@ export function PedirNotificacoes() {
                 type="button"
                 onClick={estado === 'iphone' ? () => setPassoIphone(true) : ativar}
                 disabled={pedindo}
-                className="rounded-full bg-[#128C7E] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#0f7a6e] disabled:opacity-60"
+                className="h-9 rounded-full bg-[#128C7E] px-4 text-[13px] font-semibold text-white hover:bg-[#0f7a6e] disabled:opacity-60"
               >
                 {estado === 'iphone' ? 'Como instalar' : pedindo ? 'Ativando…' : 'Ativar'}
               </button>
-              <button type="button" onClick={depois} className="rounded-full px-3 py-1.5 text-[13px] font-medium text-gray-500 hover:bg-gray-100">
+              <button type="button" onClick={depois} className="h-9 rounded-full px-3 text-[13px] font-medium text-gray-500 hover:bg-gray-100">
                 Agora não
               </button>
             </div>
           </div>
-          <button type="button" onClick={depois} className="text-gray-400 hover:text-gray-600" aria-label="Fechar"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={depois} className="-m-2 p-2 text-gray-400 hover:text-gray-600" aria-label="Fechar"><X className="h-4 w-4" /></button>
         </div>
       </div>
-      {passoIphone && <PassoAPassoIphone nome="EasyFeed" aoFechar={() => { setPassoIphone(false); depois() }} />}
+      {passoIphone && <PassoAPassoInstalar nome="EasyFeed" jeito="iphone" aoFechar={() => { setPassoIphone(false); depois() }} />}
     </>
   )
 }

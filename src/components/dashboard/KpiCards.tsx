@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import { MessageSquare, Smile } from 'lucide-react'
 import type { DashboardData, PeriodInfo } from '@/lib/queries/visao-geral'
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator'
+import { cn } from '@/lib/utils'
 
 const PERIODO_LABEL: Record<PeriodInfo, string> = {
   '7d': '7 dias',
@@ -16,11 +18,24 @@ function IconBox({ icon: Icon }: { icon: typeof MessageSquare }) {
   )
 }
 
-export function KpiCards({ data, period }: { data: DashboardData['kpis']; period: PeriodInfo }) {
+/** Com mais números na fileira (RH): a linha entre eles, só com as 4 colunas lado a lado. */
+export const CELULA_COM_DIVISOR = 'lg:border-l lg:border-border lg:pl-6'
+
+/**
+ * Os números do topo da Visão Geral. `depois`: o que vem na mesma fileira,
+ * depois do sentimento (no RH, funcionários e o último pedido de feedback —
+ * cada um com `CELULA_COM_DIVISOR`). Com eles, a fileira vira uma grade de 4
+ * colunas iguais (2 no tablet, 1 no celular), para não quebrar no meio com o
+ * menu lateral aberto.
+ */
+export function KpiCards({ data, period, depois }: { data: DashboardData['kpis']; period: PeriodInfo; depois?: ReactNode }) {
   const periodoLabel = PERIODO_LABEL[period]
   const suffix = `nos últimos ${periodoLabel}`
+  const emGrade = !!depois
   return (
-    <div className="flex items-center gap-10">
+    // Sem os números do RH: os dois lado a lado; no celular, um embaixo do outro
+    // (sem quebrar, o "Sentimento Geral" passava da borda da tela).
+    <div className={emGrade ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4' : 'flex flex-wrap items-center gap-x-10 gap-y-6'}>
       <div className="flex items-center gap-3">
         <IconBox icon={MessageSquare} />
         <div>
@@ -36,8 +51,8 @@ export function KpiCards({ data, period }: { data: DashboardData['kpis']; period
           />
         </div>
       </div>
-      <div className="w-px h-16 bg-border" />
-      <div className="flex items-center gap-3">
+      {!emGrade && <div className="hidden h-16 w-px bg-border sm:block" />}
+      <div className={cn('flex items-center gap-3', emGrade && CELULA_COM_DIVISOR)}>
         <IconBox icon={Smile} />
         <div>
           <p className="text-sm font-bold text-muted-foreground">Sentimento Geral</p>
@@ -53,6 +68,7 @@ export function KpiCards({ data, period }: { data: DashboardData['kpis']; period
           />
         </div>
       </div>
+      {depois}
     </div>
   )
 }

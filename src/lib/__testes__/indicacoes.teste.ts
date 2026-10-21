@@ -4,7 +4,7 @@
  *   node --experimental-strip-types src/lib/__testes__/indicacoes.teste.ts
  */
 import {
-  CODIGO_VALIDO, codigoParaCopia, lerNumeros, linkDeIndicacao, linkDoWhatsapp, mensagemDeIndicacao, premiosPendentes, RECUSA_QUE_TRAVA,
+  CODIGO_VALIDO, codigoParaCopia, lerBonus, lerNumeros, linkDeIndicacao, mesesNaFila, premiosPendentes, RECUSA_QUE_TRAVA,
   ROTULO_PREMIO, ROTULO_PREMIO_ADMIN, textoDaPorcentagem,
 } from '../indicacoes.ts'
 import { conviteDoEndereco } from '../areas.ts'
@@ -49,20 +49,32 @@ ok('no RH, o mesmo código vai como convite do RH', linkRh === 'https://easyfeed
 ok('o código curto de um afiliado criado à mão também vira convite', conviteDoEndereco(new URL(linkDeIndicacao('https://x.com', 'JOAO10', 'rh')).search)?.convite === 'JOAO10')
 ok('formato do código: o mesmo do checkout', ['AB', 'CAMELO-R2UF', 'EASYFEED-N3B4', 'A_B-9'].every((c) => CODIGO_VALIDO.test(c))
   && !['', 'A', 'abc', 'COM ESPACO', 'AÇAÍ', 'A'.repeat(31)].some((c) => CODIGO_VALIDO.test(c)))
-const msg = mensagemDeIndicacao(link)
-ok('a mensagem pronta leva o link', msg.endsWith(link) && msg.includes('EasyFeed') && msg.includes('restaurante'))
-ok('no RH, a mensagem fala da equipe (e não de restaurante)', /equipe/.test(mensagemDeIndicacao(linkRh, 'rh')) && !/restaurante/.test(mensagemDeIndicacao(linkRh, 'rh')) && mensagemDeIndicacao(linkRh, 'rh').endsWith(linkRh))
-const wa = linkDoWhatsapp(msg)
-ok('o link do WhatsApp leva a mensagem inteira, sem número fixo', wa.startsWith('https://wa.me/?text=') && decodeURIComponent(wa.split('text=')[1]) === msg)
 
 // ── Os benefícios ganhos ─────────────────────────────────────────────────────
-ok('situação por extenso, para o restaurante e para o admin', ROTULO_PREMIO.pendente === 'A receber' && ROTULO_PREMIO.aplicado === 'Recebido' && ROTULO_PREMIO.cancelado === 'Cancelado'
-  && ROTULO_PREMIO_ADMIN.pendente === 'Pendente' && ROTULO_PREMIO_ADMIN.aplicado === 'Aplicado')
+ok('situação por extenso, para o restaurante e para o admin', ROTULO_PREMIO.pendente === 'Na fila' && ROTULO_PREMIO.aplicado === 'Usado' && ROTULO_PREMIO.cancelado === 'Descartado'
+  && ROTULO_PREMIO_ADMIN.pendente === 'Na fila' && ROTULO_PREMIO_ADMIN.aplicado === 'Usado')
 ok('pendentes: só os que faltam dar', premiosPendentes([{ status: 'pendente' }, { status: 'aplicado' }, { status: 'cancelado' }, { status: 'pendente' }]) === 2 && premiosPendentes([]) === 0)
-ok('números: lê o que veio do banco', JSON.stringify(lerNumeros({ entraram: 5, nao_pagaram: 1, usam: 2, pararam: 2, aguardando: 1, liberados: 1 }))
-  === JSON.stringify({ entraram: 5, nao_pagaram: 1, usam: 2, pararam: 2, aguardando: 1, liberados: 1 }))
-ok('números: o que falta ou não é número vira zero', JSON.stringify(lerNumeros({ entraram: '3', usam: -1, pararam: 'x' })) === JSON.stringify({ entraram: 3, nao_pagaram: 0, usam: 0, pararam: 0, aguardando: 0, liberados: 0 })
+ok('números: lê o que veio do banco', JSON.stringify(lerNumeros({ entraram: 5, nao_pagaram: 1, a_caminho: 2, contam: 2, liberados: 1 }))
+  === JSON.stringify({ entraram: 5, nao_pagaram: 1, a_caminho: 2, contam: 2, liberados: 1 }))
+ok('números: o que falta ou não é número vira zero', JSON.stringify(lerNumeros({ entraram: '3', contam: -1, a_caminho: 'x' })) === JSON.stringify({ entraram: 3, nao_pagaram: 0, a_caminho: 0, contam: 0, liberados: 0 })
   && lerNumeros(null).entraram === 0)
+
+// A fila de meses grátis (17/10/2026).
+{
+  const bonus = lerBonus([
+    { id: 'b1', status: 'pendente', criado_em: '2026-10-01T00:00:00Z', reservado: true },
+    { id: 'b2', status: 'pendente', criado_em: '2026-10-05T00:00:00Z' },
+    { id: 'b3', status: 'aplicado', criado_em: '2026-09-01T00:00:00Z', aplicado_em: '2026-10-02T00:00:00Z' },
+    { id: 'b4', status: 'cancelado', criado_em: '2026-08-01T00:00:00Z', descartado_em: '2026-09-02T00:00:00Z', motivo: 'indicado_cancelou' },
+    { id: 'b5', status: 'qualquer', criado_em: '2026-08-01T00:00:00Z' },
+    { status: 'pendente', criado_em: '2026-08-01T00:00:00Z' },
+  ])
+  ok('fila: mantém a ordem que veio do banco e tira o que não presta', bonus.map((b) => b.id).join() === 'b1,b2,b3,b4', bonus)
+  ok('fila: o que já está na próxima cobrança', bonus[0].reservado && !bonus[1].reservado)
+  ok('fila: por que foi descartado', bonus[3].motivo === 'indicado_cancelou' && bonus[3].descartado_em === '2026-09-02T00:00:00Z')
+  ok('fila: quantos estão esperando', mesesNaFila(bonus) === 2 && mesesNaFila([]) === 0)
+  ok('fila: lixo vira lista vazia', lerBonus(null).length === 0 && lerBonus('x').length === 0)
+}
 ok('porcentagem com vírgula', textoDaPorcentagem(10) === '10%' && textoDaPorcentagem(12.5) === '12,5%')
 ok('copiar afiliado: código novo, com o sufixo do software', codigoParaCopia('joao10', 'rh', new Set()) === 'JOAO10RH' && codigoParaCopia('MARIA', 'restaurante', new Set()) === 'MARIAR')
 ok('copiar afiliado: não repete código que já existe', codigoParaCopia('JOAO10', 'rh', new Set(['JOAO10RH', 'JOAO10RH2'])) === 'JOAO10RH3')

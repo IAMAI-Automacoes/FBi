@@ -203,9 +203,9 @@ export function WhatsAppTab({
 
   const conteudo = (
     estado?.connected ? (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-11 w-11 rounded-full bg-emerald-100 flex items-center justify-center">
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="h-11 w-11 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center">
                 <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               </div>
               <div>
@@ -346,7 +346,7 @@ export function CartaoNumeroDoDono({
             <CampoTelefone
               value={numero}
               onChange={aoMudar}
-              className="h-9 w-[210px] rounded-md border-gray-200 bg-white px-2.5 text-sm focus-within:border-amber-300 focus-within:ring-amber-300"
+              className="h-9 w-full rounded-md border-gray-200 bg-white px-2.5 text-sm sm:w-[210px] focus-within:border-amber-300 focus-within:ring-amber-300"
             />
             {children}
           </div>

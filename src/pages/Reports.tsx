@@ -699,7 +699,7 @@ function LayoutNovo({
           <CardNovo>
             <h3 className="text-base font-bold text-gray-900">{t.comoSeDividem}</h3>
             <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="flex shrink-0 gap-6">
+              <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-3">
                 {[
                   { valor: kpis.positivePercent, cor: 'text-green-600', dot: 'bg-green-500', label: publico === 'equipe' ? 'Positivos' : 'Positivas' },
                   { valor: kpis.neutralPercent, cor: 'text-slate-500', dot: 'bg-slate-400', label: publico === 'equipe' ? 'Neutros' : 'Neutras' },
@@ -864,10 +864,10 @@ function LayoutNovo({
                     const estilo = estiloCategoria(c.nome)
                     const Icone = estilo.icon
                     return (
-                      <div key={c.nome} className="flex items-center gap-3">
+                      <div key={c.nome} className="flex items-center gap-2 sm:gap-3">
                         <Icone className={cn('h-4 w-4 shrink-0', estilo.corTexto)} />
                         {/* Os nomes das categorias da equipe são mais compridos ("Treinamento e crescimento"). */}
-                        <span className={cn('shrink-0 truncate text-sm text-gray-700', publico === 'equipe' ? 'w-32 sm:w-48' : 'w-32')}>{c.nome}</span>
+                        <span className={cn('shrink-0 truncate text-sm text-gray-700', publico === 'equipe' ? 'w-28 sm:w-48' : 'w-24 sm:w-32')}>{c.nome}</span>
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                           {/* largura com piso mínimo: em 0% a barra some de vista e
                               parece "sem avaliação nenhuma" — mas a categoria só
@@ -881,7 +881,8 @@ function LayoutNovo({
                         <span className="w-9 shrink-0 text-right text-sm font-bold tabular-nums text-gray-900">
                           {c.satisfacao}%
                         </span>
-                        <span className="w-24 shrink-0 text-right text-[11px] text-gray-400">
+                        {/* Celular: a contagem sai (não cabia junto do nome e da barra). */}
+                        <span className="hidden w-24 shrink-0 text-right text-[11px] text-gray-400 sm:inline">
                           ({contar(c.total, t)})
                         </span>
                       </div>

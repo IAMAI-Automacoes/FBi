@@ -7,6 +7,10 @@
   # de ~2 MB. A URL continua /f/:slug (reescrita interna). Precisa vir ANTES do
   # fallback do SPA abaixo, senão cairia no index.html.
   RewriteRule ^f/[^/]+/?$ /f.html [L]
+  # Volta do login com o Google: o endereço cadastrado no Google é do nosso
+  # domínio (a verificação do app exige), e daqui o navegador segue para a
+  # função que troca o código, com o mesmo ?code&state.
+  RewriteRule ^google/retorno/?$ https://lixrcruilisncfhfhndo.supabase.co/functions/v1/google-oauth-callback [R=302,L,QSA]
   # React Router (BrowserRouter): tudo que NÃO é arquivo/pasta real cai no
   # index.html — faz /admin, F5 e links profundos funcionarem em vez de 404.
   RewriteRule ^index\.html$ - [L]

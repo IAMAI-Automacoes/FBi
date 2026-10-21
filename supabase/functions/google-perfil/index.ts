@@ -5,6 +5,8 @@
 //   escolher_local  → { local }: liga o restaurante escolhido (quando o dono tem vários)
 //   descobrir       → busca de novo os restaurantes da conta (depois que o Google libera a API)
 //   sincronizar     → busca as avaliações agora (no máximo 1 vez por minuto)
+//   responder       → { avaliacao, texto }: publica (ou troca) a resposta do dono no Google
+//   apagar_resposta → { avaliacao }: apaga a resposta do dono no Google
 //   desconectar     → revoga no Google e apaga token, avaliações e conexão
 // Pelo cron, a cada 2 min (cabeçalho x-cron-secret = integracao_config.PUSH_TRIGGER_SECRET):
 //   sincronizar_todos → todos os restaurantes conectados, em segundo plano: leitura
@@ -12,9 +14,11 @@
 
 import { json, preflight } from '../_shared/cors.ts'
 import { autenticarRestaurante, clienteAdmin } from '../_shared/auth.ts'
-import { ErroGoogle, locaisDeTodasAsContas, urlAutorizacao } from '../_shared/google-perfil.ts'
+import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
+import { ErroGoogle, idAvaliacaoValido, locaisDeTodasAsContas, urlAutorizacao, validarResposta } from '../_shared/google-perfil.ts'
 import {
-  aplicarLocais, clienteGoogle, configGoogle, escolherLocal, lerToken, marcarAguardandoGoogle, sincronizarRestaurante,
+  aplicarLocais, clienteGoogle, configGoogle, escolherLocal, lerToken, marcarAguardandoGoogle, responderAvaliacao,
+  sincronizarRestaurante,
 } from '../_shared/google-operacoes.ts'
 
 /**
@@ -71,8 +75,13 @@ Deno.serve(async (req: Request) => {
   const auth = await autenticarRestaurante(req, db)
   if (auth.ok === false) return json({ error: auth.erro }, auth.status)
   if (SO_ADMIN) {
-    const { data: admin } = await db.from('platform_admins').select('email').eq('email', auth.restaurante.email).maybeSingle()
-    if (!admin) return json({ error: 'Disponível só para o admin por enquanto' }, 403)
+    // O admin parceiro (Anderson, na conta da hamburgueria dele) também usa.
+    const email = String(auth.restaurante.email ?? '').toLowerCase()
+    const [{ data: admin }, { data: parceiro }] = await Promise.all([
+      db.from('platform_admins').select('email').eq('email', auth.restaurante.email).maybeSingle(),
+      db.from('admins_parceiros').select('email').eq('email', email).maybeSingle(),
+    ])
+    if (!admin && !parceiro) return json({ error: 'Disponível só para o admin por enquanto' }, 403)
   }
   const restauranteId = auth.restaurante.id
   if (!cfg) return json({ ok: false, motivo: 'nao_configurado' })
@@ -117,6 +126,21 @@ Deno.serve(async (req: Request) => {
       const ultima = c?.ultima_tentativa ? new Date(c.ultima_tentativa).getTime() : 0
       if (Date.now() - ultima < INTERVALO_MINIMO_MS) return json({ ok: false, motivo: 'aguarde' })
       return json(await sincronizarRestaurante(db, google, restauranteId))
+    }
+
+    if (acao === 'responder' || acao === 'apagar_resposta') {
+      // Publica no perfil de verdade: na demonstração, não.
+      const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
+      if (await ehSessaoDemo(db, jwt)) return json({ ok: false, motivo: 'demo', mensagem: MENSAGEM_BLOQUEADO_NA_DEMO }, 403)
+      const avaliacao = corpo?.avaliacao
+      if (!idAvaliacaoValido(avaliacao)) return json({ ok: false, motivo: 'avaliacao_nao_encontrada' }, 400)
+      let texto: string | null = null
+      if (acao === 'responder') {
+        const v = validarResposta(corpo?.texto)
+        if (v.ok === false) return json({ ok: false, motivo: v.motivo }, 400)
+        texto = v.texto
+      }
+      return json(await responderAvaliacao(db, google, restauranteId, avaliacao, texto))
     }
 
     if (acao === 'desconectar') {

@@ -2,6 +2,10 @@
 // "Entrar"). Sem Deno nem banco: o index.ts liga as dependências, e o teste
 // roda isto com tudo de mentira.
 //
+// O admin parceiro (tabela `admins_parceiros`, hoje só o Anderson) também
+// entra, mas só nas contas ao alcance dele: versão Restaurante, não excluídas
+// e que não são de admin (`parceiro_pode_ver` no banco).
+//
 // A sessão aberta é de verdade (mesmos dados e permissões do cliente) e fica
 // registrada em `acessos_admin` pelo id dela — é assim que o banco diferencia
 // o admin dentro da conta do próprio cliente.
@@ -16,6 +20,10 @@ export interface DepsEntrar {
   quemPede: () => Promise<{ userId: string; email: string } | null>
   /** E-mails dos admins da plataforma. */
   emailsAdmins: () => Promise<string[]>
+  /** Este e-mail é de admin parceiro? */
+  ehParceiro: (email: string) => Promise<boolean>
+  /** A conta está ao alcance do parceiro? */
+  parceiroPodeVer: (email: string, restauranteId: number) => Promise<boolean>
   restaurante: (id: number) => Promise<{ auth_user_id: string | null; nome_restaurante: string | null; excluida_em: string | null } | null>
   emailDoUsuario: (userId: string) => Promise<string | null>
   /** Cria o registro do acesso e devolve o id dele. */
@@ -31,6 +39,7 @@ export interface Resultado { status: number; corpo: Record<string, unknown> }
 const RECUSAS = {
   sem_login: [401, 'Entre de novo na sua conta de admin.'],
   so_admin: [403, 'Só o admin da plataforma entra em outras contas.'],
+  fora_do_parceiro: [403, 'Esta conta não está liberada para o seu acesso.'],
   pedido_invalido: [400, 'Conta não informada.'],
   nao_encontrada: [404, 'Conta não encontrada.'],
   conta_excluida: [409, 'Esta conta está excluída. Restaure antes de entrar.'],
@@ -60,10 +69,12 @@ export async function entrarNaConta(restauranteIdBruto: unknown, deps: DepsEntra
   const quem = await deps.quemPede()
   if (!quem?.email) return recusa('sem_login')
   const admins = (await deps.emailsAdmins()).map((e) => e.toLowerCase())
-  if (!admins.includes(quem.email.toLowerCase())) return recusa('so_admin')
+  const parceiro = !admins.includes(quem.email.toLowerCase()) && await deps.ehParceiro(quem.email.toLowerCase())
+  if (!admins.includes(quem.email.toLowerCase()) && !parceiro) return recusa('so_admin')
 
   const restauranteId = Number(restauranteIdBruto)
   if (!Number.isInteger(restauranteId) || restauranteId <= 0) return recusa('pedido_invalido')
+  if (parceiro && !(await deps.parceiroPodeVer(quem.email.toLowerCase(), restauranteId))) return recusa('fora_do_parceiro')
   const rest = await deps.restaurante(restauranteId)
   if (!rest?.auth_user_id) return recusa('nao_encontrada')
   if (rest.excluida_em) return recusa('conta_excluida')

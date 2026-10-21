@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { TelaWhatsapp, type RestauranteDaTela } from '@/components/whatsapp/TelaWhatsapp'
 import { WhatsappDesconectado } from '@/components/whatsapp/WhatsappDesconectado'
 import { WA } from '@/components/whatsapp/pecas'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 
 /** De quanto em quanto tempo a página confere se o WhatsApp continua conectado. */
 const CONFERIR_A_CADA_MS = 120_000
@@ -82,15 +83,26 @@ export default function WhatsApp() {
 
   if (!restaurante || !user) return null
 
+  // Carregando ou desconectado: a tela não tem o cabeçalho da lista (onde
+  // fica o botão do menu no celular), e o cabeçalho do painel some nesta rota.
+  // Sem isto, no app instalado não havia como sair dali.
+  const menuNoCelular = (
+    <SidebarTrigger
+      className="fixed left-2 z-40 bg-white/80 shadow-sm md:hidden"
+      style={{ top: 'max(env(safe-area-inset-top, 0px), 0.5rem)' }}
+    />
+  )
+
   if (conectado === null) {
     return (
       <div className={CLASSE_TELA}>
+        {menuNoCelular}
         <div className="m-auto"><Loader2 className="h-7 w-7 animate-spin" style={{ color: WA.TEAL }} /></div>
       </div>
     )
   }
 
-  if (!conectado) return <WhatsappDesconectado modo="dono" className={CLASSE_TELA} />
+  if (!conectado) return <>{menuNoCelular}<WhatsappDesconectado modo="dono" className={CLASSE_TELA} /></>
 
   return <TelaWhatsapp key={numero ?? ''} modo="dono" restaurante={restaurante} className={CLASSE_TELA} />
 }

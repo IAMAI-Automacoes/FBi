@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { appDaRota } from '@/lib/instalar-app'
 
 /**
  * Permite instalar DOIS apps a partir do mesmo site:
@@ -16,11 +17,11 @@ export function ManifestPorRota() {
 
   useEffect(() => {
     // Três apps no mesmo site: o painel inteiro ("Easy Feed"), o chat de
-    // suporte do admin ("Mensagens") e a tela WhatsApp ("Whatsapp EasyFeed").
+    // suporte do admin ("Mensagens") e a tela WhatsApp ("ZapFeed").
     // O index.html faz a mesma escolha antes do React, no carregamento.
-    const app = pathname.startsWith('/whatsapp') ? 'whatsapp' : pathname.startsWith('/admin') ? 'mensagens' : 'easyfeed'
+    const app = appDaRota(pathname)
     const tags = {
-      whatsapp: { manifest: '/manifest-whatsapp.webmanifest', icone: '/whatsapp-apple-touch.png', titulo: 'Whatsapp EasyFeed', cor: '#128c7e' },
+      whatsapp: { manifest: '/manifest-whatsapp.webmanifest', icone: '/whatsapp-apple-touch.png', titulo: 'ZapFeed', cor: '#128c7e' },
       mensagens: { manifest: '/manifest-mensagens.webmanifest', icone: '/mensagens-apple-touch.png', titulo: 'Mensagens', cor: '#128c7e' },
       easyfeed: { manifest: '/manifest.webmanifest', icone: '/apple-touch-icon.png', titulo: 'Easy Feed', cor: '#ffffff' },
     }[app]

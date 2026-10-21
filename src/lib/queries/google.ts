@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import type { FiltroAvaliacoes, NumerosDoPeriodo } from '@/lib/google-avaliacoes'
 
 /**
  * Avaliações do Google (página /google).
@@ -40,12 +41,11 @@ export interface MediaMensal {
   media_acumulada: number | null
 }
 
-export interface ResumoGoogle {
-  /** Quantidade de avaliações com 1, 2, 3, 4 e 5 estrelas (índice 0 = 1 estrela). */
-  estrelas: number[]
-  media30d: number | null
-  quantidade30d: number
-}
+/** Os números do período do filtro de data (lib/google-avaliacoes.ts). */
+export type ResumoGoogle = NumerosDoPeriodo
+
+/** O recorte do filtro de data, em [de, ate). null = sem corte daquele lado. */
+export interface IntervaloGoogle { de: Date | null; ate: Date | null }
 
 export interface AvaliacaoGoogle {
   id: string
@@ -71,8 +71,15 @@ export async function buscarConexaoGoogle(restauranteId: number): Promise<Conexa
   return { ...data, nota_media: data.nota_media === null ? null : Number(data.nota_media) } as ConexaoGoogle
 }
 
-export async function buscarMediasMensais(meses = 24): Promise<MediaMensal[]> {
-  const { data, error } = await db.rpc('google_medias_mensais', { p_meses: meses })
+/**
+ * Mês a mês, só os meses do período do filtro de data (todo o período = desde
+ * a primeira avaliação). A média geral conta desde a primeira avaliação.
+ */
+export async function buscarMediasMensais(intervalo: IntervaloGoogle): Promise<MediaMensal[]> {
+  const { data, error } = await db.rpc('google_medias_periodo', {
+    p_de: intervalo.de?.toISOString() ?? null,
+    p_ate: intervalo.ate?.toISOString() ?? null,
+  })
   if (error) throw error
   return (data ?? []).map((r: any) => ({
     mes: r.mes,
@@ -82,29 +89,54 @@ export async function buscarMediasMensais(meses = 24): Promise<MediaMensal[]> {
   }))
 }
 
-export async function buscarResumoGoogle(): Promise<ResumoGoogle> {
-  const { data, error } = await db.rpc('google_resumo')
+/** Os números do período (calculados no banco: a lista vem aos poucos). */
+export async function buscarResumoGoogle(intervalo: IntervaloGoogle): Promise<ResumoGoogle> {
+  const { data, error } = await db.rpc('google_resumo_periodo', {
+    p_de: intervalo.de?.toISOString() ?? null,
+    p_ate: intervalo.ate?.toISOString() ?? null,
+  })
   if (error) throw error
   const r = (Array.isArray(data) ? data[0] : data) ?? {}
+  const n = (v: unknown) => Number(v ?? 0)
   return {
-    estrelas: [r.estrelas_1, r.estrelas_2, r.estrelas_3, r.estrelas_4, r.estrelas_5].map((n: unknown) => Number(n ?? 0)),
-    media30d: r.media_30d === null || r.media_30d === undefined ? null : Number(r.media_30d),
-    quantidade30d: Number(r.quantidade_30d ?? 0),
+    estrelas: [r.estrelas_1, r.estrelas_2, r.estrelas_3, r.estrelas_4, r.estrelas_5].map(n),
+    quantidade: n(r.quantidade),
+    media: r.media === null || r.media === undefined ? null : Number(r.media),
+    respondidas: n(r.respondidas),
+    semResposta: n(r.sem_resposta),
+    negativas: n(r.negativas),
+    comComentario: n(r.com_comentario),
+    ultimaEm: r.ultima_em ?? null,
   }
 }
 
-export async function buscarUltimasAvaliacoes(restauranteId: number, limite = 20): Promise<AvaliacaoGoogle[]> {
-  const { data, error } = await db
+/**
+ * As avaliações do período e do filtro da lista, da mais nova para a mais
+ * antiga — as `limite` primeiras ("Mostrar mais" pede mais).
+ */
+export async function buscarAvaliacoes(
+  restauranteId: number,
+  op: IntervaloGoogle & { filtro: FiltroAvaliacoes; limite: number },
+): Promise<AvaliacaoGoogle[]> {
+  let q = db
     .from('google_avaliacoes')
     .select('id, nota, comentario, autor, anonimo, resposta, resposta_em, criada_em')
     .eq('restaurante_id', restauranteId)
+  if (op.de) q = q.gte('criada_em', op.de.toISOString())
+  if (op.ate) q = q.lt('criada_em', op.ate.toISOString())
+  if (typeof op.filtro === 'number') q = q.eq('nota', op.filtro)
+  else if (op.filtro === 'sem_resposta') q = q.is('resposta', null)
+  else if (op.filtro === 'negativas') q = q.lte('nota', 3)
+  else if (op.filtro === 'com_comentario') q = q.not('comentario', 'is', null)
+  const { data, error } = await q
     .order('criada_em', { ascending: false })
-    .limit(limite)
+    .order('id', { ascending: true })
+    .limit(op.limite)
   if (error) throw error
   return (data ?? []) as AvaliacaoGoogle[]
 }
 
-export type AcaoGoogle = 'conectar' | 'escolher_local' | 'descobrir' | 'sincronizar' | 'desconectar'
+export type AcaoGoogle = 'conectar' | 'escolher_local' | 'descobrir' | 'sincronizar' | 'responder' | 'apagar_resposta' | 'desconectar'
 
 export interface RespostaGoogle {
   ok: boolean
@@ -112,6 +144,9 @@ export interface RespostaGoogle {
   motivo?: string
   mensagem?: string
   status?: StatusGoogle
+  /** responder / apagar_resposta: a resposta como ficou no Google (null = apagada). */
+  resposta?: string | null
+  resposta_em?: string | null
 }
 
 /** Chama a função google-perfil. Erros de rede viram { ok: false, motivo: 'rede' }. */
@@ -141,6 +176,12 @@ export const MENSAGENS_GOOGLE: Record<string, string> = {
   sem_local: 'Essa conta Google não administra nenhum perfil de empresa.',
   aguarde: 'As avaliações acabaram de ser atualizadas. Tente de novo daqui a 1 minuto.',
   local_invalido: 'Esse restaurante não está na lista da sua conta Google.',
+  resposta_vazia: 'Escreva a resposta antes de publicar.',
+  resposta_longa: 'A resposta passou do tamanho que o Google aceita. Encurte um pouco.',
+  avaliacao_nao_encontrada: 'O Google não encontrou essa avaliação. Ela pode ter sido apagada.',
+  nao_conectado: 'O Google não está conectado. Conecte de novo.',
+  demo: 'Responder fica bloqueado durante a demonstração.',
+  nao_encontrado: 'O Google não encontrou esse perfil ou avaliação.',
   google: 'O Google respondeu com um erro. Tente de novo.',
   rede: 'Não foi possível falar com o servidor. Confira a internet.',
   erro: 'Algo deu errado. Tente de novo.',

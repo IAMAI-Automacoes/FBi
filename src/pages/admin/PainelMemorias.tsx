@@ -50,7 +50,7 @@ function FatoItem({ fato, onSalvar, onApagar }: {
         <p className="text-sm text-gray-800 leading-snug">{fato.fato}</p>
         <p className="text-[11px] text-gray-400 mt-0.5">{fato.categoria || 'geral'}</p>
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
         <Button size="icon" variant="ghost" className="h-7 w-7 text-gray-400 hover:text-gray-700" onClick={() => setEditando(true)}><Pencil className="h-3.5 w-3.5" /></Button>
         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={apagar} disabled={ocupado}>
           {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}

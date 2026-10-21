@@ -919,7 +919,7 @@ export default function Garcons() {
                   value={rankingRegraId || SEM_REGRA}
                   onValueChange={(v) => setRankingRegraId(v === SEM_REGRA ? '' : v)}
                 >
-                  <SelectTrigger className="h-10 w-[220px] border-gray-200 bg-white">
+                  <SelectTrigger className="h-10 w-full border-gray-200 bg-white sm:w-[220px]">
                     <SelectValue placeholder="Todas as aberturas" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1248,14 +1248,14 @@ export default function Garcons() {
                                   const pago = regraEstaPaga(pagamentoDeRegra(g.bonus_pagamentos, regra.id), regra)
                                   const chave = `${g.id}:${regra.id}`
                                   return (
-                                    <div key={regra.id} title={rotuloRegra(regra)} className="w-2/3">
+                                    <div key={regra.id} title={rotuloRegra(regra)} className="w-full sm:w-2/3">
                                       <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-gray-500">
                                         <span>{scans} de {meta} feitos</span>
                                         {atingiu && !pago ? (
                                           <Button
                                             size="sm"
                                             variant="outline"
-                                            className={cn('h-5 px-1.5 text-[10px]', CLASSE_BOTAO_PAGAR)}
+                                            className={cn('h-8 px-2 text-[11px] sm:h-5 sm:px-1.5 sm:text-[10px]', CLASSE_BOTAO_PAGAR)}
                                             disabled={pagando === chave}
                                             onClick={(e) => { e.stopPropagation(); pagarBonus(g, regra) }}
                                           >
@@ -1547,7 +1547,7 @@ export default function Garcons() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className={cn('h-6 px-2 text-[11px]', CLASSE_BOTAO_PAGAR)}
+                                      className={cn('h-8 px-2 text-[11px] sm:h-6', CLASSE_BOTAO_PAGAR)}
                                       disabled={pagando === chave}
                                       onClick={() => pagarBonus(garcomAtual, regra)}
                                     >

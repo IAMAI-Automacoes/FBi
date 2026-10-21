@@ -16,3 +16,16 @@ export function usePlatformAdmin() {
   const { ehAdminPlataforma, loading, buscandoUsuario } = useAuth()
   return { isAdmin: ehAdminPlataforma, loading: loading || buscandoUsuario }
 }
+
+/* Quem abre o Painel Admin: o admin da plataforma (tudo) ou o admin parceiro
+   (só Suporte, WhatsApp e Contas, nas contas da versão Restaurante — quem
+   garante é o banco, nas regras `parceiro_*`; aqui é só o que aparece). */
+export function usePainelAdmin() {
+  const { ehAdminPlataforma, ehAdminParceiro, loading, buscandoUsuario } = useAuth()
+  return {
+    podeAbrir: ehAdminPlataforma || ehAdminParceiro,
+    /** Parceiro e não admin: o painel reduzido. */
+    parceiro: !ehAdminPlataforma && ehAdminParceiro,
+    loading: loading || buscandoUsuario,
+  }
+}

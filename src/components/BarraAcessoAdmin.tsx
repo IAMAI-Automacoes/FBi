@@ -26,7 +26,9 @@ export function BarraAcessoAdmin() {
   return (
     <div
       role="status"
-      className="fixed bottom-3 left-1/2 z-[60] flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 py-1.5 pl-3 pr-1.5 text-white shadow-lg ring-1 ring-black/10"
+      // Celular: acima do botão do chat (canto de baixo) e da barra do iPhone.
+      style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className="fixed bottom-[4.5rem] sm:bottom-3 left-1/2 z-[60] flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900 py-1.5 pl-3 pr-1.5 text-white shadow-lg ring-1 ring-black/10"
     >
       <UserCog className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
       <span className="min-w-0 truncate text-[12px] leading-tight">
@@ -38,7 +40,8 @@ export function BarraAcessoAdmin() {
         className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-white px-3 text-[12px] font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-60"
       >
         {voltando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
-        Voltar para minha conta
+        <span className="sm:hidden">Voltar</span>
+        <span className="hidden sm:inline">Voltar para minha conta</span>
       </button>
     </div>
   )

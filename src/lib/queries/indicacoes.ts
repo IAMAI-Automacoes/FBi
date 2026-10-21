@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabase/client'
-import { lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type PremioIndicacao, type StatusPremio } from '@/lib/indicacoes'
+import { lerBonus, lerNumeros, type AreaDaIndicacao, type MinhaIndicacao, type StatusPremio } from '@/lib/indicacoes'
 
-/* Indicações: tudo passa por funções do banco (migrations 20261017010000 e
-   20261027000000), que conferem por dentro quem pode. */
+/* Indicações: tudo passa por funções do banco (migrations 20261017010000,
+   20261027000000 e 20261030040000), que conferem por dentro quem pode. */
 
-/** A subpágina Indicações: código, porcentagem, números e benefícios da conta logada. */
+/** A subpágina Indicações: código, números e os meses grátis da conta logada. */
 export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
   const { data, error } = await supabase.rpc('indicacao_minha')
   if (error) throw error
@@ -15,9 +15,8 @@ export async function buscarMinhaIndicacao(): Promise<MinhaIndicacao> {
     area: r.area === 'rh' ? 'rh' : 'restaurante',
     codigo: typeof r.codigo === 'string' ? r.codigo : null,
     ativo: r.ativo !== false,
-    porcentagem: Number(r.porcentagem) || 0,
     numeros: lerNumeros(r.numeros),
-    premios: Array.isArray(r.premios) ? (r.premios as PremioIndicacao[]).map((p) => ({ ...p, porcentagem: p.porcentagem != null ? Number(p.porcentagem) : null })) : [],
+    bonus: lerBonus(r.bonus),
   }
 }
 
@@ -53,8 +52,20 @@ export async function salvarPorcentagemPadrao(area: AreaDaIndicacao, porcentagem
   if (error) throw error
 }
 
-export interface PremioDoAfiliado { id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null; indicado: string }
-export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; premios: PremioDoAfiliado[] }
+export interface PremioDoAfiliado {
+  id: string; beneficio: string; status: StatusPremio; criado_em: string; aplicado_em: string | null
+  descartado_em: string | null
+  /** 'indicado_cancelou' ou 'admin'. */
+  motivo: string | null
+  /** Já está numa cobrança do Asaas ainda não paga. */
+  reservado: boolean
+  /** 'asaas' (automático) ou o e-mail do admin. */
+  aplicado_por: string | null
+  /** O indicado que gerou o mês grátis. */
+  indicado: string
+}
+/** `contam`: indicados que já pagaram 2 meses (cada um virou 1 mês grátis). */
+export interface NumerosDoAfiliado { entraram: number; assinaram: number; usam: number; contam: number; premios: PremioDoAfiliado[] }
 
 /** O que cada afiliado de um software trouxe (por id do afiliado). */
 export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<Record<string, NumerosDoAfiliado>> {
@@ -63,7 +74,20 @@ export async function buscarNumerosDosAfiliados(area: AreaDaIndicacao): Promise<
   return (data ?? {}) as unknown as Record<string, NumerosDoAfiliado>
 }
 
-/** O admin marca que já deu o benefício, cancela ou volta para pendente. */
+// ── Semestral/anual: quantos meses o indicado precisa ter pago ───────────────
+
+export async function buscarMesesParaRenovacao(): Promise<number> {
+  const { data, error } = await supabase.from('indicacao_config').select('meses_para_renovacao').limit(1).maybeSingle()
+  if (error) throw error
+  return Number(data?.meses_para_renovacao) || 4
+}
+
+export async function salvarMesesParaRenovacao(meses: number): Promise<void> {
+  const { error } = await supabase.rpc('indicacao_admin_meses_renovacao', { p_meses: meses })
+  if (error) throw error
+}
+
+/** O admin marca à mão: usado, descartado ou de volta para a fila. */
 export async function mudarPremioDaIndicacao(id: string, status: StatusPremio): Promise<void> {
   const { data, error } = await supabase.rpc('indicacao_admin_premio', { p_id: id, p_status: status })
   if (error) throw error

@@ -513,9 +513,13 @@ export default function Insights() {
   // filtros onde a lista rolando pudesse vazar por cima.
   const barraFiltros = (
     <>
+        {/* Celular: a busca numa linha inteira e, embaixo, os botões numa
+            fileira só (o grupo da esquerda vira `contents` e os filhos entram
+            na mesma fileira que "Gerar"). Antes cada grupo empilhava e a barra
+            fixa tomava quase metade da tela. */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 px-3 py-2.5">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 lg:gap-3 px-3 py-2.5">
+          <div className="contents lg:flex lg:flex-wrap lg:items-center lg:gap-2">
             <FiltroCategorias
               contagens={contagemCategorias}
               rotuloItens="insights"
@@ -524,10 +528,11 @@ export default function Insights() {
               // Vazado, como o "Conversar com a IA" dos cards: filtrar é ação
               // secundária, e a pílula cheia deixava a barra pesando mais que a
               // lista embaixo dela.
-              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'max-w-[200px] justify-start')}
+              className={cn(BOTAO_PILULA_AZUL_VAZADO, 'max-w-[150px] sm:max-w-[200px] justify-start')}
             />
 
             <CampoBusca
+              className="order-first sm:order-none"
               value={busca}
               onChange={setBusca}
               placeholder="Buscar nos insights"
@@ -550,24 +555,25 @@ export default function Insights() {
               )}
             >
               <Pin className={cn('h-4 w-4', showOnlyPinned && 'fill-current')} />
-              Fixados
+              <span className="hidden sm:inline">Fixados</span>
             </Button>
           </div>
 
-          <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
                   size="sm"
                   disabled={generating}
-                  className={cn(BOTAO_PILULA_AZUL, 'w-full lg:w-auto')}
+                  className={BOTAO_PILULA_AZUL}
                 >
                   {generating ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                   )}
-                  {generating ? 'Analisando...' : 'Gerar insights agora'}
+                  <span className="sm:hidden">{generating ? 'Analisando...' : 'Gerar'}</span>
+                  <span className="hidden sm:inline">{generating ? 'Analisando...' : 'Gerar insights agora'}</span>
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -699,13 +705,14 @@ export default function Insights() {
                 onClick={() => setFilterPriority(aba.value)}
                 aria-current={ativa ? 'page' : undefined}
                 className={cn(
-                  'flex min-w-0 flex-1 items-center justify-center gap-2 border-b-[3px] px-3 py-2.5 text-sm transition-colors',
+                  'flex min-w-0 flex-1 items-center justify-center gap-1.5 sm:gap-2 border-b-[3px] px-1.5 sm:px-3 py-2.5 text-sm transition-colors',
                   ativa
                     ? cn(aba.corBorda, aba.cor, 'font-semibold')
                     : 'border-transparent font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900',
                 )}
               >
-                <Icone className={cn('h-4 w-4 shrink-0', ativa ? aba.cor : 'text-gray-500')} />
+                {/* Celular: sem o ícone, para o nome caber inteiro. */}
+                <Icone className={cn('hidden h-4 w-4 shrink-0 sm:block', ativa ? aba.cor : 'text-gray-500')} />
                 <span className="truncate">{aba.label}</span>
                 {quantos > 0 && (
                   <span

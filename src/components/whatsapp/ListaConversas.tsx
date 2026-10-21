@@ -172,10 +172,10 @@ export function ListaConversas({
         style={{ background: WA.TEAL, paddingTop: somenteLeitura ? undefined : 'max(env(safe-area-inset-top, 0px), 0.75rem)' }}
       >
         {!somenteLeitura && <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white md:hidden" />}
-        <p className="flex-1 text-[17px] font-semibold text-white">WhatsApp</p>
+        <p className="min-w-0 flex-1 truncate text-[17px] font-semibold text-white">WhatsApp</p>
         {!somenteLeitura && (
           <>
-            <BotaoInstalarApp rota="/whatsapp" nome="Whatsapp EasyFeed" destacar={destacarInstalar} />
+            <BotaoInstalarApp app="whatsapp" nome="ZapFeed" rotulo="Instalar ZapFeed" destacar={destacarInstalar} />
             <BotaoSino claro silenciado={tudoSilenciado} aoAlternar={aoAlternarTudo} rotulo="notificações do WhatsApp" />
           </>
         )}

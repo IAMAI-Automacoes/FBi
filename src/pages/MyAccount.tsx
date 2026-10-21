@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, Camera, Mail, AtSign, UserIcon, Trash2, AlertTriangle, CreditCard } from 'lucide-react'
+import { ChevronLeft, Camera, Mail, AtSign, UserIcon, Trash2, AlertTriangle, CreditCard, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,11 +15,18 @@ import { getIniciais } from '@/lib/iniciais'
 import { excluirMinhaConta } from '@/lib/queries/conta'
 import { ImageCropper } from '@/components/ImageCropper'
 import { PainelCodigoDemo } from '@/components/demo/PainelCodigoDemo'
+import { CartaoInstalarApps } from '@/components/InstalarApp'
+import { usePermissoes } from '@/hooks/use-permissoes'
+import { useArea } from '@/lib/area'
 
 export default function MyAccount() {
   const { confirmar, dialogo } = useConfirmacao()
   const { usuario, refetchUsuario, logout } = useAuth()
   const { toast } = useToast()
+  // ZapFeed só para quem tem a tela WhatsApp (não existe na versão RH).
+  const { podeVer } = usePermissoes()
+  const { ehRh } = useArea()
+  const podeVerWhatsapp = !ehRh && podeVer('whatsapp')
   const [loading, setLoading] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
   const [cancelando, setCancelando] = useState(false)
@@ -487,6 +494,21 @@ export default function MyAccount() {
                       {cancelando ? 'Cancelando…' : 'Cancelar assinatura'}
                     </Button>
                   )}
+              </div>
+            </div>
+          </div>
+
+          {/* Instalar o app: fica sempre aqui (os botões do cabeçalho e da tela
+              WhatsApp somem depois de instalado). */}
+          <div className="rounded-2xl border border-gray-200/75 bg-white p-5 sm:p-6 shadow-subtle">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              <Smartphone className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900">Instalar o app</h3>
+                <p className="text-[13px] text-gray-600 mt-1 mb-4">
+                  Coloque o Easy Feed na tela inicial do celular ou do computador: abre direto, já logado, e recebe notificações.
+                </p>
+                <CartaoInstalarApps comZapFeed={podeVerWhatsapp} />
               </div>
             </div>
           </div>

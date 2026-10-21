@@ -199,7 +199,7 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
               type="button"
               aria-label="Diminuir a fonte"
               onClick={() => onAlterar(elemento.id, { tamanho: Math.max(TAMANHO_MIN, elemento.tamanho - 4) })}
-              className="px-1.5 text-gray-500 hover:text-gray-900"
+              className="flex h-full items-center px-2.5 text-gray-500 hover:text-gray-900 sm:px-1.5"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
@@ -210,7 +210,7 @@ export function BarraElemento({ elemento, onAlterar, onRemover, podeRemover = tr
               type="button"
               aria-label="Aumentar a fonte"
               onClick={() => onAlterar(elemento.id, { tamanho: Math.min(TAMANHO_MAX, elemento.tamanho + 4) })}
-              className="px-1.5 text-gray-500 hover:text-gray-900"
+              className="flex h-full items-center px-2.5 text-gray-500 hover:text-gray-900 sm:px-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>

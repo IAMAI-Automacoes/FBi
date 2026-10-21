@@ -1066,7 +1066,10 @@ export function ChatFab({
             /* Mesmo azul do botão de ação do site (ver `BOTAO_PILULA_AZUL`):
                degradê `blue-800 → blue-950`. Só a forma muda — aqui é redondo e
                de 44px, não pílula. */
-            className="fixed bottom-6 right-6 h-11 w-11 rounded-full border-0 bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 shadow-elevation hover:from-blue-500 hover:to-blue-700 hover:shadow-lg hover:scale-105 transition-all z-40"
+            // Celular: mais perto do canto (o conteúdo tem só 16px de margem) e
+            // acima da barra do iPhone.
+            style={{ marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 h-11 w-11 rounded-full border-0 bg-blue-700 bg-gradient-to-b from-blue-600 to-blue-800 shadow-elevation hover:from-blue-500 hover:to-blue-700 hover:shadow-lg hover:scale-105 transition-all z-40"
           >
             <MessageCircle className="h-5 w-5 text-white" />
           </Button>
@@ -1096,7 +1099,9 @@ export function ChatFab({
           )}
 
           {/* ── Header ── */}
-          <SheetHeader className="p-4 border-b bg-white shrink-0">
+          {/* `pr-12`: espaço do X de fechar do Sheet (canto de cima), que no
+              histórico ficava por cima do botão "Nova". */}
+          <SheetHeader className="p-4 pr-12 border-b bg-white shrink-0">
             <SheetTitle className="flex items-center gap-3 text-lg font-semibold">
               {view === 'history' ? (
                 <>
@@ -1144,7 +1149,7 @@ export function ChatFab({
                   <FolderPlus className="h-4 w-4 text-gray-400 shrink-0" />
                   <input
                     autoFocus
-                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                    className="flex-1 text-base md:text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
                     placeholder="Nome da pasta"
                     value={novaPastaNome}
                     onChange={(e) => setNovaPastaNome(e.target.value)}
@@ -1176,7 +1181,7 @@ export function ChatFab({
                             <Folder className="h-4 w-4 text-gray-400 shrink-0" />
                             <input
                               autoFocus
-                              className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                              className="flex-1 text-base md:text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
                               value={nomePastaEdit}
                               onChange={(e) => setNomePastaEdit(e.target.value)}
                               onKeyDown={(e) => {
@@ -1209,18 +1214,18 @@ export function ChatFab({
                               </span>
                               <span className="text-[11px] text-gray-400 shrink-0">({group.items.length})</span>
                             </button>
-                            <div className="hidden group-hover/pasta:flex items-center gap-0.5 shrink-0">
+                            <div className="hidden group-hover/pasta:flex [@media(hover:none)]:flex items-center gap-0.5 shrink-0">
                               <button
                                 onClick={() => { setNomePastaEdit(group.pasta.nome); setRenomeandoPastaId(group.pasta.id); setExcluirPastaId(null) }}
                                 title="Renomear pasta"
-                                className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
+                                className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 onClick={() => { setExcluirPastaId(group.pasta.id); setRenomeandoPastaId(null) }}
                                 title="Excluir pasta"
-                                className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-rose-600 transition-colors"
+                                className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-rose-600 transition-colors"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -1248,7 +1253,7 @@ export function ChatFab({
                             <div className="px-4 py-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                               <input
                                 ref={renameInputRef}
-                                className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
+                                className="flex-1 text-base md:text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-400"
                                 value={renameValue}
                                 onChange={(e) => setRenameValue(e.target.value)}
                                 onKeyDown={(e) => {
@@ -1281,33 +1286,33 @@ export function ChatFab({
                                 <p className="text-sm text-gray-800 line-clamp-2 leading-snug flex-1">
                                   {s.nome || s.preview}
                                 </p>
-                                {/* Hover actions */}
-                                <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 -mt-0.5">
+                                {/* Ações: no hover (mouse) ou sempre (toque, sem hover) */}
+                                <div className="hidden group-hover:flex [@media(hover:none)]:flex items-center gap-0.5 shrink-0 -mt-0.5">
                                   <button
                                     onClick={(e) => handleTogglePin(e, s.id)}
                                     title={s.pinned ? 'Desafixar' : 'Fixar'}
-                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-amber-500 transition-colors"
+                                    className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-amber-500 transition-colors"
                                   >
                                     {s.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                                   </button>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setMoverSessaoId(moverSessaoId === s.id ? null : s.id) }}
                                     title="Mover para pasta"
-                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-amber-600 transition-colors"
+                                    className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-amber-600 transition-colors"
                                   >
                                     <FolderInput className="h-3.5 w-3.5" />
                                   </button>
                                   <button
                                     onClick={(e) => handleStartRename(e, s)}
                                     title="Renomear"
-                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
+                                    className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-colors"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
                                   <button
                                     onClick={(e) => handleDeleteRequest(e, s.id)}
                                     title="Excluir"
-                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-rose-600 transition-colors"
+                                    className="h-8 w-8 md:h-6 md:w-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-400 hover:text-rose-600 transition-colors"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
@@ -1474,7 +1479,7 @@ export function ChatFab({
                                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); salvarEdicao() }
                                   if (e.key === 'Escape') setEditandoUid(null)
                                 }}
-                                className="resize-none text-sm bg-white/15 border-white/30 text-white"
+                                className="resize-none text-base md:text-sm bg-white/15 border-white/30 text-white"
                               />
                               <div className="flex justify-end gap-2">
                                 <button onClick={() => setEditandoUid(null)} className="text-[11px] text-white/70 hover:text-white">
@@ -1496,7 +1501,7 @@ export function ChatFab({
                         </div>
                         <div
                           className={cn(
-                            'opacity-0 group-hover/msg:opacity-100 transition-opacity self-center flex items-center gap-0.5 shrink-0',
+                            'opacity-0 group-hover/msg:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity self-center flex items-center gap-0.5 shrink-0',
                             msg.role === 'user' && 'order-1',
                           )}
                         >
@@ -1509,7 +1514,7 @@ export function ChatFab({
                               })
                             }
                             title="Responder esta mensagem"
-                            className="h-6 w-6 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center"
+                            className="h-8 w-8 md:h-6 md:w-6 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center"
                           >
                             <Reply className="h-3.5 w-3.5" />
                           </button>
@@ -1521,7 +1526,7 @@ export function ChatFab({
                                   setTextoEdicao(String(msg.content))
                                 }}
                                 title="Editar mensagem"
-                                className="h-6 w-6 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center"
+                                className="h-8 w-8 md:h-6 md:w-6 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
@@ -1642,7 +1647,11 @@ export function ChatFab({
                 )}
               </div>
 
-              <div className="p-4 border-t bg-white flex flex-col gap-3 shrink-0">
+              <div
+                className="p-4 border-t bg-white flex flex-col gap-3 shrink-0"
+                // Celular em tela cheia: a caixa fica acima da barra do iPhone.
+                style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1rem)' }}
+              >
                 {/* Sugestões */}
                 <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   {(naEquipe ? SUGGESTIONS_EQUIPE : SUGGESTIONS).map((s, i) => (
@@ -1762,7 +1771,7 @@ export function ChatFab({
                         ? 'Crédito de IA esgotado — renova junto com a assinatura'
                         : `Pergunte ao ${mascoteNome}...`
                     }
-                    className="min-h-[52px] max-h-[120px] resize-none border-0 bg-transparent px-3 pt-2.5 pb-0 text-sm shadow-none focus-visible:ring-0"
+                    className="min-h-[52px] max-h-[120px] resize-none border-0 bg-transparent px-3 pt-2.5 pb-0 text-base md:text-sm shadow-none focus-visible:ring-0"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => {
@@ -1778,7 +1787,7 @@ export function ChatFab({
                       onClick={() => fileInputRef.current?.click()}
                       disabled={loading}
                       title="Anexar imagens, PDFs ou textos"
-                      className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md text-gray-400 hover:text-[#1D4ED8] hover:bg-blue-50 transition-colors disabled:opacity-40"
+                      className="h-9 w-9 md:h-7 md:w-7 shrink-0 flex items-center justify-center rounded-md text-gray-400 hover:text-[#1D4ED8] hover:bg-blue-50 transition-colors disabled:opacity-40"
                     >
                       <ImageIcon className="h-4 w-4" />
                     </button>
@@ -1791,7 +1800,7 @@ export function ChatFab({
                           : 'A IA pergunta antes de alterar. Clique para ela fazer sozinha.'
                       }
                       className={cn(
-                        'h-7 flex items-center gap-1 px-1.5 rounded-md text-[11px] font-medium transition-colors disabled:opacity-40',
+                        'h-9 md:h-7 flex items-center gap-1 px-1.5 rounded-md text-[11px] font-medium transition-colors disabled:opacity-40',
                         modoAcao === 'automatico'
                           ? 'text-amber-600 hover:bg-amber-50'
                           : 'text-gray-500 hover:bg-gray-100',
@@ -1803,7 +1812,7 @@ export function ChatFab({
                     <div className="flex-1" />
                     <Button
                       size="icon"
-                      className="h-7 w-7 disabled:opacity-40"
+                      className="h-9 w-9 md:h-7 md:w-7 disabled:opacity-40"
                       onClick={() => handleSend(message)}
                       disabled={(!message.trim() && !anexos.length) || loading || enviandoImagem || creditoEsgotado}
                     >

@@ -1,4 +1,5 @@
-import { AlertTriangle, KanbanSquare, FileText, Users, Bot, Palette } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, KanbanSquare, FileText, Users, Bot, Palette, Star } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ancora, cores, orbe, rotuloSecao, tituloSecao, TRANSICAO } from './tokens'
 
@@ -150,6 +151,39 @@ export function Beneficios() {
               </div>
             )
           })}
+        </div>
+
+        {/* As avaliações do Google. O Google exige que a página inicial diga o que
+            o app faz com os dados dele (verificação do login com Google). */}
+        <div
+          id="avaliacoes-google"
+          className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start"
+          style={{
+            background: 'rgba(255,255,255,0.9)',
+            border: `1px solid ${cores.borda}`,
+            borderRadius: '18px',
+            padding: '26px 24px',
+          }}
+        >
+          <div
+            className="flex shrink-0 items-center justify-center"
+            style={{ width: '44px', height: '44px', borderRadius: '13px', background: 'rgba(245,158,11,0.14)', color: '#B45309' }}
+          >
+            <Star className="h-5 w-5" />
+          </div>
+          <div style={{ maxWidth: '760px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.01em', color: cores.tinta, marginBottom: '8px' }}>
+              As avaliações do Google no mesmo painel, e a resposta dali mesmo
+            </h3>
+            <p style={{ fontSize: '14px', lineHeight: 1.6, color: cores.corpoSuave }}>
+              Se quiser, conecte o Perfil da Empresa no Google com o login oficial do Google. O EasyFeed lê a nota, as
+              estrelas e as avaliações do perfil que você escolher e mostra a evolução mês a mês, ao lado dos feedbacks
+              do WhatsApp. Você responde cada avaliação pelo próprio painel: o EasyFeed só publica no seu perfil a
+              resposta que você escrever e mandar publicar, e mais nada. Você desconecta quando quiser, e as avaliações
+              guardadas são apagadas na hora. Veja como esses dados são usados na{' '}
+              <Link to="/privacidade" style={{ color: cores.azul, fontWeight: 600 }}>Política de Privacidade</Link>.
+            </p>
+          </div>
         </div>
       </div>
     </section>

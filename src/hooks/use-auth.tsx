@@ -55,6 +55,11 @@ interface AuthContextType {
       Diferente de `usuario.cargo === 'admin'`, que é papel DENTRO de um
       restaurante. Quem administra a plataforma não precisa de assinatura. */
   ehAdminPlataforma: boolean
+  /** Admin parceiro (tabela `admins_parceiros`, casada por email; hoje só o
+      Anderson). Abre o Painel Admin só com Suporte, WhatsApp e Contas, e a
+      página Google da própria conta. NÃO vale como `ehAdminPlataforma`: o
+      banco libera para ele só as regras `parceiro_*`. */
+  ehAdminParceiro: boolean
   /** Conta de vendedor (tabela `vendedores`, casada por email). Paga com cupom
       como qualquer conta; a diferença é o código da demonstração no perfil e
       poder pular a conexão do WhatsApp no onboarding. */
@@ -118,6 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const [buscandoUsuario, setBuscandoUsuario] = useState(false)
   const [ehAdminPlataforma, setEhAdminPlataforma] = useState(false)
+  const [ehAdminParceiro, setEhAdminParceiro] = useState(false)
   const [ehVendedor, setEhVendedor] = useState(false)
   const [sessaoDemo, setSessaoDemo] = useState<SessaoDemo | null>(null)
   const [acessoAdmin, setAcessoAdmin] = useState<AcessoAdmin | null>(null)
@@ -154,13 +160,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const buscarAdminPlataforma = async (email: string | undefined) => {
       if (!email) {
         setEhAdminPlataforma(false)
+        setEhAdminParceiro(false)
         return
       }
-      const { data, error } = await supabase
-        .from('platform_admins')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle()
+      const [{ data, error }, parceiro] = await Promise.all([
+        supabase
+          .from('platform_admins')
+          .select('email')
+          .eq('email', email)
+          .maybeSingle(),
+        // A RLS só mostra a própria linha.
+        supabase
+          .from('admins_parceiros')
+          .select('email')
+          .eq('email', email.toLowerCase())
+          .maybeSingle(),
+      ])
+      // Falha de consulta significa "não é parceiro", nunca acesso liberado.
+      setEhAdminParceiro(!parceiro.error && !!parceiro.data)
 
       if (error) {
         // Falha de consulta significa "não é admin", nunca acesso liberado.
@@ -265,6 +282,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setUsuario(null)
         setEhAdminPlataforma(false)
+        setEhAdminParceiro(false)
         setEhVendedor(false)
         setSessaoDemo(null)
         setAcessoAdmin(null)
@@ -421,7 +439,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, usuario, ehAdminPlataforma, ehVendedor, sessaoDemo, acessoAdmin, contaDeInfluencer, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
+      value={{ user, session, usuario, ehAdminPlataforma, ehAdminParceiro, ehVendedor, sessaoDemo, acessoAdmin, contaDeInfluencer, recarregarAcesso, login, cadastro, logout, recuperarSenha, loading, buscandoUsuario, refetchUsuario }}
     >
       {children}
     </AuthContext.Provider>

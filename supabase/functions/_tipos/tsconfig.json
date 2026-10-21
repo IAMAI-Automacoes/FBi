@@ -20,6 +20,8 @@
     "./deno.d.ts",
     "../_shared/*.ts",
     "../_shared/asaas/*.ts",
+    "../asaas-webhook/*.ts",
+    "../criar-cobranca/*.ts",
     "../gerar-insights/*.ts",
     "../sugerir-acoes/*.ts",
     "../categorizar-acao/*.ts",

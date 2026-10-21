@@ -193,7 +193,9 @@ export default function Layout() {
   return (
     <SidebarProvider open={sidebarAberto} onOpenChange={setSidebarAberto}>
       <HeaderExtraProvider>
-        <div className="flex h-screen w-full bg-background overflow-hidden">
+        {/* `100dvh`, não `100vh`: no celular o `vh` conta a área por trás da
+            barra do navegador, e o fim de toda página ficava escondido nela. */}
+        <div className="flex h-[100dvh] w-full bg-background overflow-hidden">
           <AppSidebar />
           <main
             className="flex flex-1 flex-col w-full min-w-0 min-h-0 transition-[margin] duration-300 ease-in-out"
@@ -204,12 +206,11 @@ export default function Layout() {
             <div className="relative flex-1 min-h-0">
               <div
                 ref={scrollRef}
-                // `pr-8` fixo (não escala com o breakpoint como o resto do
-                // padding) — é a folga mínima pra nunca o conteúdo (cards)
-                // encostar na `BarraDeScroll`, que fica a 24-30px da borda
-                // direita: em telas estreitas o `p-4` (16px) sozinho era menor
-                // que isso, e a barra ficava por cima da borda dos cards.
-                className="h-full overflow-auto sem-barra pl-4 sm:pl-6 lg:pl-8 pr-8 py-4 sm:py-6 lg:py-8 animate-fade-in"
+                // `md:pr-8` fixo a partir do tablet — é a folga mínima pra nunca
+                // o conteúdo (cards) encostar na `BarraDeScroll`, que fica rente
+                // à borda direita. No celular a barra não aparece (rolagem é
+                // pelo dedo), então o recuo volta a ser igual ao da esquerda.
+                className="h-full overflow-auto sem-barra pl-4 sm:pl-6 lg:pl-8 pr-4 sm:pr-6 md:pr-8 py-4 sm:py-6 lg:py-8 animate-fade-in"
               >
                 {/* `key={pathname}`: se uma página quebrar, o boundary reseta
                     sozinho ao trocar de rota (senão ficaria travado na tela
@@ -220,7 +221,7 @@ export default function Layout() {
                   <Outlet />
                 </ErrorBoundary>
               </div>
-              {mostrarBarraScroll && <BarraDeScroll containerRef={scrollRef} />}
+              {mostrarBarraScroll && !isMobile && <BarraDeScroll containerRef={scrollRef} />}
             </div>
           </main>
           {/* A `key` remonta o chat ao entrar ou sair das páginas da equipe: a

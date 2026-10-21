@@ -38,13 +38,21 @@ export const TODAS_AS_ABAS: readonly AbaAdmin[] = [
  */
 const SO_NO_RESTAURANTE: ReadonlySet<AbaAdmin> = new Set(['vendedores', 'influenciadores', 'motor', 'acompanhamento'])
 
-export function abasDaVersao(area: Area): AbaAdmin[] {
+/**
+ * O admin parceiro (decisão do Raver, 16/10/2026: só o Anderson) vê três abas,
+ * e só na versão Restaurante: Suporte e WhatsApp como qualquer admin, e Contas
+ * para ver e entrar nas contas (sem excluir, restaurar ou trocar a versão).
+ */
+export const ABAS_DO_PARCEIRO: readonly AbaAdmin[] = ['suporte', 'whatsapp', 'contas']
+
+export function abasDaVersao(area: Area, parceiro = false): AbaAdmin[] {
+  if (parceiro) return area === 'restaurante' ? [...ABAS_DO_PARCEIRO] : []
   return TODAS_AS_ABAS.filter((a) => area === 'restaurante' || !SO_NO_RESTAURANTE.has(a))
 }
 
 /** A aba pedida (pelo endereço, por exemplo), se ela existir nesta versão; senão, a padrão. */
-export function abaDaVersao(pedida: unknown, area: Area, padrao: AbaAdmin = 'suporte'): AbaAdmin {
-  return abasDaVersao(area).includes(pedida as AbaAdmin) ? (pedida as AbaAdmin) : padrao
+export function abaDaVersao(pedida: unknown, area: Area, padrao: AbaAdmin = 'suporte', parceiro = false): AbaAdmin {
+  return abasDaVersao(area, parceiro).includes(pedida as AbaAdmin) ? (pedida as AbaAdmin) : padrao
 }
 
 /** A versão de uma conta para o painel: conta que ainda não escolheu conta como restaurante. */

@@ -57,7 +57,7 @@ export function MessageMenu({ side, onReact, onReply, onEdit, onDelete, myReacti
         ref={btnRef}
         onClick={toggleOpen}
         className={cn(
-          'h-6 w-6 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100',
+          'h-6 w-6 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 [@media(hover:none)]:h-8 [@media(hover:none)]:w-8 [@media(hover:none)]:opacity-100',
           open ? 'opacity-100 bg-black/15' : 'bg-black/10 hover:bg-black/15',
         )}
       >

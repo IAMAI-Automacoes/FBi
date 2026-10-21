@@ -1,11 +1,16 @@
-// Google Business Profile: login (OAuth 2.0) e leitura das avaliações.
+// Google Business Profile: login (OAuth 2.0), leitura das avaliações e a
+// resposta do dono a uma avaliação.
 //
 // Só usa `fetch`, então roda no Deno (funções) e no Node (testes, com um
 // fetch de mentira). As APIs:
 //   - contas: My Business Account Management API v1
 //   - locais (restaurantes): My Business Business Information API v1
-//   - avaliações: Google My Business API v4 (accounts.locations.reviews)
-// Escopo único: business.manage (sensível — o app passa pela verificação do Google).
+//   - avaliações e respostas: Google My Business API v4 (accounts.locations.reviews)
+// Escopo único: business.manage (no Google Cloud ficou como NÃO sensível: o
+// app passa só pela verificação da marca).
+//
+// Publicar: só a resposta que o dono escreve e manda publicar na página Google
+// (e apagar uma resposta, quando ele pede). Nada é publicado sozinho.
 //
 // Política da API ("Content storage"): o conteúdo só pode ficar guardado como
 // cópia temporária de até 30 dias, sem ser agregado. Por isso quem chama grava
@@ -24,6 +29,7 @@ export type MotivoErroGoogle =
   | 'precisa_reconectar' // token de renovação revogado, vencido ou inválido
   | 'acesso_nao_liberado' // API ainda não liberada pelo Google (cota 0) ou desativada no projeto
   | 'sem_permissao' // a conta não administra esse perfil
+  | 'nao_encontrado' // 404: a avaliação (ou o perfil) não existe mais no Google
   | 'outro'
 
 export class ErroGoogle extends Error {
@@ -64,6 +70,7 @@ export function motivoDoErro(status: number, corpo: any): MotivoErroGoogle {
     return 'acesso_nao_liberado'
   }
   if (status === 403) return 'sem_permissao'
+  if (status === 404) return 'nao_encontrado'
   return 'outro'
 }
 
@@ -71,8 +78,28 @@ const MENSAGENS: Record<MotivoErroGoogle, string> = {
   precisa_reconectar: 'A conexão com o Google expirou ou foi desfeita. Conecte de novo.',
   acesso_nao_liberado: 'O acesso à API do Google Business Profile ainda não foi liberado pelo Google.',
   sem_permissao: 'Esta conta Google não tem permissão para ver esse perfil da empresa.',
+  nao_encontrado: 'O Google não encontrou essa avaliação. Ela pode ter sido apagada.',
   outro: 'O Google respondeu com um erro.',
 }
+
+/** O Google aceita resposta de até 4096 bytes (UTF-8: acento conta 2). */
+export const LIMITE_RESPOSTA_BYTES = 4096
+
+export const bytesUtf8 = (t: string): number => new TextEncoder().encode(t).length
+
+/** O texto da resposta do dono, limpo; vazio ou longo demais é recusado. */
+export function validarResposta(texto: unknown):
+  | { ok: true; texto: string }
+  | { ok: false; motivo: 'resposta_vazia' | 'resposta_longa' } {
+  const t = typeof texto === 'string' ? texto.replace(/\r\n?/g, '\n').trim() : ''
+  if (!t) return { ok: false, motivo: 'resposta_vazia' }
+  if (bytesUtf8(t) > LIMITE_RESPOSTA_BYTES) return { ok: false, motivo: 'resposta_longa' }
+  return { ok: true, texto: t }
+}
+
+/** O id de uma avaliação vai no caminho da API: só letras, números, - e _. */
+export const idAvaliacaoValido = (id: unknown): id is string =>
+  typeof id === 'string' && /^[A-Za-z0-9_-]{1,300}$/.test(id)
 
 /** Nota em palavras ("FOUR") vira número (4). Nota não informada vira null. */
 export function notaEmNumero(estrelas: unknown): number | null {
@@ -192,8 +219,15 @@ export function criarClienteGoogle(op: {
     return json
   }
 
-  async function get(url: string, accessToken: string): Promise<any> {
-    const resp = await buscar(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  async function pedir(metodo: 'GET' | 'PUT' | 'DELETE', url: string, accessToken: string, corpo?: unknown): Promise<any> {
+    const resp = await buscar(url, {
+      ...(metodo !== 'GET' ? { method: metodo } : {}),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(corpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
+    })
     const json = await lerJson(resp)
     if (!resp.ok) {
       const motivo = motivoDoErro(resp.status, json)
@@ -201,6 +235,11 @@ export function criarClienteGoogle(op: {
     }
     return json
   }
+
+  const get = (url: string, accessToken: string): Promise<any> => pedir('GET', url, accessToken)
+
+  const urlDaResposta = (conta: string, local: string, avaliacao: string) =>
+    `${API_AVALIACOES}/${conta}/locations/${local.replace(/^locations\//, '')}/reviews/${encodeURIComponent(avaliacao)}/reply`
 
   return {
     /** Troca o código de uso único (volta do Google) pelos tokens. */
@@ -307,6 +346,28 @@ export function criarClienteGoogle(op: {
         if (!pagina || chegouNoLimite) break
       }
       return { avaliacoes, notaMedia, total, cortado, completo: !desde && !cortado }
+    },
+
+    /**
+     * Publica a resposta do dono (ou troca a que já existe): PUT …/reviews/{id}/reply.
+     * Ela aparece no Google para todo mundo. Devolve como o Google gravou.
+     */
+    async responder(accessToken: string, conta: string, local: string, avaliacao: string, texto: string): Promise<{ comentario: string; atualizadaEm: string | null }> {
+      const j = await pedir('PUT', urlDaResposta(conta, local, avaliacao), accessToken, { comment: texto })
+      return {
+        comentario: typeof j?.comment === 'string' ? j.comment : texto,
+        atualizadaEm: typeof j?.updateTime === 'string' ? j.updateTime : null,
+      }
+    },
+
+    /** Apaga a resposta do dono. Se ela já não existia (404), está feito. */
+    async apagarResposta(accessToken: string, conta: string, local: string, avaliacao: string): Promise<void> {
+      try {
+        await pedir('DELETE', urlDaResposta(conta, local, avaliacao), accessToken)
+      } catch (e) {
+        if (e instanceof ErroGoogle && e.motivo === 'nao_encontrado') return
+        throw e
+      }
     },
   }
 }

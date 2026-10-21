@@ -30,6 +30,9 @@ function cenario(over: Partial<DepsEntrar> & { quem?: { userId: string; email: s
   const deps: DepsEntrar = {
     quemPede: async () => ('quem' in over ? over.quem! : { userId: 'u-raver', email: 'raverbrandi@gmail.com' }),
     emailsAdmins: async () => ['raverbrandi@gmail.com', 'dmcaio.24@gmail.com'],
+    ehParceiro: async (email) => email === 'parceiro@burger.com',
+    // O parceiro alcança só a conta 20 (no banco: versão Restaurante, não excluída, não é de admin).
+    parceiroPodeVer: async (_email, id) => id === 20,
     restaurante: async (id) => restaurantes[id] ?? null,
     emailDoUsuario: async (id) => emails[id] ?? null,
     registrar: async (r) => { feito.push(`registrou:${r.admin_email}:${r.alvo_user_id}:${r.restaurante_id}`); return 'reg-1' },
@@ -54,6 +57,16 @@ ok('token sem session_id: null', idDaSessao(token({ sub: 'x' })) === null && idD
   const c = cenario({ quem: { userId: 'u-x', email: 'cliente@qualquer.com' } })
   const r = await entrarNaConta(20, c.deps)
   ok('quem não é admin: 403 e nada acontece', r.status === 403 && r.corpo.motivo === 'so_admin' && c.feito.length === 0)
+}
+{
+  const c = cenario({ quem: { userId: 'u-and', email: 'Parceiro@Burger.com' } })
+  const r = await entrarNaConta(20, c.deps)
+  ok('admin parceiro entra na conta ao alcance dele (e fica registrado com o e-mail dele)', r.status === 200
+    && c.feito[0] === 'registrou:parceiro@burger.com:u-cliente:20', c.feito)
+  const fora = cenario({ quem: { userId: 'u-and', email: 'parceiro@burger.com' } })
+  const r2 = await entrarNaConta(12, fora.deps)
+  ok('admin parceiro: conta fora do alcance (de admin, RH, excluída) é recusada antes de tudo', r2.status === 403
+    && r2.corpo.motivo === 'fora_do_parceiro' && fora.feito.length === 0)
 }
 {
   const c = cenario({ quem: { userId: 'u-raver', email: 'RaverBrandi@Gmail.com' } })

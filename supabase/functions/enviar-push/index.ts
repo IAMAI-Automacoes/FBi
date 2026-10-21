@@ -384,9 +384,10 @@ Deno.serve(async (req: Request) => {
     // onde ele escreveu, com a página de Sugestões aberta, não se avisa.
     const payloadProprio = montarPayload({ ...aviso, chaves: [...aviso.chaves, 'suporte'] })
 
-    // Inscrições só de admins (função security definer), menos os aparelhos
-    // que silenciaram o suporte inteiro ou esta conversa.
-    const { data: todas } = await admin.rpc('admin_push_subscriptions')
+    // Inscrições só de admins (função security definer) — e do admin parceiro,
+    // quando quem escreveu é uma conta ao alcance dele (`p_cliente`) —, menos
+    // os aparelhos que silenciaram o suporte inteiro ou esta conversa.
+    const { data: todas } = await admin.rpc('admin_push_subscriptions', { p_cliente: usuarioId ?? null })
     const subs = await filtrarSilenciados(admin, (todas ?? []) as Inscricao[], 'suporte_admin', usuarioId)
     const envios = subs.map((sub) => ({ sub, payload: sub.auth_user_id === usuarioId ? payloadProprio : payload }))
     return jsonResp({ ok: true, ...(await enviarPara(admin, envios, simular)) })

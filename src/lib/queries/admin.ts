@@ -47,7 +47,43 @@ export interface SugestaoAdmin {
   reacoes: ReacaoAdmin[]
 }
 
-export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
+// ── Admin parceiro ──────────────────────────────────────────────────────────
+// O parceiro não lê `restaurantes` direto (lá está a chave do WhatsApp de cada
+// conta): as contas ao alcance dele vêm de `parceiro_contas()`, sem a chave,
+// e servem às três abas dele (Suporte, WhatsApp e Contas).
+
+interface ContaDoParceiro {
+  id: number
+  auth_user_id: string | null
+  nome_restaurante: string | null
+  logo_url: string | null
+  nome: string | null
+  email: string | null
+  avatar_url: string | null
+  numero_whatsapp: string | null
+  whatsapp_dono: string | null
+  tem_instancia: boolean
+  whatsapp_conectado: boolean
+  tipo_culinaria: string | null
+  numero_mesas: number | null
+  detalhes: string | null
+  area: string | null
+  assinatura_status: string
+  plano_ciclo: string | null
+  onboarding_completo: boolean
+  created_at: string
+}
+
+async function contasDoParceiro(): Promise<ContaDoParceiro[]> {
+  const { data, error } = await supabase.rpc('parceiro_contas')
+  if (error) throw error
+  return (data ?? []) as unknown as ContaDoParceiro[]
+}
+
+/** `parceiro`: o painel reduzido do admin parceiro (lib/admin-versoes.ts). */
+export interface OpcoesDoPainel { parceiro?: boolean }
+
+export async function buscarTodasSugestoes(opcoes: OpcoesDoPainel = {}): Promise<SugestaoAdmin[]> {
   const { data: sugestoes, error } = await supabase
     .from('sugestoes_plataforma')
     .select(`
@@ -63,14 +99,35 @@ export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
 
   const usuarioIds = [...new Set((sugestoes as any[]).map((s) => s.usuario_id).filter(Boolean))]
 
+  const userMap: Record<string, PerfilRestaurante> = {}
+  if (opcoes.parceiro) {
+    // Parceiro: o perfil sai das contas ao alcance dele (a RLS já só mostra
+    // as conversas delas).
+    for (const c of await contasDoParceiro()) {
+      if (!c.auth_user_id) continue
+      userMap[c.auth_user_id] = {
+        nome: c.nome ?? null,
+        email: c.email ?? null,
+        avatar_url: c.avatar_url ?? null,
+        nome_restaurante: c.nome_restaurante ?? null,
+        logo_url: c.logo_url ?? null,
+        numero_whatsapp: c.numero_whatsapp ?? null,
+        tipo_culinaria: c.tipo_culinaria ?? null,
+        numero_mesas: c.numero_mesas ?? null,
+        detalhes: c.detalhes ?? null,
+        area: c.area ?? null,
+      }
+    }
+  }
+
   // Dados do restaurante vêm de `restaurantes`; os da pessoa (nome/email/avatar)
   // de `usuarios`. Une-se pelo id do auth (usuario_id da sugestão).
-  const { data: restaurantes } = await supabase
+  const { data: restaurantes } = opcoes.parceiro ? { data: [] } : await supabase
     .from('restaurantes')
     .select('auth_user_id, nome_restaurante, logo_url, numero_whatsapp, tipo_culinaria, numero_mesas, detalhes, area')
     .in('auth_user_id', usuarioIds)
 
-  const { data: pessoas } = await supabase
+  const { data: pessoas } = opcoes.parceiro ? { data: [] } : await supabase
     .from('usuarios')
     .select('id, nome, email, avatar_url')
     .in('id', usuarioIds)
@@ -78,7 +135,6 @@ export async function buscarTodasSugestoes(): Promise<SugestaoAdmin[]> {
   const pessoaMap: Record<string, any> = {}
   for (const p of pessoas ?? []) pessoaMap[p.id] = p
 
-  const userMap: Record<string, PerfilRestaurante> = {}
   for (const r of restaurantes ?? []) {
     if (r.auth_user_id) {
       const p = pessoaMap[r.auth_user_id] || {}
@@ -445,7 +501,21 @@ export interface ContaAdmin {
   area: string | null
 }
 
-export async function buscarContas(): Promise<ContaAdmin[]> {
+export async function buscarContas(opcoes: OpcoesDoPainel = {}): Promise<ContaAdmin[]> {
+  if (opcoes.parceiro) {
+    return (await contasDoParceiro()).map((c) => ({
+      id: c.id,
+      nome: c.nome ?? null,
+      email: c.email ?? null,
+      nome_restaurante: c.nome_restaurante ?? null,
+      assinatura_status: c.assinatura_status as AssinaturaStatus,
+      plano_ciclo: c.plano_ciclo ?? null,
+      onboarding_completo: c.onboarding_completo,
+      excluida_em: null, // conta excluída não chega ao parceiro
+      created_at: c.created_at,
+      area: c.area ?? null,
+    }))
+  }
   const { data, error } = await supabase
     .from('restaurantes')
     .select('id, nome_restaurante, assinatura_status, plano_ciclo, onboarding_completo, excluida_em, created_at, area')
@@ -496,7 +566,23 @@ export interface RestauranteWhatsappAdmin {
   area: string | null
 }
 
-export async function buscarRestaurantesWhatsapp(): Promise<RestauranteWhatsappAdmin[]> {
+export async function buscarRestaurantesWhatsapp(opcoes: OpcoesDoPainel = {}): Promise<RestauranteWhatsappAdmin[]> {
+  if (opcoes.parceiro) {
+    return (await contasDoParceiro())
+      .map((c) => ({
+        id: c.id,
+        nome: c.nome_restaurante ?? null,
+        logo_url: c.logo_url || null,
+        email: c.email ?? null,
+        numero_whatsapp: c.numero_whatsapp || null,
+        whatsapp_dono: c.whatsapp_dono || null,
+        temInstancia: c.tem_instancia === true,
+        conectado: c.whatsapp_conectado === true,
+        excluida_em: null,
+        area: c.area ?? null,
+      }))
+      .sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'))
+  }
   const { data, error } = await supabase
     .from('restaurantes')
     .select('id, nome_restaurante, logo_url, email, numero_whatsapp, whatsapp_dono, whatsapp_token, whatsapp_conectado, excluida_em, area')

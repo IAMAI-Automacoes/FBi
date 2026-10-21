@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { CheckCircle2, Copy, Loader2, Percent, RotateCcw, X } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Copy, Loader2, Percent, RotateCcw, X } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
@@ -11,13 +11,17 @@ import { DEFINICOES, type Area } from '@/lib/areas'
 import { codigoParaCopia, ROTULO_PREMIO_ADMIN, textoDaPorcentagem, type StatusPremio } from '@/lib/indicacoes'
 import { lerPorcentagem } from '@/lib/pagamentos'
 import { buscarAfiliados, buscarCodigosDeAfiliado, criarAfiliado, type Afiliado } from '@/lib/queries/admin'
-import { mudarPremioDaIndicacao, salvarPorcentagemPadrao, type NumerosDoAfiliado } from '@/lib/queries/indicacoes'
+import {
+  buscarMesesParaRenovacao, mudarPremioDaIndicacao, salvarMesesParaRenovacao, salvarPorcentagemPadrao, type NumerosDoAfiliado,
+} from '@/lib/queries/indicacoes'
 import { cn } from '@/lib/utils'
 
-/* Admin → Afiliados, por software (decisões do Raver, 15/10/2026): a
-   porcentagem padrão de cada software (vem em todo afiliado novo), trazer
-   afiliados do outro software e, para quem é conta EasyFeed indicando, os
-   descontos liberados (entram sozinhos na próxima renovação da assinatura). */
+/* Admin → Afiliados, por software (decisões do Raver, 15 e 17/10/2026): a
+   porcentagem padrão de cada software (a comissão do afiliado de fora), trazer
+   afiliados do outro software e, para quem é conta EasyFeed indicando, a fila
+   de meses grátis (1 por indicado que pagou o 2º mês; o Asaas usa sozinho,
+   conferindo se o indicado segue assinando) e o mínimo de meses que o
+   indicado precisa ter pago para valer na renovação semestral/anual. */
 
 const COR: Record<StatusPremio, string> = {
   pendente: 'bg-amber-50 text-amber-700',
@@ -53,7 +57,7 @@ export function PorcentagemPadrao({ area, valor, aoSalvar }: { area: Area; valor
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-800">Porcentagem padrão</p>
         <p className="text-[12px] leading-snug text-gray-500">
-          Já vem em todo afiliado novo (dá para mudar em cada um). Para quem é conta EasyFeed, é o desconto na própria mensalidade por indicado.
+          Já vem em todo afiliado novo (dá para mudar em cada um): é a comissão do afiliado de fora. Conta EasyFeed que indica ganha meses grátis.
         </p>
       </div>
       <div className="flex items-center gap-1.5">
@@ -62,6 +66,58 @@ export function PorcentagemPadrao({ area, valor, aoSalvar }: { area: Area; valor
             className={cn('h-9 w-20 pr-6 text-right tabular-nums', lida === null && 'border-rose-400')} disabled={valor == null} />
           <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
         </div>
+        {mudou && (
+          <Button size="sm" onClick={salvar} disabled={salvando}>
+            {salvando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Salvar
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Plano semestral/anual do padrinho: na renovação, só vale o mês grátis de
+ * indicado que já pagou pelo menos este tanto de meses (ou comprou semestral
+ * ou anual). Vale para os dois softwares.
+ */
+export function MesesParaRenovacao() {
+  const [valor, setValor] = useState<number | null>(null)
+  const [texto, setTexto] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => {
+    buscarMesesParaRenovacao().then((n) => { setValor(n); setTexto(String(n)) }).catch(() => setValor(4))
+  }, [])
+  const lido = Number.parseInt(texto, 10)
+  const valido = Number.isInteger(lido) && lido >= 1 && lido <= 24
+  const mudou = valor != null && valido && lido !== valor
+
+  const salvar = async () => {
+    setSalvando(true)
+    try {
+      await salvarMesesParaRenovacao(lido)
+      setValor(lido)
+      toast.success(`Semestral e anual: o indicado precisa ter pago ${lido} ${lido === 1 ? 'mês' : 'meses'}.`)
+    } catch {
+      toast.error('Não foi possível salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <CalendarClock className="h-4 w-4 shrink-0 text-gray-400" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-800">Meses grátis na renovação semestral e anual</p>
+        <p className="text-[12px] leading-snug text-gray-500">
+          Na renovação, abate de uma vez 1 mensalidade por indicado ativo que já pagou pelo menos estes meses (ou comprou semestral ou anual). O resto fica para a próxima. Vale nos dois softwares.
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Input value={texto} onChange={(e) => setTexto(e.target.value.replace(/\D/g, ''))} inputMode="numeric" aria-label="Meses mínimos"
+          className={cn('h-9 w-16 text-right tabular-nums', texto && !valido && 'border-rose-400')} disabled={valor == null} />
+        <span className="text-sm text-gray-500">meses</span>
         {mudou && (
           <Button size="sm" onClick={salvar} disabled={salvando}>
             {salvando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Salvar
@@ -189,7 +245,7 @@ export function DescontosDeQuemIndica({ afiliado, numeros, aoFechar, aoMudar }: 
       await mudarPremioDaIndicacao(id, status)
       aoMudar()
     } catch {
-      toast.error('Não foi possível mudar a situação do desconto.')
+      toast.error('Não foi possível mudar a situação do mês grátis.')
     } finally {
       setMexendo(null)
     }
@@ -202,11 +258,10 @@ export function DescontosDeQuemIndica({ afiliado, numeros, aoFechar, aoMudar }: 
         {afiliado && (
           <div className="space-y-4">
             <p className="text-[13px] text-gray-600">
-              Conta EasyFeed que indica. Ganha {textoDaPorcentagem(afiliado.comissao_valor)} de desconto na própria mensalidade por indicado que pagar o 2º mês.
-              Código <span className="font-mono font-semibold">{afiliado.codigo}</span>.
+              Conta EasyFeed que indica: cada indicado que paga o 2º mês dá 1 mês grátis, na fila. O Asaas usa um por mês, só se aquele indicado segue assinando. Código <span className="font-mono font-semibold">{afiliado.codigo}</span>.
             </p>
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[['criaram a conta', numeros?.entraram ?? 0], ['assinaram', numeros?.assinaram ?? 0], ['usam hoje', numeros?.usam ?? 0]].map(([t, v]) => (
+              {[['criaram a conta', numeros?.entraram ?? 0], ['assinaram', numeros?.assinaram ?? 0], ['já contam (2 meses)', numeros?.contam ?? 0]].map(([t, v]) => (
                 <div key={String(t)} className="rounded-lg border border-gray-200 px-2 py-2">
                   <p className="text-xl font-bold tabular-nums text-gray-900">{v}</p>
                   <p className="text-[11.5px] text-gray-500">{t}</p>
@@ -214,31 +269,36 @@ export function DescontosDeQuemIndica({ afiliado, numeros, aoFechar, aoMudar }: 
               ))}
             </div>
             <div>
-              <p className="mb-1.5 text-[13px] font-semibold text-gray-700">Descontos liberados</p>
+              <p className="mb-1.5 text-[13px] font-semibold text-gray-700">Meses grátis</p>
               {!numeros?.premios.length ? (
-                <p className="rounded-lg bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">Nenhum ainda: sai quando um indicado pagar o 2º mês.</p>
+                <p className="rounded-lg bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">Nenhum ainda: sai quando um indicado paga o 2º mês.</p>
               ) : (
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {numeros.premios.map((p) => (
                     <li key={p.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-800">{p.beneficio}</p>
-                        <p className="text-[11.5px] text-gray-500">Por {p.indicado} · liberado em {quando(p.criado_em)}{p.aplicado_em ? ` · aplicado em ${quando(p.aplicado_em)}` : ''}</p>
+                        <p className="text-[11.5px] text-gray-500">
+                          Por {p.indicado} · liberado em {quando(p.criado_em)}
+                          {p.status === 'pendente' && p.reservado && ' · na próxima cobrança'}
+                          {p.status === 'aplicado' && p.aplicado_em && ` · usado em ${quando(p.aplicado_em)}${p.aplicado_por === 'asaas' ? ' (automático)' : ' (à mão)'}`}
+                          {p.status === 'cancelado' && (p.motivo === 'indicado_cancelou' ? ' · descartado: o indicado cancelou' : ' · descartado à mão')}
+                        </p>
                       </div>
                       <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', COR[p.status])}>{ROTULO_PREMIO_ADMIN[p.status]}</span>
                       {mexendo === p.id ? <Loader2 className="h-4 w-4 animate-spin text-gray-400" /> : p.status === 'pendente' ? (
                         <>
-                          <Button size="sm" variant="outline" className="h-8 text-[12px]" onClick={() => mudar(p.id, 'aplicado')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Aplicado</Button>
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-500" onClick={() => mudar(p.id, 'cancelado')} aria-label="Cancelar este desconto"><X className="h-4 w-4" /></Button>
+                          <Button size="sm" variant="outline" className="h-8 text-[12px]" onClick={() => mudar(p.id, 'aplicado')} title="Dei este mês grátis à mão"><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Usado</Button>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-gray-500" onClick={() => mudar(p.id, 'cancelado')} aria-label="Descartar este mês grátis"><X className="h-4 w-4" /></Button>
                         </>
                       ) : (
-                        <Button size="sm" variant="ghost" className="h-8 text-[12px]" onClick={() => mudar(p.id, 'pendente')}><RotateCcw className="mr-1 h-3.5 w-3.5" /> {p.status === 'aplicado' ? 'Desfazer' : 'Reabrir'}</Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-[12px]" onClick={() => mudar(p.id, 'pendente')}><RotateCcw className="mr-1 h-3.5 w-3.5" /> Voltar para a fila</Button>
                       )}
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-1.5 text-[11.5px] text-gray-500">O desconto entra sozinho na próxima renovação da assinatura (Asaas). Marque aqui só se der o desconto à mão (ex.: plano parcelado).</p>
+              <p className="mt-1.5 text-[11.5px] text-gray-500">Na assinatura recorrente o Asaas usa sozinho. "Usado" à mão é para quando o mês foi dado fora do Asaas.</p>
             </div>
           </div>
         )}

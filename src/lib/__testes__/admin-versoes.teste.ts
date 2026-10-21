@@ -27,6 +27,12 @@ ok('aba pedida que existe na versão abre', abaDaVersao('contas', 'rh') === 'con
 ok('aba que não existe na versão cai na padrão', abaDaVersao('motor', 'rh') === 'suporte' && abaDaVersao('vendedores', 'rh', 'contas') === 'contas')
 ok('lixo no endereço cai na padrão', [null, undefined, '', 'xyz', 3, {}].every((v) => abaDaVersao(v, 'restaurante') === 'suporte'))
 
+// Admin parceiro: só Suporte, WhatsApp e Contas, e só no Restaurante.
+ok('parceiro: três abas, na ordem do menu', abasDaVersao('restaurante', true).join() === 'suporte,whatsapp,contas')
+ok('parceiro: nada no RH', abasDaVersao('rh', true).length === 0)
+ok('parceiro: aba de admin pelo endereço cai no Suporte', ['pagamentos', 'cupons', 'afiliados', 'agentes', 'vendedores', 'uso_ia'].every((a) => abaDaVersao(a, 'restaurante', 'suporte', true) === 'suporte'))
+ok('parceiro: as dele abrem pelo endereço', abaDaVersao('contas', 'restaurante', 'suporte', true) === 'contas' && abaDaVersao('whatsapp', 'restaurante', 'suporte', true) === 'whatsapp')
+
 // ── Contas por versão ────────────────────────────────────────────────────────
 ok('conta sem versão conta como restaurante', versaoDaConta(null) === 'restaurante' && versaoDaConta('') === 'restaurante' && versaoDaConta('rh') === 'rh')
 const contas = [{ id: 1, area: 'restaurante' }, { id: 2, area: 'rh' }, { id: 3, area: null }, { id: 4, area: 'rh' }]

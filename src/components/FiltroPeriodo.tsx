@@ -149,10 +149,12 @@ export function FiltroPeriodo<P extends string = PeriodoPreset>({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-auto p-0" align="start">
+      {/* Celular: no máximo a largura da tela; os atalhos ficam em duas
+          colunas (numa fileira só passavam de 450px e saíam da tela). */}
+      <PopoverContent className="w-auto max-w-[calc(100vw-1rem)] p-0" align="start">
         <div className="flex flex-col">
           <div className="flex flex-col sm:flex-row">
-            <div className="flex gap-0.5 border-b p-2 sm:flex-col sm:border-b-0 sm:border-r">
+            <div className="grid grid-cols-2 gap-0.5 border-b p-2 sm:flex sm:flex-col sm:border-b-0 sm:border-r">
               {lista.map((p) => (
                 <button
                   key={p.value}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useLocation, Link, useNavigate } from 'react-router-dom'
+import { useLocation, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { LogOut, Settings as SettingsIcon, User as UserIcon, ShieldCheck } from 'lucide-react'
-import { usePlatformAdmin } from '@/hooks/use-platform-admin'
+import { usePainelAdmin } from '@/hooks/use-platform-admin'
 import { buscarTotalNaoLidas } from '@/lib/queries/admin'
 import { supabase } from '@/lib/supabase/client'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -11,6 +11,7 @@ import { useUserProfile } from '@/hooks/use-user-profile'
 import { useHeaderExtra } from '@/hooks/use-header-extra'
 import { useRestauranteConfig } from '@/hooks/use-restaurante-config'
 import { PontoPendente } from '@/components/PontoPendente'
+import { BotaoInstalarApp } from '@/components/InstalarApp'
 import { getIniciais } from '@/lib/iniciais'
 import { easyFeedLogoInterna } from '@/assets/brand'
 import { PilulaDemo } from '@/components/demo/ControleDemo'
@@ -73,8 +74,20 @@ export function TopHeader() {
   const { perfilFaltando } = useRestauranteConfig()
   const perfilPendente = !ehRh && perfilFaltando > 0
   const avisoPerfil = `Faltam ${perfilFaltando} ${perfilFaltando === 1 ? 'informação' : 'informações'} sobre o restaurante`
-  const { isAdmin } = usePlatformAdmin()
+  // O botão do Painel Admin: o admin da plataforma e o admin parceiro.
+  const { podeAbrir: isAdmin } = usePainelAdmin()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+
+  // Vindo de "Instalar App" noutra página (?instalar=1, ver instalar-app.ts):
+  // o botão fica em destaque (o navegador só instala com um toque) e a URL limpa.
+  const [params, setParams] = useSearchParams()
+  const [destacarInstalar] = useState(() => params.get('instalar') === '1')
+  useEffect(() => {
+    if (!params.has('instalar')) return
+    const limpo = new URLSearchParams(params)
+    limpo.delete('instalar')
+    setParams(limpo, { replace: true })
+  }, [params, setParams])
   const [adminUnread, setAdminUnread] = useState(0)
 
   // Busca do banco ao montar (Admin e TopHeader nunca ficam montados juntos)
@@ -126,9 +139,9 @@ export function TopHeader() {
       */}
       <header className="sticky top-0 z-30 w-full border-b border-border bg-white shadow-sm">
         <div className="relative flex h-16 w-full items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <SidebarTrigger className="-ml-2 md:hidden" />
-            <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <SidebarTrigger className="-ml-2 shrink-0 md:hidden" />
+            <h1 className="truncate text-lg font-semibold text-foreground sm:text-xl">{title}</h1>
           </div>
 
           {/* Logo centralizada na barra — entre o nome da página e os ícones à direita.
@@ -142,8 +155,10 @@ export function TopHeader() {
             <img src={easyFeedLogoInterna} alt="Easy Feed" className="h-[52px] w-auto" />
           </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <PilulaDemo />
+            {/* Instalar o painel na tela inicial (some no app já instalado). */}
+            {!sessaoDemo && <BotaoInstalarApp app="easyfeed" nome="Easy Feed" rotulo="Instalar App" variante="escuro" destacar={destacarInstalar} />}
             {/* Na demonstração o painel admin fica fora, mesmo se o vendedor for admin. */}
             {isAdmin && !sessaoDemo && (
               <Link

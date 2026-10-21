@@ -141,7 +141,7 @@ export function DetalheRestaurante({
         : `Os últimos 30 dias têm ${resumo.agora.avaliacoes} avaliações; o mínimo para comparar é ${MIN_AVALIACOES}.`
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
       <div className="max-w-5xl mx-auto space-y-5">
         <button onClick={onVoltar} className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-gray-500 hover:text-gray-800">
           <ArrowLeft className="h-3.5 w-3.5" /> Todos os restaurantes

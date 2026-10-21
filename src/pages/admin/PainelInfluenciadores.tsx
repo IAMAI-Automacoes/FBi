@@ -164,11 +164,11 @@ export function PainelInfluenciadores() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
       {dialogo}
       <div className="max-w-4xl mx-auto">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-gray-800">Influenciadores</h2>
             <p className="mt-1 text-[12px] text-gray-500">
               Entram em easyfeed.com.br/influencers e veem, sem identificar ninguém, o que os clientes de restaurante comentam.

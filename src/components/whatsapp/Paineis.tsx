@@ -90,7 +90,7 @@ export function PainelContato({
   return (
     <div className="flex h-full w-full flex-col bg-[#F0F2F5]">
       <Cabecalho titulo={participante ? 'Participante do grupo' : grupo ? 'Dados do grupo' : 'Dados do contato'} aoFechar={aoFechar} />
-      <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
+      <div className="sem-barra min-h-0 flex-1 overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex flex-col items-center gap-2 bg-white px-6 pb-6 pt-8 text-center">
           <Avatar nome={nome} grupo={grupo} foto={foto} tamanho={120} />
           <p className="mt-2 text-[22px] text-[#111b21]">{nome}</p>
@@ -270,7 +270,7 @@ export function PainelPesquisa({ restauranteId, chatId, nome, aoFechar, aoEscolh
           {buscando && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
         </label>
       </div>
-      <div className="sem-barra min-h-0 flex-1 overflow-y-auto">
+      <div className="sem-barra min-h-0 flex-1 overflow-y-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {resultados === null ? (
           <p className="px-6 py-8 text-center text-[13px] text-gray-500">Pesquise mensagens, legendas, transcrições de áudio e nomes de arquivo com {nome}. Primeiro vem o que está escrito exatamente igual; depois, o parecido.</p>
         ) : resultados.length === 0 && !buscando ? (
