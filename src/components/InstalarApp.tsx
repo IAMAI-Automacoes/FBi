@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy, Download, EllipsisVertical, Menu, Share, SquarePlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { useToast } from '@/hooks/use-toast'
 import {
   abertoComoApp, ehAppInstalado, enderecoDoApp, existePedidoDeInstalar, instalar, jaInstalado,
@@ -124,7 +125,7 @@ function useInstalar(app: AppInstalavel, nome: string) {
  * depois de sumir daqui: Perfil → `CartaoInstalarApps`.)
  *
  * `variante`: 'claro' para fundo colorido (cabeçalho verde do WhatsApp),
- * 'escuro' para fundo branco (cabeçalho do painel).
+ * 'escuro' para fundo branco (cabeçalho do painel, com o azul padrão do site).
  */
 export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante = 'claro' }: {
   app: AppInstalavel
@@ -148,8 +149,9 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
         onClick={clicar}
         className={cn(
           'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-semibold transition-colors',
+          // Fundo branco: a pílula azul padrão do site (BOTAO_PILULA_AZUL).
           variante === 'escuro'
-            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+            ? cn(BOTAO_PILULA_AZUL, 'px-3 text-[13px] font-semibold')
             : forte ? 'bg-white text-[#128C7E] hover:bg-white/90' : 'text-white/90 hover:bg-white/10 hover:text-white',
           destacar && 'animate-pulse',
         )}
