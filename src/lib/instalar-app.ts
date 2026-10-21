@@ -44,8 +44,26 @@ interface EventoInstalar extends Event {
 }
 
 let pedido: EventoInstalar | null = null
-// Em que página este carregamento começou: o pedido é do manifest DELA.
+// De qual app é o `pedido`: o do manifest ligado na página quando o
+// navegador ofereceu (ManifestPorRota troca o manifest ao trocar de página, e
+// o Chrome oferece de novo para o manifest novo).
+let appDoPedido: AppInstalavel | null = null
+// Em que página este carregamento começou (janela aberta pelo ícone).
 const appInicial: AppInstalavel = typeof window !== 'undefined' ? appDaRota(window.location.pathname) : 'easyfeed'
+
+/** De qual app é o manifest ligado na página agora. */
+function appDoManifestAtual(): AppInstalavel {
+  const href = document.querySelector('link[rel="manifest"]')?.getAttribute('href') ?? ''
+  const achado = (Object.keys(MANIFESTO_DO_APP) as AppInstalavel[]).find((a) => href.endsWith(MANIFESTO_DO_APP[a]))
+  return achado ?? appDaRota(window.location.pathname)
+}
+
+function ligarManifest(app: AppInstalavel) {
+  document.querySelector('link[rel="manifest"]')?.setAttribute('href', MANIFESTO_DO_APP[app])
+}
+
+// Quem está esperando o navegador oferecer um app (ver `instalar`).
+const esperandoPedido = new Set<() => void>()
 
 const CHAVE_ABERTO = 'easyfeed:app-aberto'
 const chaveInstalado = (app: AppInstalavel) => `easyfeed:instalado:${app}`
@@ -74,14 +92,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     pedido = e as EventoInstalar
+    appDoPedido = appDoManifestAtual()
     // O navegador só oferece o que NÃO está instalado: se estava marcado
     // como instalado, a pessoa apagou o ícone. O botão volta a aparecer.
-    desmarcarInstalado(appInicial)
+    desmarcarInstalado(appDoPedido)
+    esperandoPedido.forEach((avisar) => avisar())
     window.dispatchEvent(new Event('easyfeed:pode-instalar'))
   })
   window.addEventListener('appinstalled', () => {
+    marcarInstalado(appDoPedido ?? appDoManifestAtual())
     pedido = null
-    marcarInstalado(appInicial)
+    appDoPedido = null
     window.dispatchEvent(new Event('easyfeed:pode-instalar'))
   })
   // Aberto pelo ícone: lembra QUAL app é esta janela. O ?app= do start_url
@@ -150,9 +171,14 @@ export function existePedidoDeInstalar(): boolean {
   return !!pedido
 }
 
-/** Dá para pedir ao navegador o app `app` agora, sem recarregar? */
+/** O navegador já ofereceu o app `app` (com o manifest dele ligado na página)? */
 export function podeInstalarAqui(app: AppInstalavel): boolean {
-  return !!pedido && appInicial === app
+  return !!pedido && appDoPedido === app && appDoManifestAtual() === app
+}
+
+/** Navegador que oferece instalar com um toque (Chrome, Edge, Samsung Internet novo). */
+export function navegadorInstalaComUmToque(): boolean {
+  return typeof window !== 'undefined' && 'onbeforeinstallprompt' in window
 }
 
 /**
@@ -172,23 +198,61 @@ export function enderecoDoApp(app: AppInstalavel): string {
   return `${window.location.origin}${ROTA_DO_APP[app]}`
 }
 
+// Quanto esperar o navegador oferecer depois de trocar o manifest. O Chrome
+// só deixa abrir a janela de instalar até ~5 s depois do clique.
+const ESPERA_PEDIDO_MS = 4000
+
+function esperarPedido(app: AppInstalavel): Promise<boolean> {
+  return new Promise((resolver) => {
+    const terminar = (veio: boolean) => {
+      clearTimeout(prazo)
+      esperandoPedido.delete(avisar)
+      resolver(veio)
+    }
+    const avisar = () => { if (appDoPedido === app) terminar(true) }
+    const prazo = setTimeout(() => terminar(false), ESPERA_PEDIDO_MS)
+    esperandoPedido.add(avisar)
+  })
+}
+
 /**
- * Pede a instalação. Se este carregamento começou na página de outro app, o
- * pedido do navegador seria do app errado (o manifest é lido no carregamento):
- * então recarrega na rota certa, e lá a pessoa toca de novo.
- * Devolve 'recarregando' | 'aceito' | 'recusado' | 'indisponivel'.
+ * Pede a instalação do app `app` — de qualquer página, num toque só.
+ *
+ * O navegador só oferece o app do manifest ligado na página, e só se ele
+ * ainda não está instalado: na página do Easy Feed já instalado, por exemplo,
+ * não há oferta nenhuma, e o ZapFeed caía no passo a passo dos três pontinhos.
+ * Então, se a oferta não é deste app, liga o manifest dele e espera o
+ * navegador oferecer (ele reavalia quando o manifest muda) — ainda dentro do
+ * tempo do clique. Depois devolve o manifest da página.
+ * Devolve 'aceito' | 'recusado' | 'indisponivel' (sem oferta: passo a passo).
  */
-export async function instalar(app: AppInstalavel): Promise<'recarregando' | 'aceito' | 'recusado' | 'indisponivel'> {
-  if (pedido && appInicial !== app) {
-    window.location.assign(`${ROTA_DO_APP[app]}?instalar=1`)
-    return 'recarregando'
+export async function instalar(app: AppInstalavel): Promise<'aceito' | 'recusado' | 'indisponivel'> {
+  if (!navegadorInstalaComUmToque()) return 'indisponivel'
+  const devolverManifest = () => ligarManifest(appDaRota(window.location.pathname))
+  if (!podeInstalarAqui(app)) {
+    // O manifest já é o deste app e o navegador não ofereceu: trocar não muda nada.
+    if (appDoManifestAtual() === app) return 'indisponivel'
+    pedido = null
+    appDoPedido = null
+    ligarManifest(app)
+    if (!(await esperarPedido(app))) {
+      devolverManifest()
+      return 'indisponivel'
+    }
   }
-  if (!pedido) return 'indisponivel'
   const atual = pedido
-  await atual.prompt()
+  if (!atual) return 'indisponivel'
+  try {
+    await atual.prompt()
+  } catch {
+    devolverManifest()
+    return 'indisponivel'
+  }
   const { outcome } = await atual.userChoice
   pedido = null
+  appDoPedido = null
   if (outcome === 'accepted') marcarInstalado(app)
+  devolverManifest()
   window.dispatchEvent(new Event('easyfeed:pode-instalar'))
   return outcome === 'accepted' ? 'aceito' : 'recusado'
 }

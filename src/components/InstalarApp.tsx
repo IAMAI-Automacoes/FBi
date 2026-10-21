@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Check, Copy, Download, EllipsisVertical, Menu, Share, SquarePlus, X } from 'lucide-react'
+import { Check, Copy, Download, EllipsisVertical, Loader2, Menu, Share, SquarePlus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BOTAO_PILULA_AZUL } from '@/lib/estilos-botao'
 import { useToast } from '@/hooks/use-toast'
 import {
-  abertoComoApp, ehAppInstalado, enderecoDoApp, existePedidoDeInstalar, instalar, instaladoNoAparelho,
-  jaInstalado, jeitoDeInstalar, podeInstalarAqui, type AppInstalavel,
+  abertoComoApp, ehAppInstalado, enderecoDoApp, instalar, instaladoNoAparelho, jaInstalado,
+  jeitoDeInstalar, navegadorInstalaComUmToque, podeInstalarAqui, type AppInstalavel,
 } from '@/lib/instalar-app'
 
 type Jeito = ReturnType<typeof jeitoDeInstalar>
@@ -130,6 +130,8 @@ function useInstalar(app: AppInstalavel, nome: string) {
   const [passo, setPasso] = useState<{ endereco?: string; jaTem?: boolean } | null>(null)
   // Já instalado neste aparelho? (marcado aqui ou respondido pelo navegador)
   const [instalado, setInstalado] = useState(() => jaInstalado(app))
+  // Esperando o navegador abrir a janela de instalar (até ~4 s, ver `instalar`).
+  const [abrindo, setAbrindo] = useState(false)
   useEffect(() => {
     let ativo = true
     const conferir = () => {
@@ -145,15 +147,18 @@ function useInstalar(app: AppInstalavel, nome: string) {
     // Já tem o app: avisa, em vez de mandar procurar o menu do navegador.
     if (await instaladoNoAparelho(app)) { setInstalado(true); setPasso({ jaTem: true }); return }
     if (ehAppInstalado()) { setPasso({ endereco: enderecoDoApp(app) }); return }
-    if (!existePedidoDeInstalar()) { setPasso({}); return }
-    const r = await instalar(app)
+    if (!navegadorInstalaComUmToque()) { setPasso({}); return }
+    // Num toque: `instalar` consegue a oferta do navegador mesmo estando na
+    // página de outro app; só sem oferta nenhuma cai no passo a passo.
+    setAbrindo(true)
+    const r = await instalar(app).finally(() => setAbrindo(false))
     if (r === 'aceito') toast({ title: `${nome} instalado`, description: 'Abra pelo ícone na tela inicial.' })
     else if (r === 'indisponivel') setPasso({})
   }
   const passoAPasso = passo && (
     <PassoAPassoInstalar nome={nome} endereco={passo.endereco} jaTem={passo.jaTem} aoFechar={() => setPasso(null)} />
   )
-  return { clicar, passoAPasso, instalado }
+  return { clicar, passoAPasso, instalado, abrindo }
 }
 
 /**
@@ -173,7 +178,7 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
   destacar?: boolean
   variante?: 'claro' | 'escuro'
 }) {
-  const { clicar, passoAPasso, instalado } = useInstalar(app, nome)
+  const { clicar, passoAPasso, instalado, abrindo } = useInstalar(app, nome)
 
   if (abertoComoApp(app)) return null
   // Fora de um app instalado, "já instalado" esconde: o Chrome para de
@@ -186,6 +191,7 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
       <button
         type="button"
         onClick={clicar}
+        disabled={abrindo}
         className={cn(
           'flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-semibold transition-colors',
           // Fundo branco: a pílula azul padrão do site (BOTAO_PILULA_AZUL).
@@ -196,7 +202,7 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
         )}
         title={`Instalar o ${nome} na tela inicial`}
       >
-        <Download className="h-4 w-4" />
+        {abrindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         <span>{rotulo}</span>
       </button>
       {passoAPasso}
@@ -206,7 +212,7 @@ export function BotaoInstalarApp({ app, nome, rotulo, destacar = false, variante
 
 /** Uma linha do cartão do Perfil: o app, para que serve e o botão (sempre à mostra). */
 function LinhaInstalar({ app, nome, descricao }: { app: AppInstalavel; nome: string; descricao: string }) {
-  const { clicar, passoAPasso, instalado } = useInstalar(app, nome)
+  const { clicar, passoAPasso, instalado, abrindo } = useInstalar(app, nome)
   const aberto = abertoComoApp(app)
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -219,9 +225,10 @@ function LinhaInstalar({ app, nome, descricao }: { app: AppInstalavel; nome: str
       <button
         type="button"
         onClick={clicar}
+        disabled={abrindo}
         className="flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50"
       >
-        <Download className="h-4 w-4" />
+        {abrindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         Instalar {nome}
       </button>
       {passoAPasso}
