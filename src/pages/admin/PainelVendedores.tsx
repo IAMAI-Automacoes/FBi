@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ArrowLeft, Briefcase, Copy, Loader2, Plus, Presentation, Trash2, Wallet } from 'lucide-react'
+import { ArrowLeft, Briefcase, Copy, Loader2, Percent, Plus, Presentation, Trash2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils'
 
 /* Admin → Vendedores, nos dois softwares (pedido do Raver, 21/10/2026).
    Afiliado e vendedor viraram uma coisa só: cada vendedor tem um código de
-   venda e ganha comissão pela regra do software (no topo). No Restaurante,
+   venda e ganha comissão pela regra do software (botão Comissão). No Restaurante,
    o vendedor também pode ter o acesso de demonstração (código no Perfil, pula
    o WhatsApp, paga com o VENDEDOR100), marcado pelo e-mail. A conta EasyFeed
    que indica outra (padrinho) não é vendedor: o desconto dela é em Descontos.
@@ -96,7 +96,7 @@ function CustosDaComissao({ area, custos, aoMudar }: { area: Area; custos: Custo
   }
 
   return (
-    <div className="space-y-2 border-t border-gray-100 px-4 py-3">
+    <div className="space-y-2 border-t border-gray-100 pt-4">
       <p className="text-[12.5px] font-medium text-gray-800">Nossos custos <span className="font-normal text-gray-500">· saem antes da comissão</span></p>
       {custos.length === 0 ? (
         <p className="text-[12px] text-gray-500">Nenhum custo: a comissão é sobre tudo o que o Asaas entrega.</p>
@@ -136,14 +136,22 @@ function CustosDaComissao({ area, custos, aoMudar }: { area: Area; custos: Custo
   )
 }
 
-function RegraDaComissao({ area }: { area: Area }) {
+/** O popup do botão "Comissão": a regra do software e os nossos custos. */
+function RegraDaComissao({ area, aberto, aoFechar, aoSalvar }: {
+  area: Area
+  aberto: boolean
+  aoFechar: () => void
+  aoSalvar: (r: RegraDeComissao) => void
+}) {
   const [salva, setSalva] = useState<RegraDeComissao | null>(null)
   const [texto, setTexto] = useState({ entrada: '', recorrente: '', meses: '' })
   const [mensalidade, setMensalidade] = useState<number | null>(null)
   const [custos, setCustos] = useState<CustoDaComissao[]>([])
   const [salvando, setSalvando] = useState(false)
 
+  // Lê de novo a cada abertura: o que foi digitado e não salvo some.
   useEffect(() => {
+    if (!aberto) return
     setSalva(null)
     buscarRegraDeComissao(area).catch(() => ({ ...REGRA_PADRAO })).then((r) => {
       setSalva(r)
@@ -151,7 +159,7 @@ function RegraDaComissao({ area }: { area: Area }) {
     })
     buscarPrecos(area).then((p) => setMensalidade(p.find((x) => x.ciclo === 'mensal')?.total_centavos ?? null)).catch(() => setMensalidade(null))
     buscarCustosDaComissao(area).then(setCustos).catch(() => setCustos([]))
-  }, [area])
+  }, [area, aberto])
 
   const ler = (t: string) => (t.trim() === '' ? Number.NaN : Number(t.replace(',', '.')))
   const regra: RegraDeComissao = { entradaPct: ler(texto.entrada), recorrentePct: ler(texto.recorrente), recorrenteMeses: ler(texto.meses) }
@@ -166,7 +174,9 @@ function RegraDaComissao({ area }: { area: Area }) {
     try {
       await salvarRegraDeComissao(area, regra)
       setSalva(regra)
+      aoSalvar(regra)
       toast.success('Comissão salva.')
+      aoFechar()
     } catch {
       toast.error('Não foi possível salvar a comissão.')
     } finally {
@@ -174,47 +184,47 @@ function RegraDaComissao({ area }: { area: Area }) {
     }
   }
 
-  if (!salva) return <Skeleton className="h-32 w-full rounded-xl" />
   return (
-    <section className="rounded-xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-100 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-800">Comissão dos vendedores</h3>
-        <p className="text-[12px] text-gray-500">
-          Vale para todos os vendedores do {DEFINICOES[area].nome}. Sempre sobre a <b className="font-medium text-gray-700">mensalidade líquida</b>: o que
-          o Asaas entrega (já sem a taxa dele) menos os nossos custos, abaixo. Se o indicado cancelar, a comissão acaba.
-        </p>
-      </div>
-      <div className="space-y-3 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <Label htmlFor="com-entrada" className="w-52 text-[13px] text-gray-700">Na 2ª mensalidade paga</Label>
-          <CampoNumero id="com-entrada" valor={texto.entrada} aoMudar={(v) => setTexto((t) => ({ ...t, entrada: v }))} sufixo="% da mensalidade líquida" />
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <Label htmlFor="com-recorrente" className="w-52 text-[13px] text-gray-700">Nas mensalidades seguintes</Label>
-          <CampoNumero id="com-recorrente" valor={texto.recorrente} aoMudar={(v) => setTexto((t) => ({ ...t, recorrente: v }))} sufixo="% de cada líquida, por" />
-          <CampoNumero id="com-meses" valor={texto.meses} aoMudar={(v) => setTexto((t) => ({ ...t, meses: v.replace(/\D/g, '') }))} sufixo="meses" largura="w-16" />
-        </div>
-        {problema ? (
-          <p className="text-[12px] text-rose-600">{problema}</p>
-        ) : exemplo && (
-          <p className="rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
-            Com a mensalidade de {reais(mensalidade!)}{liquida !== mensalidade && <> menos os custos ({reais(liquida!)} líquida, antes da taxa do Asaas)</>}: {reais(exemplo.entrada)} na 2ª mensalidade
-            {regra.recorrentePct > 0 && regra.recorrenteMeses > 0 && <> + {reais(exemplo.porMes)} por mês nos {regra.recorrenteMeses} meses seguintes</>}
-            {' '}= até <b className="text-gray-800">{reais(exemplo.total)}</b> por indicado. Depois disso, a mensalidade fica toda com a empresa.
-          </p>
+    <Dialog open={aberto} onOpenChange={(a) => !a && !salvando && aoFechar()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle>Comissão dos vendedores</DialogTitle>
+          <DialogDescription>
+            Vale para todos os vendedores do {DEFINICOES[area].nome}. Sempre sobre a mensalidade líquida: o que o Asaas entrega (já sem a
+            taxa dele) menos os nossos custos, abaixo. Se o indicado cancelar, a comissão acaba.
+          </DialogDescription>
+        </DialogHeader>
+        {!salva ? <Skeleton className="h-40 w-full rounded-lg" /> : (
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <Label htmlFor="com-entrada" className="w-52 text-[13px] text-gray-700">Na 2ª mensalidade paga</Label>
+                <CampoNumero id="com-entrada" valor={texto.entrada} aoMudar={(v) => setTexto((t) => ({ ...t, entrada: v }))} sufixo="% da mensalidade líquida" />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <Label htmlFor="com-recorrente" className="w-52 text-[13px] text-gray-700">Nas mensalidades seguintes</Label>
+                <CampoNumero id="com-recorrente" valor={texto.recorrente} aoMudar={(v) => setTexto((t) => ({ ...t, recorrente: v }))} sufixo="% de cada líquida, por" />
+                <CampoNumero id="com-meses" valor={texto.meses} aoMudar={(v) => setTexto((t) => ({ ...t, meses: v.replace(/\D/g, '') }))} sufixo="meses" largura="w-16" />
+              </div>
+              {problema ? (
+                <p className="text-[12px] text-rose-600">{problema}</p>
+              ) : exemplo && (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
+                  Com a mensalidade de {reais(mensalidade!)}{liquida !== mensalidade && <> menos os custos ({reais(liquida!)} líquida, antes da taxa do Asaas)</>}: {reais(exemplo.entrada)} na 2ª mensalidade
+                  {regra.recorrentePct > 0 && regra.recorrenteMeses > 0 && <> + {reais(exemplo.porMes)} por mês nos {regra.recorrenteMeses} meses seguintes</>}
+                  {' '}= até <b className="text-gray-800">{reais(exemplo.total)}</b> por indicado. Depois disso, a mensalidade fica toda com a empresa.
+                </p>
+              )}
+            </div>
+            <CustosDaComissao area={area} custos={custos} aoMudar={() => buscarCustosDaComissao(area).then(setCustos).catch(() => {})} />
+          </div>
         )}
-      </div>
-      <CustosDaComissao area={area} custos={custos} aoMudar={() => buscarCustosDaComissao(area).then(setCustos).catch(() => {})} />
-      {mudou && (
-        <div className="flex justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
-          <Button variant="ghost" size="sm" disabled={salvando}
-            onClick={() => setTexto({ entrada: String(salva.entradaPct).replace('.', ','), recorrente: String(salva.recorrentePct).replace('.', ','), meses: String(salva.recorrenteMeses) })}>
-            Descartar
-          </Button>
-          <Button size="sm" onClick={salvar} disabled={salvando}>{salvando && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Salvar</Button>
-        </div>
-      )}
-    </section>
+        <DialogFooter>
+          <Button variant="outline" onClick={aoFechar} disabled={salvando}>{mudou ? 'Cancelar' : 'Fechar'}</Button>
+          {mudou && <Button onClick={salvar} disabled={salvando}>{salvando && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Salvar</Button>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -566,7 +576,7 @@ function ListaDeComissoes({ area }: { area: Area }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-100 px-4 py-3">
         <div>
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-gray-800"><Wallet className="h-4 w-4 text-gray-400" /> Comissões</h3>
-          <p className="text-[12px] text-gray-500">Cada mensalidade paga por um indicado de vendedor. Com a carteira do Asaas, o repasse é automático.</p>
+          <p className="text-[12px] text-gray-500">Cada mensalidade paga por um indicado de vendedor ou de influenciador. Com a carteira do Asaas, o repasse é automático.</p>
         </div>
         {aPagar.length > 0 && (
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[12px] font-medium text-amber-700">
@@ -596,7 +606,10 @@ function ListaDeComissoes({ area }: { area: Area }) {
               {lista.map((c) => (
                 <tr key={c.id}>
                   <td className="whitespace-nowrap px-4 py-2 text-gray-500">{format(new Date(c.criado_em), 'dd/MM/yyyy')}</td>
-                  <td className="px-4 py-2 font-medium text-gray-800">{c.vendedor}</td>
+                  <td className="px-4 py-2 font-medium text-gray-800">
+                    {c.vendedor}
+                    {c.influenciador && <span className="ml-1.5 rounded bg-pink-50 px-1.5 py-0.5 text-[10.5px] font-medium text-pink-700">Influenciador</span>}
+                  </td>
                   <td className="px-4 py-2 text-gray-700">{c.indicado}</td>
                   <td className="whitespace-nowrap px-4 py-2 text-gray-500">{meses(c)}</td>
                   <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums text-gray-800">{reais(c.valor_centavos)}</td>
@@ -632,6 +645,7 @@ export function PainelVendedores() {
   const [numeros, setNumeros] = useState<Record<string, NumerosDoAfiliado>>({})
   const [regra, setRegra] = useState<RegraDeComissao>(REGRA_PADRAO)
   const [aberto, setAberto] = useState<Vendedor<Afiliado> | 'novo' | null>(null)
+  const [comissaoAberta, setComissaoAberta] = useState(false)
   const [erro, setErro] = useState(false)
 
   const carregar = useCallback(async () => {
@@ -651,7 +665,7 @@ export function PainelVendedores() {
       setErro(true)
     }
   }, [area, comDemo])
-  useEffect(() => { setCadastros(null); setAberto(null); carregar() }, [carregar])
+  useEffect(() => { setCadastros(null); setAberto(null); setComissaoAberta(false); carregar() }, [carregar])
 
   const vendedores = useMemo(() => juntarVendedores(cadastros ?? [], marcas, comDemo), [cadastros, marcas, comDemo])
 
@@ -676,14 +690,16 @@ export function PainelVendedores() {
           <div>
             <h2 className="text-base font-semibold text-gray-800">Vendedores <span className="font-normal text-gray-400">· versão {DEFINICOES[area].nome}</span></h2>
             <p className="mt-0.5 text-[12.5px] text-gray-500">Quem vende o {DEFINICOES[area].nome} com um código próprio e ganha comissão.</p>
+            <p className="mt-0.5 text-[12px] text-gray-400">Comissão: {textoDaRegra(regra)}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setComissaoAberta(true)}><Percent className="mr-1 h-4 w-4" /> Comissão</Button>
             <TrazerDoOutroSoftware area={area} aoTrazer={carregar} />
             <Button size="sm" onClick={() => setAberto('novo')}><Plus className="mr-1 h-4 w-4" /> Novo vendedor</Button>
           </div>
         </div>
 
-        <RegraDaComissao key={area} area={area} />
+        <RegraDaComissao area={area} aberto={comissaoAberta} aoFechar={() => setComissaoAberta(false)} aoSalvar={setRegra} />
 
         {erro ? (
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center">

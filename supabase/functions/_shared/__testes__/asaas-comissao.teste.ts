@@ -8,6 +8,7 @@ import {
   comissaoDoPagamento,
   corpoDoPut,
   espacoParaSaldo,
+  regraDoInfluenciador,
   statusDoSplit,
   valorComMesesGratis,
   VALOR_MINIMO_CENTAVOS,
@@ -78,6 +79,21 @@ ok('status do split', statusDoSplit('DONE') === 'repassado' && statusDoSplit('PE
 ok('saldo cabe até deixar R$ 5', espacoParaSaldo(19700) === 19700 - VALOR_MINIMO_CENTAVOS && espacoParaSaldo(300) === 0)
 ok('bônus de indicação de 50%: meia mensalidade', valorComMesesGratis(19700, 19700, 'mensal', 0.5) === 9850)
 ok('anual com 1,5 bônus: abate 1,5 mensalidade', valorComMesesGratis(176400, 176400, 'anual', 1.5) === 176400 - 22050)
+
+// ── Influenciador: a % dele em cada mensalidade a partir da 2ª, por N ───────
+const SEM_CUSTO: CustosDaComissao = { fixoCentavosPorMes: 0, pct: 0 }
+const INF = regraDoInfluenciador(15, 12)
+ok('influenciador 15% por 12: 15% do 2º ao 13º mês', INF.entradaPct === 15 && INF.recorrentePct === 15 && INF.recorrenteMeses === 11, INF)
+const mesInf = (m: number) => comissaoDoPagamento({ de: m, ate: m, liquidoCentavos: 19000, custos: SEM_CUSTO, regra: INF })
+ok('influenciador: 1º mês não paga', mesInf(1) === 0)
+ok('influenciador: 2º e 13º mês pagam 15%', mesInf(2) === 2850 && mesInf(13) === 2850, [mesInf(2), mesInf(13)])
+ok('influenciador: 14º mês não paga mais', mesInf(14) === 0)
+ok('influenciador: anual à vista (meses 1 a 12) paga 11 meses de 15%',
+  comissaoDoPagamento({ de: 1, ate: 12, liquidoCentavos: 228000, custos: SEM_CUSTO, regra: INF }) === Math.round(19000 * 15 * 11 / 100))
+ok('influenciador: 1 mês só = só o 2º', (() => { const r = regraDoInfluenciador(20, 1); return r.entradaPct === 20 && r.recorrenteMeses === 0 })())
+ok('influenciador sem % ou sem meses: nada', [regraDoInfluenciador(0, 12), regraDoInfluenciador(15, 0), regraDoInfluenciador(Number.NaN, 12)]
+  .every((r) => comissaoDoPagamento({ de: 2, ate: 2, liquidoCentavos: 19000, custos: SEM_CUSTO, regra: r }) === 0))
+ok('influenciador: % acima de 100 trava em 100', regraDoInfluenciador(150, 3).entradaPct === 100)
 
 // ── Período do limite de vídeos ──────────────────────────────────────────────
 const em = (iso: string) => Date.parse(iso)

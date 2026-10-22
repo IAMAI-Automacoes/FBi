@@ -26,6 +26,7 @@ import {
   corpoDoPut,
   pagamentoEstornado,
   reais,
+  regraDoInfluenciador,
   statusDoSplit,
   type CustosDaComissao,
   type RegraDeComissao,
@@ -59,10 +60,10 @@ export async function garantirComissao(db: Db, cli: ClienteAsaas, a: any, pag: a
   }
   if (atual && FINAIS.has(atual.status)) return
 
-  // Só vendedor ganha comissão; a conta EasyFeed que indica ganha desconto.
+  // Só vendedor e influenciador ganham comissão; a conta EasyFeed que indica ganha desconto.
   const { data: af, error: errAf } = await db
     .from('afiliados')
-    .select('id, restaurante_id, asaas_wallet_id')
+    .select('id, restaurante_id, asaas_wallet_id, eh_influenciador, comissao_valor, comissao_meses')
     .eq('id', a.afiliado_id)
     .maybeSingle()
   if (errAf) throw new Error(`afiliados: ${errAf.message}`)
@@ -82,7 +83,10 @@ export async function garantirComissao(db: Db, cli: ClienteAsaas, a: any, pag: a
     .select('comissao_entrada_pct, comissao_recorrente_pct, comissao_recorrente_meses')
     .eq('area', area)
     .maybeSingle()
-  const regra: RegraDeComissao = cfg
+  // O influenciador tem a % dele (Admin → Influenciadores); o vendedor, a do software.
+  const regra: RegraDeComissao = af.eh_influenciador
+    ? regraDoInfluenciador(Number(af.comissao_valor), Number(af.comissao_meses))
+    : cfg
     ? {
         entradaPct: Number(cfg.comissao_entrada_pct) || 0,
         recorrentePct: Number(cfg.comissao_recorrente_pct) || 0,

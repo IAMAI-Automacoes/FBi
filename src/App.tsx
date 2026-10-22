@@ -59,6 +59,7 @@ import { AtualizacaoDoApp } from './components/AtualizacaoDoApp'
 import { MODO_DEMO, PREFIXO_DEMO } from './lib/demo'
 import { ROTA_DESCONTOS, ROTA_DESCONTOS_HISTORICO, ROTA_INDICACOES } from './lib/descontos'
 import { lerCodigoIndicacao } from './lib/indicacao'
+import { registrarVisitaDoLink } from './lib/visita-do-link'
 import { lerConviteDeArea } from './lib/convite-area'
 import DemoLogin from './pages/demo/DemoLogin'
 import DemoEncerrada from './pages/demo/DemoEncerrada'
@@ -67,6 +68,8 @@ import DemoEncerrada from './pages/demo/DemoEncerrada'
 // entrada (vendas, cadastro, login), antes de a navegação tirar o `?ref=` do
 // endereço. Quem usa depois é a tela de assinatura.
 lerCodigoIndicacao()
+// E conta a visita no link (para o vendedor e o influenciador verem se divulgam).
+registrarVisitaDoLink()
 // O convite de versão (`?area=rh&convite=CODIGO`) é guardado do mesmo jeito:
 // quem usa é a tela de escolha, depois de a conta existir.
 lerConviteDeArea()

@@ -339,18 +339,22 @@ export interface Afiliado {
   /** Desconto (%) de quem compra com o código, nas `desconto_cobrancas` primeiras cobranças. */
   desconto_pct: number
   desconto_cobrancas: number
+  /** O link de um influenciador (Admin → Influenciadores): não entra em Vendedores. */
+  eh_influenciador?: boolean
 }
 
 /** Campos com padrão no banco: dá para criar sem eles. */
-type AfiliadoComPadrao = 'asaas_wallet_id' | 'desconto_pct' | 'desconto_cobrancas'
+type AfiliadoComPadrao = 'asaas_wallet_id' | 'desconto_pct' | 'desconto_cobrancas' | 'eh_influenciador'
 
 /** Os afiliados de um software: os de fora (comissão em dinheiro) e as contas
-    EasyFeed que pegaram o link em Descontos → Indicações (desconto). */
+    EasyFeed que pegaram o link em Descontos → Indicações (desconto). Os links
+    dos influenciadores ficam de fora (estão em Admin → Influenciadores). */
 export async function buscarAfiliados(area: 'restaurante' | 'rh'): Promise<Afiliado[]> {
   const { data, error } = await supabase
     .from('afiliados')
     .select('*')
     .eq('area', area)
+    .eq('eh_influenciador', false)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as Afiliado[]
@@ -389,6 +393,8 @@ export interface Comissao {
   criado_em: string
   afiliado_id: string | null
   vendedor: string
+  /** A comissão é de um influenciador (a % é a dele), não de um vendedor. */
+  influenciador: boolean
   indicado: string
   mes_de: number | null
   mes_ate: number | null
@@ -401,7 +407,7 @@ export interface Comissao {
 export async function buscarComissoes(area: 'restaurante' | 'rh', limite = 100): Promise<Comissao[]> {
   const { data, error } = await supabase
     .from('cobranca_comissoes')
-    .select('id, criado_em, afiliado_id, restaurante_id, mes_de, mes_ate, valor_centavos, status, erro, afiliados!inner(nome, area)')
+    .select('id, criado_em, afiliado_id, restaurante_id, mes_de, mes_ate, valor_centavos, status, erro, afiliados!inner(nome, area, eh_influenciador)')
     .eq('afiliados.area', area)
     .order('criado_em', { ascending: false })
     .limit(limite)
@@ -418,6 +424,7 @@ export async function buscarComissoes(area: 'restaurante' | 'rh', limite = 100):
     criado_em: l.criado_em,
     afiliado_id: l.afiliado_id,
     vendedor: (l.afiliados as unknown as { nome: string } | null)?.nome ?? '—',
+    influenciador: !!(l.afiliados as unknown as { eh_influenciador?: boolean } | null)?.eh_influenciador,
     indicado: l.restaurante_id != null ? nomes.get(Number(l.restaurante_id)) ?? `Conta ${l.restaurante_id}` : '—',
     mes_de: l.mes_de,
     mes_ate: l.mes_ate,

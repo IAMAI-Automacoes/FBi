@@ -1,5 +1,6 @@
 import { supabaseInfluencers } from '@/lib/supabase/cliente-influencers'
 import type { DadosPainel } from '@/lib/painel-influencers'
+import type { VideoDoInfluenciador } from '@/lib/influenciadores'
 
 // Tudo da área /influencers passa por aqui, sempre com o login de lá.
 
@@ -61,6 +62,54 @@ export async function salvarPerfil(nome: string, cidade: string): Promise<void> 
 
 export async function marcarAcesso(): Promise<void> {
   await supabaseInfluencers.rpc('influencer_marcar_acesso')
+}
+
+// ── O link e os vídeos ────────────────────────────────────────────────────────
+
+export interface MeuLink {
+  /** `null` = ainda sem link (ou o admin parou o link). */
+  codigo: string | null
+  comissaoPct: number | null
+  comissaoMeses: number | null
+  videosPorMes: number
+  visitas30: number
+  contas: number
+  assinando: number
+  videos: VideoDoInfluenciador[]
+}
+
+export async function buscarMeuLink(): Promise<MeuLink> {
+  const { data, error } = await supabaseInfluencers.rpc('influencer_meu_link')
+  if (error) throw error
+  const d = (data ?? {}) as Record<string, unknown>
+  const num = (v: unknown) => (v == null ? null : Number(v))
+  return {
+    codigo: (d.codigo as string | null) ?? null,
+    comissaoPct: num(d.comissao_pct),
+    comissaoMeses: num(d.comissao_meses),
+    videosPorMes: Number(d.videos_por_mes) || 0,
+    visitas30: Number(d.visitas_30d) || 0,
+    contas: Number(d.contas) || 0,
+    assinando: Number(d.assinando) || 0,
+    videos: Array.isArray(d.videos) ? (d.videos as VideoDoInfluenciador[]) : [],
+  }
+}
+
+/** Avisa que postou um vídeo (o link dele). Volta a frase do problema, ou `null` se deu certo. */
+export async function registrarVideo(url: string): Promise<string | null> {
+  const { data, error } = await supabaseInfluencers.rpc('influencer_registrar_video', { p_url: url })
+  if (error) return 'Não foi possível mandar agora. Tente de novo.'
+  const r = (data ?? {}) as { ok?: boolean; motivo?: string }
+  if (r.ok) return null
+  if (r.motivo === 'repetido') return 'Esse vídeo já está na sua lista.'
+  if (r.motivo === 'muitos_hoje') return 'Muitos vídeos hoje. Mande o resto amanhã.'
+  return 'Confira o link: copie o endereço do vídeo no app e cole aqui.'
+}
+
+/** Tira um vídeo que ainda não foi conferido. */
+export async function removerVideo(id: string): Promise<void> {
+  const { error } = await supabaseInfluencers.rpc('influencer_remover_video', { p_id: id })
+  if (error) throw error
 }
 
 // ── O painel ──────────────────────────────────────────────────────────────────

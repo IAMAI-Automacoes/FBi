@@ -28,7 +28,7 @@ import { CrudTable, Td, Th } from '@/pages/admin/tabela'
 /* Admin → Descontos (antes "Vídeos"), nos dois softwares. Pedido do Raver
    (21/10/2026): só o essencial, nomes fáceis, sem botão de atualizar.
    - Vídeos: os vídeos que as contas mandam (a IA confere, o admin revisa) e
-     as missões (o que gravar). Cada vídeo aprovado vale um saldo de X% de uma
+     os temas de vídeo (o que gravar; no banco, "missões"). Cada vídeo aprovado vale um saldo de X% de uma
      mensalidade, até N vídeos por período (ano, semestre ou trimestre): ficam
      em Configurações (a escada de prêmios e a lista de prêmios saíram).
    - Indicação: quanto de uma mensalidade cada indicado vale para quem indicou
@@ -132,7 +132,7 @@ function DetalheEnvio({ envio, onFechar, onMudou }: { envio: EnvioAdmin | null; 
   )
 }
 
-// ── Criar ou editar uma missão ───────────────────────────────────────────────
+// ── Criar ou editar um tema de vídeo ───────────────────────────────────────────────
 
 type Rascunho = MissaoParaSalvar
 
@@ -189,11 +189,11 @@ function EditarMissao({ area, rascunho, onFechar, onSalvo }: { area: Area; rascu
         return { id, texto: r.texto.trim() }
       })
       await salvarMissao(area, { ...m, requisitos })
-      toast.success('Missão salva.')
+      toast.success('Tema salvo.')
       onSalvo()
       onFechar()
     } catch {
-      toast.error('Não foi possível salvar a missão.')
+      toast.error('Não foi possível salvar o tema.')
     } finally {
       setSalvando(false)
     }
@@ -207,7 +207,7 @@ function EditarMissao({ area, rascunho, onFechar, onSalvo }: { area: Area; rascu
         {m && (
           <>
             <DialogHeader>
-              <DialogTitle>{m.id ? 'Editar missão' : 'Nova missão'}</DialogTitle>
+              <DialogTitle>{m.id ? 'Editar tema do vídeo' : 'Novo tema de vídeo'}</DialogTitle>
               <DialogDescription>O cliente vê o título e os requisitos. A IA assiste o vídeo e confere cada requisito.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
@@ -256,7 +256,7 @@ function EditarMissao({ area, rascunho, onFechar, onSalvo }: { area: Area; rascu
                   <input type="number" className={cn(campo, 'w-20')} value={m.ordem} onChange={(e) => setM({ ...m, ordem: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="flex items-center gap-2 text-[13px] text-gray-700">
-                  <Switch checked={m.ativa} onCheckedChange={(v) => setM({ ...m, ativa: v })} /> Ativa
+                  <Switch checked={m.ativa} onCheckedChange={(v) => setM({ ...m, ativa: v })} /> Ativo
                 </label>
               </div>
             </div>
@@ -348,7 +348,7 @@ function Configuracoes({ area, aberto, config, mensalidade, onFechar, onSalvo }:
               </div>
             </div>
             <p className="text-[12px] text-gray-500">
-              Somando todas as missões. {periodo === 12 ? 'Recomeça em 1º de janeiro.' : periodo === 6 ? 'Recomeça em 1º de janeiro e 1º de julho.' : 'Recomeça em 1º de janeiro, abril, julho e outubro.'}
+              Somando todos os temas. {periodo === 12 ? 'Recomeça em 1º de janeiro.' : periodo === 6 ? 'Recomeça em 1º de janeiro e 1º de julho.' : 'Recomeça em 1º de janeiro, abril, julho e outubro.'}
             </p>
           </div>
           {(!pctOk || !maxOk) && <p className="text-[12px] text-rose-600">{!pctOk ? 'Ponha a porcentagem (0 a 1000).' : 'O máximo vai de 1 a 100 (vazio = sem limite).'}</p>}
@@ -447,7 +447,6 @@ function ConfigIndicacao({ mensalidade }: { mensalidade: number | null }) {
 const FILTROS = [
   { chave: 'todos', rotulo: 'Todos' },
   { chave: 'erro', rotulo: 'Para revisar' },
-  { chave: 'analisando', rotulo: 'Em análise' },
   { chave: 'aprovado', rotulo: 'Aprovados' },
   { chave: 'reprovado', rotulo: 'Recusados' },
 ] as const
@@ -466,7 +465,7 @@ function Numero({ rotulo, valor, detalhe }: { rotulo: string; valor: string; det
 }
 
 export function PainelDescontos() {
-  // Cada software tem as suas missões, o seu saldo por vídeo e o seu limite.
+  // Cada software tem os seus temas de vídeo, o seu saldo por vídeo e o seu limite.
   const { area } = useArea()
   const [carregando, setCarregando] = useState(true)
   const [envios, setEnvios] = useState<EnvioAdmin[]>([])
@@ -521,7 +520,7 @@ export function PainelDescontos() {
       await salvarMissao(area, { ...m, ativa: !m.ativa })
       await carregar()
     } catch {
-      toast.error('Não foi possível mudar a missão.')
+      toast.error('Não foi possível mudar o tema.')
     } finally {
       setMexendo(null)
     }
@@ -549,15 +548,14 @@ export function PainelDescontos() {
           <TabsContent value="videos">
             {carregando ? <Skeleton className="h-64 w-full rounded-xl" /> : (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Numero rotulo="Saldo por vídeo aprovado" valor={saldoPorVideo != null ? reais(saldoPorVideo) : `${String(config.saldoPct).replace('.', ',')}%`} detalhe={`${String(config.saldoPct).replace('.', ',')}% de uma mensalidade`} />
                   <Numero rotulo="Limite por conta" valor={config.maxPorAno == null ? 'Sem limite' : `${config.maxPorAno} por ${nomeDoPeriodo(config.periodoMeses)}`} />
                   <Numero rotulo={`Aprovados em ${anoAtual}`} valor={String(aprovadosNoAno)} detalhe="somando todas as contas" />
-                  <Numero rotulo="Para revisar" valor={String(paraRevisar)} detalhe={paraRevisar ? 'a IA não conseguiu decidir' : 'nada parado'} />
                 </div>
 
                 <div className="inline-flex rounded-lg bg-gray-100 p-1">
-                  {([['recebidos', `Vídeos recebidos${paraRevisar ? ` · ${paraRevisar} para revisar` : ''}`], ['missoes', `Missões · ${noAr} no ar`]] as const).map(([v, rotulo]) => (
+                  {([['recebidos', `Vídeos recebidos${paraRevisar ? ` · ${paraRevisar} para revisar` : ''}`], ['missoes', `Temas de vídeo · ${noAr} no ar`]] as const).map(([v, rotulo]) => (
                     <button key={v} type="button" onClick={() => setVista(v)} aria-pressed={vista === v}
                       className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors', vista === v ? 'bg-white text-[#1D4ED8] shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
                       {rotulo}
@@ -582,7 +580,7 @@ export function PainelDescontos() {
                       <p className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-[13px] text-gray-500">Nenhum vídeo aqui.</p>
                     ) : (
                       <CrudTable>
-                        <thead><tr><Th>Conta</Th><Th>Missão</Th><Th>Enviado em</Th><Th>Situação</Th><Th>Saldo</Th><Th className="text-right">Ver</Th></tr></thead>
+                        <thead><tr><Th>Conta</Th><Th>Tema do vídeo</Th><Th>Enviado em</Th><Th>Situação</Th><Th>Saldo</Th><Th className="text-right">Ver</Th></tr></thead>
                         <tbody>
                           {filtrados.map((e) => {
                             const saldo = saldoDoEnvio.get(e.id)
@@ -615,7 +613,7 @@ export function PainelDescontos() {
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-[12.5px] text-gray-500">O cliente faz uma missão por vez, na ordem da fila.</p>
+                      <p className="text-[12.5px] text-gray-500">O cliente grava um tema por vez, na ordem da fila.</p>
                       <Button
                         size="sm"
                         onClick={() => setEditando({
@@ -624,11 +622,11 @@ export function PainelDescontos() {
                         })}
                         className="bg-[#1D4ED8] hover:bg-[#1E40AF]"
                       >
-                        <Plus className="mr-1 h-4 w-4" /> Nova missão
+                        <Plus className="mr-1 h-4 w-4" /> Novo tema
                       </Button>
                     </div>
                     <CrudTable>
-                      <thead><tr><Th>Fila</Th><Th>Missão</Th><Th>No ar</Th><Th>Duração</Th><Th>Ativa</Th><Th className="text-right">Editar</Th></tr></thead>
+                      <thead><tr><Th>Fila</Th><Th>Tema do vídeo</Th><Th>No ar</Th><Th>Duração</Th><Th>Ativo</Th><Th className="text-right">Editar</Th></tr></thead>
                       <tbody>
                         {missoes.map((m) => (
                           <tr key={m.id} className="border-b border-gray-100 last:border-0">
@@ -642,7 +640,7 @@ export function PainelDescontos() {
                               {rotuloPeriodo(m) && <p className="mt-0.5 text-[11px] text-gray-400">{rotuloPeriodo(m)}</p>}
                             </Td>
                             <Td className="whitespace-nowrap text-[12px] text-gray-600">{rotuloDuracao(m)}</Td>
-                            <Td><Switch checked={m.ativa} disabled={mexendo === m.id} onCheckedChange={() => alternarMissao(m)} aria-label={`Missão ${m.titulo} ativa`} /></Td>
+                            <Td><Switch checked={m.ativa} disabled={mexendo === m.id} onCheckedChange={() => alternarMissao(m)} aria-label={`Tema ${m.titulo} ativo`} /></Td>
                             <Td className="text-right">
                               <button onClick={() => setEditando({ ...m })} title="Editar" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900">
                                 <Pencil className="h-4 w-4" />
@@ -651,7 +649,7 @@ export function PainelDescontos() {
                           </tr>
                         ))}
                         {missoes.length === 0 && (
-                          <tr><td colSpan={6} className="px-4 py-8 text-center text-[13px] text-gray-500">Nenhuma missão ainda. Crie a primeira em <span className="font-medium text-gray-700">Nova missão</span>.</td></tr>
+                          <tr><td colSpan={6} className="px-4 py-8 text-center text-[13px] text-gray-500">Nenhum tema ainda. Crie o primeiro em <span className="font-medium text-gray-700">Novo tema</span>.</td></tr>
                         )}
                       </tbody>
                     </CrudTable>

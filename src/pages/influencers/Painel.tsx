@@ -19,8 +19,10 @@ import {
 } from '@/lib/painel-influencers'
 import { useInfluencer } from './contexto'
 import { buscarPainel, marcarAcesso } from './dados'
+import { SeuLink } from './SeuLink'
 
-/* O painel do EasyFeed Influencers: a mesma tela da Visão Geral dos
+/* O painel do EasyFeed Influencers: no topo, o link de indicação da pessoa e
+   os vídeos dela (SeuLink); embaixo, a mesma tela da Visão Geral dos
    restaurantes (mesmo topo, mesmos números, mesmo gráfico, mesma lista de
    temas e mesmos cartões de feedback), com os dados anônimos de todos os
    restaurantes e as ideias de pauta. */
@@ -242,9 +244,16 @@ export default function Painel() {
       {/* O mesmo espaçamento e a mesma largura da Visão Geral. */}
       <main className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 pb-10">
+          <div>
+            <p className="text-base font-semibold text-foreground">Oi, {nome.split(' ')[0]}!</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">Divulgue o EasyFeed com o seu link e use os dados abaixo como pauta.</p>
+          </div>
+
+          <SeuLink />
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-base font-semibold text-foreground">Oi, {nome.split(' ')[0]}!</p>
+              <p className="text-base font-semibold text-foreground">Feedbacks dos restaurantes</p>
               <p className="mt-0.5 text-sm text-muted-foreground">Os feedbacks anônimos dos restaurantes que usam o EasyFeed.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">

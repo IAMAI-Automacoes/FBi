@@ -121,6 +121,19 @@ export interface RegraDeComissao {
   recorrenteMeses: number
 }
 
+/**
+ * A regra de um influenciador (pedido do Raver, 21/10/2026): a % é de cada um
+ * (`afiliados.comissao_valor`, muda com o tamanho dele) e vale em cada
+ * mensalidade a partir da 2ª — o mesmo cuidado da regra dos vendedores —, por
+ * `meses` mensalidades. Ex.: 15% por 12 → do 2º ao 13º mês.
+ */
+export function regraDoInfluenciador(pct: number, meses: number): RegraDeComissao {
+  const p = Math.min(100, Math.max(0, Number(pct) || 0))
+  const n = Math.max(0, Math.floor(Number(meses) || 0))
+  if (!p || !n) return { entradaPct: 0, recorrentePct: 0, recorrenteMeses: 0 }
+  return { entradaPct: p, recorrentePct: p, recorrenteMeses: n - 1 }
+}
+
 export interface SplitAsaas {
   walletId: string
   fixedValue: number
