@@ -19,6 +19,7 @@
  * split = já era: fica `erro` para pagar à mão.
  */
 import { ErroAsaas, type ClienteAsaas } from './cliente.ts'
+import { espelharPagamento } from './espelho.ts'
 import {
   baseDaComissaoPorMes,
   centavos,
@@ -68,6 +69,8 @@ export async function garantirComissao(db: Db, cli: ClienteAsaas, a: any, pag: a
     .maybeSingle()
   if (errAf) throw new Error(`afiliados: ${errAf.message}`)
   if (!af || af.restaurante_id != null) return
+
+  await espelharParcelasAnteriores(db, cli, a, pag)
 
   const { data: linhasMeses, error: errMeses } = await db.rpc('cobranca_meses_do_pagamento', {
     p_conta_id: chave.conta_id,
@@ -128,11 +131,14 @@ export async function garantirComissao(db: Db, cli: ClienteAsaas, a: any, pag: a
     status = statusDoSplit(item.status)
   } else if (jaPosto) {
     status = 'agendado'
-  } else if (RECEBIDA.has(String(pag.status))) {
+  } else if (RECEBIDA.has(String(pag.status)) && item?.status !== 'BLOCKED_BY_VALUE_DIVERGENCE') {
     status = 'erro'
-    erro = 'A cobrança foi recebida sem o split. Pagar a comissão à mão.'
+    erro = item
+      ? `A cobrança foi recebida com split de R$ ${reais(centavos(item.fixedValue ?? 0)).toFixed(2)}, mas o certo é R$ ${reais(valor).toFixed(2)}. Acertar à mão.`
+      : 'A cobrança foi recebida sem o split. Pagar a comissão à mão.'
   } else {
-    // Em aberto, vencida ou cartão confirmado: põe (ou troca) o split.
+    // Em aberto, vencida, cartão confirmado ou split bloqueado por divergência
+    // (o Asaas dá 2 dias úteis para acertar, mesmo recebida): põe ou troca o split.
     const split = valor > 0
       ? [{ walletId: wallet, fixedValue: reais(valor), externalReference: `comissao:${chave.asaas_payment_id}`, description: 'Comissão EasyFeed' }]
       : []
@@ -164,4 +170,27 @@ export async function garantirComissao(db: Db, cli: ClienteAsaas, a: any, pag: a
     { onConflict: 'conta_id,asaas_payment_id' },
   )
   if (error) throw new Error(`cobranca_comissoes: ${error.message}`)
+}
+
+/**
+ * Parcelado: as parcelas nascem juntas e os eventos chegam fora de ordem. O
+ * mês de cada parcela vem das anteriores no banco (`cobranca_meses_do_pagamento`):
+ * sem elas, a parcela 2 contaria como mês 1 e sairia sem comissão. Faltando
+ * alguma, espelha todas pelo Asaas antes de calcular.
+ */
+// deno-lint-ignore no-explicit-any
+async function espelharParcelasAnteriores(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<void> {
+  const numero = Number(pag.installmentNumber) || 0
+  if (!pag.installment || numero <= 1 || !a?.id) return
+  const { count, error } = await db
+    .from('cobranca_pagamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('assinatura_id', a.id)
+    .lt('numero_parcela', numero)
+  if (error) throw new Error(`cobranca_pagamentos: ${error.message}`)
+  if ((count ?? 0) >= numero - 1) return
+  const lista = await cli.get(`/payments?installment=${encodeURIComponent(String(pag.installment))}&limit=100`)
+  for (const p of lista?.data ?? []) {
+    if (Number(p.installmentNumber) < numero) await espelharPagamento(db, cli.contaId, a, p)
+  }
 }

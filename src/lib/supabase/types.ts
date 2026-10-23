@@ -2495,6 +2495,8 @@ export type Database = {
       }
       indicacao_config: {
         Row: {
+          desconto_indicado_cobrancas: number
+          desconto_indicado_pct: number
           ativo: boolean
           atualizado_em: string
           atualizado_por: string | null
@@ -2504,6 +2506,8 @@ export type Database = {
           meses_para_renovacao: number
         }
         Insert: {
+          desconto_indicado_cobrancas?: number
+          desconto_indicado_pct?: number
           ativo?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -2513,6 +2517,8 @@ export type Database = {
           meses_para_renovacao?: number
         }
         Update: {
+          desconto_indicado_cobrancas?: number
+          desconto_indicado_pct?: number
           ativo?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
@@ -5316,6 +5322,10 @@ export type Database = {
       }
       indicacao_admin: { Args: never; Returns: Json }
       indicacao_admin_bonus_pct: { Args: { p_pct: number }; Returns: number }
+      indicacao_admin_desconto_indicado: {
+        Args: { p_cobrancas: number; p_pct: number }
+        Returns: undefined
+      }
       indicacao_admin_meses_renovacao: {
         Args: { p_meses: number }
         Returns: number

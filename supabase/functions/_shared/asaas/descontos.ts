@@ -1,8 +1,9 @@
 /**
  * Descontos que entram na cobrança além do cupom e dos meses grátis de
  * indicação (fase 2 do Asaas, 20/10/2026):
- *   - o do código do vendedor: quem comprou pelo código ganha `desconto_pct`
- *     nas `desconto_cobrancas` primeiras cobranças (Admin → Vendedores);
+ *   - o do código de quem indicou: quem comprou pelo código ganha a % nas N
+ *     primeiras cobranças — por vendedor (Admin → Vendedores) ou, código de
+ *     restaurante, a mesma para todos (Admin → Descontos → Indicação);
  *   - o saldo dos vídeos aprovados (`video_premios.valor_centavos`): abate a
  *     próxima cobrança pelo banco (reservar → confirmar → soltar).
  * Usado por `criar-cobranca` (a compra) e `asaas-webhook` (as renovações).
@@ -46,17 +47,30 @@ export async function quemIndicou(db: Db, restauranteId: number): Promise<Vended
 }
 
 /**
- * A % de desconto do código do vendedor nesta cobrança (0 = nenhum). Na compra
- * o código precisa estar ativo; nas renovações o combinado continua até
- * acabarem as `desconto_cobrancas` (contando as que já tiveram o desconto).
+ * A % de desconto do código de quem indicou nesta cobrança (0 = nenhum): o do
+ * vendedor/influenciador (`afiliados.desconto_pct`) ou, se o código for de um
+ * restaurante, o de `indicacao_config` (Admin → Descontos → Indicação). Na
+ * compra o código precisa estar ativo; nas renovações o combinado continua até
+ * acabarem as cobranças com desconto (contando as que já tiveram).
  */
-export async function descontoDoVendedor(
+export async function descontoDoCodigo(
   db: Db,
   restauranteId: number,
   opcoes: { compra: boolean; excluirPagamento?: string },
 ): Promise<number> {
   const v = await quemIndicou(db, restauranteId)
-  if (!v || v.restaurante_id != null || !(v.desconto_pct > 0)) return 0
+  if (!v) return 0
+  if (v.restaurante_id != null) {
+    const { data: cfg, error } = await db
+      .from('indicacao_config')
+      .select('desconto_indicado_pct, desconto_indicado_cobrancas')
+      .limit(1)
+      .maybeSingle()
+    if (error) throw new Error(`indicacao_config: ${error.message}`)
+    v.desconto_pct = Number(cfg?.desconto_indicado_pct) || 0
+    v.desconto_cobrancas = Number(cfg?.desconto_indicado_cobrancas) || 0
+  }
+  if (!(v.desconto_pct > 0)) return 0
   if (opcoes.compra && !v.ativo) return 0
   let q = db
     .from('cobranca_pagamentos')

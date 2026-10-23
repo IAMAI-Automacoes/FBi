@@ -29,7 +29,7 @@ import { ehSessaoDemo, MENSAGEM_BLOQUEADO_NA_DEMO } from '../_shared/demo.ts'
 import { siteUrl } from '../_shared/config.ts'
 import { asaas, contaDasVendasNovas, ErroAsaas, removerNoAsaas, type ClienteAsaas } from '../_shared/asaas/cliente.ts'
 import { espelharPagamento } from '../_shared/asaas/espelho.ts'
-import { descontoDoVendedor, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
+import { descontoDoCodigo, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
 import {
   CICLO_ASAAS,
   comDescontoDoCupom,
@@ -129,10 +129,10 @@ Deno.serve(async (req: Request) => {
         ? { tipo: 'porcentagem', valor: Number(cupomUso.porcentagem_desconto) }
         : { tipo: 'valor', valor: Number(cupomUso.valor_desconto) }
       : null
-    // Cupom ou código do vendedor: vale o maior (não somam). O cupom só é
-    // consumido se for ele o usado.
+    // Cupom ou código (vendedor, influenciador ou restaurante): vale o maior
+    // (não somam). O cupom só é consumido se for ele o usado.
     const comCupom = comDescontoDoCupom(total, desconto)
-    const pctVendedor = await descontoDoVendedor(db, rest.id, { compra: true })
+    const pctVendedor = await descontoDoCodigo(db, rest.id, { compra: true })
     const comVendedor = comDescontoDoCupom(total, pctVendedor > 0 ? { tipo: 'porcentagem', valor: pctVendedor } : null)
     const usaVendedor = comVendedor < comCupom
     const usaCupom = !usaVendedor && comCupom < total

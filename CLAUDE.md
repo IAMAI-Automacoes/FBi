@@ -143,16 +143,21 @@ acesso é o `asaas-webhook`. Detalhes em `supabase/migrations/20261029100000_cob
   não toca), `asaas_parcelado`, `cupom`, `manual`.
 - Contas do Asaas em `contas_cobranca` (hoje só `mei`). Secrets por conta:
   `ASAAS_CONTA_MEI_API_KEY`, `ASAAS_CONTA_MEI_AMBIENTE` (`sandbox`|`producao`),
-  `ASAAS_CONTA_MEI_WEBHOOK_TOKEN`. Sandbox → produção = trocar os secrets e
-  rodar a limpeza comentada no fim da migration (o banco é o mesmo).
-- Descontos (`POLITICA_DESCONTOS` em `_shared/asaas/regras.ts`; fase 2, migration
-  `20261101000000_asaas_comissoes_e_descontos.sql`):
-  - 1ª cobrança: o maior entre cupom e o desconto do código do vendedor
-    (`afiliados.desconto_pct` nas `desconto_cobrancas` primeiras), depois o saldo
-    dos vídeos aprovados (`video_premios.valor_centavos`, reservado pelo pedido);
-  - renovação recorrente (`PAYMENT_CREATED`): meses grátis de indicação
-    (`indicacao_config.bonus_pct` de uma mensalidade cada), depois saldo de vídeo
-    e desconto do vendedor. Nunca abaixo de R$ 5 (mínimo do Asaas);
+  `ASAAS_CONTA_MEI_WEBHOOK_TOKEN`. Sandbox → produção: seguir `docs/asaas/README.md`
+  (roteiro de testes, domínio do site no Asaas, limpeza do banco, secrets; o banco é o mesmo).
+- Descontos (`POLITICA_DESCONTOS` em `_shared/asaas/regras.ts`; migrations
+  `20261101000000_asaas_comissoes_e_descontos.sql` e `20261102000000_desconto_codigo_restaurante.sql`).
+  Regra do dono (23/10/2026): **não acumulam, é um ou outro**; só o vídeo soma por cima:
+  - 1ª cobrança: o maior entre cupom (só para clientes especiais) e o desconto do
+    código de quem indicou: vendedor/influenciador (`afiliados.desconto_pct` nas
+    `desconto_cobrancas` primeiras) ou restaurante (`indicacao_config.desconto_indicado_*`,
+    um para todos). Depois o saldo dos vídeos aprovados (`video_premios.valor_centavos`,
+    reservado pelo pedido);
+  - renovação recorrente (`PAYMENT_CREATED`): o mês grátis de indicação
+    (`indicacao_config.bonus_pct` de uma mensalidade cada) OU o desconto do código +
+    saldo de vídeo. No mês grátis os dois esperam a cobrança seguinte. Nunca abaixo de R$ 5 (mínimo do Asaas);
+  - vídeo: 50% de uma mensalidade cheia por vídeo, com limite por período; vários
+    somam, o que não cabe numa cobrança fica para a seguinte;
   - `PUT /payments/{id}` exige `billingType`, `value` e `dueDate`: usar `corpoDoPut`.
 - Comissão do vendedor = split do Asaas (`_shared/asaas/comissao.ts`): em cada
   evento de cobrança de um indicado por vendedor, calcula pela regra de

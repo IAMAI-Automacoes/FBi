@@ -368,11 +368,20 @@ function ConfigIndicacao({ mensalidade }: { mensalidade: number | null }) {
   const [salva, setSalva] = useState<ConfigDaIndicacao | null>(null)
   const [pct, setPct] = useState('')
   const [meses, setMeses] = useState('')
+  const [descPct, setDescPct] = useState('')
+  const [descCobrancas, setDescCobrancas] = useState('')
   const [salvando, setSalvando] = useState(false)
+
+  const preencher = (c: ConfigDaIndicacao) => {
+    setPct(String(c.bonusPct).replace('.', ','))
+    setMeses(String(c.mesesParaRenovacao))
+    setDescPct(String(c.descontoIndicadoPct).replace('.', ','))
+    setDescCobrancas(String(c.descontoIndicadoCobrancas))
+  }
 
   useEffect(() => {
     buscarConfigDaIndicacao()
-      .then((c) => { setSalva(c); setPct(String(c.bonusPct).replace('.', ',')); setMeses(String(c.mesesParaRenovacao)) })
+      .then((c) => { setSalva(c); preencher(c) })
       .catch(() => toast.error('Não foi possível carregar a indicação.'))
   }, [])
 
@@ -380,11 +389,24 @@ function ConfigIndicacao({ mensalidade }: { mensalidade: number | null }) {
   const mesesLido = Number(meses)
   const pctOk = pct.trim() !== '' && Number.isFinite(pctLido) && pctLido >= 1 && pctLido <= 100
   const mesesOk = Number.isInteger(mesesLido) && mesesLido >= 1 && mesesLido <= 24
-  const mudou = !!salva && pctOk && mesesOk && (Math.round(pctLido * 100) / 100 !== salva.bonusPct || mesesLido !== salva.mesesParaRenovacao)
+  const descPctLido = Number(descPct.replace(',', '.'))
+  const descCobrancasLido = Number(descCobrancas)
+  const descPctOk = descPct.trim() !== '' && Number.isFinite(descPctLido) && descPctLido >= 0 && descPctLido <= 100
+  const descCobrancasOk = Number.isInteger(descCobrancasLido) && descCobrancasLido >= 1 && descCobrancasLido <= 24
+  const tudoOk = pctOk && mesesOk && descPctOk && descCobrancasOk
+  const mudou = !!salva && tudoOk && (
+    Math.round(pctLido * 100) / 100 !== salva.bonusPct || mesesLido !== salva.mesesParaRenovacao
+    || Math.round(descPctLido * 100) / 100 !== salva.descontoIndicadoPct || descCobrancasLido !== salva.descontoIndicadoCobrancas
+  )
 
   const salvar = async () => {
     if (!mudou) return
-    const nova = { bonusPct: Math.round(pctLido * 100) / 100, mesesParaRenovacao: mesesLido }
+    const nova = {
+      bonusPct: Math.round(pctLido * 100) / 100,
+      mesesParaRenovacao: mesesLido,
+      descontoIndicadoPct: Math.round(descPctLido * 100) / 100,
+      descontoIndicadoCobrancas: descCobrancasLido,
+    }
     setSalvando(true)
     try {
       await salvarConfigDaIndicacao(nova)
@@ -427,12 +449,28 @@ function ConfigIndicacao({ mensalidade }: { mensalidade: number | null }) {
           </div>
           <p className="text-[12px] text-gray-500">No mensal, vale 1 desconto por mês. No semestral/anual, entram de uma vez os de indicados que já pagaram esse mínimo.</p>
         </div>
-        {(!pctOk || !mesesOk) && <p className="text-[12px] text-rose-600">{!pctOk ? 'A porcentagem vai de 1 a 100.' : 'O mínimo vai de 1 a 24 meses.'}</p>}
+        <div className="space-y-1">
+          <label htmlFor="ind-desc-pct" className="text-[13px] font-medium text-gray-800">Quem compra com o código de um restaurante ganha</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input id="ind-desc-pct" value={descPct} onChange={(e) => setDescPct(e.target.value.replace(/[^\d,]/g, ''))} inputMode="decimal" className="w-20 text-right tabular-nums" />
+            <span className="text-[13px] text-gray-500">% de desconto nas</span>
+            <Input aria-label="Cobranças com desconto" value={descCobrancas} onChange={(e) => setDescCobrancas(e.target.value.replace(/\D/g, ''))} inputMode="numeric" className="w-16 text-right tabular-nums" />
+            <span className="text-[13px] text-gray-500">primeiras cobranças</span>
+          </div>
+          <p className="text-[12px] text-gray-500">
+            0% = sem desconto. Não soma com cupom nem com o mês grátis: vale um ou outro. Só o desconto dos vídeos soma por cima.
+          </p>
+        </div>
+        {!tudoOk && (
+          <p className="text-[12px] text-rose-600">
+            {!pctOk ? 'A porcentagem vai de 1 a 100.' : !mesesOk ? 'O mínimo vai de 1 a 24 meses.' : !descPctOk ? 'O desconto vai de 0% a 100%.' : 'As cobranças com desconto vão de 1 a 24.'}
+          </p>
+        )}
       </div>
       {mudou && (
         <div className="flex justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
           <Button variant="ghost" size="sm" disabled={salvando}
-            onClick={() => { setPct(String(salva.bonusPct).replace('.', ',')); setMeses(String(salva.mesesParaRenovacao)) }}>
+            onClick={() => preencher(salva)}>
             Descartar
           </Button>
           <Button size="sm" onClick={salvar} disabled={salvando}>{salvando && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Salvar</Button>

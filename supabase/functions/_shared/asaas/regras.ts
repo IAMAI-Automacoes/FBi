@@ -23,18 +23,22 @@ export const ehModalidade = (v: unknown): v is Modalidade => v === 'recorrente' 
 export const VALOR_MINIMO_CENTAVOS = 500
 
 /**
- * Onde cada desconto entra:
- *   - cupom ou código de vendedor: na 1ª cobrança vale o maior dos dois (não
- *     somam); o do vendedor continua nas renovações até `desconto_cobrancas`;
+ * Onde cada desconto entra (regra do dono, 23/10/2026: não acumulam, é um
+ * ou outro — só o vídeo soma por cima):
+ *   - cupom ou código (vendedor, influenciador ou restaurante): na 1ª cobrança
+ *     vale o maior dos dois; o do código continua nas renovações até acabarem
+ *     as suas cobranças com desconto;
  *   - saldo de vídeo aprovado: abate a próxima cobrança (compra ou renovação),
- *     sem deixar a cobrança abaixo de R$ 5; o que não cabe fica para a próxima;
+ *     somado ao do código, sem deixar a cobrança abaixo de R$ 5; o que não cabe
+ *     fica para a próxima;
  *   - bônus de indicação ("proteção de caixa", regra do Raver em 17/10/2026):
  *     cada indicado que paga o 2º mês dá 1 mensalidade grátis ao padrinho,
  *     numa fila. Na renovação recorrente, o banco confere os indicados
  *     (`indicacao_reservar_bonus`): no mensal, 1 bônus por mês (indicado
  *     ativo); no semestral/anual, todos os de indicado ativo que já pagou o
  *     mínimo de meses, até os meses do plano. Cada bônus abate 1 mensalidade
- *     (`valorComMesesGratis`).
+ *     (`valorComMesesGratis`). Na cobrança com mês grátis não entra o código
+ *     nem o vídeo: esperam a seguinte.
  */
 export const POLITICA_DESCONTOS = {
   cupom: 'primeira_cobranca',

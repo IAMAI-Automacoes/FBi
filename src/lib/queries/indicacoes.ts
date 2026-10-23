@@ -37,7 +37,7 @@ export async function registrarIndicacao(codigo: string): Promise<{ ok: boolean;
   }
 }
 
-/** O desconto que um código de vendedor dá a quem compra (0 = nenhum), para a tela de compra. */
+/** O desconto que um código (vendedor, influenciador ou restaurante) dá a quem compra (0 = nenhum), para a tela de compra. */
 export async function buscarDescontoDoCodigo(codigo: string): Promise<{ pct: number; cobrancas: number }> {
   const limpo = codigo.trim().toUpperCase()
   if (!limpo) return { pct: 0, cobrancas: 0 }
@@ -49,14 +49,28 @@ export async function buscarDescontoDoCodigo(codigo: string): Promise<{ pct: num
 
 // ── Admin → Descontos → Indicação ────────────────────────────────────────────
 
-/** Quanto cada indicado vale para quem indicou, e o mínimo de meses pagos que
-    conta na renovação semestral/anual (`indicacao_config`). */
-export interface ConfigDaIndicacao { bonusPct: number; mesesParaRenovacao: number }
+/** Quanto cada indicado vale para quem indicou, o mínimo de meses pagos que
+    conta na renovação semestral/anual, e o desconto de quem compra com o
+    código de um restaurante (`indicacao_config`). */
+export interface ConfigDaIndicacao {
+  bonusPct: number
+  mesesParaRenovacao: number
+  /** % de desconto para quem compra com o código de um restaurante (0 = nenhum)… */
+  descontoIndicadoPct: number
+  /** …nas N primeiras cobranças. */
+  descontoIndicadoCobrancas: number
+}
 
 export async function buscarConfigDaIndicacao(): Promise<ConfigDaIndicacao> {
-  const { data, error } = await supabase.from('indicacao_config').select('bonus_pct, meses_para_renovacao').limit(1).maybeSingle()
+  const { data, error } = await supabase.from('indicacao_config')
+    .select('bonus_pct, meses_para_renovacao, desconto_indicado_pct, desconto_indicado_cobrancas').limit(1).maybeSingle()
   if (error) throw error
-  return { bonusPct: Number(data?.bonus_pct) || 100, mesesParaRenovacao: Number(data?.meses_para_renovacao) || 4 }
+  return {
+    bonusPct: Number(data?.bonus_pct) || 100,
+    mesesParaRenovacao: Number(data?.meses_para_renovacao) || 4,
+    descontoIndicadoPct: Number(data?.desconto_indicado_pct) || 0,
+    descontoIndicadoCobrancas: Number(data?.desconto_indicado_cobrancas) || 1,
+  }
 }
 
 export async function salvarConfigDaIndicacao(c: ConfigDaIndicacao): Promise<void> {
@@ -64,6 +78,11 @@ export async function salvarConfigDaIndicacao(c: ConfigDaIndicacao): Promise<voi
   if (e1) throw e1
   const { error: e2 } = await supabase.rpc('indicacao_admin_meses_renovacao', { p_meses: c.mesesParaRenovacao })
   if (e2) throw e2
+  const { error: e3 } = await supabase.rpc('indicacao_admin_desconto_indicado', {
+    p_pct: c.descontoIndicadoPct,
+    p_cobrancas: c.descontoIndicadoCobrancas,
+  })
+  if (e3) throw e3
 }
 
 // ── Admin → Vendedores ───────────────────────────────────────────────────────

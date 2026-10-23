@@ -276,11 +276,13 @@ Conta sem plano (/assinatura) → mesma função com JWT → webhook vincula soz
 
 **Fase 2 (descontos e comissão — 21/10/2026):**
 - [x] Código: split da comissão do vendedor (`_shared/asaas/comissao.ts`), desconto do código do vendedor, saldo do vídeo na cobrança, % da indicação, limite de vídeos por período, `PUT` do Asaas com os campos obrigatórios
-- [ ] Aplicar `20261101000000_asaas_comissoes_e_descontos.sql` no Supabase
-- [ ] Publicar `asaas-webhook` (`--no-verify-jwt`), `criar-cobranca`, `videos-missao` e o site
+- [x] Aplicar `20261101000000_asaas_comissoes_e_descontos.sql` no Supabase (conferido em 23/10/2026)
+- [x] Publicar `asaas-webhook` (`--no-verify-jwt`), `criar-cobranca`, `videos-missao` e o site (21/10; webhook de novo em 23/10 com a correção do parcelado)
 - [ ] Cadastrar os nossos custos em Admin → Vendedores (a comissão é sobre o que sobra depois deles)
 - [ ] Webhook do Asaas recebendo também os eventos `PAYMENT_SPLIT_*`
 - [ ] Sandbox: vendedor com walletId de uma 2ª conta sandbox → split na 2ª mensalidade
+- [ ] Roteiro completo do sandbox e passagem para a produção: `docs/asaas/README.md` (domínio do site no Asaas, T1–T6, limpeza, secrets)
+- [ ] Sócios (40/40/20): decidir repasse automático (split ou Pix); hoje fica tudo na conta do MEI
 - [ ] Contador: o valor do split conta no teto do MEI? O vendedor emite nota/recibo?
 - [x] Vídeo: 50% sobre o valor cheio de uma mensalidade (sem descontar custos), abate a próxima cobrança
 

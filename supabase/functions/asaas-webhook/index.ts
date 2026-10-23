@@ -25,7 +25,7 @@ import { json } from '../_shared/cors.ts'
 import { asaas, ErroAsaas, removerNoAsaas, type ClienteAsaas } from '../_shared/asaas/cliente.ts'
 import { acharAssinatura, espelharPagamento } from '../_shared/asaas/espelho.ts'
 import { garantirComissao } from '../_shared/asaas/comissao.ts'
-import { confirmarSaldoDoVideo, descontoDoVendedor, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
+import { confirmarSaldoDoVideo, descontoDoCodigo, reservarSaldoDoVideo, soltarSaldoDoVideo } from '../_shared/asaas/descontos.ts'
 import {
   centavos,
   contaValida,
@@ -164,11 +164,13 @@ async function aoMudarPagamento(db: Db, contaId: string, evento: Evento) {
     return
   }
 
-  // Renovação de recorrente ainda em aberto: os meses grátis de indicação, o
-  // saldo dos vídeos e o desconto do código do vendedor entram nela.
+  // Renovação de recorrente ainda em aberto: entra o mês grátis de indicação
+  // OU o desconto do código mais o saldo dos vídeos (não acumulam com o mês
+  // grátis: esperam a cobrança seguinte).
   if (evento.event === 'PAYMENT_CREATED' && a.modalidade === 'recorrente' && pag.status === 'PENDING' && !pag.deleted) {
-    pag = await aplicarBonus(db, cli, a, pag)
-    if (!pag.deleted) pag = await aplicarSaldoEVendedor(db, cli, a, pag)
+    const comBonus = await aplicarBonus(db, cli, a, pag)
+    pag = comBonus.pag
+    if (!pag.deleted) pag = await aplicarSaldoEVendedor(db, cli, a, pag, comBonus.usou)
   }
 
   const linha = await espelharPagamento(db, contaId, a, pag)
@@ -294,8 +296,8 @@ async function aoEstornar(db: Db, cli: ClienteAsaas, a: any, pag: any) {
  * ele volta para a fila; nunca sai um mês grátis sem gastar um bônus.
  */
 // deno-lint-ignore no-explicit-any
-async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<any> {
-  if (!a.restaurante_id) return pag
+async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<{ pag: any; usou: boolean }> {
+  if (!a.restaurante_id) return { pag, usou: false }
 
   // A 1ª cobrança é da compra (o cupom cuida dela); o bônus é para renovações.
   const { count: pagas } = await db
@@ -303,7 +305,7 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
     .select('id', { count: 'exact', head: true })
     .eq('assinatura_id', a.id)
     .in('status', ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH'])
-  if (!pagas) return pag
+  if (!pagas) return { pag, usou: false }
 
   const { data: r, error } = await db.rpc('indicacao_reservar_bonus', {
     p_restaurante_id: a.restaurante_id,
@@ -313,19 +315,20 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
   if (error) throw new Error(`indicacao_reservar_bonus: ${error.message}`)
   // Cada bônus vale a % de uma mensalidade com que nasceu (`bonus_pct`, padrão 100).
   const meses = r?.pct != null ? Number(r.pct) / 100 : Number(r?.meses ?? 0)
-  // Nenhum bônus valeu, ou evento repetido (o abatimento já foi feito).
-  if (!(meses > 0) || r?.repetido) return pag
+  if (!(meses > 0)) return { pag, usou: false }
+  // Evento repetido: o abatimento já foi feito.
+  if (r?.repetido) return { pag, usou: true }
 
   const atual = centavos(pag.value)
   const novo = valorComMesesGratis(atual, a.valor_centavos, a.ciclo as Ciclo, meses)
   if (novo >= atual) {
     await soltarBonus(db, pag.id)
-    return pag
+    return { pag, usou: false }
   }
 
   if (novo > 0) {
     try {
-      return await cli.put(`/payments/${pag.id}`, corpoDoPut(pag, { valorCentavos: novo }))
+      return { pag: await cli.put(`/payments/${pag.id}`, corpoDoPut(pag, { valorCentavos: novo })), usou: true }
     } catch (e) {
       await soltarBonus(db, pag.id).catch(() => {})
       throw e
@@ -346,7 +349,7 @@ async function aplicarBonus(db: Db, cli: ClienteAsaas, a: any, pag: any): Promis
     throw e
   }
   await andarPeriodo(db, a, pag)
-  return { ...pag, deleted: true }
+  return { pag: { ...pag, deleted: true }, usou: true }
 }
 
 async function confirmarBonus(db: Db, pagamentoId: unknown) {
@@ -360,17 +363,24 @@ async function soltarBonus(db: Db, pagamentoId: unknown) {
 }
 
 /**
- * Saldo dos vídeos aprovados e desconto do código do vendedor nesta renovação
- * (a compra já sai com eles de `criar-cobranca`). Vem depois dos meses grátis.
+ * Saldo dos vídeos aprovados e desconto do código (vendedor, influenciador ou
+ * restaurante) nesta renovação (a compra já sai com eles de `criar-cobranca`).
+ * Os dois somam entre si, mas não com o mês grátis de indicação (`comBonus`):
+ * nessa cobrança ficam zerados e esperam a seguinte — o desconto do código não
+ * gasta uma das suas cobranças, e o saldo do vídeo continua guardado.
  * Uma vez só por cobrança: as colunas `desconto_vendedor_centavos` e
  * `saldo_video_centavos` preenchidas = já foi feito (evento repetido).
  */
 // deno-lint-ignore no-explicit-any
-async function aplicarSaldoEVendedor(db: Db, cli: ClienteAsaas, a: any, pag: any): Promise<any> {
+async function aplicarSaldoEVendedor(db: Db, cli: ClienteAsaas, a: any, pag: any, comBonus: boolean): Promise<any> {
   if (!a.restaurante_id) return pag
   // A linha da cobrança existe antes da reserva (a reserva solta as de cobrança que não está em aberto).
   const linha = await espelharPagamento(db, cli.contaId, a, pag)
   if (linha.desconto_vendedor_centavos != null || linha.saldo_video_centavos != null) return pag
+  if (comBonus) {
+    await espelharPagamento(db, cli.contaId, a, pag, { desconto_vendedor_centavos: 0, saldo_video_centavos: 0 })
+    return pag
+  }
 
   const { count: pagas } = await db
     .from('cobranca_pagamentos')
@@ -381,7 +391,7 @@ async function aplicarSaldoEVendedor(db: Db, cli: ClienteAsaas, a: any, pag: any
 
   const atual = centavos(pag.value)
   let novo = atual
-  const pct = await descontoDoVendedor(db, a.restaurante_id, { compra: false, excluirPagamento: String(pag.id) })
+  const pct = await descontoDoCodigo(db, a.restaurante_id, { compra: false, excluirPagamento: String(pag.id) })
   if (pct > 0) novo = Math.max(500, atual - Math.round((Number(a.valor_centavos) * pct) / 100))
   const descontoVendedor = atual - novo
 

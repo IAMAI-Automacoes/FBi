@@ -54,7 +54,7 @@ export default function Checkout() {
   const [documento, setDocumento] = useState('')
   // Código de indicação: começa vazio (o do link fica guardado sem aparecer).
   const [codigoIndicacao, setCodigoIndicacao] = useState('')
-  // O desconto que o código digitado dá (código de vendedor); entra sozinho na fatura.
+  // O desconto que o código digitado dá (vendedor, influenciador ou restaurante); entra sozinho na fatura.
   const [descontoCodigo, setDescontoCodigo] = useState<{ pct: number; cobrancas: number } | null>(null)
   useEffect(() => {
     setDescontoCodigo(null)
